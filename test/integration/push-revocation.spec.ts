@@ -17,7 +17,10 @@ import { runRevokeAllPush } from '../../src/maintenance/revoke-push';
 import { runSetPassword } from '../../src/maintenance/set-password';
 import { type MinuteOfDay } from '../../src/push/reminders';
 import { addDays, instantAt } from '../../src/calendar-date';
-import { updatePasswordHash } from '../../src/web/auth/queries';
+import {
+  endOtherSessions,
+  updatePasswordHash,
+} from '../../src/web/auth/queries';
 import { saveReminderSettings, upsertDevice } from '../../src/web/push/queries';
 import { sendDueReminders } from '../../src/web/push/reminders';
 import { captureLogs } from '../support/log-capture';
@@ -286,6 +289,45 @@ describe('push subscriptions revoked with the sessions (PWA_ENABLED=true)', () =
       expect(t.logs.messages('info', 'Web')).toContain(
         `User ${userId}'s push subscription refused: the session ended under it`,
       );
+    });
+  });
+
+  // The same turns with Sign out everywhere (#700), where only the session
+  // version moves: the fingerprint alone would let both subscriptions live.
+  describe('a subscribe racing Sign out everywhere', () => {
+    it('revokes a subscription that held the row lock while the bump waited', async () => {
+      const email = `everywhere-held-${randomUUID()}@example.com`;
+      await t.register(email);
+      const userId = await userIdOf(t, email);
+      const session = await sessionStampOf(t.db, userId);
+      const [deviceId, ended] = await interleave(
+        t.db,
+        (tx) => upsertDevice(tx, userId, session, subscription(), undefined),
+        () => endOtherSessions(t.db, userId),
+      );
+      expect(deviceId).toBeDefined();
+      expect(ended.revokedDevices).toBe(1);
+      expect(await endpointsOf(userId)).toEqual([]);
+    });
+
+    it('refuses a subscribe that waited while the bump committed: the 401, no row', async () => {
+      const email = `everywhere-waited-${randomUUID()}@example.com`;
+      const cookie = await t.register(email);
+      const userId = await userIdOf(t, email);
+      const [, res] = await interleave(
+        t.db,
+        (tx) =>
+          tx.update(user).set({ sessionVersion: 7 }).where(eq(user.id, userId)),
+        () =>
+          t.inject({
+            method: 'POST',
+            url: '/push/subscribe',
+            payload: subscription(),
+            headers: { cookie },
+          }),
+      );
+      expect(res.statusCode).toBe(401);
+      expect(await endpointsOf(userId)).toEqual([]);
     });
   });
 

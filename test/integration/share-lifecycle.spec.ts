@@ -937,5 +937,22 @@ describe('wardrobe share lifecycle', () => {
       expect(res.headers['hx-redirect']).toBe('/auth/login');
       expect(await invitesOf(waiter)).toEqual([]);
     });
+
+    // Sign out everywhere moves only the session version (#700): an invite
+    // asked for by a session it ended, waiting on the lock, is refused too.
+    it('an invite that waited for a session-version bump is refused', async () => {
+      const waiter = await signUpAs('mint-version');
+      const [, res] = await interleave(
+        t.db,
+        (tx) =>
+          tx
+            .update(user)
+            .set({ sessionVersion: 7 })
+            .where(eq(user.id, waiter.id)),
+        () => createLink(waiter, { permission: 'VIEW' }, true),
+      );
+      expect(res.statusCode).toBe(401);
+      expect(await invitesOf(waiter)).toEqual([]);
+    });
   });
 });
