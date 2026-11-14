@@ -211,6 +211,8 @@ test.describe('the image cache belongs to one session', () => {
     await expect.poll(() => cachedAnywhere(page, photos)).toEqual([]);
     // The drop forgets those rows with the caches (#731): no URL of the
     // first account outlives its session on the device.
+    // The worker deletes a cache's rows before the cache, so the poll above
+    // passing means these are gone too.
     expect(
       (await expirationUrls(page)).filter((row) => firstRows.includes(row)),
     ).toEqual([]);
