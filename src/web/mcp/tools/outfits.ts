@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { LIST_LIMIT_MAX } from '../../api/resource';
 import { DEFAULT_OCCASION } from '../../../wardrobe/occasions';
 import { planOutfit } from '../../calendar/entry-actions';
 import { replaceEntryOutfit, replaceMessage } from '../../calendar/replace';
@@ -7,12 +8,13 @@ import { requireOutfit } from '../../outfits/outfit-actions';
 import {
   type CreateResult,
   createOutfit,
-  listOutfits,
+  listOutfitsPage,
   OUTFIT_GARMENTS_MAX,
   OUTFIT_NAME_MAX,
   OUTFIT_NOTES_MAX,
   type ToolOutfit,
 } from '../../outfits/queries';
+import { OUTFIT_PAGE_SIZE } from '../../outfits/page-size';
 import { piecesToBuy } from '../../outfits/references';
 import { actorOf, defineTool, originOf } from '../tool';
 import { agentNameOf } from '../../write-origin';
@@ -60,13 +62,30 @@ export const outfitTools = [
   defineTool({
     name: 'list_outfits',
     title: 'List my outfits',
-    description:
-      'Your own saved outfits, newest first (not the outfits your agent proposed that you have not saved), each with its garments in the order it was built. toBuy lists the garments it holds that are not bought yet (wishlist items): an outfit with any is incomplete, and cannot be planned, added to a trip or worn until they are bought.',
-    input: z.object({}),
+    description: `Your own saved outfits, newest first (not the outfits your agent proposed that you have not saved), each with its garments in the order it was built, ${OUTFIT_PAGE_SIZE} a page unless \`limit\` asks: pass the answer's \`next\` (null on the last page) back as \`before\` for the next. toBuy lists the garments it holds that are not bought yet (wishlist items): an outfit with any is incomplete, and cannot be planned, added to a trip or worn until they are bought.`,
+    input: z.object({
+      before: rowId()
+        .optional()
+        .describe("The previous page's `next`, passed back as it came."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(LIST_LIMIT_MAX)
+        .optional()
+        .describe(
+          `How many a page holds: ${OUTFIT_PAGE_SIZE} unless asked, at most ${LIST_LIMIT_MAX}.`,
+        ),
+    }),
     writes: false,
-    async run(_args, ctx) {
-      const outfits = await listOutfits(ctx.db, ctx.userId);
-      return { outfits: outfits.map(outfitOut) };
+    async run({ before, limit = OUTFIT_PAGE_SIZE }, ctx) {
+      // GET /api/v1/outfits' reader and page size (#660), so the two page alike.
+      const { outfits, next } = await listOutfitsPage(ctx.db, ctx.userId, {
+        before,
+        limit,
+        proposed: false,
+      });
+      return { outfits: outfits.map(outfitOut), next };
     },
   }),
 

@@ -6,6 +6,7 @@ import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
@@ -265,21 +266,17 @@ export function IdeaCards({ model }: { model: IdeaCardsModel }) {
         />
       ))}
       {model.more && (
-        <div
+        <PageSentinel
+          as="div"
           class="snap-center shrink-0 w-16 flex items-center justify-center"
-          hx-get={ideasUrl(model.state, {
+          href={ideasUrl(model.state, {
             path: '/outfits/ideas/more',
             page: model.page + 1,
           })}
-          hx-trigger="intersect once"
-          hx-swap="outerHTML"
-          data-ideas-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </div>
+          trigger="intersect once"
+          marker="ideas"
+          label={t('outfits.LOADING_MORE')}
+        />
       )}
     </>
   );

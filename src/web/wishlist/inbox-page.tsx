@@ -3,6 +3,7 @@ import type { OutfitCount } from '../../wardrobe/goes-with';
 import { unlocksText } from '../gallery/goes-with';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { CANDIDATE_GRID, PAIR_GRID } from '../layout/columns';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
@@ -303,18 +304,14 @@ export function GroupCards(props: {
         <GroupCard group={group} viewOwner={viewOwner} />
       ))}
       {more && (
-        <li
+        <PageSentinel
+          as="li"
           class="flex justify-center py-4 lg:col-span-2"
-          hx-get={wardrobeUrl(viewOwner, { page: page + 1 }, INBOX_MORE_PATH)}
-          hx-trigger="intersect once"
-          hx-swap="outerHTML"
-          data-inbox-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </li>
+          href={wardrobeUrl(viewOwner, { page: page + 1 }, INBOX_MORE_PATH)}
+          trigger="intersect once"
+          marker="inbox"
+          label={t('LOADING_MORE')}
+        />
       )}
     </>
   );

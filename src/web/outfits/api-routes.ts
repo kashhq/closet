@@ -38,11 +38,9 @@ import {
 import { OUTFIT_LISTS } from './outfit-list';
 import { createOutfit, listOutfitsPage, outfitText } from './queries';
 import type { OutfitReaction } from './reactions';
+import { OUTFIT_PAGE_SIZE } from './page-size';
 import { OutfitParams } from './schemas';
 import { BY_PERSON } from '../write-origin';
-
-/** A page of GET /outfits unless asked: the Saved grid's two columns, a few screens. */
-const OUTFIT_PAGE_SIZE = 30;
 
 const OutfitListQuery = Type.Object({
   cursor: Type.Optional(ListCursor),

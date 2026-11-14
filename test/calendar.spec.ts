@@ -2,18 +2,21 @@ import { expect, test } from './support/fixtures';
 import {
   addPhotographedGarment,
   createGarment,
+  createOutfit,
   createOutfitOf,
 } from './support/e2e-data';
 import { expectCollagePiecesInsidePlinths } from './support/collage-fit';
 import { E2E_PASSWORD, SAME_ORIGIN, signIn } from './support/e2e-session';
 import { pageErrors } from './support/page-errors';
+import { OUTFIT_PAGE_SIZE as PAGE_SIZE } from '../src/web/outfits/page-size';
 
 /**
  * Planning an outfit on the calendar from its page: the plan sheet (htmx,
  * an inline handler for the occasion) posts and the app lands on that week;
  * then "Plan my week", after which Saved still opens on the person's outfit
  * (#659) and the planner's are one tab away; a layered outfit's collage
- * stays inside its cell (#663).
+ * stays inside its cell (#663); and Saved loads its next page as it is
+ * scrolled (#660).
  * The calendar's own behaviour is test/integration/calendar.spec.ts.
  */
 
@@ -211,5 +214,20 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
     .getByRole('button', { name: 'Delete', exact: true })
     .click();
   await expect(page).toHaveURL(/\/outfits(\?|$)/);
+
+  // #660: Saved loads a page at a time; scrolled to its end at 390 px, the
+  // sentinel brings the rest (Layered and these 31: one page and two).
+  for (let n = 0; n < PAGE_SIZE + 1; n += 1) {
+    const top = await createGarment(page, `Page tee ${n}`, 'tops');
+    await createOutfit(page, `Page outfit ${n}`, top);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/outfits');
+  const savedTiles = page.locator('#saved-outfits a[data-outfit-id]');
+  await expect(savedTiles).toHaveCount(PAGE_SIZE);
+  await page.locator('[data-saved-more]').scrollIntoViewIfNeeded();
+  await expect(savedTiles).toHaveCount(PAGE_SIZE + 2);
+  await expect(page.locator('[data-saved-more]')).toHaveCount(0);
+  await expect(savedTiles.last()).toContainText('Layered');
   expect(errors).toEqual([]);
 });

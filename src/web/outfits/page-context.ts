@@ -14,6 +14,8 @@ import {
 import {
   type OutfitActivity,
   outfitActivitySql,
+  type OutfitPage,
+  type OutfitPageAsk,
   type SavedOutfit,
   savedOutfitsSql,
   type OutfitPageDetail,
@@ -33,11 +35,12 @@ import type { OutfitList } from './outfit-list';
 
 /** What GET /outfits shows (list-page.tsx). */
 export interface SavedContext {
-  /** The owner's own outfits of the list asked, newest first: the tiles (ownersOutfit, keptOutfit). */
-  outfits: SavedOutfit[];
+  /** A page of the owner's own outfits of the list asked, newest first: the tiles (ownersOutfit, keptOutfit). */
+  page: OutfitPage<SavedOutfit>;
   /**
    * Muse's outfits not the owner's yet (awaiting them, or set aside), and
-   * what each piece to buy unlocks; none while picking for a day.
+   * what each piece to buy unlocks; none while picking for a day, nor on a
+   * later page (the section is above the first).
    */
   muse: { outfits: MuseOutfit[]; unlocks: Map<number, OutfitCount> };
   /** Each tile's line (worn count, next plan), by outfit id; absent: never planned. */
@@ -47,10 +50,11 @@ export interface SavedContext {
 }
 
 /**
- * The Saved tab's tiles of `list` (#659) and their activity, Muse's
- * outfits with what their pieces to buy unlock (#335), and with a day to
- * pick for, that day's entries (readDayChoice: the plan page's rule): one
- * statement.
+ * A page of the Saved tab's tiles of `list` (#659, #660) and their
+ * activity, on the first page Muse's outfits with what their pieces to buy
+ * unlock (#335), and with a day to pick for, that day's entries
+ * (readDayChoice: the plan page's rule): one statement, GET /outfits' and
+ * its sentinel's GET /outfits/tiles.
  */
 export async function savedContext(
   db: Db,
@@ -58,19 +62,21 @@ export async function savedContext(
   today: IsoDate,
   day: DayDestination | undefined,
   list: OutfitList,
+  page: OutfitPageAsk,
 ): Promise<SavedContext> {
   // Picking for a day is its own task, and the one-offs are not where
-  // Muse's proposals wait: her section shows only above the kept grid.
-  const withMuse = !day && list === 'kept';
+  // Muse's proposals wait: her section shows only above the kept grid's
+  // first page.
+  const withMuse = !day && list === 'kept' && page.before === undefined;
   const row = await selectScalars(db, {
-    outfits: savedOutfitsSql(ownerId, list),
+    page: savedOutfitsSql(ownerId, list, page),
     activity: outfitActivitySql(ownerId, today),
     entries: day && entriesOfDaySql(ownerId, day.day),
     muse: withMuse ? museOutfitsSql(ownerId) : undefined,
     unlocks: withMuse ? museUnlocksInputsSql(ownerId) : undefined,
   });
   return {
-    outfits: row.outfits,
+    page: row.page,
     muse: {
       outfits: row.muse ?? [],
       unlocks: row.unlocks ? readMuseUnlocks(row.unlocks) : new Map(),

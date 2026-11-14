@@ -6,7 +6,7 @@ import { parseIsoDate, todayIn } from '../../calendar-date';
 import { pickDestination } from '../calendar/day-choice';
 import { HttpError } from '../errors';
 import type { WebOptions } from '../plugin';
-import { navigateTo, renderPage } from '../render';
+import { navigateTo, renderFragment, renderPage } from '../render';
 import { DEFAULT_OCCASION } from '../../wardrobe/occasions';
 import { IsoDateSchema, OccasionSchema, RowId } from '../schemas';
 import { alreadySavedOf, alreadySavedParam } from '../gallery/urls';
@@ -17,7 +17,8 @@ import {
   type OutfitDestination,
   parseDestination,
 } from './destination';
-import { OutfitsPage } from './list-page';
+import { OutfitsPage, SavedTiles } from './list-page';
+import { OUTFIT_PAGE_SIZE } from './page-size';
 import { OutfitListQuery, parseOutfitList } from './outfit-list';
 import {
   editOutfit,
@@ -30,6 +31,7 @@ import { savedContext } from './page-context';
 import {
   createOutfit,
   type CreateResult,
+  FIRST_OUTFIT_PAGE,
   OUTFIT_NAME_MAX,
   OUTFIT_NOTES_MAX,
   OUTFIT_SLOTS_MAX,
@@ -37,9 +39,14 @@ import {
   outfitText,
   type SaveResult,
 } from './queries';
-import { DECLINE_NOTE_MAX, OutfitParams, SlotCategory } from './schemas';
+import {
+  DECLINE_NOTE_MAX,
+  OutfitCursor,
+  OutfitParams,
+  SlotCategory,
+} from './schemas';
 import { OutfitPage } from './show-page';
-import { outfitUrl } from './urls';
+import { outfitUrl, SAVED_TILES_PATH } from './urls';
 import type { OutfitReaction } from './reactions';
 import { OUTFIT_DISMISS_REASONS } from '../../wardrobe/suggestions';
 import { actorOf } from '../sharing/access';
@@ -96,6 +103,15 @@ const SavedQuery = Type.Object({
   ...DestinationQuery,
   ...OutfitListQuery,
   [DECISION_FLAG]: Type.Optional(Type.String({ maxLength: 16 })),
+});
+
+// The Saved grid's next page (#660): the page's own navigation state, and
+// the keyset cursor its sentinel names (a malformed one is a 400: only our
+// sentinel builds it).
+const SavedTilesQuery = Type.Object({
+  ...DestinationQuery,
+  ...OutfitListQuery,
+  before: OutfitCursor,
 });
 
 // The gallery's pick lands here with `alreadySaved=1` when the outfit
@@ -275,12 +291,13 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       }
       const day = destination.kind === 'day' ? destination : undefined;
       const list = parseOutfitList(request.query.show);
-      const { outfits, activity, choice, muse } = await savedContext(
+      const { page, activity, choice, muse } = await savedContext(
         db,
         ownerId,
         today,
         day,
         list,
+        FIRST_OUTFIT_PAGE,
       );
       if (day?.replace !== undefined && !choice?.replacing) {
         logger.debug(
@@ -292,7 +309,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         <OutfitsPage
           ctx={viewContext(reply)}
           model={{
-            outfits,
+            ...page,
             list,
             activity,
             muse,
@@ -302,6 +319,48 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
                 ? { destination: pickDestination(day, choice), choice }
                 : undefined,
           }}
+        />,
+      );
+    },
+  );
+
+  // The Saved grid's sentinel (hx-trigger="revealed", #660): the page below
+  // `before` of the same list, picking for the same day, and the next
+  // sentinel. Always a fragment; one statement after the session, as the tab.
+  app.get(
+    SAVED_TILES_PATH,
+    { schema: { querystring: SavedTilesQuery } },
+    async (request, reply) => {
+      const ownerId = sessionUserId(request);
+      const today = todayIn(config.timeZone, new Date());
+      const destination = parseDestination(request.query);
+      const day = destination.kind === 'day' ? destination : undefined;
+      const list = parseOutfitList(request.query.show);
+      const { before } = request.query;
+      const { page, activity, choice } = await savedContext(
+        db,
+        ownerId,
+        today,
+        day,
+        list,
+        { before, limit: OUTFIT_PAGE_SIZE },
+      );
+      logger.debug(
+        `GET ${SAVED_TILES_PATH}: ${page.outfits.length} ${list} outfits of user ${ownerId} below ${before}${page.next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(
+        reply,
+        <SavedTiles
+          model={{
+            ...page,
+            list,
+            activity,
+            picking:
+              day && choice
+                ? { destination: pickDestination(day, choice), choice }
+                : undefined,
+          }}
+          firstPage={false}
         />,
       );
     },

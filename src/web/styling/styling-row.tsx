@@ -1,6 +1,7 @@
 import { garmentMarks } from '../../wardrobe/marks';
 import type { GarmentRole } from '../../wardrobe/properties';
 import { t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { GarmentMark } from '../layout/garment-mark';
 import { GarmentPicture } from '../layout/parts';
 import { categoryLabel } from '../wardrobe/garment';
@@ -287,18 +288,15 @@ function StripSentinel(props: {
     `before=${props.before}`,
   ]);
   return (
-    <span
+    <PageSentinel
+      as="span"
       class="snap-center shrink-0 w-12 flex items-center justify-center"
-      hx-get={url}
-      hx-trigger="intersect once"
-      hx-swap="outerHTML"
-      data-strip-more=""
-    >
-      <span
-        class="loading loading-dots loading-sm text-muted"
-        aria-label={t('LOADING_MORE')}
-      ></span>
-    </span>
+      href={url}
+      trigger="intersect once"
+      marker="strip"
+      label={t('LOADING_MORE')}
+      size="sm"
+    />
   );
 }
 

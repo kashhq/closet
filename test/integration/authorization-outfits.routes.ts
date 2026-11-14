@@ -36,6 +36,27 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    // The Saved grid's next page (#660): the requester's own outfits below
+    // the cursor, whatever ownerId says; below the shared outfit's id + 1,
+    // it starts with it.
+    name: 'GET /outfits/tiles',
+    kind: 'read',
+    ok: 200,
+    secret: outfitName,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/outfits/tiles${q ? `${q}&` : '?'}before=${f.outfitId + 1}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
     // Styling (#42) from a capsule: the addressed wardrobe's capsule. A
     // grantee styles the owner's through `?ownerId=` (browsing only); by
     // itself the capsule is not in their wardrobe.
@@ -557,16 +578,38 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    // The plan page lists the requester's own outfits to plan (#13).
+    // The plan page lists the requester's own outfits to plan (#13), a
+    // page at a time (#660): the writes' fixtures push the shared outfit
+    // past the first, so the page shows it as the entry being changed.
     name: 'GET /calendar/plan',
     kind: 'read',
     ok: 200,
     secret: outfitName,
     shows: true,
     vias: BOTH,
-    request: (_, q) => ({
+    request: (f, q) => ({
       method: 'GET',
-      url: `/calendar/plan${q ? `${q}&` : '?'}for=day:2030-10-09&occasion=evening`,
+      url: `/calendar/plan${q ? `${q}&` : '?'}for=day:${f.today}&occasion=all-day&replace=${f.entryId}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    // The plan page's next page of outfits (#660), the requester's own:
+    // the page below the shared outfit's id + 1 starts with it.
+    name: 'GET /calendar/plan/more',
+    kind: 'read',
+    ok: 200,
+    secret: outfitName,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/calendar/plan/more${q ? `${q}&` : '?'}for=day:2030-10-09&occasion=evening&before=${f.outfitId + 1}`,
     }),
     expect: {
       owner: 'ok',
