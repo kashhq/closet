@@ -25,6 +25,18 @@ import { HERE_FRESH_HOURS } from './queries';
 import type { UserWeather } from './service';
 
 /**
+ * Every weather operation says it exists only with WEATHER_ENABLED: its
+ * route is never registered otherwise (`apiPlugin`), and a client reads the
+ * switch from `features.weather` on GET /me. A new weather route wraps its
+ * description in this.
+ */
+export function weatherOnly(description?: string): string {
+  const condition =
+    'Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.';
+  return description ? `${description} ${condition}` : condition;
+}
+
+/**
  * A day's weather and what it asks of an outfit, as the machines read it:
  * MCP's tools (get_weather, get_calendar, get_today, get_trip) and the
  * API's resources (GET /weather, GET /today, GET /trips/{id}/weather), so

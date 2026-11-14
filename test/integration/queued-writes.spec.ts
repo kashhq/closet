@@ -663,19 +663,21 @@ describe('queued writes', () => {
         (await post(`/wardrobe/${tee}/wear`, { worn: '1' })).statusCode,
       ).toBe(303);
 
-      // The garment page: worn today, so Undo shows and Wore today waits.
+      // The garment page names no day (#708): Wore today shows, its undo
+      // waits, and the last wear's day and kind tell the page's script
+      // (views/assets/outbox.ts, showPageDay) to show the undo on that day.
       const garmentPage = await page(`/wardrobe/${tee}`);
-      const wear = queuedTarget('wear', tee, today);
+      const wear = queuedTarget('wear', tee);
       expect(regionTag(garmentPage, wear.key)).toContain(
-        `data-outbox-path="${wear.path}" data-outbox-label="Marked tee" data-outbox-day="${today}"`,
+        `data-outbox-path="${wear.path}" data-outbox-label="Marked tee" data-worn-on="${today}" data-worn-by="single"`,
       );
       const wore = states(garmentPage, wear.key);
       expect(wore.shown).toMatch(
-        /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="0"\/>/,
-      );
-      expect(wore.shown).toContain('Undo');
-      expect(wore.alternate).toMatch(
         /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="1"\/>/,
+      );
+      expect(wore.alternate).toContain('Undo');
+      expect(wore.alternate).toMatch(
+        /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="0"\/>/,
       );
       expect(wore.chip).toContain('Waiting to sync');
       const wash = states(garmentPage, queuedTarget('wash', tee).key);

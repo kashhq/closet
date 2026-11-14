@@ -287,7 +287,7 @@ const ClientId = Type.Optional(
   Type.String({
     format: 'uuid',
     description:
-      'Your id for this create, for retrying it offline: accepted, not yet deduplicated',
+      'Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look',
   }),
 );
 

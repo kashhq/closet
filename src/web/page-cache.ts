@@ -189,6 +189,114 @@ export function cachedAt(headers: {
 }
 
 /**
+ * A stored copy's Server-Timing with its arrival stamp (CACHED_AT_TIMING_NAME)
+ * set to `stampMs`: the server's entries kept, any earlier stamp replaced, so
+ * a copy re-stamped on a 304 (#708) carries exactly one, the one
+ * freshness.js finds first.
+ */
+export function stampedServerTiming(
+  timing: string | null,
+  stampMs: string,
+): string {
+  const kept = (timing ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(
+      (entry) =>
+        entry !== '' && entry.split(';')[0].trim() !== CACHED_AT_TIMING_NAME,
+    );
+  return [...kept, `${CACHED_AT_TIMING_NAME};desc="${stampMs}"`].join(', ');
+}
+
+interface HeadersOf {
+  status: number;
+  headers: { get(name: string): string | null };
+}
+
+/**
+ * The If-None-Match a worker's refetch sends (#708; send(),
+ * src/web/render.ts): the stored copy's ETag, only for a copy of the account
+ * that owns the cache (`owner`, OWNER_KEY); none for another's, a copy
+ * without one, or no copy.
+ */
+export function revalidationTag(
+  copy: HeadersOf | undefined,
+  owner: string | undefined,
+): string | undefined {
+  if (!copy || owner === undefined || pageAccount(copy.headers) !== owner) {
+    return undefined;
+  }
+  return copy.headers.get('ETag') ?? undefined;
+}
+
+/**
+ * Whether a refetch's 304 confirms the stored copy, which is then stored
+ * again with a new stamp, its body unchanged: a 304 naming the copy's tag
+ * and its account, which still owns the cache. Anything else stores nothing.
+ */
+export function confirmsCopy(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): boolean {
+  const account = pageAccount(copy.headers);
+  return (
+    answer.status === 304 &&
+    owner !== undefined &&
+    account === owner &&
+    pageAccount(answer.headers) === account &&
+    answer.headers.get('ETag') === copy.headers.get('ETag')
+  );
+}
+
+/**
+ * What a worker's conditional refetch does with its answer (PageRefresh):
+ * a page (or a failure) is the answer, stored or refused by the page
+ * plugins; a 304 confirming the copy (confirmsCopy) re-stamps it; any
+ * other 304 (another tag, or the cache changed hands while it was in
+ * flight, #991) confirms nothing this cache may keep, so the page is asked
+ * again unconditionally, as when there is no copy: a raw 304 is no page,
+ * and the warm would count it failed.
+ */
+export type ConditionalVerdict = 'answer' | 'confirmed' | 'unconditional';
+
+export function conditionalVerdict(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): ConditionalVerdict {
+  if (answer.status !== 304) return 'answer';
+  return confirmsCopy(answer, copy, owner) ? 'confirmed' : 'unconditional';
+}
+
+/**
+ * What a 304 tells its stored copy (RFC 9111 4.3.4, 3.2): every header the
+ * 304 carries replaces the copy's (X-Asset-Version, Cache-Control,
+ * X-Page-Account, Server-Timing, Vary), except those describing the body
+ * it did not send, which stay the copy's. The storage checks then read the
+ * updated headers (forbidsStorage: a route that moved to no-store drops
+ * its copy rather than keeping it).
+ */
+const BODY_HEADERS = new Set([
+  'content-encoding',
+  'content-length',
+  'content-range',
+  'content-type',
+  'transfer-encoding',
+]);
+
+export function confirmedHeaders(
+  stored: Headers,
+  confirming: Headers,
+): Headers {
+  const headers = new Headers(stored);
+  confirming.forEach((value, name) => {
+    if (!BODY_HEADERS.has(name)) headers.set(name, value);
+  });
+  return headers;
+}
+
+/**
  * A page request the server redirected to the login page, which then
  * rendered for nobody (a followed redirect: htmx's boosted XHR, a
  * revalidation): nobody is signed in any more. The session gate is what

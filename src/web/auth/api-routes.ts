@@ -44,6 +44,26 @@ const Me = Type.Object(
     timeZone: Type.String(),
     /** The household's today (todayIn), the day a wear or wash defaults to. */
     today: IsoDateSchema,
+    /**
+     * What this server has, decided at registration: a client reads it here
+     * rather than guessing from a 404 (src/web/api/AGENTS.md).
+     */
+    features: Type.Object(
+      {
+        weather: Type.Boolean({
+          description:
+            'WEATHER_ENABLED: the /weather routes, GET and PUT /trips/{id}/weather and destination exist',
+        }),
+        push: Type.Boolean({
+          description: 'PWA_ENABLED: Web Push (the /push routes) exists',
+        }),
+      },
+      { title: 'Features' },
+    ),
+    /** The build: the same release /health/ready reports as `version`. */
+    version: Type.String({
+      description: 'The server build, as `version` on /health/ready',
+    }),
   },
   { title: 'Me', description: 'The account the token acts as' },
 );
@@ -57,11 +77,12 @@ const Me = Type.Object(
  *    doors). It sets no cookie.
  *  - DELETE /auth/token: signs this device out, revoking the calling token
  *    and nothing else.
- *  - GET /me: who the token acts as, and the household's day.
+ *  - GET /me: who the token acts as, the household's day, the server's
+ *    features and build.
  */
 export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
-  { db, config, apiLogger: logger, signInLimits },
+  { db, config, weather, apiLogger: logger, signInLimits },
   done,
 ) => {
   app.post(
@@ -159,6 +180,8 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         ...(user.email === null ? {} : { email: user.email }),
         timeZone: config.timeZone,
         today: todayIn(config.timeZone, new Date()),
+        features: { weather: weather !== undefined, push: config.pwaEnabled },
+        version: config.release,
       };
     },
   );

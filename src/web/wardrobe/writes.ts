@@ -5,7 +5,7 @@ import {
   initialCutoutState,
 } from '../../cutout/state';
 import type { Db, Queryable } from '../../db/client';
-import { isDeletedClientId } from '../../db/errors';
+import { createOnce } from '../../db/create-once';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { parseStoredName, unkeyedPhoto } from '../files/image-variant';
@@ -131,8 +131,7 @@ export function createGarment(
  * createGarment for a create that carries the client's own id (the API's,
  * #563): a retry finds the owner's row of that id and answers it
  * (`created: false`, nothing else written). A client id whose garment was
- * deleted since (its tombstone, the sync triggers' CL410, or the row gone
- * between the insert and the lookup) is a 410: never created again. The id
+ * deleted since (createOnce's tombstone) is a 410: never created again. The id
  * is not compared with the row's content: a retry may follow the client's
  * own later edits, and the id names the create.
  *
@@ -153,23 +152,20 @@ export async function createGarmentOnce(
   clientId: string,
   settle?: (tx: Queryable) => Promise<WithGarment | undefined>,
 ): Promise<{ id: number; created: boolean }> {
-  try {
-    const write = async (tx: Queryable) => {
-      const id = await insertGarmentOnce(tx, ownerId, fields, status, clientId);
-      if (id === null) return null;
-      const withGarment = await settle?.(tx);
-      await withGarment?.(tx, id);
-      return id;
-    };
+  const write = async (tx: Queryable) => {
+    const id = await insertGarmentOnce(tx, ownerId, fields, status, clientId);
+    if (id === null) return undefined;
+    const withGarment = await settle?.(tx);
+    await withGarment?.(tx, id);
+    return id;
+  };
+  const once = await createOnce(
     // A transaction only when rows ride with the insert, as createGarment.
-    const id = settle ? await db.transaction(write) : await write(db);
-    if (id !== null) return { id, created: true };
-    const first = await garmentIdByClientId(db, ownerId, clientId);
-    if (first !== null) return { id: first, created: false };
-  } catch (error) {
-    if (!isDeletedClientId(error)) throw error;
-  }
-  throw new HttpError(410, t('GARMENT_DELETED'));
+    () => (settle ? db.transaction(write) : write(db)),
+    async () => (await garmentIdByClientId(db, ownerId, clientId)) ?? undefined,
+  );
+  if (once === 'gone') throw new HttpError(410, t('GARMENT_DELETED'));
+  return { id: once.row, created: once.created };
 }
 
 /**

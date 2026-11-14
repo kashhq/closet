@@ -96,7 +96,7 @@ export function shortDayLabel(date: IsoDate): string {
 }
 
 /** "Sep 29, 2025". */
-function shortDayYearLabel(date: IsoDate): string {
+export function shortDayYearLabel(date: IsoDate): string {
   const { year, month, day } = dateParts(date);
   return t('calendar.SHORT_DAY_YEAR', {
     month: t(MONTH_NAMES[month - 1]),

@@ -1,20 +1,27 @@
 import * as z from 'zod';
-import { tripPhase } from '../../../wardrobe/packing';
 import { NORMAL_YEARS } from '../../../weather/normals';
 import { todayIn } from '../../../calendar-date';
+import { type Projection, project } from '../../api/resource';
 import { HttpError } from '../../errors';
 import { OUTFIT_NAME_MAX } from '../../outfits/queries';
 import { type TripForecast, tripForecast } from '../../trips/forecast';
-import type { TripOutfitView } from '../../trips/model';
 import { listTrips, type TripSlot } from '../../trips/queries';
 import {
   pickIdeaForTrip,
   planTripOutfit,
   requireTripModel,
 } from '../../trips/trip-actions';
+import {
+  Trip,
+  TripListItem,
+  tripListRecord,
+  type TripListRecord,
+  tripRecord,
+  type TripRecord,
+} from '../../trips/trip-resource';
 import { actorOf, defineTool, originOf, type ToolContext } from '../tool';
-import { agentNameOf } from '../../write-origin';
 import { isoDate, occasionInput, rowId } from './common';
+import { outfitGarmentForAgent } from './outfits';
 import { dayWeather, typicalDayWeather } from '../../weather/weather-resource';
 
 /**
@@ -23,21 +30,114 @@ import { dayWeather, typicalDayWeather } from '../../weather/weather-resource';
  * the same writers. The caller's own, like outfits: no ownerId.
  */
 
-function outfitOut(outfit: TripOutfitView) {
-  return {
+/**
+ * The trip resources as an agent reads them (#711): the API's records
+ * (trip-resource.ts), nulls kept, each level projected; no photo URLs (an
+ * agent cannot fetch a signed /file URL), and `agent` the agent's bare
+ * name, as every tool's.
+ */
+export const TRIP_LIST_ITEM_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  destination: 'keep',
+  notes: 'omit',
+  located: 'keep',
+  startsOn: 'keep',
+  endsOn: 'keep',
+  phase: 'keep',
+  // Answered as `outfits` and `extras`, list_trips' names since #10.
+  outfitCount: 'omit',
+  extraCount: 'omit',
+} as const satisfies Projection<TripListRecord>;
+
+export const TRIP_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  destination: 'keep',
+  notes: 'keep',
+  located: 'keep',
+  startsOn: 'keep',
+  endsOn: 'keep',
+  phase: 'keep',
+  days: 'own',
+  anyDay: 'own',
+  packing: 'own',
+  extras: 'keep',
+} as const satisfies Projection<TripRecord>;
+
+type TripOutfitRecord = TripRecord['anyDay'][number];
+type PackingRecord = TripRecord['packing'];
+type PackingGroupRecord = PackingRecord['groups'][number];
+
+export const TRIP_DAY_FOR_MCP = {
+  day: 'keep',
+  outfits: 'own',
+} as const satisfies Projection<TripRecord['days'][number]>;
+
+export const TRIP_OUTFIT_FOR_MCP = {
+  // Answered as `tripOutfitId`, get_trip's name since #10.
+  id: 'omit',
+  outfitId: 'keep',
+  name: 'keep',
+  day: 'keep',
+  occasion: 'keep',
+  wornTodayEntryId: 'keep',
+  agent: 'own',
+  garments: 'own',
+} as const satisfies Projection<TripOutfitRecord>;
+
+export const PACKING_FOR_MCP = {
+  garments: 'keep',
+  packed: 'keep',
+  pieces: 'keep',
+  warned: 'keep',
+  groups: 'own',
+} as const satisfies Projection<PackingRecord>;
+
+export const PACKING_GROUP_FOR_MCP = {
+  role: 'keep',
+  garments: 'own',
+} as const satisfies Projection<PackingGroupRecord>;
+
+export const PACKING_GARMENT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  thumbUrl: 'omit',
+  category: 'keep',
+  quantity: 'keep',
+  outfits: 'keep',
+  wears: 'keep',
+  copiesNeeded: 'keep',
+  pack: 'keep',
+  packed: 'keep',
+  warnings: 'keep',
+} as const satisfies Projection<PackingGroupRecord['garments'][number]>;
+
+// The nested levels' schemas, which project shapes their kept fields by.
+const TRIP_DAY = Trip.properties.days.items;
+const TRIP_OUTFIT = Trip.properties.anyDay.items;
+const PACKING = Trip.properties.packing;
+const PACKING_GROUP = PACKING.properties.groups.items;
+const PACKING_GARMENT = PACKING_GROUP.properties.garments.items;
+
+function tripOutfitForAgent(outfit: TripOutfitRecord) {
+  return project(outfit, TRIP_OUTFIT, TRIP_OUTFIT_FOR_MCP, {
     tripOutfitId: outfit.id,
-    outfitId: outfit.outfitId,
-    name: outfit.name,
-    day: outfit.day,
-    occasion: outfit.occasion,
-    // Your agent put it on the trip (#682): its token's name.
-    agent: agentNameOf(outfit.agent),
-    garments: outfit.garments.map((g) => ({
-      id: g.id,
-      name: g.name,
-      category: g.category,
-    })),
-  };
+    agent: outfit.agent?.name ?? null,
+    garments: outfit.garments.map(outfitGarmentForAgent),
+  });
+}
+
+function packingForAgent(packing: PackingRecord) {
+  return project(packing, PACKING, PACKING_FOR_MCP, {
+    groups: packing.groups.map((group) =>
+      project(group, PACKING_GROUP, PACKING_GROUP_FOR_MCP, {
+        garments: group.garments.map((row) =>
+          project(row, PACKING_GARMENT, PACKING_GARMENT_FOR_MCP, {}),
+        ),
+      }),
+    ),
+  });
 }
 
 /** get_trip's weather: none without weather on, else the forecast or why there is none. */
@@ -117,17 +217,13 @@ export const tripTools = [
       const trips = await listTrips(ctx.db, ctx.userId, today);
       return {
         today,
-        trips: trips.map((trip) => ({
-          id: trip.id,
-          name: trip.name,
-          destination: trip.destination,
-          located: trip.location !== null,
-          startsOn: trip.startsOn,
-          endsOn: trip.endsOn,
-          phase: tripPhase(trip, today),
-          outfits: trip.outfits,
-          extras: trip.extras,
-        })),
+        trips: trips.map((trip) => {
+          const record = tripListRecord(trip, today);
+          return project(record, TripListItem, TRIP_LIST_ITEM_FOR_MCP, {
+            outfits: record.outfitCount,
+            extras: record.extraCount,
+          });
+        }),
       };
     },
   }),
@@ -141,7 +237,7 @@ export const tripTools = [
     async run({ tripId }, ctx) {
       const today = todayIn(ctx.timeZone, new Date());
       const model = await requireTripModel(ctx.db, actorOf(ctx), tripId, today);
-      const { trip, packing } = model;
+      const { trip } = model;
       const forecast = ctx.weather
         ? await tripForecast(
             { db: ctx.db, weather: ctx.weather },
@@ -150,48 +246,18 @@ export const tripTools = [
             today,
           )
         : null;
-      return {
-        id: trip.id,
-        name: trip.name,
-        destination: trip.destination,
-        located: trip.location !== null,
-        startsOn: trip.startsOn,
-        endsOn: trip.endsOn,
-        notes: trip.notes,
+      const record = tripRecord(model);
+      return project(record, Trip, TRIP_FOR_MCP, {
+        days: record.days.map((day) =>
+          project(day, TRIP_DAY, TRIP_DAY_FOR_MCP, {
+            outfits: day.outfits.map(tripOutfitForAgent),
+          }),
+        ),
+        anyDay: record.anyDay.map(tripOutfitForAgent),
+        packing: packingForAgent(record.packing),
         today,
-        phase: model.phase,
-        days: model.days.map((day) => ({
-          day: day.day,
-          outfits: day.outfits.map(outfitOut),
-        })),
-        anyDay: model.undated.map(outfitOut),
-        packing: {
-          garments: packing.garments,
-          packed: packing.packed,
-          pieces: packing.pieces,
-          warned: packing.warned,
-          groups: packing.groups.map((group) => ({
-            role: group.role,
-            garments: group.rows.map((row) => ({
-              id: row.garment.id,
-              name: row.garment.name,
-              category: row.garment.category,
-              quantity: row.garment.quantity,
-              outfits: row.outfits,
-              wears: row.wears,
-              copiesNeeded: row.needed,
-              pack: row.pack,
-              packed: row.packed,
-              warnings: row.warnings,
-            })),
-          })),
-        },
-        extras: model.items.map((item) => ({
-          label: item.label,
-          packed: item.packed,
-        })),
         weather: weatherOut(forecast),
-      };
+      });
     },
   }),
 

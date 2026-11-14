@@ -336,23 +336,6 @@ describe('the garment writes', () => {
       expect((await garmentRow(t, id))?.clientId).toBeNull();
     });
 
-    it("answers a deleted garment's id 410 gone and never creates it again", async () => {
-      const clientId = randomUUID();
-      const id = await created({
-        name: 'Short-lived',
-        category: 'tops',
-        clientId,
-      });
-      expect((await send('DELETE', `/garments/${id}`)).statusCode).toBe(204);
-      const retry = await send('POST', '/garments', {
-        name: 'Short-lived',
-        category: 'tops',
-        clientId,
-      });
-      expectProblem(retry, 410, 'gone');
-      expect(await rowsOf(t.owner.id, clientId)).toEqual([]);
-    });
-
     it('is scoped to the wardrobe it lands in: a manager creates into the owner’s, their own is another', async () => {
       const manager = await signUp('api-garments-manager@example.com');
       await share(manager.cookie, 'MANAGE');

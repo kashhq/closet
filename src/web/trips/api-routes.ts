@@ -17,9 +17,15 @@ import { enforceLimit } from '../security/rate-limit';
 import { type Actor, actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
 import { keptDestination, pickedPlace } from '../weather/place-picker';
-import { KeptDestination, PlaceInput } from '../weather/weather-resource';
+import {
+  KeptDestination,
+  PlaceInput,
+  weatherOnly,
+} from '../weather/weather-resource';
 import { tripForecast } from './forecast';
-import { createTripAt, listTrips } from './queries';
+import { createTripAt, createTripOnce, listTrips } from './queries';
+import { HttpError } from '../errors';
+import { t } from '../i18n';
 import {
   addTripItem,
   copyTripExtras,
@@ -208,9 +214,9 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['trips'],
         summary: 'Creates a trip',
         description:
-          "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`.",
+          "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         body: NewTrip,
-        response: apiResponses({ 201: TripCreated }),
+        response: apiResponses({ 200: TripCreated, 201: TripCreated }),
       },
     },
     async (request, reply) => {
@@ -225,18 +231,27 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           who: `user ${userId}`,
         });
       }
-      const { id, away } = await createTripAt(
-        db,
-        userId,
-        form.fields,
-        place ? pickedPlace(place) : null,
-        today(),
-      );
+      const picked = place ? pickedPlace(place) : null;
+      const once = clientId
+        ? await createTripOnce(
+            db,
+            userId,
+            form.fields,
+            picked,
+            today(),
+            clientId,
+          )
+        : {
+            row: await createTripAt(db, userId, form.fields, picked, today()),
+            created: true,
+          };
+      if (once === 'gone') throw new HttpError(410, t('TRIP_DELETED'));
+      const { id, away } = once.row;
       logger.info(
-        `Trip ${id} created by user ${userId} (API): ${form.fields.startsOn} to ${form.fields.endsOn}${place ? ', destination located' : ''}${away > 0 ? `, ${away} planned entr(ies) removed from its days` : ''}${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
+        `Trip ${id} ${once.created ? 'created' : 'already created, retry answered'} by user ${userId} (API): ${form.fields.startsOn} to ${form.fields.endsOn}${place && once.created ? ', destination located' : ''}${away > 0 ? `, ${away} planned entr(ies) removed from its days` : ''}${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
       );
       return reply
-        .status(201)
+        .status(once.created ? 201 : 200)
         .header('Location', `${API_PREFIX}/trips/${id}`)
         .send({ id });
     },
@@ -544,8 +559,9 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           operationId: 'getTripWeather',
           tags: ['trips'],
           summary: "The destination's weather for the trip's days",
-          description:
+          description: weatherOnly(
             "The trip page's forecast: the located destination's forecast for the trip's days from today within the 16-day forecast, each with what it asks of an all-day outfit (your offset included), and the typical weather of the days past it. Nothing is fetched for a trip not located or over. No ETag: it moves with the day and the forecast.",
+          ),
           params: TripParams,
           response: apiResponses({ 200: TripWeather }),
         },
@@ -570,8 +586,9 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           operationId: 'setTripDestination',
           tags: ['trips'],
           summary: "Locates the trip's destination",
-          description:
+          description: weatherOnly(
             "A place from GET /weather/places becomes the destination (its name too), so the trip gets the place's weather. Set-state. 10 a minute per user (each new place is a forecast to fetch).",
+          ),
           params: TripParams,
           body: PlaceInput,
           response: apiResponses({ 200: KeptDestination }),

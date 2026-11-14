@@ -406,7 +406,6 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ctx={viewContext(reply)}
           outfit={found.outfit}
           entries={found.entries}
-          today={today}
           alreadySaved={alreadySavedOf(request.query.alreadySaved)}
           toast={decisionToastOf(request.query[DECISION_FLAG])}
         />,

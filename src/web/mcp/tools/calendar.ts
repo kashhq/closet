@@ -16,7 +16,58 @@ import { actorOf, defineTool, wardrobeFor } from '../tool';
 import { isoDate, ownerIdInput, rowId } from './common';
 import { type DayWeatherOf, reachesForecast, weatherOfDays } from './weather';
 import { garmentNotFound } from '../../wardrobe/garment-access';
-import { agentNameOf } from '../../write-origin';
+import { type Projection, project } from '../../api/resource';
+import type { CalendarEntry } from '../../calendar/calendar-view';
+import {
+  CalendarEntryResource,
+  calendarEntryRecord,
+  type CalendarEntryRecord,
+} from '../../calendar/entry-resource';
+import { outfitGarmentForAgent } from './outfits';
+
+/**
+ * A calendar entry as an agent reads it (#711): the API's record
+ * (entry-resource.ts), nulls kept; never the selfie itself, and `agent`
+ * the agent's bare name, as every tool's.
+ */
+export const CALENDAR_ENTRY_FOR_MCP = {
+  id: 'keep',
+  day: 'keep',
+  occasion: 'keep',
+  worn: 'keep',
+  plannedBy: 'keep',
+  agent: 'own',
+  // Answered as `selfie`: whether a mirror photo was taken (#19).
+  selfieId: 'omit',
+  selfiePhoto: 'omit',
+  outfit: 'own',
+} as const satisfies Projection<CalendarEntryRecord>;
+
+export const CALENDAR_ENTRY_OUTFIT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  garments: 'own',
+} as const satisfies Projection<CalendarEntryRecord['outfit']>;
+
+function entryForAgent(
+  entry: CalendarEntry,
+  weather: ReturnType<DayWeatherOf> | undefined,
+) {
+  const record = calendarEntryRecord(entry);
+  return project(record, CalendarEntryResource, CALENDAR_ENTRY_FOR_MCP, {
+    agent: record.agent?.name ?? null,
+    outfit: project(
+      record.outfit,
+      CalendarEntryResource.properties.outfit,
+      CALENDAR_ENTRY_OUTFIT_FOR_MCP,
+      {
+        garments: record.outfit.garments.map(outfitGarmentForAgent),
+      },
+    ),
+    selfie: record.selfieId !== null,
+    weather,
+  });
+}
 
 /**
  * The calendar and the wears are the caller's own records (src/web/wears):
@@ -28,7 +79,7 @@ export const calendarTools = [
   defineTool({
     name: 'get_calendar',
     title: 'Get my calendar',
-    description: `Your calendar from one day to another (inclusive, at most ${MAX_CALENDAR_DAYS} days): each entry's id, day, occasion (the part of the day: a day can hold several outfits, listed in occasion order), outfit, whether it was worn, whether you took an outfit selfie of it (a mirror photo; the photo itself is never given), and who planned it (plannedBy: user; auto for "Plan my week"'s picks, which its daily re-plan may swap until you edit or wear them; or agent for what an agent planned through these tools, with agent naming its token). Without dates: this week, from today. Days are the household's (its time zone). With weather on and a location set, an entry within the forecast also has the day's weather and what it asks of that occasion's outfit (as get_weather gives it).`,
+    description: `Your calendar from one day to another (inclusive, at most ${MAX_CALENDAR_DAYS} days): each entry's id, day, occasion (the part of the day: a day can hold several outfits, listed in occasion order), outfit (its id, name and garments), whether it was worn, whether you took an outfit selfie of it (a mirror photo; the photo itself is never given), and who planned it (plannedBy: user; auto for "Plan my week"'s picks, which its daily re-plan may swap until you edit or wear them; or agent for what an agent planned through these tools, with agent naming its token). Without dates: this week, from today. Days are the household's (its time zone). With weather on and a location set, an entry within the forecast also has the day's weather and what it asks of that occasion's outfit (as get_weather gives it).`,
     input: z.object({
       from: isoDate().optional().describe('First day, YYYY-MM-DD.'),
       to: isoDate().optional().describe('Last day, YYYY-MM-DD.'),
@@ -85,18 +136,9 @@ export const calendarTools = [
               a.day.localeCompare(b.day) ||
               compareOccasions(a.occasion, b.occasion),
           )
-          .map((entry) => ({
-            id: entry.id,
-            day: entry.day,
-            occasion: entry.occasion,
-            worn: entry.worn,
-            // Whether a mirror photo was taken (#19); never the image.
-            selfie: entry.selfie !== null,
-            plannedBy: entry.plannedBy,
-            agent: agentNameOf(entry.agent),
-            outfit: { id: entry.outfit.id, name: entry.outfit.name },
-            weather: weatherOf?.(entry.day, entry.occasion),
-          })),
+          .map((entry) =>
+            entryForAgent(entry, weatherOf?.(entry.day, entry.occasion)),
+          ),
       };
     },
   }),

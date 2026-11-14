@@ -321,7 +321,9 @@
                   "required": [
                     "id",
                     "timeZone",
-                    "today"
+                    "today",
+                    "features",
+                    "version"
                   ],
                   "properties": {
                     "id": {
@@ -335,6 +337,28 @@
                     },
                     "today": {
                       "format": "date",
+                      "type": "string"
+                    },
+                    "features": {
+                      "title": "Features",
+                      "type": "object",
+                      "required": [
+                        "weather",
+                        "push"
+                      ],
+                      "properties": {
+                        "weather": {
+                          "description": "WEATHER_ENABLED: the /weather routes, GET and PUT /trips/{id}/weather and destination exist",
+                          "type": "boolean"
+                        },
+                        "push": {
+                          "description": "PWA_ENABLED: Web Push (the /push routes) exists",
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "version": {
+                      "description": "The server build, as `version` on /health/ready",
                       "type": "string"
                     }
                   }
@@ -12364,7 +12388,7 @@
         "tags": [
           "trips"
         ],
-        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`.",
+        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -12442,7 +12466,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet stored",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first trip of that id (200), the id of one deleted since is a 410",
                     "type": "string"
                   }
                 }
@@ -12451,6 +12475,25 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "TripCreated",
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -14308,7 +14351,7 @@
         "tags": [
           "trips"
         ],
-        "description": "The trip page's forecast: the located destination's forecast for the trip's days from today within the 16-day forecast, each with what it asks of an all-day outfit (your offset included), and the typical weather of the days past it. Nothing is fetched for a trip not located or over. No ETag: it moves with the day and the forecast.",
+        "description": "The trip page's forecast: the located destination's forecast for the trip's days from today within the 16-day forecast, each with what it asks of an all-day outfit (your offset included), and the typical weather of the days past it. Nothing is fetched for a trip not located or over. No ETag: it moves with the day and the forecast. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "parameters": [
           {
             "schema": {
@@ -14854,7 +14897,7 @@
         "tags": [
           "trips"
         ],
-        "description": "A place from GET /weather/places becomes the destination (its name too), so the trip gets the place's weather. Set-state. 10 a minute per user (each new place is a forecast to fetch).",
+        "description": "A place from GET /weather/places becomes the destination (its name too), so the trip gets the place's weather. Set-state. 10 a minute per user (each new place is a forecast to fetch). Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18126,7 +18169,7 @@
         "tags": [
           "capsules"
         ],
-        "description": "In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`.",
+        "description": "In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`. With a `clientId`, a retry answers the first capsule of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18150,7 +18193,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet stored",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first capsule of that id (200), the id of one deleted since is a 410",
                     "type": "string"
                   }
                 }
@@ -18172,6 +18215,25 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "CapsuleCreated",
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -19963,7 +20025,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet deduplicated",
+                    "description": "Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look",
                     "type": "string"
                   }
                 }
@@ -20064,7 +20126,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet deduplicated",
+                    "description": "Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look",
                     "type": "string"
                   }
                 }
@@ -25155,13 +25217,13 @@
         "tags": [
           "sizes"
         ],
-        "description": "A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}).",
+        "description": "A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}). With a `clientId`, a retry answers the first note of that id (200, as it was saved) and creates nothing; the id of a note deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "title": "BrandSizeInput",
+                "title": "NewBrandSize",
                 "description": "A brand note, replaced whole: the brand (one row per brand, whatever the case) and a size or a note, at least one; a size is normalized like a garment’s (XL is X-Large)",
                 "type": "object",
                 "required": [
@@ -25179,6 +25241,11 @@
                   "note": {
                     "maxLength": 200,
                     "type": "string"
+                  },
+                  "clientId": {
+                    "format": "uuid",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first note of that id (200), the id of one deleted since is a 410",
+                    "type": "string"
                   }
                 }
               }
@@ -25187,6 +25254,39 @@
           "description": "A brand note, replaced whole: the brand (one row per brand, whatever the case) and a size or a note, at least one; a size is normalized like a garment’s (XL is X-Large)"
         },
         "responses": {
+          "200": {
+            "description": "Your size in a brand: a size, a note, or both",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "BrandSize",
+                  "description": "Your size in a brand: a size, a note, or both",
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "brand"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "brand": {
+                      "description": "The brand as you spelled it",
+                      "type": "string"
+                    },
+                    "size": {
+                      "description": "The size you wear in it",
+                      "type": "string"
+                    },
+                    "note": {
+                      "description": "How it runs (\"runs small, size up\")",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Your size in a brand: a size, a note, or both",
             "content": {
@@ -30717,7 +30817,7 @@
         "tags": [
           "weather"
         ],
-        "description": "The header line's weather and the calendar's day chips: where you are (the home, or the phone while fresh), your unit and offset, and each forecast day asked for with what it asks of an outfit. Seven days unless both ends are sent: from today without dates, from `from` with it alone, up to `to` with it alone. At most 42 days, else a 400; days the forecast does not reach are left out. Fetches the forecast only when none is kept for the place (else serves it, refreshing it behind once stale).",
+        "description": "The header line's weather and the calendar's day chips: where you are (the home, or the phone while fresh), your unit and offset, and each forecast day asked for with what it asks of an outfit. Seven days unless both ends are sent: from today without dates, from `from` with it alone, up to `to` with it alone. At most 42 days, else a 400; days the forecast does not reach are left out. Fetches the forecast only when none is kept for the place (else serves it, refreshing it behind once stale). Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "parameters": [
           {
             "schema": {
@@ -31148,7 +31248,7 @@
         "tags": [
           "weather"
         ],
-        "description": "The profile's and a trip's city search (Open-Meteo's geocoding, through the server): pick one for PUT /weather/home or PUT /trips/{id}/destination. 20 a minute per user; a 503 when the search did not answer, worth a retry.",
+        "description": "The profile's and a trip's city search (Open-Meteo's geocoding, through the server): pick one for PUT /weather/home or PUT /trips/{id}/destination. 20 a minute per user; a 503 when the search did not answer, worth a retry. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "parameters": [
           {
             "schema": {
@@ -31249,7 +31349,7 @@
         "tags": [
           "weather"
         ],
-        "description": "The profile's pick from the place search: the forecast is for it whenever the phone's location is not fresh. Set-state. 10 a minute per user (each new place is a forecast to fetch).",
+        "description": "The profile's pick from the place search: the forecast is for it whenever the phone's location is not fresh. Set-state. 10 a minute per user (each new place is a forecast to fetch). Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -31355,6 +31455,7 @@
         "tags": [
           "weather"
         ],
+        "description": "Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "responses": {
           "204": {
             "description": "Cleared"
@@ -31389,7 +31490,7 @@
         "tags": [
           "weather"
         ],
-        "description": "\"Use my location\": the forecast is for it, standing in for home while fresh; send it again to keep it fresh. Round it on the phone too: a precise position need never leave it. 10 a minute per user.",
+        "description": "\"Use my location\": the forecast is for it, standing in for home while fresh; send it again to keep it fresh. Round it on the phone too: a precise position need never leave it. 10 a minute per user. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -31479,7 +31580,7 @@
         "tags": [
           "weather"
         ],
-        "description": "Stop: the forecast is for the home again, if one is set.",
+        "description": "Stop: the forecast is for the home again, if one is set. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "responses": {
           "204": {
             "description": "Cleared"
@@ -31514,7 +31615,7 @@
         "tags": [
           "weather"
         ],
-        "description": "Display only: every temperature here stays °C. Set-state.",
+        "description": "Display only: every temperature here stays °C. Set-state. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -31612,7 +31713,7 @@
         "tags": [
           "weather"
         ],
-        "description": "An Ideas card's and the profile's \"Too warm\" / \"Too cold\": your temperature offset moves a step, and the next ideas are matched to it. Not idempotent: each call is a step.",
+        "description": "An Ideas card's and the profile's \"Too warm\" / \"Too cold\": your temperature offset moves a step, and the next ideas are matched to it. Not idempotent: each call is a step. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -31699,7 +31800,7 @@
         "tags": [
           "weather"
         ],
-        "description": "The profile's Reset: the feedback's steps are forgotten, and ideas are matched to the forecast as it reads.",
+        "description": "The profile's Reset: the feedback's steps are forgotten, and ideas are matched to the forecast as it reads. Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.",
         "responses": {
           "204": {
             "description": "Cleared"

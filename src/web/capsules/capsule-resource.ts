@@ -1,5 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
-import { ListOf, withoutNulls } from '../api/resource';
+import { asResource, ListOf, withoutNulls } from '../api/resource';
 import { imageUrl } from '../files/image-url';
 import { RowId } from '../schemas';
 import type { CapsuleCard, CapsuleDetail, SyncedCapsuleRow } from './queries';
@@ -11,7 +11,8 @@ import { CAPSULE_NAME_MAX, CAPSULE_NOTES_MAX } from './validation';
  * list's capsule (listCapsules, the list page's cards) and one capsule
  * (requireCapsule). Its garments are a garment list: GET
  * /garments?capsuleId={id}, paged and counted like the grid. camelCase,
- * null fields left out.
+ * null fields left out: the records keep them (`capsuleListRecord`,
+ * `capsuleRecord`) for MCP's capsule tools to project.
  */
 
 const CapsulePreviewGarment = Type.Object(
@@ -51,19 +52,23 @@ export const CapsuleList = ListOf(CapsuleListItem, {
   description: "A page of the wardrobe's capsules, by name",
 });
 
-export function toCapsuleListItem(card: CapsuleCard): CapsuleListItem {
+/** A list's capsule, nulls kept: the API's CapsuleListItem, what list_capsules projects. */
+export function capsuleListRecord(card: CapsuleCard) {
   return {
     id: card.id,
     name: card.name,
     count: card.count,
-    preview: card.strip.map((garment) =>
-      withoutNulls({
-        id: garment.id,
-        name: garment.name,
-        thumbUrl: garment.photo && imageUrl(garment.photo, 'thumb'),
-      }),
-    ),
+    preview: card.strip.map((garment) => ({
+      id: garment.id,
+      name: garment.name,
+      thumbUrl: garment.photo && imageUrl(garment.photo, 'thumb'),
+    })),
   };
+}
+export type CapsuleListRecord = ReturnType<typeof capsuleListRecord>;
+
+export function toCapsuleListItem(card: CapsuleCard): CapsuleListItem {
+  return asResource(CapsuleListItem, capsuleListRecord(card));
 }
 
 export const Capsule = Type.Object(
@@ -79,10 +84,16 @@ export const Capsule = Type.Object(
   },
 );
 
+/** One capsule, nulls kept: the API's Capsule, what get_capsule projects. */
+export function capsuleRecord(capsule: CapsuleDetail) {
+  return { id: capsule.id, name: capsule.name, notes: capsule.notes };
+}
+export type CapsuleRecord = ReturnType<typeof capsuleRecord>;
+
 export function toCapsuleResource(
   capsule: CapsuleDetail,
 ): Static<typeof Capsule> {
-  return withoutNulls(capsule);
+  return asResource(Capsule, capsuleRecord(capsule));
 }
 
 /**
@@ -134,7 +145,7 @@ export const NewCapsule = Type.Object(
       Type.String({
         format: 'uuid',
         description:
-          'Your id for this create, for retrying it offline: accepted, not yet stored',
+          'Your id for this create, for retrying it offline: a retry answers the first capsule of that id (200), the id of one deleted since is a 410',
       }),
     ),
   },
