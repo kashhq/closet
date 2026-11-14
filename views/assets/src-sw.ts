@@ -234,13 +234,15 @@ const MAX_ENTRIES: Readonly<Record<string, number>> = {
  * its plugin touched since this worker started, so a cold worker's drop
  * would forget nothing. CacheExpiration asks for a limit (asserted in
  * development builds); delete() reads none, so a retired cache's is nominal.
+ * The rows go first: an entry stored between the two steps then keeps its
+ * fresh row (the other order deleted it, so maxEntries never counted or
+ * evicted that entry), and a cache that is gone implies its rows are.
  */
 async function deleteCacheAndMetadata(name: string): Promise<boolean> {
-  const deleted = await self.caches.delete(name);
   await new CacheExpiration(name, {
     maxEntries: MAX_ENTRIES[name] ?? 1,
   }).delete();
-  return deleted;
+  return self.caches.delete(name);
 }
 
 // One precache per static build (#656, src/static-build.ts, src/web/shell/updates.md), named
