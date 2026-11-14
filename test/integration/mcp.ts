@@ -6,6 +6,8 @@ import { user } from '../../src/db/schema';
 import {
   createToken,
   type CreateTokenResult,
+  FULL_SCOPE,
+  type TokenScope,
 } from '../../src/web/auth/personal-tokens';
 import { TEST_PASSWORD, type TestApp } from './harness';
 
@@ -21,16 +23,22 @@ const TOKEN = /closet_[A-Za-z0-9_-]{43}/;
 
 /**
  * POST /auth/tokens as `cookie`'s user (the owner by default), with the
- * harness's password (the step-up); the new token.
+ * harness's password (the step-up); the new token. Ticks "Can make
+ * changes" unless `scope` says otherwise: the page's own default is
+ * read-only (#701), which access-tokens.spec proves.
  */
 export async function createAccessToken(
   t: TestApp,
-  { cookie, name = 'Claude Code' }: { cookie?: string; name?: string } = {},
+  {
+    cookie,
+    name = 'Claude Code',
+    scope = FULL_SCOPE,
+  }: { cookie?: string; name?: string; scope?: TokenScope } = {},
 ): Promise<string> {
   const res = await t.inject({
     method: 'POST',
     url: '/auth/tokens',
-    payload: { name, currentPassword: TEST_PASSWORD },
+    payload: { name, currentPassword: TEST_PASSWORD, ...scopeFields(scope) },
     headers: cookie ? { cookie } : {},
   });
   expect(res.statusCode).toBe(200);
@@ -49,6 +57,7 @@ export async function mintToken(
   userId: number,
   name: string,
   kind: TokenKind = 'mcp',
+  scope: TokenScope = FULL_SCOPE,
 ): Promise<CreateTokenResult> {
   const [account] = await t.db
     .select({ password: user.password })
@@ -60,9 +69,18 @@ export async function mintToken(
       userId,
       kind,
       name,
+      scope,
       verifiedPassword: account.password,
     },
   );
+}
+
+/** Agent Access's checkboxes for `scope`, as a browser posts them (ticked: `on`). */
+export function scopeFields(scope: TokenScope): Record<string, string> {
+  return {
+    ...(scope.readOnly ? {} : { writes: 'on' }),
+    ...(scope.ownWardrobeOnly ? { ownWardrobeOnly: 'on' } : {}),
+  };
 }
 
 let requestId = 0;

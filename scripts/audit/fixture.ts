@@ -532,6 +532,8 @@ export async function createFixture(options: {
         userId: id,
         kind: 'mcp',
         name,
+        // The audit calls every tool, writes included.
+        scope: build.tokens.FULL_SCOPE,
         verifiedPassword: row.password,
       },
     );

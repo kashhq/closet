@@ -7,7 +7,7 @@ import {
   garmentSummaries,
 } from '../../wardrobe/queries';
 import { type ComparedGarment, compareWardrobes } from '../compare';
-import { defineTool, type ToolContext, wardrobeFor } from '../tool';
+import { actorOf, defineTool, type ToolContext, wardrobeFor } from '../tool';
 import { rowId } from './common';
 
 /**
@@ -48,7 +48,7 @@ export const sharingTools = [
     input: z.object({}),
     writes: false,
     async run(_args, ctx) {
-      const shared = await sharedWardrobesOf(ctx.db, ctx.userId);
+      const shared = await sharedWardrobesOf(ctx.db, actorOf(ctx));
       return {
         wardrobes: shared.map((wardrobe) => ({
           ownerId: wardrobe.grantorId,

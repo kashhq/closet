@@ -252,7 +252,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const userId = sessionUserId(request);
       const [items, sharedWardrobes] = await Promise.all([
         laundryList(db, userId),
-        sharedWardrobesOf(db, userId),
+        sharedWardrobesOf(db, actorOf(request)),
       ]);
       return renderPage(
         reply,

@@ -102,7 +102,8 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   // name stays inside the row at phone width.
   const tokenName = 'Laptop Claude on the long walk home';
   const minted = await page.request.post('/auth/tokens', {
-    data: { name: tokenName, currentPassword: E2E_PASSWORD },
+    // "Can make changes": a token is read-only unless ticked (#701).
+    data: { name: tokenName, currentPassword: E2E_PASSWORD, writes: 'on' },
     headers: SAME_ORIGIN,
   });
   expect(minted.ok()).toBe(true);

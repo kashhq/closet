@@ -1,5 +1,6 @@
 import Fastify, { type FastifyRequest } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FULL_SCOPE } from '../auth/personal-tokens';
 import { actorOf as toolActorOf } from '../mcp/tool';
 import { type Actor, actorOf, rememberShareReadAhead } from './access';
 
@@ -54,6 +55,23 @@ describe('actorOf', () => {
   });
 
   it("is the token's user for an MCP tool, never with a read ahead", () => {
-    expect(toolActorOf({ userId: 7 })).toEqual({ userId: 7 });
+    expect(toolActorOf({ userId: 7, scope: FULL_SCOPE })).toEqual({
+      userId: 7,
+    });
+  });
+
+  it('carries an own-wardrobe-only token’s scope, and only that (#701)', () => {
+    expect(
+      toolActorOf({
+        userId: 7,
+        scope: { readOnly: true, ownWardrobeOnly: true },
+      }),
+    ).toEqual({ userId: 7, ownWardrobeOnly: true });
+    expect(
+      toolActorOf({
+        userId: 7,
+        scope: { readOnly: true, ownWardrobeOnly: false },
+      }),
+    ).toEqual({ userId: 7 });
   });
 });

@@ -70,7 +70,7 @@ export const sharingApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const shared = await sharedWardrobesOf(db, actorOf(request).userId);
+      const shared = await sharedWardrobesOf(db, actorOf(request));
       return { data: shared.map(toSharedWardrobe) };
     },
   );

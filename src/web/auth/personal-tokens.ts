@@ -22,7 +22,8 @@ import type { SessionUser } from './session';
  * once when created; the database keeps its SHA-256 (hex) and a short
  * prefix to tell tokens apart on Agent Access. A fast hash is right here:
  * the token is 256 random bits, so there is nothing to guess, and a slow
- * one would cost every call. A token acts exactly as its user; a new
+ * one would cost every call. A token acts as its user within its scope
+ * (TokenScope, an agent token's, fixed at mint: #701); a new
  * password revokes every token of both kinds (revokeTokensStatement, in
  * updatePasswordHash), as it ends every session; so does a database
  * restore (maintenance:after-restore, #908). Sign out everywhere revokes
@@ -40,6 +41,24 @@ export const TOKEN_NAME_MAX = 100;
  */
 export const MAX_ACTIVE_TOKENS = 20;
 
+/**
+ * What an agent token may do (#701), chosen at mint and never changed (a
+ * wider scope is a new token, behind the password again). `readOnly`: no
+ * write tool is registered for it (scopedTools, src/web/mcp/tool.ts);
+ * `ownWardrobeOnly`: its actor resolves no shared wardrobe
+ * (src/web/sharing/access.ts). Device tokens are always FULL_SCOPE.
+ */
+export interface TokenScope {
+  readOnly: boolean;
+  ownWardrobeOnly: boolean;
+}
+
+/** Every token minted before 0067, and every device token. */
+export const FULL_SCOPE: TokenScope = {
+  readOnly: false,
+  ownWardrobeOnly: false,
+};
+
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -52,6 +71,9 @@ export interface TokenListing {
   prefix: string;
   createdAt: Date;
   lastUsedAt: Date | null;
+  /** Agent Access shows it on each token. */
+  readOnly: boolean;
+  ownWardrobeOnly: boolean;
 }
 
 const listingColumns = {
@@ -61,6 +83,8 @@ const listingColumns = {
   prefix: personalAccessToken.tokenPrefix,
   createdAt: personalAccessToken.createdAt,
   lastUsedAt: personalAccessToken.lastUsedAt,
+  readOnly: personalAccessToken.readOnly,
+  ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
 };
 
 const inForce = (userId: number) =>
@@ -134,6 +158,8 @@ export interface NewToken {
   kind: TokenKind;
   /** Already trimmed and bounded (TOKEN_NAME_MAX). */
   name: string;
+  /** Agent Access's choice; a device sign-in's is FULL_SCOPE. */
+  scope: TokenScope;
   /**
    * The full password hash the caller verified the user's password against,
    * from the row read that did it (sessionAccount on a page). Rechecked under
@@ -164,7 +190,7 @@ export interface NewToken {
  */
 export function createToken(
   { db, logger }: { db: Db; logger: Logger },
-  { userId, kind, name, verifiedPassword }: NewToken,
+  { userId, kind, name, scope, verifiedPassword }: NewToken,
 ): Promise<CreateTokenResult> {
   return db.transaction(async (tx) => {
     const [account] = await tx
@@ -200,6 +226,7 @@ export function createToken(
         name,
         tokenHash: hashToken(token),
         tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+        ...scope,
       })
       .returning(listingColumns);
     return {
@@ -298,6 +325,8 @@ export interface TokenAuth {
   user: SessionUser;
   /** The token's row id: what logs and the rate limit name, never the token. */
   tokenId: number;
+  /** Read with the token, so a scope costs no statement (#701). */
+  scope: TokenScope;
 }
 
 /**
@@ -335,6 +364,8 @@ export async function authenticateToken(
       kind: personalAccessToken.kind,
       revokedAt: personalAccessToken.revokedAt,
       lastUsedAt: personalAccessToken.lastUsedAt,
+      readOnly: personalAccessToken.readOnly,
+      ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
       userId: user.id,
       email: user.email,
       ...(shareOf === undefined
@@ -357,6 +388,7 @@ export async function authenticateToken(
   return {
     user: { id: row.userId, email: row.email },
     tokenId: row.tokenId,
+    scope: { readOnly: row.readOnly, ownWardrobeOnly: row.ownWardrobeOnly },
     ...(share && { share }),
   };
 }
