@@ -470,6 +470,13 @@
       "when": 1794666495664,
       "tag": "0066_session-version",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794667755354,
+      "tag": "0067_token-scope",
+      "breakpoints": true
     }
   ]
 }

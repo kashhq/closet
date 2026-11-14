@@ -9,7 +9,12 @@ import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { IsoDateSchema } from '../schemas';
 import { enforceLimit, SIGN_IN_ACCOUNT_LIMIT } from '../security/rate-limit';
-import { createToken, revokeToken, TOKEN_NAME_MAX } from './personal-tokens';
+import {
+  createToken,
+  FULL_SCOPE,
+  revokeToken,
+  TOKEN_NAME_MAX,
+} from './personal-tokens';
 import { normalizeEmail } from './queries';
 import { checkSignIn, failedSignInFor, signInGate } from './sign-in';
 import { Email, Password } from './validation';
@@ -118,6 +123,7 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           userId: account.id,
           kind: 'device',
           name: deviceName.trim(),
+          scope: FULL_SCOPE,
           verifiedPassword: account.password,
         },
       );

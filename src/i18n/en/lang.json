@@ -392,7 +392,7 @@
   },
   "agentAccess": {
     "TITLE": "Agent Access",
-    "INTRO": "A personal access token lets your own Claude, or another MCP client, work on your wardrobe as you: search it, add from links, build outfits and plan days. It reaches the app over the tailnet only. Changing your password revokes every token.",
+    "INTRO": "A personal access token lets your own Claude, or another MCP client, work on your wardrobe as you: search it, add from links, build outfits and plan days. A token reads only unless you let it make changes, and what it may do is fixed when it is made. Changing your password revokes every token.",
     "NEW": "New token",
     "NAME": "Name",
     "NAME_PLACEHOLDER": "Claude Code on my laptop",
@@ -413,7 +413,15 @@
     "NAME_REQUIRED": "Give the token a name.",
     "TOO_MANY": "You have {max} tokens. Revoke one first.",
     "PASSWORD_CHANGED": "Your password was changed while this token was being made, so it was not. Enter your current password again.",
-    "MANAGE": "Manage tokens"
+    "MANAGE": "Manage tokens",
+    "SCOPE": "What it may do",
+    "WRITES": "Can make changes",
+    "WRITES_HINT": "Edit garments and capsules, plan and mark outfits worn, add from links, suggest to the wishlist. Off: it can only read.",
+    "OWN_ONLY": "My wardrobe only",
+    "OWN_ONLY_HINT": "It cannot see or change wardrobes shared with you.",
+    "READ_ONLY": "Read only",
+    "READ_WRITE": "Can make changes",
+    "OWN_WARDROBE_ONLY": "My wardrobe only"
   },
   "devices": {
     "TITLE": "Devices",
