@@ -201,6 +201,35 @@ test.describe('Trips', () => {
     await page.goto('/auth/profile');
     await expectNoZoomingFields(page);
     await expectTouchTargets(page);
+    // The app bar's menus close on Escape, focus back on the summary (#730).
+    await page.goto(`/outfits/${outfit}`);
+    const menu = page.locator('#outfit-menu');
+    await menu.locator('summary').click();
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(menu.locator('summary')).toBeFocused();
+
+    // Focus never lands under the fixed dock (#730): the page's last control,
+    // focused from the keyboard, is scrolled clear of it.
+    await page.goto(new URL(tripUrl).pathname);
+    await page.locator('main').locator('a, button, input').last().focus();
+    const clearance = await page.evaluate(() => {
+      const focused = document.activeElement?.getBoundingClientRect();
+      const dock = document.querySelector('.dock')?.getBoundingClientRect();
+      return focused && dock ? dock.top - focused.bottom : null;
+    });
+    expect(clearance).toBeGreaterThanOrEqual(0);
+
+    // 200% text (#730): nothing wider than the phone, the dock's labels
+    // give way to their icons (still named).
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    await expectPhoneWidth(page);
+    await expect(page.locator('.dock-label').first()).toHaveCSS('width', '1px');
+    await expect(page.getByRole('link', { name: 'Wardrobe' })).toBeVisible();
+
     // The error page (#644): inside the phone's width, its actions tappable.
     const missing = await page.goto('/wardrobe/999999');
     expect(missing?.status()).toBe(404);

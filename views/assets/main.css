@@ -295,6 +295,48 @@
   z-index: 900;
 }
 
+/* Keyboard focus and scripted scrolling stop short of the fixed bars: a
+   focused control is scrolled into view clear of the app bar and, where the
+   dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
+   the rail, and on a page without one). */
+html {
+  scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
+}
+:root:has(.dock) {
+  scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
+}
+
+/* Below the rail, the dock's labels give way when the text is too large for
+   five of them to sit side by side: the container's width in rem shrinks as
+   the root font grows, so this reads the text size, not the screen. The
+   links keep their icon and their words as the accessible name (sr-only). */
+@media (max-width: 1023.98px) {
+  .dock {
+    container-type: inline-size;
+    container-name: dock;
+  }
+  @container dock (width < 22rem) {
+    .dock-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
+/* Sheets and menus appear without sliding or fading for someone who asked
+   the system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal-box,
+  .modal-backdrop {
+    transition: none;
+  }
+}
+
 /* At lg the dock is a slim left rail: the same markup (layout/dock.tsx),
    restyled here, because the server cannot know the viewport and the tab
    roots are cached byte for byte. The page is offset by the rail's width

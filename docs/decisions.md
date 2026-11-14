@@ -1394,3 +1394,8 @@ Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `im
 **Why:** the cache and its `workbox-expiration` rows are two non-atomic deletes, so a store between them leaves a row with no entry, whichever the order (review of #1017). A gate holding stores off during a drop was tried and withdrawn: it refused the page that had just claimed the cache and could wait forever on a token.
 **Decision:** `deleteCacheAndMetadata` deletes the rows, the cache, then the rows again; the second pass sweeps a row written in the window. Which stores may happen at all stays with the generation and owner checks (`pageStore`'s claim, `imageStore`).
 **Consequence:** a store after the last step leaves an entry and its row together in a fresh cache, never a lone row; no store/drop locking exists to maintain.
+
+## 2026-11-14 — Large text is read from a container query in rem (#730)
+Why: a media query ignores `html { font-size }`, so the dock could not tell 200% text from 100%.
+Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
+Consequence: the 22rem threshold is five labels at text-xs; a new dock tab means rechecking it.

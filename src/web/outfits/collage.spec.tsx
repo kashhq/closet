@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { configurePhotoUrls } from '../files/image-url';
+import { readPhotoRef } from '../files/queries';
 import { renderToString } from '../render';
 import {
   collagePieces,
@@ -80,6 +82,28 @@ describe('outfitLabel', () => {
  * frame (a 48 px month cell). The browser's bounding-box check is
  * test/calendar.spec.ts; this holds the markup at each size.
  */
+describe('OutfitCollage alt text', () => {
+  const photo = readPhotoRef({
+    fileName: '0b8f1c2e-3d4a-4b5c-8d6e-7f8091a2b3c4.webp',
+    variantKey: null,
+  });
+  const garments = [{ name: 'Coat', category: 'outerwear', photo }];
+
+  beforeAll(() => configurePhotoUrls('a-secret-0123456789abcdef-0123456789'));
+
+  it('names a photo by its garment, except where the link already names the outfit (#730)', async () => {
+    const named = await renderToString(
+      <OutfitCollage garments={garments} size="cell" />,
+    );
+    expect(named).toContain('alt="Coat"');
+    const decorative = await renderToString(
+      <OutfitCollage garments={garments} size="cell" decorative />,
+    );
+    expect(decorative).toContain('alt=""');
+    expect(decorative).not.toContain('alt="Coat"');
+  });
+});
+
 describe('OutfitCollage with two upper pieces', () => {
   const layered = [
     { name: 'Coat', category: 'outerwear', photo: null },

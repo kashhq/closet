@@ -8,7 +8,7 @@ import { BackLink } from './parts';
 
 export interface AppBarProps {
   ctx: ViewContext;
-  /** The page's heading, its one h1. Short: the bar truncates it. */
+  /** The page's heading, its one h1. Short: the bar clamps it to two lines (a text size of 200% wraps it). */
   title: Child;
   /**
    * The title as a menu: its items (`<li>`s), opened by tapping the title
@@ -66,7 +66,9 @@ export function AppBar(props: AppBarProps) {
           {props.titleMenu ? (
             <TitleMenu title={props.title}>{props.titleMenu}</TitleMenu>
           ) : (
-            <h1 class="text-xl font-semibold truncate">{props.title}</h1>
+            <h1 class="text-xl font-semibold leading-tight line-clamp-2 break-words">
+              {props.title}
+            </h1>
           )}
           {/* In-flight htmx request spinner: every request's indicator (the
               body's hx-indicator, layout.tsx). Connectivity is a separate
@@ -102,8 +104,10 @@ export function AppBar(props: AppBarProps) {
 function TitleMenu(props: { title: Child; children: Child }) {
   return (
     <details class="dropdown min-w-0" id="title-menu">
-      <summary class="btn btn-ghost btn-sm px-1 gap-1 flex-nowrap max-w-full">
-        <h1 class="text-xl font-semibold truncate">{props.title}</h1>
+      <summary class="btn btn-ghost btn-sm h-auto min-h-8 px-1 gap-1 flex-nowrap max-w-full text-start">
+        <h1 class="text-xl font-semibold leading-tight line-clamp-2 break-words">
+          {props.title}
+        </h1>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"

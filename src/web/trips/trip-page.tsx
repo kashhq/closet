@@ -424,7 +424,7 @@ function PackingSection({ model }: { model: TripPageModel }) {
           >
             <div class="flex flex-col gap-3">
               {packing.groups.map((group) => (
-                <fieldset data-role={group.role}>
+                <fieldset data-role={group.role} class="min-w-0">
                   <legend class="text-xs text-muted mb-1">
                     {roleGroupLabel(group.role)}
                   </legend>
