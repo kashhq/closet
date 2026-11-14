@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { relativeDay } from './web/date-labels';
 import {
+  BodyArrivals,
   dayOfStamp,
   dayText,
   pageDay,
@@ -28,22 +29,53 @@ describe('dayOfStamp', () => {
 });
 
 describe('pageDay', () => {
-  const loadedAt = Date.UTC(2026, 5, 11, 3, 30); // 23:30 on the 10th in New York
+  const arrivedAt = Date.UTC(2026, 5, 11, 3, 30); // 23:30 on the 10th in New York
 
   it('is the stamp’s day when the copy has one', () => {
-    expect(pageDay(String(Date.UTC(2026, 5, 8, 15)), loadedAt, NEW_YORK)).toBe(
+    expect(pageDay(String(Date.UTC(2026, 5, 8, 15)), arrivedAt, NEW_YORK)).toBe(
       '2026-06-08',
     );
   });
 
   // No service worker (the HTTP twin, PWA_ENABLED off): freshness.js never
-  // stamps the page, which is then of its load.
+  // stamps the page, which is then of its body's arrival.
   it.each([undefined, '', 'soon'])(
-    'is the load’s household day without a stamp (%j)',
+    'is the arrival’s household day without a stamp (%j)',
     (stamp) => {
-      expect(pageDay(stamp, loadedAt, NEW_YORK)).toBe('2026-06-10');
+      expect(pageDay(stamp, arrivedAt, NEW_YORK)).toBe('2026-06-10');
     },
   );
+});
+
+describe('BodyArrivals', () => {
+  const MONDAY = Date.UTC(2026, 5, 8, 15);
+  const THURSDAY = Date.UTC(2026, 5, 11, 15);
+
+  // A tab left open for days (#990): a boosted navigation never reloads the
+  // document, so its load is no later page's day.
+  it('is the last boosted navigation’s arrival, not the document’s load', () => {
+    const arrivals = new BodyArrivals('/', MONDAY);
+    arrivals.arrived('/wardrobe/41', THURSDAY);
+    expect(arrivals.current).toBe(THURSDAY);
+  });
+
+  it('gives a restored snapshot its own arrival, and a pushed URL its body’s', () => {
+    const arrivals = new BodyArrivals('/', MONDAY);
+    arrivals.pushed('/?capsule=3'); // a fragment's URL, Monday's body
+    arrivals.arrived('/wardrobe/41', THURSDAY);
+    arrivals.restored('/');
+    expect(arrivals.current).toBe(MONDAY);
+    arrivals.restored('/wardrobe/41');
+    arrivals.restored('/?capsule=3');
+    expect(arrivals.current).toBe(MONDAY);
+  });
+
+  it('keeps the current arrival for a snapshot it never saw', () => {
+    const arrivals = new BodyArrivals('/', MONDAY);
+    arrivals.arrived('/wardrobe/41', THURSDAY);
+    arrivals.restored('/elsewhere');
+    expect(arrivals.current).toBe(THURSDAY);
+  });
 });
 
 describe('wearQueuesOn', () => {
