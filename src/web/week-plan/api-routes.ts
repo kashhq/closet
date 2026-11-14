@@ -4,7 +4,6 @@ import { DAY_OCCASIONS, OCCASIONS } from '../../wardrobe/occasions';
 import {
   AROUND_OCCASIONS,
   type TemplateDay,
-  templateDays,
   templateSlots,
   WEEKDAYS,
 } from '../../wardrobe/week';
@@ -22,6 +21,7 @@ import {
   undoWeekPlan,
 } from './plan';
 import { findWeekTemplate, saveWeekTemplate } from './template';
+import { toWeekTemplate, WeekTemplate } from './week-template-resource';
 
 const Occasion = literals(OCCASIONS);
 
@@ -117,42 +117,6 @@ const WeekPlanUndone = Type.Object(
   },
   { title: 'WeekPlanUndone' },
 );
-
-const TemplateDayResource = Type.Object(
-  {
-    weekday: CloneType(literals(WEEKDAYS), {
-      description: '0 is Sunday … 6 Saturday',
-    }),
-    day: Type.Optional(
-      CloneType(literals(DAY_OCCASIONS), {
-        description:
-          "The day's outfit: at most one of all day, work, daytime; absent, none",
-      }),
-    ),
-    around: Type.Array(literals(AROUND_OCCASIONS), {
-      description:
-        'The occasions around it (a workout, an evening, a night out)',
-    }),
-  },
-  { title: 'WeekTemplateDay' },
-);
-
-const WeekTemplate = Type.Object(
-  { days: Type.Array(TemplateDayResource, { minItems: 7, maxItems: 7 }) },
-  {
-    title: 'WeekTemplate',
-    description:
-      'Your week, Sunday first: the slots Plan my week fills. Empty on every day until you set it',
-  },
-);
-
-function toWeekTemplate(days: readonly TemplateDay[]) {
-  return {
-    days: days.map(({ weekday, day, around }) =>
-      withoutNulls({ weekday, day, around }),
-    ),
-  };
-}
 
 const TemplateDayInput = Type.Object(
   {
@@ -309,9 +273,7 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) =>
-      toWeekTemplate(
-        templateDays(await findWeekTemplate(db, actorOf(request).userId)),
-      ),
+      toWeekTemplate(await findWeekTemplate(db, actorOf(request).userId)),
   );
 
   app.put(
@@ -334,7 +296,7 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       logger.info(
         `Week template saved by user ${userId} (API): ${slots.length} slot(s) on ${new Set(slots.map((s) => s.weekday)).size} day(s)`,
       );
-      return toWeekTemplate(templateDays(slots));
+      return toWeekTemplate(slots);
     },
   );
 

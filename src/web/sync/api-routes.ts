@@ -4,6 +4,7 @@ import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { ListLimit, literals } from '../api/resource';
 import { actorOf } from '../sharing/access';
+import { coverageTable, READ_COVERAGE } from './coverage';
 import { FEED, readChanges } from './feed';
 
 /** A page of the feed unless asked: the most a page holds. */
@@ -123,8 +124,11 @@ export const syncApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         operationId: 'listChanges',
         tags: ['sync'],
         summary: 'What changed since your last sync',
-        description:
-          "Rows and deletions after `cursor`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its `cursor`; call again while `more`. A 410 `cursor_expired` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry `snapshot`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules.",
+        description: `Rows and deletions after \`cursor\`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its \`cursor\`; call again while \`more\`. A 410 \`cursor_expired\` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), the feed has carried more since (a new resource), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry \`snapshot\`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules. The style profile (with its outfit rules), the measurements and the week template are one per user, the change's \`id\` yours; the week template is never deleted, only emptied.
+
+What the feed keeps fresh, and what you fetch online each time:
+
+${coverageTable(READ_COVERAGE)}`,
         querystring: ChangesQuery,
         response: apiResponses({ 200: ChangesPage }),
       },

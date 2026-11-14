@@ -10,6 +10,7 @@ import {
 import { addDays } from '../../src/calendar-date';
 import { createGarment, createWishlistItem } from './garments';
 import {
+  asFixture,
   createTestApp,
   hasText,
   recordQueries,
@@ -576,7 +577,7 @@ describe('Styling', () => {
             false,
           ]);
         } finally {
-          await t.db.delete(outfitRule);
+          await asFixture(t.db, (tx) => tx.delete(outfitRule));
         }
       });
 

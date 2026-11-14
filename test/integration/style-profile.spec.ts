@@ -7,7 +7,13 @@ import { findWeatherSettings, setHome } from '../../src/web/weather/queries';
 import { recordStatements } from '../support/query-recorder';
 import { startWeatherStub, type WeatherStub } from '../support/weather-stub';
 import { createGarment } from './garments';
-import { createTestApp, type TestApp, unescapeHtml, userIdOf } from './harness';
+import {
+  asFixture,
+  createTestApp,
+  type TestApp,
+  unescapeHtml,
+  userIdOf,
+} from './harness';
 import { expectFullPage } from './pages';
 
 /**
@@ -205,7 +211,7 @@ describe('the style profile', () => {
     });
 
     afterAll(async () => {
-      await t.db.delete(outfitRule);
+      await asFixture(t.db, (tx) => tx.delete(outfitRule));
     });
 
     it('adds rules by property, type and garment, and lists them as sentences', async () => {

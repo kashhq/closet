@@ -2521,6 +2521,14 @@ describe('API statements per route', () => {
         ['POST', '/sizes/brands', { brand: 'Counted', size: 'xl' }],
         ['PUT', '/sizes/measurements', { waist: 80 }],
         ['PUT', '/style-profile', { styles: ['classic'], palette: ['black'] }],
+        // Rides in the profile's read (#716): no statement of its own.
+        [
+          'POST',
+          '/outfit-rules',
+          { kind: 'never', a: { color: 'red' }, b: { color: 'green' } },
+        ],
+        // Written last, so the first pages are garments only.
+        ['PUT', '/week-template', { days: [{ weekday: 1, day: 'work' }] }],
       ];
       for (const [method, url, payload] of writes) {
         const res = await t.api(token, {
@@ -2540,9 +2548,10 @@ describe('API statements per route', () => {
 
     it('a page of every resource: one statement each; an empty page none', async () => {
       // Garments, wears, capsules, outfits, entries, trips, brand notes,
-      // measurements and the style profile: 9 reads after the keyset's.
+      // measurements, the style profile and the week template: 10 reads
+      // after the keyset's.
       const all = await page('limit=100');
-      expect(all).toMatchObject({ status: 200, statements: 14 });
+      expect(all).toMatchObject({ status: 200, statements: 15 });
       const { cursor } = (
         await t.api(token, { method: 'GET', url: '/api/v1/changes' })
       ).json<{ cursor: string }>();

@@ -2,13 +2,20 @@ import { eq, type SQL, sql } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import type { Db, Queryable } from '../../db/client';
 import { syncEpoch, syncTombstone, user, wardrobeShare } from '../../db/schema';
-import type { SYNC_ROOTS, SyncResource } from '../../db/sync-tables';
+import type {
+  SYNC_ROOTS,
+  SYNC_STAMPS,
+  SyncResource,
+} from '../../db/sync-tables';
 import { HttpError } from '../errors';
 import { acceptedSharesWith } from '../sharing/access';
 import { type Epoch, KIND, type Position } from './cursor';
 
 /** A synced root as sync-tables.ts lists it. */
 export type FeedRoot = (typeof SYNC_ROOTS)[number];
+
+/** A stamped resource (the week template): its revision a column of the owner's user row. */
+export type FeedStamp = (typeof SYNC_STAMPS)[number];
 
 /**
  * The changes feed's statements (feed.ts): the wardrobes, then one keyset
@@ -103,6 +110,8 @@ export interface WardrobeRead extends FeedWardrobe {
   at: Position;
   /** The owner's own: every registered resource; a share's: its share-aware ones. */
   roots: readonly FeedRoot[];
+  /** Likewise of the stamps (none is share-aware). */
+  stamps: readonly FeedStamp[];
 }
 
 /** An item of the page in feed order: a row to read, or a deletion. */
@@ -120,8 +129,9 @@ export interface FeedItem {
  * The first `take` items after each wardrobe's position, wardrobe by
  * wardrobe in `reads` order, in one statement: a branch per resource and
  * one for the tombstones per wardrobe, each on its `(owner, revision)`
- * index with its own limit. Tombstones at or below the pass's floor are
- * left out (cursor.ts' Position.floor).
+ * index with its own limit (a stamp's, the owner's user row by its key).
+ * Tombstones at or below the pass's floor are left out (cursor.ts'
+ * Position.floor).
  */
 export async function feedItems(
   db: Queryable,
@@ -131,6 +141,7 @@ export async function feedItems(
   const branches = reads.flatMap((read, rank) => [
     tombstoneBranch(read, rank, take),
     ...read.roots.map((root) => rowBranch(read, rank, root, take)),
+    ...read.stamps.map((stamp) => stampBranch(read, rank, stamp)),
   ]);
   const { rows } = await db.execute<
     Omit<FeedItem, 'revision'> & { revision: string }
@@ -176,6 +187,26 @@ function rowBranch(
       and ${after(read.at, { kind: sql`${KIND.row}::int`, resource: sql`${resource}::text`, id, seq: sql`0` })}
     order by revision, ${id}
     limit ${take}
+  )`;
+}
+
+/**
+ * A stamp's one item: the owner's user row, its id the change's, when the
+ * stamp's revision is in the window. A user who never wrote it is at the
+ * backfill's 0, so a full sync carries it (empty) too. Never tombstoned.
+ */
+function stampBranch(read: WardrobeRead, rank: number, stamp: FeedStamp): SQL {
+  const resource = stamp.resource;
+  return sql`(
+    select ${rank}::int as rank, ${read.ownerId}::int as owner_id, revision,
+      ${KIND.row}::int as kind, ${resource}::text collate "C" as resource,
+      id, 0 as seq, null::uuid as client_id
+    from (
+      select ${user.id} as id, ${sql.identifier(stamp.revision)} as revision
+      from ${user} where ${user.id} = ${read.ownerId}
+    ) stamped
+    where ${inWindow(read)}
+      and ${after(read.at, { kind: sql`${KIND.row}::int`, resource: sql`${resource}::text`, id: sql`id`, seq: sql`0` })}
   )`;
 }
 

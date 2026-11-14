@@ -1,6 +1,10 @@
 import type { Static, TSchema } from '@sinclair/typebox';
 import type { Db, Queryable } from '../../db/client';
-import { SYNC_ROOTS, type SyncResource } from '../../db/sync-tables';
+import {
+  SYNC_ROOTS,
+  SYNC_STAMPS,
+  type SyncResource,
+} from '../../db/sync-tables';
 import {
   SyncedCalendarEntry,
   toSyncedCalendarEntry,
@@ -24,8 +28,8 @@ import {
 } from '../sizes/sizes-resource';
 import { styleProfilesByUserIds } from '../style/queries';
 import {
-  StyleProfileValues,
-  toStyleProfileValues,
+  SyncedStyleProfile,
+  toSyncedStyleProfile,
 } from '../style/style-resource';
 import { tripsByIds } from '../trips/queries';
 import { SyncedTrip, toSyncedTrip } from '../trips/trip-resource';
@@ -34,6 +38,11 @@ import { garmentsByIds } from '../wardrobe/queries';
 import { wearsByIds } from '../wears/queries';
 import { SyncedWear, toSyncedWear } from '../wears/wear-resource';
 import { weekPlansByIds } from '../week-plan/queries';
+import { weekTemplatesByUserIds } from '../week-plan/template';
+import {
+  toWeekTemplate,
+  WeekTemplate,
+} from '../week-plan/week-template-resource';
 import {
   SyncedWeekPlan,
   toSyncedWeekPlan,
@@ -52,6 +61,7 @@ import {
 import {
   type FeedItem,
   type FeedRoot,
+  type FeedStamp,
   feedItems,
   feedWardrobes,
   inFeedSnapshot,
@@ -102,8 +112,9 @@ function feedEntry<S extends TSchema>(entry: {
 }
 
 /**
- * Every resource the feed carries, by its table (src/db/sync-tables.ts): a
- * new synced root fails tsc here until it is registered. Adding one is an
+ * Every resource the feed carries, by its table or stamp
+ * (src/db/sync-tables.ts): a new synced root or stamp fails tsc here until
+ * it is registered; coverage.ts then says which reads it backs. Adding one is an
  * entry: its batched by-id reader beside its per-id one, and its feed shape
  * beside its API resource. `shared` follows src/web/sharing/AGENTS.md's
  * share-aware list: everything but garments and capsules is the owner's.
@@ -200,15 +211,29 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
         data: toBrandSizeResource(row),
       })),
   }),
-  // The one-row-per-user tables: the change's id is the user's.
+  // The one-row-per-user tables and the stamp: the change's id is the user's.
+  // A rule's write stamps the profile (SYNC_CHILDREN), so it carries them.
   style_profile: feedEntry({
     name: 'styleProfile',
     shared: false,
-    schema: StyleProfileValues,
+    schema: SyncedStyleProfile,
     read: async (db, ids) =>
-      (await styleProfilesByUserIds(db, ids)).map(({ userId, ...profile }) => ({
+      (await styleProfilesByUserIds(db, ids)).map(
+        ({ userId, rules, ...profile }) => ({
+          id: userId,
+          data: toSyncedStyleProfile(profile, rules),
+        }),
+      ),
+  }),
+  // Every user has one, empty until set: never deleted, never tombstoned.
+  week_template: feedEntry({
+    name: 'weekTemplate',
+    shared: false,
+    schema: WeekTemplate,
+    read: async (db, ids) =>
+      (await weekTemplatesByUserIds(db, ids)).map(({ userId, slots }) => ({
         id: userId,
-        data: toStyleProfileValues(profile),
+        data: toWeekTemplate(slots),
       })),
   }),
   body_measurements: feedEntry({
@@ -225,15 +250,19 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
 
 const OWN_ROOTS: readonly FeedRoot[] = SYNC_ROOTS;
 const SHARED_ROOTS = OWN_ROOTS.filter((root) => FEED[root.table].shared);
+const OWN_STAMPS: readonly FeedStamp[] = SYNC_STAMPS;
+const SHARED_STAMPS = OWN_STAMPS.filter((stamp) => FEED[stamp.resource].shared);
 
 /**
- * Which resources a cursor was answered with, one bit per SYNC_ROOTS entry:
- * a cursor from before a root joined the feed never saw that resource's
- * rows below its positions, so it is expired (a full sync) rather than
- * silently missing them. #608 registering the last eight moved it once.
+ * Which resources a cursor was answered with, one bit per SYNC_ROOTS entry,
+ * then per SYNC_STAMPS entry: a cursor from before a resource joined the
+ * feed never saw its rows below its positions, so it is expired (a full
+ * sync) rather than silently missing them. #608 registering the last eight
+ * moved it once; #716 the week template (whose full sync also gave every
+ * cached style profile its rules).
  */
-export const FEED_COVERAGE = SYNC_ROOTS.reduce(
-  (bits, _root, index) => bits | (1 << index),
+export const FEED_COVERAGE = [...SYNC_ROOTS, ...SYNC_STAMPS].reduce(
+  (bits, _resource, index) => bits | (1 << index),
   0,
 );
 
@@ -323,7 +352,9 @@ export async function readChanges(
       return {
         ...wardrobe,
         at,
-        roots: wardrobe.ownerId === actor.userId ? OWN_ROOTS : SHARED_ROOTS,
+        ...(wardrobe.ownerId === actor.userId
+          ? { roots: OWN_ROOTS, stamps: OWN_STAMPS }
+          : { roots: SHARED_ROOTS, stamps: SHARED_STAMPS }),
       };
     });
     const items = await feedItems(tx, reads, limit + 1);
