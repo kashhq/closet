@@ -7,7 +7,7 @@ import { type Count, noiseBetween, relativeChange, type Timing } from './stats';
  * pins it; the walk that fills it is scripts/audit/walk.ts.
  */
 
-export const REPORT_VERSION = 1;
+export const REPORT_VERSION = 2;
 
 /**
  * A time change counts only past both: relative to the baseline's p50, and
@@ -58,6 +58,8 @@ export interface AuditReport {
   version: typeof REPORT_VERSION;
   createdAt: string;
   commit: string;
+  /** The seed persona the walk ran over (fixture.ts): reports of two never compare. */
+  persona: string;
   machine: {
     cpus: number;
     model: string;
@@ -120,7 +122,7 @@ export function renderReport(report: AuditReport): string {
   const lines = [
     '# Page audit',
     '',
-    `Commit \`${report.commit}\`, ${report.createdAt}. ${report.runs} runs per step after ${report.warmup} warm-up, ` +
+    `Commit \`${report.commit}\`, persona \`${report.persona}\`, ${report.createdAt}. ${report.runs} runs per step after ${report.warmup} warm-up, ` +
       `${report.machine.cpus} × ${report.machine.model}, Node ${report.machine.node}, ` +
       `load average ${report.machine.load.start.toFixed(1)} at the start and ${report.machine.load.end.toFixed(1)} at the end. ` +
       'Server ms is the request in process (`inject`), db ms Server-Timing’s `db`; ' +

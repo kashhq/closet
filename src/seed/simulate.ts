@@ -147,7 +147,7 @@ function eventShiftFor(anchor: IsoDate): number {
 
 export function simulate(persona: Persona, anchor: IsoDate): SimulatedLife {
   const shiftDays = shiftFor(anchor);
-  const first = addDays(anchor, -(HISTORY_DAYS - 1));
+  const first = addDays(anchor, -(persona.historyDays - 1));
   const shifted = (day: IsoDate) => addDays(day, shiftDays);
   const eventShift = eventShiftFor(anchor);
   const events = persona.events.map((event) => ({
@@ -160,7 +160,7 @@ export function simulate(persona: Persona, anchor: IsoDate): SimulatedLife {
   const weather = weatherFor(
     persona.key,
     first,
-    HISTORY_DAYS + PLANNED_DAYS,
+    persona.historyDays + PLANNED_DAYS,
     (day) => eventOn(day)?.weatherShift ?? 0,
   );
   const life: SimulatedLife = {
