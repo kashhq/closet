@@ -275,7 +275,6 @@ export function IdeaCards({ model }: { model: IdeaCardsModel }) {
           })}
           trigger="intersect once"
           marker="ideas"
-          label={t('outfits.LOADING_MORE')}
         />
       )}
     </>

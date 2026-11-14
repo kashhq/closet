@@ -182,12 +182,25 @@
   }
 }
 
-/* An inactive tab reads in the muted token, not daisyUI's 50% of the ink
-   (3.4 to 4:1 on both themes, #726). Unlayered, so it beats daisyUI's own
-   rule; the lit tab (aria-current, .tab-active, a checked radio) and hover
-   keep daisyUI's full-ink colour. */
-.tab:not(.tab-active, :checked, :hover, label:has(:checked), [aria-selected='true'], [aria-current='page']) {
-  color: var(--color-muted);
+/* A section tab (LinkTabs: an `a.tab` in a `.tabs-border` bar) that is not
+   the current page reads in the muted token, not daisyUI's 50% of the ink
+   (3.4 to 4:1 on both themes, #726). In utilities: daisyUI's layers
+   (`daisyui.*`) rank above components, so only a later layer beats its
+   rule without an unlayered override. Hover and keyboard focus keep
+   daisyUI's full ink; radio and disabled tabs are not LinkTabs and keep
+   daisyUI's. */
+@layer utilities {
+  .tabs-border
+    > a.tab:not(
+      .tab-active,
+      [aria-current='page'],
+      :hover,
+      :focus-visible,
+      [disabled],
+      [aria-disabled='true']
+    ) {
+    color: var(--color-muted);
+  }
 }
 
 /* Touch hit areas (#636): btn-sm, btn-xs, a tab, a checkbox, radio or

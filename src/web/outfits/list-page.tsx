@@ -195,7 +195,6 @@ export function SavedTiles(props: {
           )}
           trigger="revealed"
           marker="saved"
-          label={t('outfits.LOADING_MORE')}
         />
       )}
     </>

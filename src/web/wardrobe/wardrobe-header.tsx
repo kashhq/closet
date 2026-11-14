@@ -443,19 +443,17 @@ export function WardrobeTabs(props: {
     label,
   });
   return (
-    <div class="px-4">
-      <LinkTabs
-        active={props.active}
-        label={t('NAV_WARDROBE_VIEWS')}
-        id="wardrobe-tabs"
-        tabs={[
-          tab('closet', t('CLOSET')),
-          tab('capsules', t('CAPSULES')),
-          viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
-          tab('wishlist', t('wishlist.TAB')),
-        ]}
-      />
-    </div>
+    <LinkTabs
+      active={props.active}
+      label={t('NAV_WARDROBE_VIEWS')}
+      id="wardrobe-tabs"
+      tabs={[
+        tab('closet', t('CLOSET')),
+        tab('capsules', t('CAPSULES')),
+        viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
+        tab('wishlist', t('wishlist.TAB')),
+      ]}
+    />
   );
 }
 

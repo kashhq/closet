@@ -578,7 +578,6 @@ export function GarmentTiles(props: {
           })}
           trigger="revealed"
           marker="wardrobe"
-          label={t('LOADING_MORE')}
         />
       )}
     </>

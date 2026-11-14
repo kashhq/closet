@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { type Page } from '@playwright/test';
+import { type Cookie, type Page } from '@playwright/test';
 import { expect } from './support/fixtures';
 import sharp from 'sharp';
 import { addDays } from '../src/calendar-date';
@@ -46,6 +46,7 @@ function seed(...args: string[]): void {
     ['dist/seed/seed.cli.js', ...args, '--reset', '--password-stdin'],
     { input: `${PASSWORD}\n`, stdio: ['pipe', 'inherit', 'inherit'] },
   );
+  sessions.clear();
 }
 
 test.beforeAll(() => {
@@ -55,13 +56,27 @@ test.beforeAll(() => {
 
 const personaEmail = (persona: string) => `${persona}@closet.invalid`;
 
+/**
+ * One sign-in per persona and seed, replayed as cookies: the per-account
+ * sign-in limit (5 a minute, #984) answers 429 to the dozens a run would
+ * otherwise make. A re-seed ends the persona's sessions, so `seed()` drops
+ * its entry. Module state lives as long as the serial file's worker.
+ */
+const sessions = new Map<string, Cookie[]>();
+
 async function signInAs(page: Page, persona: string): Promise<void> {
+  const known = sessions.get(persona);
+  if (known) {
+    await page.context().addCookies(known);
+    return;
+  }
   const res = await page.request.post('/auth/login', {
     form: { email: personaEmail(persona), password: PASSWORD },
     headers: signUpHeaders(),
     maxRedirects: 0,
   });
   expect(res.status()).toBe(302);
+  sessions.set(persona, await page.context().cookies());
 }
 
 async function shot(page: Page, name: string, url?: string): Promise<void> {

@@ -11,7 +11,10 @@
  * as `htmx:sendError` (the worker's catch handler), which connectivity.js
  * turns into the offline banner; the sentinel stays, and the list ends
  * where the cache does. `marker` names it for the specs
- * (`data-<marker>-more`); `label` says what is loading.
+ * (`data-<marker>-more`). It announces nothing: loading more on scroll
+ * needs no word, and a live region of its own, inserted with its text and
+ * replaced on every swap, would break the page's one polite region
+ * (`#toast-host`, src/web/layout/AGENTS.md).
  */
 export function PageSentinel(props: {
   href: string;
@@ -19,12 +22,8 @@ export function PageSentinel(props: {
   as: 'div' | 'li' | 'span';
   class: string;
   marker: string;
-  label: string;
   size?: 'sm' | 'md';
-  /**
-   * A sentinel inside a `role=listbox` strip is not an option: presentational,
-   * and with no status of its own (a live region is not allowed among options).
-   */
+  /** A sentinel inside a `role=listbox` strip is not an option: presentational. */
   inListbox?: boolean;
 }) {
   const Element = props.as;
@@ -42,11 +41,6 @@ export function PageSentinel(props: {
         class={`loading loading-dots ${props.size === 'sm' ? 'loading-sm' : 'loading-md'} text-muted`}
         aria-hidden="true"
       ></span>
-      {!props.inListbox && (
-        <span class="sr-only" role="status">
-          {props.label}
-        </span>
-      )}
     </Element>
   );
 }

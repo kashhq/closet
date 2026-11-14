@@ -15,20 +15,18 @@ export type CalendarTab = 'week' | 'month' | 'trips';
  */
 export function CalendarTabs({ active }: { active: CalendarTab }) {
   return (
-    <div class="mb-4">
-      <LinkTabs
-        active={active}
-        label={t('NAV_CALENDAR_VIEWS')}
-        tabs={[
-          { name: 'week', href: CALENDAR_PATH, label: t('calendar.TAB_WEEK') },
-          {
-            name: 'month',
-            href: CALENDAR_MONTH_PATH,
-            label: t('calendar.TAB_MONTH'),
-          },
-          { name: 'trips', href: TRIPS_PATH, label: t('calendar.TAB_TRIPS') },
-        ]}
-      />
-    </div>
+    <LinkTabs
+      active={active}
+      label={t('NAV_CALENDAR_VIEWS')}
+      tabs={[
+        { name: 'week', href: CALENDAR_PATH, label: t('calendar.TAB_WEEK') },
+        {
+          name: 'month',
+          href: CALENDAR_MONTH_PATH,
+          label: t('calendar.TAB_MONTH'),
+        },
+        { name: 'trips', href: TRIPS_PATH, label: t('calendar.TAB_TRIPS') },
+      ]}
+    />
   );
 }
