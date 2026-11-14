@@ -559,9 +559,8 @@ describe('seed personas', () => {
     });
     expect(grid.statusCode).toBe(200);
     expect(grid.body).toContain('Olive chore coat');
-    // Nothing left to tag: no "needs details" prompt (#685).
-    expect(grid.body).not.toContain('need details');
-    expect(grid.body).not.toContain('needs details');
+    // Nothing left to tag: no "to tag" chip (#685).
+    expect(grid.body).not.toContain('to tag');
     const thumb = extractImgSrcs(unescapeHtml(grid.body)).find((src) =>
       src.startsWith('/file/'),
     )!;

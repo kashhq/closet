@@ -400,6 +400,31 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     for (let i = 0; i < 12; i++) {
       socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
     }
+    await test.step('from lg every row has one tile size and one origin (#732)', async () => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`/styling?with=${socks[0]}`);
+      await expect(row(page, 'accessory')).toBeVisible();
+      // The first item's place in its strip does not move with the scroll
+      // (offsetLeft), so a row centred differently shows here.
+      const firstTiles = await page
+        .locator('[data-styling-row] .styling-strip')
+        .evaluateAll((strips) =>
+          strips.map((strip) => {
+            const first = strip.querySelector<HTMLElement>('[data-snap-item]')!;
+            return {
+              left: first.offsetLeft,
+              width: first.offsetWidth,
+              strip: strip.getBoundingClientRect().left,
+            };
+          }),
+        );
+      expect(firstTiles.length).toBeGreaterThanOrEqual(4);
+      expect(new Set(firstTiles.map((tile) => tile.left)).size).toBe(1);
+      expect(new Set(firstTiles.map((tile) => tile.width))).toEqual(
+        new Set([160]),
+      );
+      expect(new Set(firstTiles.map((tile) => tile.strip)).size).toBe(1);
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     const accessories = row(page, 'accessory');
     const strip = accessories.locator('.styling-strip');

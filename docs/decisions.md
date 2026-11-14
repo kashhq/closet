@@ -1399,3 +1399,8 @@ Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `im
 Why: a media query ignores `html { font-size }`, so the dock could not tell 200% text from 100%.
 Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
 Consequence: the 22rem threshold is five labels at text-xs; a new dock tab means rechecking it.
+
+## 2026-11-14 — Wardrobe chrome is one chip row; Styling rows share one tile size from lg (#732)
+Why: six rows of chrome (weather line, a banner per prompt) put the first garment ~300 px down at 390 px; the accessory strips used a smaller tile and different spacers than the garment strips at lg.
+Decision: the closet drops the weather line (it has no job there) and shows "N photos to add", "N to tag", "N to wash" as chips in one row (`Prompts`); `small` strips are `w-40` with `roomy`'s spacers from lg. A shared wardrobe was already titled with its owner's name.
+Consequence: strips still centre their choice, so their first tile sits half a column in; starting at the column edge needs the observer's choice line (`rootMargin`, `centre()`) to move with the breakpoint and was not done.

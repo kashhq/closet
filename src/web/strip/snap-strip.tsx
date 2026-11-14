@@ -29,11 +29,13 @@ const SIZES = {
     gap: 'gap-3',
     ends: 'before:w-[calc(50%-4.25rem)] after:w-[calc(50%-4.25rem)] before:shrink-0 after:shrink-0',
   },
-  // Styling's accessory rows; larger tiles from `lg` (#321), where the row has the width.
+  // Styling's accessory rows: smaller tiles on a phone, where the outfit
+  // leads; from `lg` the same tile and spacers as `roomy`, so every row on
+  // the page has one tile size and one origin (#732).
   small: {
-    item: 'w-20 lg:w-28',
+    item: 'w-20 lg:w-40',
     gap: 'gap-3',
-    ends: 'before:w-[calc(50%-3.25rem)] after:w-[calc(50%-3.25rem)] lg:before:w-[calc(50%-4.25rem)] lg:after:w-[calc(50%-4.25rem)] before:shrink-0 after:shrink-0',
+    ends: 'before:w-[calc(50%-3.25rem)] after:w-[calc(50%-3.25rem)] lg:before:w-[calc(50%-5.75rem)] lg:after:w-[calc(50%-5.75rem)] before:shrink-0 after:shrink-0',
   },
   // Styling's garment rows: `regular` on a phone, larger from `lg`.
   roomy: {

@@ -35,7 +35,6 @@ import {
 } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
-import { WeatherSlot } from '../weather/views';
 import { categoryLabel } from './garment';
 import { type LabelledProperty, valueLabel } from './labels';
 import { type GridCursor, gridCursorText } from './grid-cursor';
@@ -199,8 +198,7 @@ export function searchParams(search: GridSearch): Record<string, string> {
 /**
  * GET /wardrobe: the Closet tab (docs/plans/2026-09-26-redesign.md, section
  * 3, "Wardrobe"). Browsing, it is the Wardrobe's header (the switcher in
- * the title, ⋯ and ＋), the tabs, today's weather (#14; outside
- * #wardrobe-main, so filtering never reloads it) and the swappable main.
+ * the title, ⋯ and ＋), the tabs and the swappable main (no weather: it has no job on the catalog, #732).
  * Select mode and the capsule picker are tasks, not the closet: their own
  * bar (the task's title and Cancel) over the checkbox grid, no tabs.
  */
@@ -227,9 +225,6 @@ export function WardrobePage(props: {
         {!model.selecting && (
           <PageColumn width="wide">
             <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
-            <div class="px-2 pt-3">
-              <WeatherSlot ctx={ctx} />
-            </div>
           </PageColumn>
         )}
         <WardrobeMain model={model} />
@@ -336,15 +331,17 @@ function WardrobeMain({ model }: { model: WardrobeModel }) {
 }
 
 /**
- * The slim prompts above the grid (the plan's "slim banner"): "4 photos
- * waiting to be added · Continue" for someone with drafts here (#200), "12
- * garments need details · Tag them" for someone who can tag, "3 garments
- * need a wash · Laundry" for the owner.
+ * What waits for the user, one row of chips above the grid ("1 to tag", "3
+ * to wash", "4 photos to add"), each a link to where it is done: photos
+ * waiting to be added (#200, Continue the batch), garments to tag (an
+ * editor), garments to wash (the owner). A row, not a banner each: the
+ * first garment stays near the app bar on a phone (#732).
  */
 function Prompts({ model }: { model: WardrobeModel }) {
   const { toTag, toWash, drafts } = model;
+  if (!drafts && toTag === 0 && toWash === 0) return null;
   return (
-    <>
+    <div id="wardrobe-prompts" class="mb-3 flex flex-wrap gap-2">
       {drafts && (
         <Prompt
           text={
@@ -353,7 +350,6 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('drafts.WAITING', { count: drafts.count })
           }
           href={draftUrl(model.viewOwner, drafts.first, [])}
-          action={t('drafts.CONTINUE')}
         />
       )}
       {toTag > 0 && (
@@ -364,7 +360,6 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('TAG_PROMPT', { count: toTag })
           }
           href={wardrobeUrl(model.viewOwner, {}, TAG_PATH)}
-          action={t('TAG_PROMPT_ACTION')}
         />
       )}
       {toWash > 0 && (
@@ -375,10 +370,9 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('wear.LAUNDRY_PROMPT', { count: toWash })
           }
           href={LAUNDRY_PATH}
-          action={t('wear.LAUNDRY')}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -486,18 +480,12 @@ function NoTiles({ model }: { model: WardrobeModel }) {
   );
 }
 
-/** One prompt: what needs doing, and the link that does it. */
-function Prompt(props: { text: string; href: string; action: string }) {
+/** One chip: what needs doing, and the link that does it. */
+function Prompt(props: { text: string; href: string }) {
   return (
-    <p
-      role="status"
-      class="mb-3 flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2 text-sm"
-    >
-      <span>{props.text}</span>
-      <a href={props.href} class="link font-medium shrink-0">
-        {props.action}
-      </a>
-    </p>
+    <a href={props.href} class="btn btn-sm btn-soft rounded-full">
+      {props.text}
+    </a>
   );
 }
 
