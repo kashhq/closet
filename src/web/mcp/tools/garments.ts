@@ -1,9 +1,7 @@
 import { buffer } from 'node:stream/consumers';
-import { selectScalars } from '../../../db/select-scalars';
 import { QUANTITY_MAX } from '../../../wardrobe/availability';
 import * as z from 'zod';
 import {
-  categoryRole,
   CONDITIONS,
   FITS,
   FORMALITIES,
@@ -21,13 +19,10 @@ import {
   CARE_IRON,
   CARE_WASH,
 } from '../../../wardrobe/care';
-import { perWearCost, totalCost } from '../../../wardrobe/insights';
 import { todayIn } from '../../../calendar-date';
-import { capsulesOfGarmentSql } from '../../capsules/queries';
+import { type Projection, project } from '../../api/resource';
 import { HttpError } from '../../errors';
-import { agentNameOf } from '../../write-origin';
 import {
-  garmentAgentSql,
   type GarmentDetail,
   type GarmentSummary,
   garmentSummaries,
@@ -35,7 +30,13 @@ import {
 import { gridCursorText } from '../../wardrobe/grid-cursor';
 import { GRID_PAGE_SIZE } from '../../wardrobe/grid-page-size';
 import { closetLookalikes } from '../../wardrobe/lookalikes';
-import { repairLogSql } from '../../wardrobe/repairs';
+import { garmentContext } from '../../wardrobe/garment-context';
+import {
+  garmentListRecord,
+  type GarmentListRecord,
+  garmentRecord,
+  type GarmentRecord,
+} from '../../wardrobe/garment-resource';
 import {
   BRAND_MAX,
   CATEGORY_MAX,
@@ -44,11 +45,7 @@ import {
   SIZE_MAX,
   TEXT_MAX,
 } from '../../wardrobe/garment-input';
-import {
-  type WearSummary,
-  wearCountsByGarment,
-  wearSummarySql,
-} from '../../wears/queries';
+import { type WearSummary, wearCountsByGarment } from '../../wears/queries';
 import { wishlistItems } from '../../wishlist/queries';
 import {
   actorOf,
@@ -75,128 +72,89 @@ import { searchFilters } from '../../wardrobe/garment-search';
 import { readGarmentEdit } from '../../wardrobe/garment-changes';
 import { addGarmentFromLink, refusedForm } from './link-import';
 
+/**
+ * The garment resources as an agent reads them (#711): the API's records
+ * (garment-resource.ts), nulls kept, never a mapping of the tools' own. No
+ * photo URLs (an agent cannot fetch a signed /file URL: get_garment_photo
+ * answers the picture); `agent` is the agent's bare name, as every tool's.
+ */
+/** What every garment resource says it is (garment-resource.ts's `identity`). */
+const GARMENT_IDENTITY_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  category: 'keep',
+  role: 'keep',
+  status: 'keep',
+  brand: 'keep',
+  colors: 'keep',
+  size: 'keep',
+  price: 'keep',
+  quantity: 'keep',
+  condition: 'keep',
+  photo: 'omit',
+} as const;
+
+export const GARMENT_SUMMARY_FOR_MCP = {
+  ...GARMENT_IDENTITY_FOR_MCP,
+  // get_garment's: a hit answers what it is.
+  photoMissingSince: 'omit',
+  type: 'keep',
+  warmth: 'keep',
+  formality: 'keep',
+} as const satisfies Projection<GarmentListRecord>;
+
+export const GARMENT_FOR_MCP = {
+  ...GARMENT_IDENTITY_FOR_MCP,
+  photoMissingSince: 'keep',
+  notes: 'keep',
+  acquiredOn: 'keep',
+  replacesGarmentId: 'keep',
+  sourceUrl: 'keep',
+  conditionNote: 'keep',
+  properties: 'keep',
+  careLabel: 'keep',
+  repairs: 'keep',
+  agent: 'own',
+  capsules: 'keep',
+  care: 'keep',
+} as const satisfies Projection<GarmentRecord>;
+
 /** A search or capsule hit, as the tools answer it. */
-export function summaryOut(garment: GarmentSummary) {
-  return {
-    id: garment.id,
-    name: garment.name,
-    category: garment.category,
-    role: categoryRole(garment.category),
-    type: garment.type,
-    brand: garment.brand,
-    colors: garment.colors ?? [],
-    size: garment.size,
-    warmth: garment.warmth,
-    formality: garment.formality,
-    quantity: garment.quantity,
-    condition: garment.condition,
-    price: garment.price,
-    status: garment.status,
-  };
+export function summaryForAgent(
+  garment: GarmentSummary,
+  cutoutsEnabled: boolean,
+) {
+  return project(
+    garmentListRecord(garment, cutoutsEnabled),
+    GARMENT_SUMMARY_FOR_MCP,
+    {},
+  );
 }
 
 /**
- * A garment in full, as its page shows it, without the photo. The owner's
- * own records (wears, washes, away, cost per wear, the repair log) only on
- * their own wardrobe, as the page: a grantee gets the price alone, never a
- * cost that holds the owner's repairs. Everything beside the garment is
- * one statement over the garment page's own fragments (#172; it was one
- * round trip each).
+ * A garment in full, as its page and GET /api/v1/garments/{id} read it
+ * (garmentContext: one statement beside the garment, #172): the owner's
+ * records (care, cost per wear, the repair log) only on their own closet
+ * garment, never a grantee's.
  */
-/** The garment's agent as this caller may see it: a grantee's is "Agent" to another grantee. */
-function agentRead(ctx: ToolContext, garment: GarmentDetail, isOwner: boolean) {
-  return garment.madeByAgent
-    ? garmentAgentSql(garment.id, {
-        viewerId: ctx.userId,
-        ownsWardrobe: isOwner,
-      })
-    : undefined;
-}
-
-async function garmentOut(
+async function garmentForAgent(
   ctx: ToolContext,
   garment: GarmentDetail,
-  ownerId: number,
-  isOwner: boolean,
+  access: { ownerId: number; isOwner: boolean },
 ) {
-  const { capsules, wears, repairs, agent } = await selectScalars(ctx.db, {
-    capsules: capsulesOfGarmentSql(ownerId, garment.id),
-    agent: agentRead(ctx, garment, isOwner),
-    wears: isOwner
-      ? wearSummarySql(garment.id, todayIn(ctx.timeZone, new Date()))
-      : undefined,
-    repairs:
-      isOwner && garment.status !== 'wishlist'
-        ? repairLogSql(garment.id)
-        : undefined,
+  const context = await garmentContext(
+    ctx.db,
+    garment,
+    { ...access, viewerId: ctx.userId },
+    todayIn(ctx.timeZone, new Date()),
+  );
+  const record = garmentRecord(garment, context, ctx.cutouts.enabled);
+  return project(record, GARMENT_FOR_MCP, {
+    agent: record.agent?.name,
+    hasPhoto: record.photo !== null,
+    // The care label's notes, also answered here since get_garment began.
+    washingDetails: record.careLabel.notes,
   });
-  const cost = wears
-    ? totalCost({
-        price: garment.price,
-        quantity: garment.quantity,
-        repairCost: wears.repairCost,
-      })
-    : null;
-  return {
-    id: garment.id,
-    name: garment.name,
-    category: garment.category,
-    role: categoryRole(garment.category),
-    brand: garment.brand,
-    colors: garment.colors ?? [],
-    size: garment.size,
-    notes: garment.notes,
-    washingDetails: garment.washingDetails,
-    acquiredOn: garment.acquiredOn,
-    status: garment.status,
-    replacesGarmentId: garment.replacesGarmentId,
-    hasPhoto: garment.photo !== null,
-    // Set while nothing of its photo is stored (#653): hasPhoto is false then.
-    photoMissingSince: garment.photoMissingSince?.toISOString() ?? null,
-    properties: {
-      type: garment.type,
-      warmth: garment.warmth,
-      formality: garment.formality,
-      materials: garment.materials ?? [],
-      pattern: garment.pattern,
-      fit: garment.fit,
-      sleeve: garment.sleeve,
-      length: garment.length,
-      fabricWeightGsm: garment.fabricWeight,
-      waterResistant: garment.waterResistant,
-    },
-    careLabel: {
-      wash: garment.careWash,
-      bleach: garment.careBleach,
-      dry: garment.careDry,
-      iron: garment.careIron,
-      dryClean: garment.careDryClean,
-      notes: garment.washingDetails,
-    },
-    sourceUrl: garment.sourceUrl,
-    price: garment.price,
-    quantity: garment.quantity,
-    condition: garment.condition,
-    conditionNote: garment.conditionNote,
-    capsules: capsules
-      .filter((capsule) => capsule.member)
-      .map(({ id, name }) => ({ id, name })),
-    ...(wears && {
-      care: {
-        washAfterWears: garment.washAfterWears,
-        lastWashedOn: garment.lastWashedOn,
-        away: garment.away,
-        awayNote: garment.awayNote,
-        worn: wears.worn,
-        wornSinceWash: wears.sinceWash,
-        lastWorn: wears.lastWorn,
-        cost,
-        costPerWear: cost === null ? null : perWearCost(cost, wears.worn),
-      },
-    }),
-    ...(repairs && { repairs }),
-    agent: agentNameOf(agent),
-  };
 }
 
 const property = <T extends z.ZodType>(schema: T, description: string) =>
@@ -380,7 +338,9 @@ export const garmentTools = [
       );
       return {
         total,
-        garments: garments.map(summaryOut),
+        garments: garments.map((garment) =>
+          summaryForAgent(garment, ctx.cutouts.enabled),
+        ),
         next: next === null ? null : gridCursorText(next),
       };
     },
@@ -431,7 +391,7 @@ export const garmentTools = [
     async run({ id, ownerId }, ctx) {
       const access = await wardrobeFor(ctx, ownerId, 'view');
       const garment = await garmentIn(ctx.db, access, id);
-      return garmentOut(ctx, garment, access.ownerId, access.isOwner);
+      return garmentForAgent(ctx, garment, access);
     },
   }),
 
@@ -516,7 +476,7 @@ export const garmentTools = [
       // garment read before with them, not a second read (#372).
       const saved: GarmentDetail = { ...garment, ...fields };
       return {
-        garment: await garmentOut(ctx, saved, access.ownerId, access.isOwner),
+        garment: await garmentForAgent(ctx, saved, access),
         ignored,
       };
     },
@@ -551,7 +511,7 @@ export const garmentTools = [
       );
       const saved = await garmentIn(ctx.db, access, args.id);
       return {
-        garment: await garmentOut(ctx, saved, access.ownerId, access.isOwner),
+        garment: await garmentForAgent(ctx, saved, access),
       };
     },
   }),
@@ -639,7 +599,7 @@ export const garmentTools = [
             )
           : [];
       return {
-        garment: await garmentOut(ctx, garment, access.ownerId, access.isOwner),
+        garment: await garmentForAgent(ctx, garment, access),
         notices: saved.notices,
         confidence: saved.confidence,
         ...(garment.status === 'closet' && {

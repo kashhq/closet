@@ -7,7 +7,8 @@ import { ROW_ID_MAX } from '../schemas';
  * The shapes every /api/v1 resource shares (docs/plans/2026-11-12-json-
  * api.md section 2): lists, their opaque cursors, the stored lowercase
  * enums, and the rule that a null field is left out. A feature's mappers
- * (`src/web/<feature>/<resource>-resource.ts`) build on them.
+ * (`src/web/<feature>/<resource>-resource.ts`) build on them, and MCP's
+ * tools answer an entity by projecting the same mapper's record (`project`).
  */
 
 /** A stored enum's values as its schema: the spec lists them for a client. */
@@ -154,4 +155,76 @@ export function withoutNulls<T extends object>(value: T): WithoutNulls<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, field]) => field !== null),
   ) as WithoutNulls<T>;
+}
+
+/** A record with its null fields left out at every level, arrays' items included. */
+export type WithoutNullsDeep<T> = T extends readonly (infer Item)[]
+  ? WithoutNullsDeep<Item>[]
+  : T extends object
+    ? WithoutNulls<{ [K in keyof T]: WithoutNullsDeep<T[K]> }>
+    : T;
+
+/**
+ * A mapper's record as the API sends it: every null left out, however
+ * deep. For a mapper whose record keeps its nulls because another surface
+ * projects from it (MCP's tools: an agent reads "null"), so the API's rule
+ * is applied once, here, and never forgotten at one nested level.
+ */
+export function withoutNullsDeep<T>(value: T): WithoutNullsDeep<T> {
+  if (Array.isArray(value)) {
+    return value.map(withoutNullsDeep) as WithoutNullsDeep<T>;
+  }
+  if (typeof value !== 'object' || value === null) {
+    return value as WithoutNullsDeep<T>;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, field]) => field !== null)
+      .map(([key, field]) => [key, withoutNullsDeep(field)]),
+  ) as WithoutNullsDeep<T>;
+}
+
+/**
+ * How another surface (MCP's tools) answers a resource mapper's record,
+ * field by field: `keep` (as mapped, the whole value), `omit` (not that
+ * surface's: a URL an agent cannot fetch) or `own` (the surface's own
+ * shape of it, handed to `project`: a nested level's own projection, the
+ * agent's bare name). Every field must be listed, so a field the record
+ * gains is a type error at each projection until someone decides it, and
+ * `projections.spec.ts` (src/web/mcp) holds every projection to its
+ * resource schema's fields.
+ */
+export type Projection<T> = {
+  readonly [K in keyof T]-?: 'keep' | 'omit' | 'own';
+};
+
+type FieldsAs<P, As> = {
+  [K in keyof P]: P[K] extends As ? K : never;
+}[keyof P];
+
+/**
+ * `record` as `projection` says, in its order: the kept fields, then each
+ * `own` field from `own`, which must hold every one of them and may add
+ * what the surface answers beside the resource (get_trip's `today`).
+ */
+export function project<
+  T extends object,
+  P extends Projection<T>,
+  Own extends { [K in FieldsAs<P, 'own'>]: unknown },
+>(
+  record: T,
+  projection: P,
+  own: Own,
+): Pick<T, Extract<FieldsAs<P, 'keep'>, keyof T>> & Own {
+  const answer: Record<string, unknown> = {};
+  const fields = record as Record<string, unknown>;
+  const owned = own as Record<string, unknown>;
+  for (const [field, as] of Object.entries(projection)) {
+    if (as === 'keep') answer[field] = fields[field];
+    if (as === 'own') answer[field] = owned[field];
+  }
+  for (const [field, value] of Object.entries(owned)) {
+    if (!(field in answer)) answer[field] = value;
+  }
+  return answer as Pick<T, Extract<FieldsAs<P, 'keep'>, keyof T>> & Own;
 }

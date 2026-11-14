@@ -3,12 +3,12 @@ import { AWAY_REASONS } from '../../wardrobe/availability';
 import { OCCASIONS } from '../../wardrobe/occasions';
 import { tripPhase, type TripPhase } from '../../wardrobe/packing';
 import { GARMENT_ROLES } from '../../wardrobe/properties';
-import { literals, withoutNulls } from '../api/resource';
+import { literals, withoutNulls, withoutNullsDeep } from '../api/resource';
 import { imageUrl } from '../files/image-url';
 import { OUTFIT_NAME_MAX } from '../outfits/queries';
 import {
   OutfitGarmentResource,
-  toOutfitGarment,
+  outfitGarmentRecord,
 } from '../outfits/outfit-resource';
 import { IsoDateSchema, RowId } from '../schemas';
 import { TEMPERATURE_UNITS } from '../../weather/temperature';
@@ -37,7 +37,10 @@ import { AgentResource, toAgentResource } from '../write-origin';
  * (listTrips) and one in full (requireTripModel: get_trip's model, the trip
  * page's one statement). camelCase, null fields left out. The packing list
  * is derived (src/wardrobe/packing.ts), so it is read, never written: a
- * client ticks its garments and extras one at a time.
+ * client ticks its garments and extras one at a time. A list's trip and
+ * one in full are records with their nulls kept (`tripListRecord`,
+ * `tripRecord`), which the API sends through withoutNullsDeep and MCP's
+ * trip tools project (src/web/mcp/tools/trips.ts).
  */
 
 const TRIP_PHASES = [
@@ -268,11 +271,12 @@ export function toSyncedTrip(row: SyncedTripRow): Static<typeof SyncedTrip> {
   };
 }
 
-function toTripFields(trip: TripRow, phase: TripPhase) {
+function tripFieldsRecord(trip: TripRow, phase: TripPhase) {
   return {
     id: trip.id,
     name: trip.name,
-    ...withoutNulls({ destination: trip.destination, notes: trip.notes }),
+    destination: trip.destination,
+    notes: trip.notes,
     located: trip.location !== null,
     startsOn: trip.startsOn,
     endsOn: trip.endsOn,
@@ -280,41 +284,46 @@ function toTripFields(trip: TripRow, phase: TripPhase) {
   };
 }
 
-export function toTripListItem(trip: TripSummary, today: string): TripListItem {
+/** A list's trip, nulls kept: the API's TripListItem, list_trips' rows. */
+export function tripListRecord(trip: TripSummary, today: string) {
   return {
-    ...toTripFields(trip, tripPhase(trip, today)),
+    ...tripFieldsRecord(trip, tripPhase(trip, today)),
     outfitCount: trip.outfits,
     extraCount: trip.extras,
   };
 }
+export type TripListRecord = ReturnType<typeof tripListRecord>;
 
-function toTripOutfit(
+export function toTripListItem(trip: TripSummary, today: string): TripListItem {
+  return withoutNullsDeep(tripListRecord(trip, today));
+}
+
+function tripOutfitRecord(
   view: TripOutfitView,
   wornToday: ReadonlyMap<number, number>,
 ) {
   return {
     id: view.id,
     outfitId: view.outfitId,
-    ...withoutNulls({
-      name: view.name,
-      day: view.day,
-      occasion: view.occasion,
-      wornTodayEntryId: wornToday.get(view.id) ?? null,
-    }),
+    name: view.name,
+    day: view.day,
+    occasion: view.occasion,
+    wornTodayEntryId: wornToday.get(view.id) ?? null,
     agent: toAgentResource(view.agent),
-    garments: view.garments.map(toOutfitGarment),
+    garments: view.garments.map(outfitGarmentRecord),
   };
 }
 
-export function toTripResource(model: TripModel): Trip {
+/** A trip in full, nulls kept: the API's Trip (toTripResource) and MCP's get_trip. */
+export function tripRecord(model: TripModel) {
   const { trip, packing, wornToday } = model;
   return {
-    ...toTripFields(trip, model.phase),
+    ...tripFieldsRecord(trip, model.phase),
     days: model.days.map(({ day, outfits }) => ({
       day,
-      outfits: outfits.map((view) => toTripOutfit(view, wornToday)),
+      outfits: outfits.map((view) => tripOutfitRecord(view, wornToday)),
     })),
-    anyDay: model.undated.map((view) => toTripOutfit(view, wornToday)),
+    anyDay: model.undated.map((view) => tripOutfitRecord(view, wornToday)),
     packing: {
       garments: packing.garments,
       packed: packing.packed,
@@ -324,10 +333,8 @@ export function toTripResource(model: TripModel): Trip {
         role,
         garments: rows.map((row) => ({
           id: row.garment.id,
-          ...withoutNulls({
-            name: row.garment.name,
-            thumbUrl: row.garment.photo && imageUrl(row.garment.photo, 'thumb'),
-          }),
+          name: row.garment.name,
+          thumbUrl: row.garment.photo && imageUrl(row.garment.photo, 'thumb'),
           category: row.garment.category,
           quantity: row.garment.quantity,
           outfits: row.outfits,
@@ -341,6 +348,11 @@ export function toTripResource(model: TripModel): Trip {
     },
     extras: model.items,
   };
+}
+export type TripRecord = ReturnType<typeof tripRecord>;
+
+export function toTripResource(model: TripModel): Trip {
+  return withoutNullsDeep(tripRecord(model));
 }
 
 /** POST /trips and PUT /trips/{id}: the trip form's fields, judged by its rules (readTripForm). */

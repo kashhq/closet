@@ -3,13 +3,38 @@ import {
   requireCapsule,
   setCapsuleMembers,
 } from '../../capsules/capsule-actions';
+import {
+  capsuleListRecord,
+  type CapsuleListRecord,
+  capsuleRecord,
+  type CapsuleRecord,
+} from '../../capsules/capsule-resource';
 import { listCapsules } from '../../capsules/queries';
+import { type Projection, project } from '../../api/resource';
 import { GRID_PAGE_SIZE } from '../../wardrobe/grid-page-size';
 import { CLOSET_FILTERS, garmentSummaries } from '../../wardrobe/queries';
 import { actorOf, defineTool, wardrobeFor } from '../tool';
 import { gridCursorText } from '../../wardrobe/grid-cursor';
 import { ownerIdInput, pageCursorInput, readPageCursor, rowId } from './common';
-import { summaryOut } from './garments';
+import { summaryForAgent } from './garments';
+
+/**
+ * The capsule resources as an agent reads them (#711): the API's records
+ * (capsule-resource.ts), nulls kept; no preview strip (photo URLs an agent
+ * cannot fetch: get_capsule lists the garments).
+ */
+export const CAPSULE_LIST_ITEM_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  count: 'keep',
+  preview: 'omit',
+} as const satisfies Projection<CapsuleListRecord>;
+
+export const CAPSULE_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  notes: 'keep',
+} as const satisfies Projection<CapsuleRecord>;
 
 export const capsuleTools = [
   defineTool({
@@ -23,7 +48,9 @@ export const capsuleTools = [
       const access = await wardrobeFor(ctx, ownerId, 'view');
       const capsules = await listCapsules(ctx.db, access.ownerId);
       return {
-        capsules: capsules.map(({ id, name, count }) => ({ id, name, count })),
+        capsules: capsules.map((card) =>
+          project(capsuleListRecord(card), CAPSULE_LIST_ITEM_FOR_MCP, {}),
+        ),
       };
     },
   }),
@@ -51,11 +78,12 @@ export const capsuleTools = [
         { ...CLOSET_FILTERS, capsule: id },
         { before: readPageCursor(before), limit: GRID_PAGE_SIZE },
       );
-      return {
-        ...capsule,
-        garments: page.garments.map(summaryOut),
+      return project(capsuleRecord(capsule), CAPSULE_FOR_MCP, {
+        garments: page.garments.map((garment) =>
+          summaryForAgent(garment, ctx.cutouts.enabled),
+        ),
         next: page.before === undefined ? null : gridCursorText(page.before),
-      };
+      });
     },
   }),
 
