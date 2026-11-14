@@ -91,7 +91,7 @@ export const READ_COVERAGE: readonly CoverageRow[] = [
     what: 'Ideas, clashes and avoided pairs',
     reads: ['listIdeas', 'getGoesWith'],
     onlineOnly:
-      'generated from the closet, the rules and the avoided pairs, which the feed does not carry',
+      "generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile",
   },
   {
     what: "The wishlist: Muse's inbox and needs",
