@@ -221,6 +221,53 @@ describe('year in review', () => {
     expect(html).toContain('Jan 1 – Sep 27, 2026');
   });
 
+  // #733: opening the recap on January 1 must not greet one with the new
+  // year's empty state when last year was a recap. The clock moves only
+  // here and is put back, so the other cases keep their September.
+  describe('opened without ?year= around New Year', () => {
+    const NEW_YEARS_DAY = '2027-01-01T17:00:00Z'; // noon in New York
+    const NEW_YEARS_EVE_LATE = '2027-01-01T04:30:00Z'; // 23:30 on December 31 in New York
+
+    afterAll(() => {
+      vi.setSystemTime(new Date(NOW));
+    });
+
+    it('opens on the latest year with enough wears while this year has too few', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page();
+      expect(html).toContain('data-year="2026"');
+      expect(html).toContain('data-to="2026-12-31"');
+      expect(html).not.toContain('id="recap-empty"');
+    });
+
+    it('reads one more statement pair only then', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const january = await recordQueries(() => page());
+      expect(january.statements).toBe(6);
+    });
+
+    it('keeps an explicit ?year= of this year its empty state', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page('?year=2027');
+      expect(html).toContain('data-year="2027"');
+      expect(html).toContain('id="recap-empty"');
+    });
+
+    it('stays on the year just ending until midnight in the household’s zone', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_EVE_LATE));
+      const { html } = await page();
+      expect(html).toContain('data-year="2026"');
+      expect(html).toContain('Your 2026 so far');
+    });
+
+    it('opens on this year’s empty state when no year has enough', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page('', strangerCookie);
+      expect(html).toContain('data-year="2027"');
+      expect(html).toContain('id="recap-empty"');
+    });
+  });
+
   it('counts the year’s wears and pieces: January 1 in, the wishlist and other users out', async () => {
     const summary = section((await page()).html, 'recap-summary');
     expect(summary).toMatch(/data-stat="wears"[^]*?>18</);
