@@ -91,6 +91,27 @@ function takesOwnerId(schema: unknown): boolean {
   );
 }
 
+/** A schema's direct subschemas: properties, items (or a tuple's), unions, patterns. */
+function subschemas(schema: object): unknown[] {
+  const { properties, items, anyOf, allOf, oneOf, patternProperties } =
+    schema as {
+      properties?: Record<string, unknown>;
+      items?: unknown;
+      anyOf?: unknown[];
+      allOf?: unknown[];
+      oneOf?: unknown[];
+      patternProperties?: Record<string, unknown>;
+    };
+  return [
+    ...Object.values(properties ?? {}),
+    ...Object.values(patternProperties ?? {}),
+    ...[items].flat(),
+    ...(anyOf ?? []),
+    ...(allOf ?? []),
+    ...(oneOf ?? []),
+  ];
+}
+
 /**
  * Whether a schema carries a RowId at any depth: a property, an array's
  * items, a union's member. The ownerId of a querystring is one too, which
@@ -98,21 +119,38 @@ function takesOwnerId(schema: unknown): boolean {
  */
 export function carriesResourceId(schema: unknown): boolean {
   if (typeof schema !== 'object' || schema === null) return false;
-  if (RESOURCE_ID in schema) return true;
-  const { properties, items, anyOf, allOf, oneOf } = schema as {
-    properties?: Record<string, unknown>;
-    items?: unknown;
-    anyOf?: unknown[];
-    allOf?: unknown[];
-    oneOf?: unknown[];
-  };
-  return [
-    ...Object.values(properties ?? {}),
-    items,
-    ...(anyOf ?? []),
-    ...(allOf ?? []),
-    ...(oneOf ?? []),
-  ].some(carriesResourceId);
+  return RESOURCE_ID in schema || subschemas(schema).some(carriesResourceId);
+}
+
+// `ownerId` is the wardrobe address, which its own rule (takesOwnerId) guards.
+const ID_NAME = /^(?!ownerId$)(id|.*Ids?)$/;
+
+/**
+ * Properties named like an id (`garmentId`, `ids`) that are integers or
+ * arrays of them but not RowId: the guard cannot see them, so a request id
+ * must be a RowId.
+ */
+export function untaggedIdProperties(schema: unknown): string[] {
+  if (typeof schema !== 'object' || schema === null) return [];
+  const { properties } = schema as { properties?: Record<string, unknown> };
+  const own = Object.entries(properties ?? {}).flatMap(([name, property]) => {
+    const { type, items } = property as { type?: string; items?: unknown };
+    const integer =
+      type === 'integer' || (type === 'array' && isInteger(items));
+    return ID_NAME.test(name) && integer && !carriesResourceId(property)
+      ? [name]
+      : [];
+  });
+  return [...own, ...subschemas(schema).flatMap(untaggedIdProperties)];
+}
+
+function isInteger(schema: unknown): boolean {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    (schema as { type?: string }).type === 'integer' &&
+    !(RESOURCE_ID in schema)
+  );
 }
 
 function appRoutes(registered: RouteOptions[]): AppRoute[] {
@@ -260,6 +298,20 @@ describe('authorization matrix coverage', () => {
     expect(coverageProblems([...routes, added], covered, EXEMPT)).toEqual([
       'GET /wardrobe/:id/unlisted: takes an id, but no matrix case requests it',
     ]);
+  });
+
+  it('has no request id that is a bare integer instead of a RowId', () => {
+    const bare = app.registered.flatMap((route) =>
+      ['body', 'querystring'].flatMap((part) =>
+        untaggedIdProperties(
+          (route.schema as Record<string, unknown> | undefined)?.[part],
+        ).map(
+          (name) =>
+            `${[route.method].flat().join('|')} ${route.url}: ${part}.${name}`,
+        ),
+      ),
+    );
+    expect(bare).toEqual([]);
   });
 
   it('sees a RowId in a body, however nested', () => {
