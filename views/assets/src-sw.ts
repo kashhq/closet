@@ -234,12 +234,21 @@ const MAX_ENTRIES: Readonly<Record<string, number>> = {
  * its plugin touched since this worker started, so a cold worker's drop
  * would forget nothing. CacheExpiration asks for a limit (asserted in
  * development builds); delete() reads none, so a retired cache's is nominal.
+ * Rows, the cache, then the rows again: the two deletes cannot be atomic, so
+ * a store landing between them leaves a row with no entry, which the second
+ * pass sweeps (the first pass alone would miss it; the cache alone would
+ * leave the first pass's rows). A store landing after the last step writes
+ * an entry and its row into a fresh cache, consistent with each other; whether
+ * that store may happen at all is the generation and owner checks' business
+ * (pageStore's claim, imageStore), not this delete's.
  */
 async function deleteCacheAndMetadata(name: string): Promise<boolean> {
-  const deleted = await self.caches.delete(name);
-  await new CacheExpiration(name, {
+  const expiration = new CacheExpiration(name, {
     maxEntries: MAX_ENTRIES[name] ?? 1,
-  }).delete();
+  });
+  await expiration.delete();
+  const deleted = await self.caches.delete(name);
+  await expiration.delete();
   return deleted;
 }
 

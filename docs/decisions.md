@@ -1389,6 +1389,12 @@ Why: `caches.delete` left every URL an account loaded in Workbox's `workbox-expi
 Decision: every whole-cache delete is the worker's `deleteCacheAndMetadata` (`CacheExpiration.delete()`, not the plugin's method, which forgets only caches it touched since the worker started: a cold drop would forget nothing). The first page stored into a cache with no owner re-warms a missing offline page (`ensureOfflinePage`), simpler than a separate cache, which would need its own owner check and activation refresh. A replay's 204 is saved only with `X-Closet-Outcome` (else retried as unreachable); the heartbeat is online only with `/health/live`'s `X-Closet-Live: up` (`public/js/live-answer.js`).
 Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `imageStore`) still leave their row: Workbox has no public per-URL forget; the rows age out under maxEntries. A rollback to a server without the live header shows the app offline until its worker activates; queued writes wait, none is lost.
 
+## 2026-11-14 — A session cache's drop deletes rows, the cache, then rows again (#1019)
+
+**Why:** the cache and its `workbox-expiration` rows are two non-atomic deletes, so a store between them leaves a row with no entry, whichever the order (review of #1017). A gate holding stores off during a drop was tried and withdrawn: it refused the page that had just claimed the cache and could wait forever on a token.
+**Decision:** `deleteCacheAndMetadata` deletes the rows, the cache, then the rows again; the second pass sweeps a row written in the window. Which stores may happen at all stays with the generation and owner checks (`pageStore`'s claim, `imageStore`).
+**Consequence:** a store after the last step leaves an entry and its row together in a fresh cache, never a lone row; no store/drop locking exists to maintain.
+
 ## 2026-11-14 — Large text is read from a container query in rem (#730)
 Why: a media query ignores `html { font-size }`, so the dock could not tell 200% text from 100%.
 Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
