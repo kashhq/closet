@@ -364,8 +364,8 @@ describe('the weekly auto-plan', () => {
         .orderBy(asc(weekTemplate.weekday), asc(weekTemplate.occasion));
       expect(rows).toHaveLength(8);
       expect(rows).toContainEqual({ weekday: 2, occasion: 'evening' });
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Week template saved by user ${t.owner.id}: 8 slot(s) on 7 day(s)`,
+      expect(t.logs.ops('week.template.saved')).toContainEqual(
+        expect.objectContaining({ userId: t.owner.id, slots: 8, days: 7 }),
       );
 
       const page = unescapeHtml((await get('/auth/profile?weekSaved=1')).body);
@@ -489,15 +489,15 @@ describe('the weekly auto-plan', () => {
       expect(recorded.every((r) => r.outfitCreated && r.torso === null)).toBe(
         true,
       );
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((m) =>
-            m.startsWith(
-              `Week planned for user ${t.owner.id} from ${TODAY} (plan ${planId}): 8 outfit(s)`,
-            ),
-          ),
-      ).toBe(true);
+      expect(t.logs.ops('week.planned')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          from: TODAY,
+          weekPlanId: planId,
+          planned: 8,
+          changed: true,
+        }),
+      );
 
       // The banner: what was planned, and Undo. #165: read with the week in
       // one statement after the session (five in parallel before).
@@ -706,11 +706,12 @@ describe('the weekly auto-plan', () => {
         garmentId: slots.map((s) => String(s.garmentId)),
       });
       expect(edit.statusCode).toBe(302);
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((m) => m.includes("1 planned entry(ies) now the user's")),
-      ).toBe(true);
+      expect(t.logs.ops('outfit.updated')).toContainEqual(
+        expect.objectContaining({
+          outfitId: tomorrows.outfitId,
+          entriesClaimed: 1,
+        }),
+      );
       const byId = new Map((await weekEntries()).map((e) => [e.id, e]));
       expect(byId.get(todays.id)!.plannedBy).toBe('user');
       expect(byId.get(tomorrows.id)!.plannedBy).toBe('user');
