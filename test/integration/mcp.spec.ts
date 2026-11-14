@@ -13,7 +13,9 @@ import {
 import { createCapsule } from '../../src/web/capsules/queries';
 import { t as text } from '../../src/web/i18n';
 import { HttpError } from '../../src/web/errors';
+import { MCP_WRITES } from '../../src/web/api/operations';
 import { MAX_TOOL_INPUT_ELEMENTS } from '../../src/web/mcp/routes';
+import { mcpTools } from '../../src/web/mcp/tools';
 import { defineTool, registerTools } from '../../src/web/mcp/tool';
 import { acceptInvite, createInvite } from '../../src/web/sharing/queries';
 import { deleteGarment } from '../../src/web/wardrobe/queries';
@@ -378,6 +380,105 @@ describe('the MCP endpoint', () => {
         isError: true,
         value: { error: expect.stringContaining('more than the maximum') },
       });
+    });
+  });
+
+  describe('a read-only token (#701)', () => {
+    let readOnly: string;
+    const READ_ONLY = { readOnly: true, ownWardrobeOnly: false };
+    /** The tools that write nothing, by their flag, with the weather's. */
+    const readTools = () =>
+      mcpTools({ weather: true })
+        .filter((listed) => listed.writes === false)
+        .map((listed) => listed.name);
+
+    beforeAll(async () => {
+      readOnly = await createAccessToken(t, {
+        name: 'Read only',
+        scope: READ_ONLY,
+      });
+      issued.push(readOnly);
+    });
+
+    it('is told so first, and lists exactly the tools marked writes: false', async () => {
+      const init = await mcpRequest(t, readOnly, 'initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'spec', version: '1' },
+      });
+      expect(
+        init.json<{ result: { instructions: string } }>().result.instructions,
+      ).toMatch(/^This token is read-only: the tools that write/);
+
+      const res = await mcpRequest(t, readOnly, 'tools/list');
+      const { tools } = res.json<{
+        result: {
+          tools: { name: string; annotations: { readOnlyHint: boolean } }[];
+        };
+      }>().result;
+      // This app has the weather off, so get_weather is not offered.
+      expect(tools.map((listed) => listed.name).sort()).toEqual(
+        readTools()
+          .filter((name) => name !== 'get_weather')
+          .sort(),
+      );
+      expect(tools.every((listed) => listed.annotations.readOnlyHint)).toBe(
+        true,
+      );
+    });
+
+    it('marks writes: false exactly the tools MCP_WRITES does not list', () => {
+      const every = mcpTools({ weather: true }).map((listed) => listed.name);
+      expect(new Set(readTools())).toEqual(
+        new Set(every.filter((name) => !(name in MCP_WRITES))),
+      );
+    });
+
+    it('calls a write tool as an unknown one: no tool error that invites a retry, nothing written, a warn line', async () => {
+      const res = await mcpRequest(t, readOnly, 'tools/call', {
+        name: 'update_garment',
+        arguments: { id: garments.tee.id, name: 'Injected' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        jsonrpc: '2.0',
+        id: expect.any(Number),
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: 'MCP error -32602: Tool update_garment not found',
+            },
+          ],
+          isError: true,
+        },
+      });
+      const [row] = await t.db
+        .select({ name: garment.name })
+        .from(garment)
+        .where(eq(garment.id, garments.tee.id));
+      expect(row.name).toBe('White Tee');
+      expect(t.logs.messages('warn', 'Mcp')).toContainEqual(
+        expect.stringMatching(
+          /^MCP update_garment by user \d+ \(token \d+\): refused \(read-only token\)$/,
+        ),
+      );
+      // A read still answers.
+      expect(
+        await tool(t, readOnly, 'get_garment', { id: garments.tee.id }),
+      ).toMatchObject({ name: 'White Tee' });
+    });
+
+    it('offers no prompts and no resources, to any token', async () => {
+      for (const bearer of [token, readOnly]) {
+        for (const method of ['prompts/list', 'resources/list']) {
+          const res = await mcpRequest(t, bearer, method);
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toMatchObject({
+            error: { code: -32601, message: 'Method not found' },
+          });
+        }
+      }
     });
   });
 

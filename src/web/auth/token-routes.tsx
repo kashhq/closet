@@ -12,6 +12,7 @@ import {
   revokeToken,
   TOKEN_NAME_MAX,
   type TokenListing,
+  type TokenScope,
 } from './personal-tokens';
 import { verifyPassword } from './passwords';
 import { sessionUserId } from './require-session';
@@ -34,9 +35,14 @@ const TokensQuery = Type.Object({
 
 // A longer name is a 400 (the input carries the same maxlength); a blank one
 // re-renders the page with a message.
+// The scope's two checkboxes (#701), each absent unless ticked: a token
+// that may write and one confined to the user's own wardrobe are asked
+// for, so a form posted without them mints the narrowest read.
 const CreateTokenBody = Type.Object({
   name: Type.String({ maxLength: TOKEN_NAME_MAX }),
   currentPassword: Password,
+  writes: Type.Optional(Type.Literal('on')),
+  ownWardrobeOnly: Type.Optional(Type.Literal('on')),
 });
 
 const TokenParams = Type.Object({ id: RowId });
@@ -46,7 +52,9 @@ const TokenParams = Type.Object({ id: RowId });
  * endpoint's personal access tokens (src/web/auth/personal-tokens.ts, kind
  * `mcp`), and revoke the profile's Devices (kind `device`, #189; minted by
  * a native client's sign-in, never here). Every form is a native post
- * (PostForm). Creating needs the current password (a token is a credential
+ * (PostForm). A token's scope (#701: read-only unless "can make changes"
+ * is ticked, optionally own wardrobe only) is chosen here and never changed
+ * after: a wider one is a new token. Creating needs the current password (a token is a credential
  * that survives signing out) and answers the page with the token in it,
  * once, and `no-store`, so no cache keeps it; rate-limited like the other
  * routes that check the password. Revoking needs no password: it only
@@ -83,6 +91,10 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const userId = sessionUserId(request);
       const name = request.body.name.trim();
+      const scope: TokenScope = {
+        readOnly: request.body.writes === undefined,
+        ownWardrobeOnly: request.body.ownWardrobeOnly !== undefined,
+      };
       // The form again with what was typed, the password never echoed.
       // `tokens`: the list when the caller already read it (createToken's).
       const refuse = async ({
@@ -101,7 +113,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
             tokens={tokens ?? (await listTokens(db, userId, 'mcp'))}
             timeZone={config.timeZone}
             notice={notice}
-            form={{ name: request.body.name, passwordError }}
+            form={{ name: request.body.name, scope, passwordError }}
           />,
           { status: 400 },
         );
@@ -122,6 +134,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           userId,
           kind: 'mcp',
           name,
+          scope,
           verifiedPassword: password,
         },
       );
@@ -134,7 +147,9 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ? refuse({ passwordError: t('agentAccess.PASSWORD_CHANGED') })
           : refuse({ notice: result.reason, tokens: result.tokens });
       }
-      logger.info(`User ${userId} created access token ${result.id}`);
+      logger.info(
+        `User ${userId} created access token ${result.id} (${scope.readOnly ? 'read-only' : 'read-write'}${scope.ownWardrobeOnly ? ', own wardrobe only' : ''})`,
+      );
       // The only time the token exists in a response: nothing may store it.
       reply.header('Cache-Control', 'no-store');
       return renderPage(

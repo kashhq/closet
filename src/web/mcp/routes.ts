@@ -12,7 +12,7 @@ import { MCP_PATH } from '../page-cache';
 import type { WebOptions } from '../plugin';
 import { MCP_LIMIT, MCP_LINK_IMPORT_LIMIT } from '../security/rate-limit';
 import { requestOrigin } from '../security/origin';
-import { registerTools, type ToolContext } from './tool';
+import { registerTools, scopedTools, type ToolContext } from './tool';
 import { mcpTools } from './tools';
 
 // Array elements and object keys one tool call's arguments may hold, checked
@@ -39,6 +39,13 @@ const INSTRUCTIONS = [
   '7. suggest_outfit a few outfits for each occasion of the week, mixing closet garments with your options so that every option is in at least one; outfits of closet garments only are welcome too. The owner judges a piece by what it does with their closet, so outfits come first for them.',
   "8. finish_round once at the end, with a one-line summary and feedbackUntil, the `until` of this conversation's get_suggestion_feedback: the owner gets one card on Today and one notification, and what you were told is not told again. Call it even when you suggested nothing new (it then only ends the round).",
   'Rules: never buy, mark anything owned (add_garment_from_link with destination closet is for what the owner already owns), archive or delete; the owner buys in the app. Never propose again anything the owner set aside: a need by its name, a product by its link, an outfit by its garments (the tools refuse them). A need the owner chose an option for is decided: leave it.',
+].join('\n');
+
+// Told a read-only token's model first (#701): its write tools are not
+// registered, so Muse's round and the Rules' writes are not there to call.
+const READ_ONLY_INSTRUCTIONS = [
+  "This token is read-only: the tools that write (every WRITES tool, Muse's round included) are not available to it. Read, compare and advise; the owner makes changes in the app or with a token that can write.",
+  INSTRUCTIONS,
 ].join('\n');
 
 /**
@@ -128,20 +135,33 @@ export const mcpRoutes: FastifyPluginCallback<
         timeZone: config.timeZone,
         userId: auth.user.id,
         tokenId: auth.tokenId,
+        scope: auth.scope,
         // `isAllowed` is the plugin's allow list; the count is isExceeded.
         allowLinkImport: async () => {
           const verdict = await linkImportLimit(request);
           return verdict.isAllowed || !verdict.isExceeded;
         },
       };
+      const { granted, withheld } = scopedTools(tools, auth.scope);
+      const called = calledTool(request.body);
+      if (called !== undefined && withheld.has(called)) {
+        // The SDK answers it as an unknown tool; this line is what tells a
+        // prompt-injected write attempt from a typo.
+        mcpLogger.warn(
+          `MCP ${called} by user ${auth.user.id} (token ${auth.tokenId}): refused (read-only token)`,
+        );
+        metrics.observeMcpCall(called, { outcome: 'refused' }, 0);
+      }
       const server = new McpServer(
         { name: config.appName, version: config.release },
         {
-          instructions: INSTRUCTIONS,
+          instructions: auth.scope.readOnly
+            ? READ_ONLY_INSTRUCTIONS
+            : INSTRUCTIONS,
           maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS,
         },
       );
-      registerTools(server, tools, context, {
+      registerTools(server, granted, context, {
         logger: mcpLogger,
         metrics,
       });
@@ -188,6 +208,17 @@ export const mcpRoutes: FastifyPluginCallback<
   app.delete(MCP_PATH, route, notAllowed);
   done();
 };
+
+/** The tool a `tools/call` message names, if it is one. */
+function calledTool(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const { method, params } = body as { method?: unknown; params?: unknown };
+  if (method !== 'tools/call' || typeof params !== 'object' || !params) {
+    return undefined;
+  }
+  const { name } = params as { name?: unknown };
+  return typeof name === 'string' ? name : undefined;
+}
 
 /** The request's headers for the SDK's Web Request (repeated ones joined). */
 function webHeaders(request: FastifyRequest): Headers {

@@ -368,6 +368,13 @@ export const personalAccessToken = pgTable(
     // cursor over the owner's decisions, null before its first call.
     // Written only by readSuggestionFeedback (src/web/wishlist/feedback.ts).
     feedbackReadAt: timestamp('feedback_read_at', { withTimezone: true }),
+    // An agent token's scope (#701), fixed at mint (Agent Access): no write
+    // tool is registered for a read-only token, and an own-wardrobe-only
+    // token's actor sees no shared wardrobe (src/web/sharing/access.ts).
+    // false is full power: every token minted before 0067, and every device
+    // token, which never reads either.
+    readOnly: boolean('read_only').default(false).notNull(),
+    ownWardrobeOnly: boolean('own_wardrobe_only').default(false).notNull(),
   },
   (table) => [
     unique('personal_access_token_token_hash_unique').on(table.tokenHash),

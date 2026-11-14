@@ -249,6 +249,115 @@ describe('agent access tokens', () => {
     expect(res.body).not.toMatch(/closet_[A-Za-z0-9_-]{43}/);
   });
 
+  describe('a token’s scope (#701)', () => {
+    /** The scope words Agent Access shows on the token named `name`. */
+    const scopeShown = (body: string, name: string) =>
+      new RegExp(`>${name}</span>\\s*<span[^>]*data-scope[^>]*>([^<]*)<`).exec(
+        unescapeHtml(body),
+      )?.[1];
+
+    it('is read-only with every wardrobe unless asked, stored as chosen, and shown on each token; a token from before keeps full power', async () => {
+      const cookie = await t.register('scoped@example.com');
+      const id = await userIdOf(t, 'scoped@example.com');
+      const mint = (name: string, fields: Record<string, string> = {}) =>
+        t.inject({
+          method: 'POST',
+          url: '/auth/tokens',
+          payload: { name, currentPassword: TEST_PASSWORD, ...fields },
+          headers: { cookie },
+        });
+      const form = await t.inject({
+        method: 'GET',
+        url: '/auth/tokens',
+        headers: { cookie },
+      });
+      // Both toggles start off: the default is the narrowest read.
+      expect(form.body).toMatch(/<input type="checkbox" name="writes"/);
+      expect(form.body).not.toMatch(/name="writes"[^>]*checked/);
+      expect(form.body).toMatch(
+        /<input type="checkbox" name="ownWardrobeOnly"/,
+      );
+      expect(form.body).not.toMatch(/name="ownWardrobeOnly"[^>]*checked/);
+
+      expect((await mint('Default')).statusCode).toBe(200);
+      expect(
+        (await mint('Writer', { writes: 'on', ownWardrobeOnly: 'on' }))
+          .statusCode,
+      ).toBe(200);
+      // A row as every token before 0067 is: no scope written, the
+      // columns' defaults.
+      await t.db.insert(personalAccessToken).values({
+        userId: id,
+        kind: 'mcp',
+        name: 'Earlier',
+        tokenHash: hashToken('closet_earlier-701'),
+        tokenPrefix: 'closet_earl',
+      });
+
+      const rows = await t.db
+        .select({
+          name: personalAccessToken.name,
+          readOnly: personalAccessToken.readOnly,
+          ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
+        })
+        .from(personalAccessToken)
+        .where(eq(personalAccessToken.userId, id))
+        .orderBy(asc(personalAccessToken.id));
+      expect(rows).toEqual([
+        { name: 'Default', readOnly: true, ownWardrobeOnly: false },
+        { name: 'Writer', readOnly: false, ownWardrobeOnly: true },
+        { name: 'Earlier', readOnly: false, ownWardrobeOnly: false },
+      ]);
+      expect(
+        await authenticateToken(t.db, 'closet_earlier-701', 'mcp'),
+      ).toMatchObject({ scope: { readOnly: false, ownWardrobeOnly: false } });
+
+      const listed = await t.inject({
+        method: 'GET',
+        url: '/auth/tokens',
+        headers: { cookie },
+      });
+      expect(scopeShown(listed.body, 'Default')).toBe('Read only');
+      expect(scopeShown(listed.body, 'Writer')).toBe(
+        'Can make changes · My wardrobe only',
+      );
+      expect(scopeShown(listed.body, 'Earlier')).toBe('Can make changes');
+    });
+
+    it('keeps the choices on a refused create, and a scope value the form never sends is a 400', async () => {
+      const cookie = await t.register('scope-refused@example.com');
+      const refused = await t.inject({
+        method: 'POST',
+        url: '/auth/tokens',
+        payload: {
+          name: 'Kept',
+          currentPassword: 'not-the-password',
+          writes: 'on',
+          ownWardrobeOnly: 'on',
+        },
+        headers: { cookie },
+      });
+      expect(refused.statusCode).toBe(400);
+      expect(refused.body).toMatch(/name="writes"[^>]*checked/);
+      expect(refused.body).toMatch(/name="ownWardrobeOnly"[^>]*checked/);
+
+      const malformed = await t.inject({
+        method: 'POST',
+        url: '/auth/tokens',
+        payload: { name: 'Odd', currentPassword: TEST_PASSWORD, writes: 'yes' },
+        headers: { cookie },
+      });
+      expect(malformed.statusCode).toBe(400);
+      const id = await userIdOf(t, 'scope-refused@example.com');
+      expect(
+        await t.db
+          .select({ id: personalAccessToken.id })
+          .from(personalAccessToken)
+          .where(eq(personalAccessToken.userId, id)),
+      ).toEqual([]);
+    });
+  });
+
   describe('device tokens (#189)', () => {
     const signedUp = async (email: string) => {
       const cookie = await t.register(email);
@@ -307,6 +416,7 @@ describe('agent access tokens', () => {
       expect(await authenticateToken(t.db, phone.token, 'device')).toEqual({
         user: { id, email: 'kinds@example.com' },
         tokenId: phone.id,
+        scope: { readOnly: false, ownWardrobeOnly: false },
       });
       expect(await authenticateToken(t.db, agent.token, 'device')).toEqual({
         refused: 'wrong kind',

@@ -10,13 +10,15 @@ import {
   MAX_ACTIVE_TOKENS,
   TOKEN_NAME_MAX,
   type TokenListing,
+  type TokenScope,
 } from './personal-tokens';
 
 /**
  * /auth/tokens, the profile's "Agent access" (#33): personal access tokens
  * for the MCP endpoint. A new token is shown once, in the answer to the
  * create form (a native post, never cached), with the command that connects
- * Claude Code; the list shows each token's name and prefix only. The
+ * Claude Code; the list shows each token's name, prefix and scope (#701:
+ * chosen in the form, read-only unless ticked, never changed after). The
  * redesign moves this into a Profile section (docs/plans/2026-09-26-redesign.md).
  */
 
@@ -35,8 +37,8 @@ export interface TokensPageProps {
   /** The token just created: its only showing. */
   created?: { name: string; token: string };
   notice?: TokenNotice;
-  /** A refused create: the name as typed and the password's message (never the password). */
-  form?: { name: string; passwordError?: string };
+  /** A refused create: the name and scope as chosen and the password's message (never the password). */
+  form?: { name: string; scope: TokenScope; passwordError?: string };
 }
 
 /** The MCP endpoint on the canonical name (SITE_URL), for the connect command. */
@@ -46,6 +48,69 @@ function mcpUrl(siteUrl: string): string {
 
 function connectCommand(siteUrl: string, token: string): string {
   return `claude mcp add --transport http closet ${mcpUrl(siteUrl)} --header "Authorization: Bearer ${token}"`;
+}
+
+/** What a token may do, as the list says it: its scope's words, joined. */
+function scopeText(scope: TokenScope): string {
+  const words = [
+    t(scope.readOnly ? 'agentAccess.READ_ONLY' : 'agentAccess.READ_WRITE'),
+  ];
+  if (scope.ownWardrobeOnly) words.push(t('agentAccess.OWN_WARDROBE_ONLY'));
+  return words.join(' · ');
+}
+
+/** One scope checkbox, a toggle as the garment form's booleans are. */
+function ScopeToggle({
+  name,
+  label,
+  hint,
+  checked,
+}: {
+  name: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+}) {
+  return (
+    <label class="label cursor-pointer justify-start items-start gap-3 whitespace-normal">
+      <input
+        type="checkbox"
+        name={name}
+        value="on"
+        class="toggle toggle-sm mt-0.5"
+        checked={checked}
+      />
+      <span class="flex flex-col gap-0.5">
+        <span class="label-text">{label}</span>
+        <span class="text-xs text-muted">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * The create form's scope (#701): both off unless a refused create brings
+ * back what was chosen, so a token is read-only with every wardrobe unless
+ * asked.
+ */
+function ScopeFields({ scope }: { scope?: TokenScope }) {
+  return (
+    <fieldset class="flex flex-col gap-2 py-1" data-token-scope>
+      <legend class="text-sm mb-1">{t('agentAccess.SCOPE')}</legend>
+      <ScopeToggle
+        name="writes"
+        label={t('agentAccess.WRITES')}
+        hint={t('agentAccess.WRITES_HINT')}
+        checked={scope?.readOnly === false}
+      />
+      <ScopeToggle
+        name="ownWardrobeOnly"
+        label={t('agentAccess.OWN_ONLY')}
+        hint={t('agentAccess.OWN_ONLY_HINT')}
+        checked={scope?.ownWardrobeOnly === true}
+      />
+    </fieldset>
+  );
 }
 
 function TokenAlert({ notice }: { notice: TokenNotice }) {
@@ -128,6 +193,7 @@ export function TokensPage(props: TokensPageProps) {
                   required
                 />
               </label>
+              <ScopeFields scope={props.form?.scope} />
               <Field
                 id="currentPassword"
                 label={t('CURRENT_PASSWORD')}
@@ -157,6 +223,9 @@ export function TokensPage(props: TokensPageProps) {
                   <li class="py-3 flex items-center justify-between gap-2">
                     <div class="flex flex-col gap-1 min-w-0">
                       <span class="font-medium truncate">{token.name}</span>
+                      <span class="text-xs" data-scope>
+                        {scopeText(token)}
+                      </span>
                       <span class="text-xs text-muted">
                         <code>{token.prefix}…</code>{' '}
                         {t('agentAccess.CREATED_ON', {

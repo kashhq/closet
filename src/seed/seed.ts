@@ -13,7 +13,7 @@ import {
 } from '../maintenance/set-password';
 import { deleteAccount } from '../web/auth/account';
 import { hashPassword, passwordProblems } from '../web/auth/passwords';
-import { createToken } from '../web/auth/personal-tokens';
+import { createToken, FULL_SCOPE } from '../web/auth/personal-tokens';
 import {
   findUserByEmail,
   insertUser,
@@ -1000,6 +1000,8 @@ async function seedOne(
       userId: account!.id,
       kind: 'mcp',
       name: SEED_TOKEN_NAME,
+      // The demo's agent drives every tool (mcp-seed.spec): a full token.
+      scope: FULL_SCOPE,
       // The seed checked no password: the hash it just read stands in, so
       // the mint still refuses if the password moved since.
       verifiedPassword: account!.password,

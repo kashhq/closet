@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type * as z from 'zod';
 import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
+import type { TokenScope } from '../auth/personal-tokens';
 import type { McpEnding, Metrics } from '../../metrics/metrics';
 import { describeError } from '../errors';
 import type { Photos } from '../files/photos';
@@ -43,8 +44,14 @@ export interface ToolContext {
   webLogger: Logger;
   /** APP_TIMEZONE: "today" is the household's. */
   timeZone: string;
-  /** The token's user: every tool acts exactly as them. */
+  /** The token's user: every tool acts as them, within `scope`. */
   userId: number;
+  /**
+   * The token's scope (#701). Read by two places only, never by a tool:
+   * scopedTools (no write tool for a read-only token) and actorOf (an
+   * own-wardrobe-only actor, refused by the access resolver).
+   */
+  scope: TokenScope;
   /**
    * The token's row id: the call's log line, the provenance of what the
    * agent suggests (#337: a need's, a pick's, an outfit's token) and its
@@ -64,7 +71,13 @@ export interface ClosetTool<Input extends z.ZodObject> {
   /** Says what the tool does and, for a write, that it writes. */
   description: string;
   input: Input;
-  /** Changes stored data. Nothing deletes: there is no destructive tool. */
+  /**
+   * Changes stored data. Nothing deletes: there is no destructive tool.
+   * Also the read-only scope's boundary (scopedTools): a tool marked false
+   * must write nothing a person would see (mcp-statements.spec runs every
+   * one through a read-only token against a row diff), and MCP_WRITES
+   * (src/web/api/operations.ts) lists exactly the true ones.
+   */
   writes: boolean;
   /** Calling it again with the same arguments changes nothing more. */
   idempotent?: boolean;
@@ -80,9 +93,39 @@ export function defineTool<Input extends z.ZodObject>(
   return tool;
 }
 
-/** The token's user as a domain function's Actor: no session, so no share read ahead. */
-export function actorOf(ctx: Pick<ToolContext, 'userId'>): Actor {
-  return { userId: ctx.userId };
+/**
+ * The token's user as a domain function's Actor: no session, so no share
+ * read ahead; an own-wardrobe-only token's actor says so, and the access
+ * resolver refuses it every other wardrobe (src/web/sharing/access.ts).
+ */
+export function actorOf(ctx: Pick<ToolContext, 'userId' | 'scope'>): Actor {
+  return ctx.scope.ownWardrobeOnly
+    ? { userId: ctx.userId, ownWardrobeOnly: true }
+    : { userId: ctx.userId };
+}
+
+/**
+ * The tools a token of `scope` is given (#701): every one, or for a
+ * read-only token those marked `writes: false` and nothing else (so a
+ * tool whose flag is anything but false is withheld). The one check of
+ * the read-only scope: a withheld tool is never registered, so
+ * `tools/list` omits it and `tools/call` gets the SDK's unknown-tool
+ * error. The route logs a call to one (withheld).
+ */
+export function scopedTools(
+  tools: readonly ClosetTool<z.ZodObject>[],
+  scope: TokenScope,
+): {
+  granted: readonly ClosetTool<z.ZodObject>[];
+  withheld: ReadonlySet<string>;
+} {
+  if (!scope.readOnly) return { granted: tools, withheld: new Set() };
+  return {
+    granted: tools.filter((tool) => tool.writes === false),
+    withheld: new Set(
+      tools.filter((tool) => tool.writes !== false).map((tool) => tool.name),
+    ),
+  };
 }
 
 /**

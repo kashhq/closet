@@ -108,6 +108,13 @@ export function rememberShareReadAhead(
 export interface Actor {
   userId: number;
   shareReadAhead?: ShareReadAhead;
+  /**
+   * An own-wardrobe-only agent token's (#701, its TokenScope): every
+   * wardrobe but the user's own resolves as unseen, the unknown id's
+   * NotFound, and no share is listed (sharedWardrobesOf). Only actorOf(ctx)
+   * sets it: a session or device token sees its shares as ever.
+   */
+  ownWardrobeOnly?: true;
 }
 
 /**
@@ -154,7 +161,11 @@ async function resolveWardrobeAccess(
       canManage: true,
     };
   }
-  const permission = await sharePermission(db, actor, ownerId);
+  // No share read: the scope refuses before any row is asked, so the answer
+  // and its cost are an unknown id's whatever the user was granted.
+  const permission = actor.ownWardrobeOnly
+    ? null
+    : await sharePermission(db, actor, ownerId);
   return {
     ownerId,
     isOwner: false,
@@ -262,11 +273,17 @@ export function toSharedWardrobe(row: SharedWardrobeRow): SharedWardrobe {
   };
 }
 
-/** Wardrobes shared with `userId`: the other tabs' switchers, list_shared_wardrobes (MCP). */
+/**
+ * Wardrobes shared with the actor: the wears page's switcher,
+ * list_shared_wardrobes (MCP), GET /api/v1/shared-wardrobes. None, and no
+ * statement, for an own-wardrobe-only actor: the list resolveWardrobeAccess
+ * would refuse every entry of.
+ */
 export async function sharedWardrobesOf(
   db: Db,
-  userId: number,
+  actor: Actor,
 ): Promise<SharedWardrobe[]> {
+  if (actor.ownWardrobeOnly) return [];
   const rows = await db
     .select({
       grantorId: wardrobeShare.grantorId,
@@ -276,7 +293,7 @@ export async function sharedWardrobesOf(
     })
     .from(wardrobeShare)
     .innerJoin(user, eq(user.id, wardrobeShare.grantorId))
-    .where(acceptedSharesWith(userId))
+    .where(acceptedSharesWith(actor.userId))
     .orderBy(wardrobeShare.id);
   return rows.map(toSharedWardrobe);
 }
@@ -285,7 +302,9 @@ export async function sharedWardrobesOf(
  * sharedWardrobesOf's rows as a scalar subquery (a JSON array, empty for
  * none; map each through toSharedWardrobe), for a page that reads it in
  * one statement with its other lists: the grid's switcher (gridContext,
- * src/web/wardrobe/grid-context.ts).
+ * src/web/wardrobe/grid-context.ts). Pages only, so it takes the session's
+ * user, never scoped: a token's reader is sharedWardrobesOf, which honours
+ * an own-wardrobe-only actor (#701).
  */
 export function sharedWardrobesSql(userId: number): SQL<SharedWardrobeRow[]> {
   return sql<SharedWardrobeRow[]>`(
