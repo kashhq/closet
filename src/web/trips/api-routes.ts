@@ -17,7 +17,11 @@ import { enforceLimit } from '../security/rate-limit';
 import { type Actor, actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
 import { keptDestination, pickedPlace } from '../weather/place-picker';
-import { KeptDestination, PlaceInput } from '../weather/weather-resource';
+import {
+  KeptDestination,
+  PlaceInput,
+  weatherOnly,
+} from '../weather/weather-resource';
 import { tripForecast } from './forecast';
 import { createTripAt, createTripOnce, listTrips } from './queries';
 import { HttpError } from '../errors';
@@ -555,8 +559,9 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           operationId: 'getTripWeather',
           tags: ['trips'],
           summary: "The destination's weather for the trip's days",
-          description:
+          description: weatherOnly(
             "The trip page's forecast: the located destination's forecast for the trip's days from today within the 16-day forecast, each with what it asks of an all-day outfit (your offset included), and the typical weather of the days past it. Nothing is fetched for a trip not located or over. No ETag: it moves with the day and the forecast.",
+          ),
           params: TripParams,
           response: apiResponses({ 200: TripWeather }),
         },
@@ -581,8 +586,9 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           operationId: 'setTripDestination',
           tags: ['trips'],
           summary: "Locates the trip's destination",
-          description:
+          description: weatherOnly(
             "A place from GET /weather/places becomes the destination (its name too), so the trip gets the place's weather. Set-state. 10 a minute per user (each new place is a forecast to fetch).",
+          ),
           params: TripParams,
           body: PlaceInput,
           response: apiResponses({ 200: KeptDestination }),
