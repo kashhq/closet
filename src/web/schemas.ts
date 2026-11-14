@@ -10,10 +10,24 @@ import { OCCASIONS } from '../wardrobe/occasions';
 export const ROW_ID_MAX = 2_147_483_647;
 
 /**
- * A row id in a path or a form: anything larger than ROW_ID_MAX would fail
- * in the query as a 500 instead of here as a 400.
+ * Marks a schema as a resource id. A symbol key, so it is neither a JSON
+ * Schema keyword (ajv strict mode would refuse it) nor part of openapi.json;
+ * TypeBox's Clone and CloneType keep symbol keys. Read by the authorization
+ * coverage guard (test/integration/authorization-coverage.spec.ts): a route
+ * whose body or querystring carries one needs a matrix case.
  */
-export const RowId = Type.Integer({ minimum: 1, maximum: ROW_ID_MAX });
+export const RESOURCE_ID = Symbol('closet.resourceId');
+
+/**
+ * A row id in a path or a form: anything larger than ROW_ID_MAX would fail
+ * in the query as a 500 instead of here as a 400. Every id of a row some
+ * user owns is a RowId, never a bare Type.Integer(): the guard keys on it.
+ */
+export const RowId = Type.Integer({
+  minimum: 1,
+  maximum: ROW_ID_MAX,
+  [RESOURCE_ID]: true,
+});
 
 /**
  * A calendar day, 'YYYY-MM-DD'. `format: 'date'` is ajv-formats' full-date

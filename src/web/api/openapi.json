@@ -2175,15 +2175,15 @@
                     ]
                   },
                   "replacesGarmentId": {
+                    "description": "The garment of this wardrobe a wishlist item would replace: `destination` wishlist only (another wardrobe's is not stored)",
                     "minimum": 1,
                     "maximum": 2147483647,
-                    "description": "The garment of this wardrobe a wishlist item would replace: `destination` wishlist only (another wardrobe's is not stored)",
                     "type": "integer"
                   },
                   "boughtForNeedId": {
+                    "description": "\"Bought a different one\": your own Muse need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only",
                     "minimum": 1,
                     "maximum": 2147483647,
-                    "description": "\"Bought a different one\": your own Muse need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only",
                     "type": "integer"
                   },
                   "clientId": {
@@ -7208,9 +7208,9 @@
                     ]
                   },
                   "replacesGarmentId": {
+                    "description": "The garment of this wardrobe a wishlist item would replace: `destination` wishlist only (another wardrobe's is not stored)",
                     "minimum": 1,
                     "maximum": 2147483647,
-                    "description": "The garment of this wardrobe a wishlist item would replace: `destination` wishlist only (another wardrobe's is not stored)",
                     "type": "integer"
                   },
                   "name": {
