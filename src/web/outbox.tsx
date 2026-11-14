@@ -1,5 +1,4 @@
 import type { Child } from 'hono/jsx';
-import type { IsoDate } from '../calendar-date';
 import type { QueueableKind, QueuedTarget } from '../offline-writes';
 import { t } from './i18n';
 import { ClockIcon } from './layout/parts';
@@ -31,20 +30,15 @@ export function queueForm(kind: QueueableKind) {
 }
 
 /**
- * A queued write's region. `day` is the page's day, on Wore today alone: the
- * outbox refuses to queue it from a page rendered on another day than the
- * tap (its state is that day's).
+ * A queued write's region. It names no day: a page reads the same from one
+ * day to the next (#708). Wore today's day is the page's, which the outbox
+ * reads from the copy's stamp (views/assets/page-day.ts).
  */
-export function outboxRegion(
-  target: QueuedTarget,
-  label: string,
-  day?: IsoDate,
-) {
+export function outboxRegion(target: QueuedTarget, label: string) {
   return {
     'data-outbox-key': target.key,
     'data-outbox-path': target.path,
     'data-outbox-label': label,
-    'data-outbox-day': day,
   } as const;
 }
 

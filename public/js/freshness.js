@@ -88,8 +88,13 @@ function render() {
 function update(fields) {
   Object.assign(display, fields);
   // In the body, so htmx's history snapshot of this page keeps it.
+  // The page's day is read from it too (views/assets/outbox.ts, #708: Wore
+  // today's state and guard, the day labels), which this event re-applies.
   const element = document.getElementById('freshness');
-  if (element) element.dataset.fetchedAt = String(display.fetchedAt);
+  if (element && element.dataset.fetchedAt !== String(display.fetchedAt)) {
+    element.dataset.fetchedAt = String(display.fetchedAt);
+    document.dispatchEvent(new CustomEvent('freshness:change'));
+  }
   render();
   const wait = display.quietUntil - Date.now();
   if (wait > 0) setTimeout(render, wait);

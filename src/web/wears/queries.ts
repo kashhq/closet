@@ -110,8 +110,13 @@ export interface WearSummary {
   worn: number;
   sinceWash: number;
   lastWorn: IsoDate | null;
-  /** Worn today by "Wore today" (undoable), through a worn calendar entry, or not. */
-  today: 'single' | 'entry' | null;
+  /**
+   * How it was worn on `lastWorn`: by "Wore today" (undoable; it wins when
+   * both), through a worn calendar entry, or null, never worn. No "worn
+   * today": the page's script judges that against the page's day (#708,
+   * views/assets/page-day.ts), so the page reads the same tomorrow.
+   */
+  lastWornBy: 'single' | 'entry' | null;
   /** Its repairs' costs summed (repairCostSql), for the wear line's cost per wear. */
   repairCost: string | null;
 }
@@ -130,17 +135,17 @@ export function wearSummarySql(
   garmentId: number,
   today: IsoDate,
 ): SQL<WearSummary> {
-  const worn = (entry: SQL) =>
-    sql`bool_or(${garmentWear.day} = ${today} and ${garmentWear.outfitCalendarId} ${entry})`;
+  // The last day's wears, a single one first: one aggregate, no subquery.
+  const lastWornBy = sql`(array_agg(
+    case when ${garmentWear.outfitCalendarId} is null then 'single' else 'entry' end
+    order by ${garmentWear.day} desc, ${garmentWear.outfitCalendarId} desc nulls first
+  ) filter (where ${garmentWear.day} is not null))[1]`;
   return sql<WearSummary>`(
     select json_build_object(
       'worn', count(distinct ${garmentWear.day})::int,
       'sinceWash', (count(distinct ${garmentWear.day}) filter (where ${wornSinceWash}))::int,
       'lastWorn', max(${garmentWear.day})::text,
-      'today', case
-        when ${worn(sql`is null`)} then 'single'
-        when ${worn(sql`is not null`)} then 'entry'
-      end,
+      'lastWornBy', ${lastWornBy},
       'repairCost', ${repairCostSql(garment.id, today)}
     )
     from ${garment}

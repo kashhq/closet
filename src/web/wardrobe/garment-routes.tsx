@@ -329,10 +329,9 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
                 garment.photo &&
                 shownPhoto(garment.photo, options.cutouts.enabled),
             },
-            today,
             capsules: context.capsules,
             viewOwner,
-            wear: own && { summary: own.wear, today },
+            wear: own && { summary: own.wear },
             replaces: context.replaces,
             replacedBy: context.replacedBy,
             // "Style this" is anyone's who sees a closet garment: Styling

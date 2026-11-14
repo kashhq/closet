@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { JSX } from 'hono/jsx/jsx-runtime';
 import { ASSET_VERSION_HEADER } from '../static-build';
@@ -12,6 +13,11 @@ const PAGE_CACHE_CONTROL = 'private, no-cache';
 
 interface RenderOptions {
   status?: number;
+}
+
+interface SendOptions extends RenderOptions {
+  /** A whole page: it carries an ETag and answers a matching If-None-Match. */
+  validated?: boolean;
 }
 
 /**
@@ -37,7 +43,10 @@ export async function renderPage(
   options: RenderOptions = {},
 ): Promise<FastifyReply> {
   const html = await timeRender(() => renderToString(page));
-  return send(reply, `<!DOCTYPE html>${html}`, options);
+  return send(reply, `<!DOCTYPE html>${html}`, {
+    ...options,
+    validated: true,
+  });
 }
 
 /** Sends an htmx swap target: markup without the layout around it. */
@@ -88,7 +97,7 @@ export function navigateTo(reply: FastifyReply, path: string): FastifyReply {
 function send(
   reply: FastifyReply,
   html: string,
-  { status = 200 }: RenderOptions,
+  { status = 200, validated = false }: SendOptions,
 ): FastifyReply {
   // A second send is a handler bug that Fastify would only log while the
   // client keeps the first response. Fail loudly instead; the error handler
@@ -98,8 +107,10 @@ function send(
   }
   // Whose page this is, for the service worker's page cache
   // (src/web/page-cache.ts): it keeps one account's pages at a time.
-  const { auth } = reply.request;
-  if (auth) reply.header(PAGE_ACCOUNT_HEADER, String(auth.user.id));
+  const account = reply.request.auth?.user.id;
+  if (account !== undefined) {
+    reply.header(PAGE_ACCOUNT_HEADER, String(account));
+  }
   // The static build its `?v=` URLs name: the worker serves an older build's
   // stored copy only while that build's precache is installed
   // (src/static-build.ts, #656). Static paths have no context
@@ -114,5 +125,57 @@ function send(
   if (!reply.hasHeader('Cache-Control')) {
     reply.header('Cache-Control', PAGE_CACHE_CONTROL);
   }
+  // After every header above: a 304 carries them, and the worker re-stamps
+  // its copy from it (#708).
+  if (validated && unchangedFor(reply, status, account, html)) {
+    return reply.status(304).send();
+  }
   return reply.status(status).type(HTML).send(html);
+}
+
+/**
+ * Tags a page read (a GET or HEAD answered 200) with its ETag; true when it
+ * is a GET whose If-None-Match names it. GET only: Fastify's HEAD route writes
+ * Content-Length: 0 on a bodiless answer, which a 304 must not carry
+ * (RFC 9110 8.6), so a HEAD keeps its 200 and the tag. Nothing asks HEAD of
+ * a page conditionally.
+ */
+function unchangedFor(
+  reply: FastifyReply,
+  status: number,
+  account: number | undefined,
+  html: string,
+): boolean {
+  const { method, headers } = reply.request;
+  if (status !== 200 || (method !== 'GET' && method !== 'HEAD')) return false;
+  const etag = pageTag(account, html);
+  reply.header('ETag', etag);
+  return method === 'GET' && matchesTag(headers['if-none-match'], etag);
+}
+
+/**
+ * A page's validator (#708, src/web/shell/offline-warm.md): its body and
+ * whose page it is, so two accounts never share one, even where their pages
+ * read the same. Weak: @fastify/compress sends one tag over the identity,
+ * gzip and br bodies, which a strong tag must not (RFC 9110 8.8.1), and
+ * If-None-Match compares weakly anyway. A page keeps its tag only while it
+ * renders byte for byte the same: no clock, nonce or request id in a page,
+ * and its day-relative text is the client's (views/assets/page-day.ts).
+ */
+function pageTag(account: number | undefined, html: string): string {
+  const hash = createHash('sha256')
+    .update(String(account ?? ''))
+    .update('\0')
+    .update(html)
+    .digest('base64url')
+    .slice(0, 27);
+  return `W/"${hash}"`;
+}
+
+/** If-None-Match's weak comparison: `*`, or any listed tag, W/ or not. */
+function matchesTag(header: string | undefined, etag: string): boolean {
+  if (header === undefined) return false;
+  if (header.trim() === '*') return true;
+  const opaque = (tag: string) => tag.trim().replace(/^W\//, '');
+  return header.split(',').some((tag) => opaque(tag) === opaque(etag));
 }

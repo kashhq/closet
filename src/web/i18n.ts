@@ -47,6 +47,24 @@ export function t(key: StringKey, params: StringParams = {}): string {
 }
 
 /**
+ * The text before and after one placeholder, for markup at it ("last worn
+ * {when}" around a <time>, src/web/day-time.tsx): JSX escapes both parts.
+ */
+export function tAround(
+  key: StringKey,
+  name: string,
+  params: StringParams = {},
+): [before: string, after: string] {
+  const marker = '\u0000';
+  const [before = '', after = ''] = interpolate(
+    key,
+    { ...params, [name]: marker },
+    (value) => value,
+  ).split(marker);
+  return [before, after];
+}
+
+/**
  * A string whose English text carries markup (ABOUT_INTRO's attribution
  * link), for `dangerouslySetInnerHTML`. The template comes from the bundled
  * language file and is trusted; the parameters are escaped, so config or user

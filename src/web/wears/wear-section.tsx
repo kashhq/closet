@@ -6,8 +6,8 @@ import {
 import { perWearCost, totalCost } from '../../wardrobe/insights';
 import { AutosaveForm } from '../autosave';
 import type { IsoDate } from '../../calendar-date';
-import { relativeDay } from '../date-labels';
-import { t } from '../i18n';
+import { DayTime } from '../day-time';
+import { t, tAround } from '../i18n';
 import { StyleThisLink } from '../styling/style-this';
 import { categoryLabel, priceLabel } from '../wardrobe/garment';
 import type { GarmentDetail } from '../wardrobe/queries';
@@ -42,8 +42,13 @@ const TAP_BUTTON_ID: Record<WearTap, (garmentId: number) => string> = {
 /** What the section shows: the garment's wash state and away, and its wears. */
 export interface WearPanel {
   summary: WearSummary;
-  /** The household's date (APP_TIMEZONE): "last worn yesterday", "Wore today". */
-  today: IsoDate;
+  /**
+   * The household's date a live answer was rendered on (APP_TIMEZONE): set
+   * on the htmx answer of Wore today and Washed alone, never on the page,
+   * which must read the same tomorrow (#708). Without it the page's script
+   * takes the day from the copy's stamp (views/assets/page-day.ts).
+   */
+  answeredOn?: IsoDate;
 }
 
 // Wore today and Washed answer the wear status (htmx) or, posted without
@@ -102,18 +107,22 @@ export function WearStatus(props: {
       class="flex flex-col gap-3"
       tabindex={lostFocus ? -1 : undefined}
       autofocus={lostFocus}
+      data-as-of-day={panel.answeredOn}
     >
       <div class="flex flex-col gap-1">
-        <p class="text-sm">{wornLine(garment, summary, panel.today)}</p>
+        <p class="text-sm">
+          <WornLine garment={garment} summary={summary} />
+        </p>
         {(needsWash || garment.lastWashedOn) && (
           <p class="flex flex-wrap items-center gap-2 text-xs text-muted">
             {needsWash && (
               <WashState dirty={dirty} quantity={garment.quantity} />
             )}
-            {garment.lastWashedOn &&
-              t('wear.LAST_WASHED', {
-                when: relativeDay(garment.lastWashedOn, panel.today),
-              })}
+            {garment.lastWashedOn && (
+              <span>
+                <Around text="wear.LAST_WASHED" day={garment.lastWashedOn} />
+              </span>
+            )}
           </p>
         )}
       </div>
@@ -122,7 +131,7 @@ export function WearStatus(props: {
         {garment.status === 'closet' && (
           <StyleThisLink garmentId={garment.id} viewOwner={undefined} />
         )}
-        <WoreToday garment={garment} panel={panel} offered={shows.wear} />
+        <WoreToday garment={garment} summary={summary} />
         {shows.wash && <Washed garment={garment} />}
       </div>
     </div>
@@ -130,17 +139,18 @@ export function WearStatus(props: {
 }
 
 /**
- * Which taps the row offers: Wore today unless a worn calendar entry today
- * already wore it, Washed once something is worn since a wash that is due.
- * The one decision: the row renders from it and WearStatus's focus follows
- * it, so a button is never gone while focus waits on it.
+ * Which taps the row offers: Wore today always (the page's script swaps it
+ * for the calendar's badge on a day a worn entry wore it, page-day.ts),
+ * Washed once something is worn since a wash that is due. The one decision:
+ * the row renders from it and WearStatus's focus follows it, so a button is
+ * never gone while focus waits on it.
  */
 export function tapsShown(
   garment: Pick<WearGarment, 'category' | 'washAfterWears'>,
-  summary: Pick<WearSummary, 'today' | 'sinceWash'>,
+  summary: Pick<WearSummary, 'sinceWash'>,
 ): Record<WearTap, boolean> {
   return {
-    wear: summary.today !== 'entry',
+    wear: true,
     wash:
       summary.sinceWash > 0 &&
       washLimit(garment.category, garment.washAfterWears) !== null,
@@ -150,15 +160,13 @@ export function tapsShown(
 /**
  * "Worn 12 times · 2 since washed · last worn yesterday · $4.00 a wear";
  * "Not worn yet". The cost is the insights' rule (totalCost, repairs
- * included, over perWearCost), shown only with a price and a wear.
+ * included, over perWearCost), shown only with a price and a wear. The day
+ * is the client's to word (DayTime).
  */
-function wornLine(
-  garment: WearGarment,
-  summary: WearSummary,
-  today: IsoDate,
-): string {
+function WornLine(props: { garment: WearGarment; summary: WearSummary }) {
+  const { garment, summary } = props;
   if (summary.worn === 0 || summary.lastWorn === null) {
-    return t('wear.NOT_WORN');
+    return <>{t('wear.NOT_WORN')}</>;
   }
   const cost = totalCost({
     price: garment.price,
@@ -166,16 +174,34 @@ function wornLine(
     repairCost: summary.repairCost,
   });
   const perWear = cost === null ? null : perWearCost(cost, summary.worn);
-  return [
+  const counts = [
     summary.worn === 1
       ? t('wear.WORN_ONCE')
       : t('wear.WORN_TIMES', { count: summary.worn }),
     t('wear.SINCE_WASH', { count: summary.sinceWash }),
-    t('wear.LAST_WORN', { when: relativeDay(summary.lastWorn, today) }),
-    ...(perWear === null
-      ? []
-      : [t('wear.PER_WEAR', { cost: priceLabel(perWear) })]),
   ].join(' · ');
+  return (
+    <>
+      {counts} · <Around text="wear.LAST_WORN" day={summary.lastWorn} />
+      {perWear !== null &&
+        ` · ${t('wear.PER_WEAR', { cost: priceLabel(perWear) })}`}
+    </>
+  );
+}
+
+/** A "{when}" string with its day as a DayTime. */
+function Around(props: {
+  text: 'wear.LAST_WORN' | 'wear.LAST_WASHED';
+  day: IsoDate;
+}) {
+  const [before, after] = tAround(props.text, 'when');
+  return (
+    <>
+      {before}
+      <DayTime day={props.day} kind="relative" />
+      {after}
+    </>
+  );
 }
 
 /** "Needs a wash", or "2 of 3 need a wash" for multiples. */
@@ -194,43 +220,48 @@ function WashState(props: { dirty: number; quantity: number }) {
 
 /**
  * Wore today: logs one wear of this garment alone. Once logged, the same
- * day, it offers the undo instead; a worn calendar entry today says so and
- * needs no second wear (they would count once anyway: distinct days). Not
- * WornControl (worn-control.tsx), which marks a calendar entry: this is a
- * garment's own record, in the same words ("Wore …", "✓ Worn …", Undo).
+ * day, it offers the undo instead; a worn calendar entry that day says so
+ * and needs no second wear (they would count once anyway: distinct days).
+ * Not WornControl (worn-control.tsx), which marks a calendar entry: this is
+ * a garment's own record, in the same words ("Wore …", "✓ Worn …", Undo).
+ *
+ * Which of the three shows is the page's script's (#708,
+ * views/assets/page-day.ts): the server renders Wore today with the undo in
+ * the template and the badge hidden, and names the last day worn and how
+ * (`data-worn-on`, `data-worn-by`); the script shows the undo or the badge
+ * when that day is the page's. The region's key has no day either: the
+ * outbox adds the page's, and refuses a tap on a page whose day is not the
+ * tap's (its state is that day's).
  */
-function WoreToday(props: {
-  garment: WearGarment;
-  panel: WearPanel;
-  /** tapsShown's decision: false once a worn calendar entry wore it today. */
-  offered: boolean;
-}) {
-  const { garment, panel } = props;
-  if (!props.offered) {
-    return (
-      <span class="badge badge-success self-center">
+function WoreToday(props: { garment: WearGarment; summary: WearSummary }) {
+  const { garment, summary } = props;
+  // The badge is the region's sibling: the outbox's flip swaps every child
+  // of a region with its template's.
+  return (
+    <>
+      <div
+        class="flex flex-1 flex-col items-center gap-1"
+        {...outboxRegion(
+          queuedTarget('wear', garment.id),
+          garmentName(garment),
+        )}
+        data-worn-on={summary.lastWorn ?? undefined}
+        data-worn-by={summary.lastWornBy ?? undefined}
+      >
+        <WoreTodayForm garmentId={garment.id} worn={false} />
+        <OutboxAlternate>
+          <WoreTodayForm garmentId={garment.id} worn />
+        </OutboxAlternate>
+        <OutboxPending />
+      </div>
+      <span
+        class="badge badge-success self-center"
+        hidden
+        data-worn-by-entry=""
+      >
         ✓ {t('wear.WORN_TODAY_CALENDAR')}
       </span>
-    );
-  }
-  const worn = panel.summary.today === 'single';
-  // The page's day is the key's and the region's: a tap on a copy rendered
-  // another day is refused offline (its state is that day's).
-  return (
-    <div
-      class="flex flex-1 flex-col items-center gap-1"
-      {...outboxRegion(
-        queuedTarget('wear', garment.id, panel.today),
-        garmentName(garment),
-        panel.today,
-      )}
-    >
-      <WoreTodayForm garmentId={garment.id} worn={worn} />
-      <OutboxAlternate>
-        <WoreTodayForm garmentId={garment.id} worn={!worn} />
-      </OutboxAlternate>
-      <OutboxPending />
-    </div>
+    </>
   );
 }
 

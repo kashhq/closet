@@ -3,6 +3,8 @@ import {
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
+  CACHED_AT_TIMING_NAME,
+  confirmsCopy,
   endedSession,
   forbidsStorage,
   isBackingOff,
@@ -21,9 +23,11 @@ import {
   refetchVerdict,
   renderedAccount,
   revalidationOutcome,
+  revalidationTag,
   sentToLogin,
   servesStaleWhileRevalidate,
   SESSION_ENDED_HEADER,
+  stampedServerTiming,
 } from './page-cache';
 import { PROFILE_PATH } from './auth/urls';
 
@@ -199,6 +203,50 @@ describe('cachedAt and pageAccount', () => {
     expect(cachedAt(new Headers())).toBe(0);
     expect(cachedAt(new Headers({ [CACHED_AT_HEADER]: 'soon' }))).toBe(0);
     expect(pageAccount(new Headers())).toBe('');
+  });
+});
+
+// A copy confirmed by a 304 is stored again with a new stamp (#708):
+// freshness.js reads the first `cache` entry, so there must be one.
+describe('stampedServerTiming', () => {
+  it('keeps the server’s entries and leaves exactly one stamp, the new one', () => {
+    const served = 'route;desc="/wardrobe/:id", db;dur=4.1';
+    const first = stampedServerTiming(served, '100');
+    const again = stampedServerTiming(first, '200');
+    expect(again).toBe(`${served}, ${CACHED_AT_TIMING_NAME};desc="200"`);
+    expect(again.match(/(^|, )cache;/g)).toHaveLength(1);
+    expect(stampedServerTiming(null, '5')).toBe('cache;desc="5"');
+  });
+});
+
+describe('the conditional refetch', () => {
+  const page = (account: string, etag = 'W/"a"', status = 200) => ({
+    status,
+    headers: new Headers({ [PAGE_ACCOUNT_HEADER]: account, ETag: etag }),
+  });
+
+  it('sends the tag of a copy the cache’s owner holds, never another account’s', () => {
+    expect(revalidationTag(page('7'), '7')).toBe('W/"a"');
+    // After a switch to account 8, account 7's copy is no validator.
+    expect(revalidationTag(page('7'), '8')).toBeUndefined();
+    expect(revalidationTag(page('7'), undefined)).toBeUndefined();
+    expect(revalidationTag(undefined, '7')).toBeUndefined();
+    const untagged = {
+      status: 200,
+      headers: new Headers({ [PAGE_ACCOUNT_HEADER]: '7' }),
+    };
+    expect(revalidationTag(untagged, '7')).toBeUndefined();
+  });
+
+  it('re-stamps only a copy a 304 confirms for the account owning the cache', () => {
+    const copy = page('7');
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '7')).toBe(true);
+    expect(confirmsCopy(page('7', 'W/"a"', 200), copy, '7')).toBe(false);
+    expect(confirmsCopy(page('7', 'W/"b"', 304), copy, '7')).toBe(false);
+    expect(confirmsCopy(page('8', 'W/"a"', 304), copy, '7')).toBe(false);
+    // The cache changed hands while the 304 was in flight.
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '8')).toBe(false);
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, undefined)).toBe(false);
   });
 });
 

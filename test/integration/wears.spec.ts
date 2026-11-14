@@ -43,6 +43,10 @@ import {
  * none of it (the refusals are in authorization-wardrobe.spec.ts).
  */
 
+/** The wear line's day, which the page's script words (src/web/day-time.tsx). */
+const lastWornOn = (day: string) =>
+  `last worn <time datetime="${day}" data-day-label="relative">`;
+
 const form = (fields: Record<string, string | string[]>) => {
   const body = new URLSearchParams();
   for (const [name, value] of Object.entries(fields)) {
@@ -259,7 +263,8 @@ describe('wears and washes', () => {
       expect(await wearsOf(tee)).toHaveLength(2);
       const page = await garmentPage(tee);
       expect(hasText(page.body, 'Worn once')).toBe(true);
-      expect(hasText(page.body, 'last worn yesterday')).toBe(true);
+      // Worded by the page's script (src/page-day.ts, #708).
+      expect(page.body).toContain(lastWornOn(daysAgo(1)));
     });
 
     // #13: several outfits a day, each for an occasion. Wears still count
@@ -335,7 +340,7 @@ describe('wears and washes', () => {
       await markWorn(await schedule(outfit, daysAgo(4)));
       const before = unescapeHtml((await garmentPage(tee)).body);
       expect(hasText(before, 'Worn 2 times')).toBe(true);
-      expect(hasText(before, 'last worn 4 days ago')).toBe(true);
+      expect(before).toContain(lastWornOn(daysAgo(4)));
 
       await deleteOutfit(outfit);
 
@@ -345,7 +350,7 @@ describe('wears and washes', () => {
       ]);
       const after = unescapeHtml((await garmentPage(tee)).body);
       expect(hasText(after, 'Worn 2 times')).toBe(true);
-      expect(hasText(after, 'last worn 4 days ago')).toBe(true);
+      expect(after).toContain(lastWornOn(daysAgo(4)));
       expect(t.logs.messages('info', 'Web')).toContainEqual(
         expect.stringMatching(
           new RegExp(
@@ -430,9 +435,12 @@ describe('wears and washes', () => {
     it('says a worn calendar entry today wore it, instead of offering a second wear', async () => {
       const tee = await newGarment('Entry today tee', 'tops');
       await markWorn(await schedule(await newOutfit('Today', [tee]), today()));
+      // The page names the day and how (#708): its script shows the
+      // calendar's badge for Wore today on that day (wornState).
       const page = await garmentPage(tee);
-      expect(hasText(page.body, 'Worn today (calendar)')).toBe(true);
-      expect(page.body).not.toContain(`/wardrobe/${tee}/wear`);
+      expect(page.body).toContain(
+        `data-worn-on="${today()}" data-worn-by="entry"`,
+      );
     });
   });
 
@@ -532,7 +540,11 @@ describe('wears and washes', () => {
       // Today's wear was before the wash: nothing since.
       expect(hasText(page, 'Worn 4 times · 0 since washed')).toBe(true);
       expect(hasText(page, 'Needs a wash')).toBe(false);
-      expect(hasText(page, 'Last washed today')).toBe(true);
+      // A live answer names its day for the page's script (#708).
+      expect(page).toContain(`data-as-of-day="${today()}"`);
+      expect(page).toContain(
+        `Last washed <time datetime="${today()}" data-day-label="relative">`,
+      );
     });
 
     it('counts copies: three tees are three wears, "1 of 3 need a wash" until the last', async () => {
