@@ -22,7 +22,12 @@ import {
   type SuggestedProduct,
   suggestionRoom,
 } from './decisions';
-import { type NeedDetail, readNeed } from './inbox';
+import {
+  markSuggestionsSeen,
+  type NeedDetail,
+  type NewNeed,
+  readNeed,
+} from './inbox';
 import { type FinishOutcome, finishRound, type RoundEnd } from './rounds';
 
 type Db = WebOptions['db'];
@@ -92,7 +97,7 @@ function subjectOf(decision: OwnerDecision): {
  * Answers what it set aside and restored.
  */
 export async function makeDecision(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   ownerId: number | '' | undefined,
   decision: OwnerDecision,
@@ -119,12 +124,38 @@ export async function makeDecision(
     }
     throw new HttpError(409, t('muse.STALE'), { logDetail });
   }
+  logOp(logger, actor, 'suggestion.decided', {
+    decision: decision.kind,
+    garmentId: 'garmentId' in decision ? decision.garmentId : undefined,
+    needId: outcome.groupId,
+    ownerId: wardrobe.access.ownerId,
+    dismissed: outcome.dismissed.length,
+    restored: outcome.restored.length,
+  });
   return {
     ...wardrobe,
     groupId: outcome.groupId,
     dismissed: outcome.dismissed,
     restored: outcome.restored,
   };
+}
+
+/**
+ * "New from Muse" (markSuggestionsSeen): the open needs with picks the
+ * owner has not looked at, and their marker moved. One line only when
+ * there was something new.
+ */
+export async function markNeedsSeen(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+): Promise<NewNeed[]> {
+  const needs = await markSuggestionsSeen(db, actor.userId);
+  if (needs.length > 0) {
+    logOp(logger, actor, 'suggestions.seen', {
+      needs: needs.map((need) => need.id),
+    });
+  }
+  return needs;
 }
 
 /** The refusal of a link the owner set aside, or one suggested already. */

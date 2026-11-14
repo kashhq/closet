@@ -240,15 +240,14 @@ describe('decisions', () => {
       .from(garment)
       .where(eq(garment.id, other));
     expect(row).toEqual({ reason: 'too_pricey', note: 'Too much' });
-    expect(
-      t.logs
-        .messages('info')
-        .some((line) =>
-          line.startsWith(
-            `Decision dismiss-pick on garment ${other} (need ${groupId})`,
-          ),
-        ),
-    ).toBe(true);
+    expect(t.logs.ops('suggestion.decided')).toContainEqual(
+      expect.objectContaining({
+        decision: 'dismiss-pick',
+        garmentId: other,
+        needId: groupId,
+        surface: 'api',
+      }),
+    );
   });
 
   it('sets a need aside and brings it back', async () => {

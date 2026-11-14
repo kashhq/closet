@@ -17,3 +17,4 @@
 ## Gotchas
 
 - **A wishlist form's `replaces` has its own marker, `wishlist=1`.** Closet forms and forms cached before #18 post neither and must leave the stored replacement alone (the product, care and props markers' rule). The replacement is stored only through `replacementOf`, which is where the same-owner rule lives: a second writer of `replaces_garment_id` must go through it.
+- **Logs** (#712, `docs/conventions.md#logging`): one line per write from its action, whichever door: `suggestion.decided` (`makeDecision`: `decision`, `garmentId`, `needId`, `dismissed`, `restored`), `suggestions.seen` (`markNeedsSeen`, only when something was new), `garment.bought` (`buyWishlistItem`: `archivedReplaced`, `needId`, `setAside`), and Muse's `need.created`, `garment.suggested`, `round.finished` (`suggestion-actions.ts`) and `outfit.proposed` (`outfit-actions.ts`).
