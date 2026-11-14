@@ -1,7 +1,7 @@
 import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { BUDGET_BANDS, STYLES } from '../../wardrobe/style';
 import type { RhythmEntry } from '../../wardrobe/week';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { profileSection, STYLE_SECTION_ID } from '../auth/urls';
 import { occasionLabel } from '../date-labels';
 import { ChipGroup } from '../form-field';

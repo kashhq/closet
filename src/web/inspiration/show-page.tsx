@@ -1,4 +1,4 @@
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { inspirationPhotoUrl } from '../files/image-url';
 import { FormField, inputAttributes } from '../form-field';

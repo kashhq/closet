@@ -5,7 +5,7 @@ import {
   type Measurement,
   MEASUREMENTS,
 } from '../../wardrobe/measurements';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { FieldErrors } from '../auth/validation';
 import { type StringKey, t } from '../i18n';
 import { AppBar } from '../layout/app-bar';

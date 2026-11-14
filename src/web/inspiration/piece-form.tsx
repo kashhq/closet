@@ -4,7 +4,7 @@ import {
   PATTERNS,
 } from '../../wardrobe/properties';
 import type { LookPiece } from '../../wardrobe/recreate';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { FormField } from '../form-field';
 import { t } from '../i18n';

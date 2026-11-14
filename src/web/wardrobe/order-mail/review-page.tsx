@@ -1,4 +1,4 @@
-import { PostForm } from '../../auth/form';
+import { PostForm } from '../../form';
 import { shortDayLabel } from '../../date-labels';
 import { t } from '../../i18n';
 import { AppBar } from '../../layout/app-bar';

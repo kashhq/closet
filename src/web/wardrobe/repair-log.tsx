@@ -1,5 +1,5 @@
 import { REPAIR_KINDS } from '../../wardrobe/care';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { dateParts } from '../../calendar-date';
 import { shortDayLabel } from '../date-labels';
 import { t } from '../i18n';

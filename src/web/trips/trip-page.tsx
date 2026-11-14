@@ -4,7 +4,7 @@ import {
   wearableToday,
 } from '../../wardrobe/packing';
 import { AgentBadge } from '../agent-badge';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { ShownId } from '../checklist';
 import type { IsoDate } from '../../calendar-date';
@@ -25,7 +25,7 @@ import {
 import { collagePieces, OutfitCollage } from '../outfits/collage';
 import { OutboxPending, outboxRegion } from '../outbox';
 import type { ViewContext } from '../view-context';
-import { PLACE_QUERY_MAX, PLACE_QUERY_MIN } from '../weather/place-picker';
+import { PLACE_QUERY_MAX, PLACE_QUERY_MIN } from '../weather/place-input';
 import { WornControl } from '../wears/worn-control';
 import { phaseLabel, tripDates } from './labels';
 import { roleGroupLabel } from '../wardrobe/labels';

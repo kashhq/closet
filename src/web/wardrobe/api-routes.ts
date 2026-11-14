@@ -71,9 +71,9 @@ import {
 } from './garment-api-input';
 import { readGarmentEdit, readNewGarment } from './garment-changes';
 import { garmentContext } from './garment-context';
-import { formAudience } from './garment-form';
 import {
   CATEGORY_MAX,
+  formAudience,
   NAME_MAX,
   readCondition,
   SIZE_MAX,

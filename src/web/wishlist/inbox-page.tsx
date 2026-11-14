@@ -9,7 +9,7 @@ import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
 import { PageColumn, PageMain } from '../layout/page-main';
 import { EmptyState } from '../layout/parts';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { BrandSizeLookup } from '../sizes/queries';
 import { BrandSizeNote } from '../sizes/views';
 import type { ViewContext } from '../view-context';

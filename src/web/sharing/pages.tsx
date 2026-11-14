@@ -1,13 +1,8 @@
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
-import {
-  Field,
-  Fieldset,
-  PostForm,
-  SubmitButton,
-  UsernameTwin,
-} from '../auth/form';
+import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
+import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
 import { t, type StringKey } from '../i18n';
 import { AppBar } from '../layout/app-bar';

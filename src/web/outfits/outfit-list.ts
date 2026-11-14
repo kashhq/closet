@@ -1,6 +1,4 @@
 import { Type } from '@sinclair/typebox';
-import { t } from '../i18n';
-import { LinkTabs } from '../layout/link-tabs';
 
 /**
  * Which of the owner's outfits a saved-outfit list shows (#659): the ones
@@ -27,30 +25,4 @@ export function parseOutfitList(show: string | undefined): OutfitList {
 export function withOutfitList(href: string, list: OutfitList): string {
   if (list === 'kept') return href;
   return `${href}${href.includes('?') ? '&' : '?'}show=one-offs`;
-}
-
-/**
- * The two lists as link tabs above a saved-outfit list. `href` is the
- * page's own address without `show` (its destination kept), so switching
- * keeps what the page was picking for.
- */
-export function OutfitListTabs(props: { list: OutfitList; href: string }) {
-  return (
-    <LinkTabs
-      active={props.list}
-      class="tabs tabs-border tabs-sm mx-2"
-      tabs={[
-        {
-          name: 'kept',
-          href: withOutfitList(props.href, 'kept'),
-          label: t('outfits.LIST_KEPT'),
-        },
-        {
-          name: 'one-offs',
-          href: withOutfitList(props.href, 'one-offs'),
-          label: t('outfits.LIST_ONE_OFFS'),
-        },
-      ]}
-    />
-  );
 }

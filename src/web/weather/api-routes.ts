@@ -17,7 +17,7 @@ import {
   pickedPlace,
   placeAnswer,
   postedLocation,
-} from './place-picker';
+} from './place-input';
 import {
   clearHere,
   clearHome,

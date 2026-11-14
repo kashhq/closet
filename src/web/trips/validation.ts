@@ -10,7 +10,7 @@ import {
   type PickedPlace,
   PlaceBody,
   pickedPlace,
-} from '../weather/place-picker';
+} from '../weather/place-input';
 import { OccasionSchema, RowId } from '../schemas';
 import type { TripFields } from './queries';
 

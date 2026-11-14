@@ -1,9 +1,10 @@
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { collagePieces, OutfitCollage } from './collage';
-import { type OutfitList, OutfitListTabs } from './outfit-list';
+import type { OutfitList } from './outfit-list';
+import { OutfitListTabs } from './outfit-list-tabs';
 import type { GarmentOutfit } from './queries';
 import { buyFirstNote } from './to-buy';
 

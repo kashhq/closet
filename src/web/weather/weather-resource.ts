@@ -20,7 +20,7 @@ import { literals, withoutNulls } from '../api/resource';
 import { IsoDateSchema } from '../schemas';
 import type { TripTypicalDay } from '../trips/forecast';
 import type { Place } from './open-meteo';
-import { LocationBody, PlaceBody } from './place-picker';
+import { LocationBody, PlaceBody } from './place-input';
 import { HERE_FRESH_HOURS } from './queries';
 import type { UserWeather } from './service';
 

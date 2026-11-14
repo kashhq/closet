@@ -38,7 +38,6 @@ import {
   postedDestination,
   resolveDestination,
 } from './destination';
-import { formAudience } from './garment-form';
 import {
   type GarmentFormRequest,
   refuseOtherWardrobesDraft,
@@ -58,6 +57,7 @@ import {
   PropertiesFragmentQuery,
 } from './garment-schemas';
 import {
+  formAudience,
   formValues,
   GarmentBody,
   type GarmentField,

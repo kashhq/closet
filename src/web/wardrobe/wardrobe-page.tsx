@@ -15,7 +15,7 @@ import {
 import { ShownId } from '../checklist';
 import { CARE_WASH } from '../../wardrobe/care';
 import { garmentMarks } from '../../wardrobe/marks';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
