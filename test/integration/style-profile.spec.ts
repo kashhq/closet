@@ -77,8 +77,8 @@ describe('the style profile', () => {
       palette: ['blue', 'white', 'grey'],
       notes: 'Office three days',
     });
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      `Style profile saved by user ${ownerId}: 2 styles, 3 colours`,
+    expect(t.logs.ops('style.profile.saved')).toContainEqual(
+      expect.objectContaining({ userId: ownerId, styles: 2, colours: 3 }),
     );
 
     const page = await get('/auth/profile/style?saved=profile');
@@ -258,8 +258,13 @@ describe('the style profile', () => {
         'Always Brown boots with Selvedge jeans',
       ]);
       const [first] = await rules();
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit rule ${first.id} added by user ${ownerId}: never color:blue with color:black`,
+      expect(t.logs.ops('outfit.rule.added')).toContainEqual(
+        expect.objectContaining({
+          ruleId: first.id,
+          userId: ownerId,
+          kind: 'never',
+          changed: true,
+        }),
       );
       expect((await get(ADDED)).body).toContain('Rule added');
     });
