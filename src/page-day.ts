@@ -55,17 +55,58 @@ export function dayText(
 }
 
 /**
- * The day a page's copy is of: its stamp's (dayOfStamp), else the day the
- * document loaded (`loadedAt`, performance.timeOrigin): a page without a
+ * The day a page's copy is of: its stamp's (dayOfStamp), else the day its
+ * body arrived (`arrivedAt`, epoch ms: BodyArrivals). A page without a
  * service worker never gets a stamp (freshness.js's watchFreshness), and
- * one loaded from the network is of its load.
+ * one fetched from the network is of its arrival.
  */
 export function pageDay(
   stamp: string | undefined,
-  loadedAt: number,
+  arrivedAt: number,
   timeZone: string,
 ): IsoDate {
-  return dayOfStamp(stamp, timeZone) ?? todayIn(timeZone, new Date(loadedAt));
+  return dayOfStamp(stamp, timeZone) ?? todayIn(timeZone, new Date(arrivedAt));
+}
+
+/**
+ * When the body on screen arrived from the server, for a page nothing
+ * stamps (no service worker: the HTTP twin, PWA_ENABLED off; #990). The
+ * document's load is only the first page's: a boosted navigation swaps in
+ * a body that arrived now, and htmx's history restores a snapshot that
+ * arrived when it was first shown, so each arrival is kept by the page's
+ * path (htmx's snapshot key). A path pushed by a fragment (the wardrobe's
+ * filters) is of the body it was pushed on. A restore of a path never
+ * seen keeps the current arrival.
+ */
+export class BodyArrivals {
+  #current: number;
+  readonly #byPath = new Map<string, number>();
+
+  constructor(path: string, loadedAt: number) {
+    this.#current = loadedAt;
+    this.#byPath.set(path, loadedAt);
+  }
+
+  /** When the body on screen arrived (epoch ms). */
+  get current(): number {
+    return this.#current;
+  }
+
+  /** A body from the server, now at `path`: a boosted navigation, a history cache miss. */
+  arrived(path: string, at: number): void {
+    this.#current = at;
+    this.#byPath.set(path, at);
+  }
+
+  /** The body on screen, now also at `path` (a fragment pushed its URL). */
+  pushed(path: string): void {
+    this.#byPath.set(path, this.#current);
+  }
+
+  /** htmx's snapshot of `path` back on screen. */
+  restored(path: string): void {
+    this.#current = this.#byPath.get(path) ?? this.#current;
+  }
 }
 
 /**

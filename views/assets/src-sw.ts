@@ -20,8 +20,8 @@ import {
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
+  conditionalVerdict,
   confirmedHeaders,
-  confirmsCopy,
   endedSession,
   forbidsStorage,
   type FreshPage,
@@ -692,7 +692,8 @@ const offlinePage = new NetworkFirst({
  * account), so an unchanged page costs its headers. A copy whose updated
  * headers forbid storage is deleted instead. The answer is then that copy,
  * a 200, so every caller reads a page as before; `confirmedCopies` says it
- * was one.
+ * was one. A 304 it may not keep is asked again unconditionally
+ * (conditionalVerdict, #991).
  * Set explicitly, If-None-Match also keeps the browser's HTTP cache out of
  * it (Fetch: the request's cache mode becomes no-store), so the 304 is ours.
  */
@@ -714,9 +715,10 @@ class PageRefresh extends Strategy {
     }
     const path = new URL(request.url).pathname;
     await lastDrop;
-    if (!confirmsCopy(answer, copy, await readRecord(OWNER_KEY))) {
-      console.warn(`[sw] ${path}: a 304 for another copy, nothing stored`);
-      return answer;
+    const owner = await readRecord(OWNER_KEY);
+    if (conditionalVerdict(answer, copy, owner) === 'unconditional') {
+      console.warn(`[sw] ${path}: a 304 for another copy, asking again`);
+      return handler.fetchAndCachePut(request);
     }
     const confirmed = new Response(copy.body, {
       status: copy.status,

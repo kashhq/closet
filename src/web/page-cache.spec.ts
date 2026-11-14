@@ -4,6 +4,7 @@ import {
   CACHED_AT_HEADER,
   cachedAt,
   CACHED_AT_TIMING_NAME,
+  conditionalVerdict,
   confirmedHeaders,
   confirmsCopy,
   endedSession,
@@ -248,6 +249,26 @@ describe('the conditional refetch', () => {
     // The cache changed hands while the 304 was in flight.
     expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '8')).toBe(false);
     expect(confirmsCopy(page('7', 'W/"a"', 304), copy, undefined)).toBe(false);
+  });
+
+  it('asks again unconditionally after a 304 it may not keep, never passing it on', () => {
+    const copy = page('7');
+    expect(conditionalVerdict(page('7', 'W/"a"', 304), copy, '7')).toBe(
+      'confirmed',
+    );
+    expect(conditionalVerdict(page('7', 'W/"b"', 200), copy, '7')).toBe(
+      'answer',
+    );
+    expect(conditionalVerdict(page('7', 'W/"a"', 503), copy, '7')).toBe(
+      'answer',
+    );
+    // The cache changed hands while the 304 was in flight (#991).
+    expect(conditionalVerdict(page('7', 'W/"a"', 304), copy, '8')).toBe(
+      'unconditional',
+    );
+    expect(conditionalVerdict(page('7', 'W/"b"', 304), copy, '7')).toBe(
+      'unconditional',
+    );
   });
 });
 

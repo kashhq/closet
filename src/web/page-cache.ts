@@ -250,6 +250,26 @@ export function confirmsCopy(
 }
 
 /**
+ * What a worker's conditional refetch does with its answer (PageRefresh):
+ * a page (or a failure) is the answer, stored or refused by the page
+ * plugins; a 304 confirming the copy (confirmsCopy) re-stamps it; any
+ * other 304 (another tag, or the cache changed hands while it was in
+ * flight, #991) confirms nothing this cache may keep, so the page is asked
+ * again unconditionally, as when there is no copy: a raw 304 is no page,
+ * and the warm would count it failed.
+ */
+export type ConditionalVerdict = 'answer' | 'confirmed' | 'unconditional';
+
+export function conditionalVerdict(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): ConditionalVerdict {
+  if (answer.status !== 304) return 'answer';
+  return confirmsCopy(answer, copy, owner) ? 'confirmed' : 'unconditional';
+}
+
+/**
  * What a 304 tells its stored copy (RFC 9111 4.3.4, 3.2): every header the
  * 304 carries replaces the copy's (X-Asset-Version, Cache-Control,
  * X-Page-Account, Server-Timing, Vary), except those describing the body

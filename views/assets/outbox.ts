@@ -51,6 +51,7 @@ import { confirmAction } from 'confirm-sheet';
 import { showToast } from 'toast';
 import { parseIsoDate, todayIn } from '../../src/calendar-date';
 import {
+  BodyArrivals,
   dayText,
   pageDay,
   wearQueuesOn,
@@ -825,6 +826,18 @@ function queueFormOf(element: unknown): HTMLFormElement | null {
   return element.closest<HTMLFormElement>(QUEUE_FORM);
 }
 
+/** htmx:afterSettle's: a whole-page swap's target is the body; xhr, from the server. */
+interface HtmxSwapEvent {
+  target?: Element;
+  xhr?: XMLHttpRequest;
+}
+
+/** htmx:historyRestore's: the restored path, and whether htmx fetched it again. */
+interface HtmxRestoreEvent {
+  path: string;
+  cacheMiss?: boolean;
+}
+
 interface HtmxRequestEvent {
   elt?: Element;
   verb?: string;
@@ -1161,7 +1174,8 @@ document.addEventListener(
     if (!(form instanceof HTMLFormElement) || !account) return;
     const action = form.getAttribute('action') ?? '';
     if (!LEAVES_ACCOUNT.has(action)) return;
-    // released/deciding: the per-form hold sets declared above the queueable-form hold (~line 742); released = resubmit let through once, deciding = a decision is pending.
+    // released/deciding: the queueable-form hold's (Queueing, above): a
+    // resubmit let through once, a decision pending.
     if (released.delete(form)) return;
     // Held while the store is read: what is queued is known only there.
     event.preventDefault();
@@ -1188,18 +1202,35 @@ function answeredOn(element: Element): string | undefined {
   return answered ? parseIsoDate(answered.dataset.asOfDay) : undefined;
 }
 
+/** A URL as htmx keys its history snapshots: path and query. */
+function historyPath(url: string): string {
+  const { pathname, search } = new URL(url, location.href);
+  return pathname + search;
+}
+
+/**
+ * When the body on screen arrived, the page's day where nothing stamps
+ * `#freshness` (#990): the document's load only until the first boosted
+ * navigation. Kept by the listeners at the end of this file.
+ */
+const arrivals = new BodyArrivals(
+  historyPath(location.href),
+  performance.timeOrigin,
+);
+
 /**
  * The day what `element` shows is of, for its day labels: a live answer's
  * own, else the page's (src/page-day.ts's pageDay: the stamp freshness.js
  * keeps on `#freshness`, from the load, the cached copy's arrival or its
- * last revalidation, kept in htmx's history snapshots; else the load).
+ * last revalidation, kept in htmx's history snapshots; else, without a
+ * service worker, when the body arrived).
  */
 function pageDayOf(element: Element, timeZone: string): string {
   return (
     answeredOn(element) ??
     pageDay(
       document.getElementById('freshness')?.dataset.fetchedAt,
-      performance.timeOrigin,
+      arrivals.current,
       timeZone,
     )
   );
@@ -1393,8 +1424,32 @@ document.addEventListener('visibilitychange', () => {
   void schedule('visible');
 });
 
-// A boosted navigation or a swap brings regions (and #app-status) anew.
-document.addEventListener('htmx:afterSettle', () => {
+// A boosted navigation or a swap brings regions (and #app-status) anew; a
+// boosted navigation's body is from the server, now (arrivals).
+document.addEventListener('htmx:afterSettle', (event) => {
+  const { target, xhr } = (event as CustomEvent<HtmxSwapEvent>).detail;
+  if (target === document.body && xhr) {
+    arrivals.arrived(historyPath(location.href), Date.now());
+  }
+  showPageDay();
+  void refresh();
+});
+
+// A URL pushed or replaced keeps the body's arrival, for its snapshot.
+for (const type of ['htmx:pushedIntoHistory', 'htmx:replacedInHistory']) {
+  document.addEventListener(type, (event) => {
+    const { path } = (event as CustomEvent<{ path: string }>).detail;
+    arrivals.pushed(historyPath(path));
+  });
+}
+
+// Back or forward: htmx's snapshot arrived when it was first shown; one it
+// no longer holds is fetched again, so arrives now. The restored body
+// brings its regions anew.
+document.addEventListener('htmx:historyRestore', (event) => {
+  const { path, cacheMiss } = (event as CustomEvent<HtmxRestoreEvent>).detail;
+  if (cacheMiss) arrivals.arrived(historyPath(path), Date.now());
+  else arrivals.restored(historyPath(path));
   showPageDay();
   void refresh();
 });
