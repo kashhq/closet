@@ -6,11 +6,11 @@
    docs/, devkit/ and comments became 44 dead classes, and daisyUI components
    (drawer, navbar, react-day-picker) nothing renders (docs/decisions.md
    2026-10-26). */
-@import 'tailwindcss' source('../../src');
+@import "tailwindcss" source("../../src");
 @source "../../public/js";
 /* The two webfonts' @font-face rules, built from node_modules by
    `npm run generate:fonts` (views/assets/fonts.css says how). */
-@import '../../public/vendor/fonts/fonts.css';
+@import "../../public/vendor/fonts/fonts.css";
 
 /* The redesign's direction A, "Atelier" (docs/plans/2026-09-26-redesign.md,
    section 4): warm paper and ink, one clay accent used sparingly (a worn
@@ -30,7 +30,7 @@
 }
 
 @plugin "daisyui/theme" {
-  name: 'closet-light';
+  name: "closet-light";
   default: true;
   prefersdark: false;
   color-scheme: light;
@@ -69,7 +69,7 @@
 /* The same design at night: warm charcoal, the plinth lighter than the
    page so dark garments stay visible, ink turned to paper. */
 @plugin "daisyui/theme" {
-  name: 'closet-dark';
+  name: "closet-dark";
   default: false;
   prefersdark: true;
   color-scheme: dark;
@@ -107,8 +107,8 @@
    bar's title, and a card's title): the plan's one risk for this
    direction is the serif spreading into the UI. */
 @theme {
-  --font-sans: 'Inter Variable', system-ui, sans-serif;
-  --font-serif: 'Fraunces Variable', Georgia, serif;
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, serif;
 }
 /* Muted text (#88): one tone for secondary text (hints, captions, section
    labels, empty states, meta lines), the base content at 65%. It is the
@@ -125,16 +125,8 @@
    eslint.config.mjs refuses text-base-content/0 to /69 in markup, so
    these two are the only ways below /70. */
 @theme inline {
-  --color-muted: color-mix(
-    in oklab,
-    var(--color-base-content) 65%,
-    transparent
-  );
-  --color-faint: color-mix(
-    in oklab,
-    var(--color-base-content) 30%,
-    transparent
-  );
+  --color-muted: color-mix(in oklab, var(--color-base-content) 65%, transparent);
+  --color-faint: color-mix(in oklab, var(--color-base-content) 30%, transparent);
 }
 
 @layer base {
@@ -164,16 +156,16 @@
     --size-field: 0.275rem;
   }
   input:not(
-    [type='checkbox'],
-    [type='radio'],
-    [type='range'],
-    [type='file'],
-    [type='color'],
-    [type='button'],
-    [type='submit'],
-    [type='reset'],
-    [type='image']
-  ),
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="file"],
+      [type="color"],
+      [type="button"],
+      [type="submit"],
+      [type="reset"],
+      [type="image"]
+    ),
   select,
   textarea {
     font-size: max(16px, 1em);
@@ -228,27 +220,23 @@
 @layer components {
   @media (pointer: coarse) {
     :is(
-      .btn-sm,
-      .btn-xs,
-      .tab,
-      .link,
-      .checkbox,
-      .radio,
-      .toggle,
-      :is(a, button, label, summary).badge
-    ) {
-      position: relative;
-    }
-    :is(
         .btn-sm,
         .btn-xs,
         .tab,
         .link,
+        .checkbox,
+        .radio,
+        .toggle,
         :is(a, button, label, summary).badge
-      ):not(input)::after,
+      ) {
+      position: relative;
+    }
+    :is(.btn-sm, .btn-xs, .tab, .link, :is(a, button, label, summary).badge):not(
+        input
+      )::after,
     :is(.checkbox, .radio, .toggle):not(.btn, .tab)::after,
     input:is(.btn-sm, .btn-xs, .tab)::before {
-      content: '';
+      content: "";
       position: absolute;
       inset-block: min(0px, calc((100% - 2.75rem) / 2));
       inset-inline: min(0px, calc((100% - 2.75rem) / 2));
@@ -418,11 +406,7 @@ html {
     linear-gradient(45deg, transparent 75%, #ccc 75%),
     linear-gradient(-45deg, transparent 75%, #ccc 75%);
   background-size: 16px 16px;
-  background-position:
-    0 0,
-    0 8px,
-    8px -8px,
-    -8px 0;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
 /* Tap feedback: pressed while touched, dimmed while the tapped link's
@@ -504,8 +488,7 @@ body {
   isolation: isolate;
   width: 100%;
   min-width: 0;
-  border: 1px solid
-    color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
   border-radius: var(--radius-field);
   background: var(--color-base-100);
 }
@@ -560,8 +543,7 @@ body {
   padding: 0.125rem 0.375rem 0.125rem 0.5rem;
   border-radius: var(--radius-selector, 1.9rem);
   background: var(--color-base-200);
-  border: 1px solid
-    color-mix(in oklch, var(--color-base-content) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
   color: var(--color-base-content);
   line-height: 1.4;
   min-width: 0;
@@ -579,8 +561,7 @@ body {
   min-width: 1.75rem;
   min-height: 1.4rem;
   margin: -0.125rem -0.375rem -0.125rem 0;
-  border-radius: 0 var(--radius-selector, 1.9rem) var(--radius-selector, 1.9rem)
-    0;
+  border-radius: 0 var(--radius-selector, 1.9rem) var(--radius-selector, 1.9rem) 0;
   background: color-mix(in oklch, var(--color-base-content) 10%, transparent);
   align-self: stretch;
 }
@@ -612,11 +593,9 @@ body {
   right: 0;
   top: calc(100% + 0.25rem);
   z-index: 30;
-  border: 1px solid
-    color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
   border-radius: 0 0 var(--radius-field) var(--radius-field);
-  box-shadow: 0 4px 12px
-    color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--color-base-content) 10%, transparent);
   background: var(--color-base-100);
   max-height: 260px;
   overflow-y: auto;
@@ -628,8 +607,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  border: 1px solid
-    color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
   border-radius: var(--radius-field);
   padding: 0.25rem 0.5rem;
   background: var(--color-base-200);
@@ -664,7 +642,7 @@ body {
   background: var(--color-base-200);
 }
 
-.ms-option input[type='checkbox'] {
+.ms-option input[type="checkbox"] {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
@@ -687,54 +665,25 @@ body {
   max-width: 0.75rem;
   max-height: 0.75rem;
   border-radius: 50%;
-  border: 1px solid
-    color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
   flex-shrink: 0;
 }
 
 /* Known enum colors — CSS color names work directly */
-.ms-swatch--red {
-  background: red;
-}
-.ms-swatch--pink {
-  background: pink;
-}
-.ms-swatch--orange {
-  background: orange;
-}
-.ms-swatch--yellow {
-  background: yellow;
-}
-.ms-swatch--green {
-  background: green;
-}
-.ms-swatch--blue {
-  background: blue;
-}
-.ms-swatch--purple {
-  background: purple;
-}
-.ms-swatch--black {
-  background: black;
-}
-.ms-swatch--white {
-  background: white;
-}
-.ms-swatch--grey {
-  background: grey;
-}
-.ms-swatch--beige {
-  background: beige;
-}
-.ms-swatch--brown {
-  background: brown;
-}
-.ms-swatch--gold {
-  background: gold;
-}
-.ms-swatch--silver {
-  background: silver;
-}
+.ms-swatch--red    { background: red; }
+.ms-swatch--pink   { background: pink; }
+.ms-swatch--orange { background: orange; }
+.ms-swatch--yellow { background: yellow; }
+.ms-swatch--green  { background: green; }
+.ms-swatch--blue   { background: blue; }
+.ms-swatch--purple { background: purple; }
+.ms-swatch--black  { background: black; }
+.ms-swatch--white  { background: white; }
+.ms-swatch--grey   { background: grey; }
+.ms-swatch--beige  { background: beige; }
+.ms-swatch--brown  { background: brown; }
+.ms-swatch--gold   { background: gold; }
+.ms-swatch--silver { background: silver; }
 .ms-swatch--pattern {
   background: repeating-linear-gradient(
     45deg,
@@ -759,8 +708,7 @@ body {
 
 /* Footer */
 .ms-footer {
-  border-top: 1px solid
-    color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
   padding: 0.375rem 0.75rem;
   display: flex;
   justify-content: space-between;
@@ -782,10 +730,7 @@ body {
   font-weight: 600;
   line-height: 1;
   padding: 0.25rem 0.5rem;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .ms-clear:hover {
@@ -808,8 +753,7 @@ body {
 
 @supports (color: color-mix(in lab, red, red)) {
   .color-ms:focus-within {
-    box-shadow: 0 1px
-      color-mix(in oklab, var(--input-color) calc(var(--depth) * 10%), #0000);
+    box-shadow: 0 1px color-mix(in oklab, var(--input-color) calc(var(--depth) * 10%), #0000);
   }
 }
 /* The snap strip's previous/next buttons (src/web/strip/snap-strip.tsx, #311)
