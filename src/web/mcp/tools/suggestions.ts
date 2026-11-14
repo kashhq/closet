@@ -17,6 +17,7 @@ import {
   checkSuggestionRoom,
   createNeed,
   finishAgentRound,
+  logSuggestedPick,
   markSuggestedPick,
 } from '../../wishlist/suggestion-actions';
 import { readSuggestionFeedback } from '../../wishlist/feedback';
@@ -283,6 +284,12 @@ export const suggestionTools = [
           'Too many link imports: try again in a minute',
         );
       }
+      const provenance = {
+        tokenId: ctx.tokenId,
+        groupId: args.groupId,
+        note: args.note ?? null,
+        rank: args.rank ?? null,
+      };
       const saved = await addGarmentFromLink(
         ctx,
         { ownerId: ctx.userId, isOwner: true },
@@ -300,20 +307,10 @@ export const suggestionTools = [
           // lock: a need decided or filled during the fetch, or the same
           // link marked by a call alongside, rolls the garment back.
           withGarment: (tx, garmentId) =>
-            markSuggestedPick(
-              { db: tx, logger: ctx.webLogger },
-              actor,
-              garmentId,
-              {
-                tokenId: ctx.tokenId,
-                groupId: args.groupId,
-                note: args.note ?? null,
-                rank: args.rank ?? null,
-              },
-              args.url,
-            ),
+            markSuggestedPick(tx, actor, garmentId, provenance, args.url),
         },
       );
+      logSuggestedPick({ logger: ctx.webLogger }, actor, saved.id, provenance);
       const garment = (await findGarment(ctx.db, saved.id, ctx.userId))!;
       return {
         id: garment.id,

@@ -196,10 +196,11 @@ export async function checkSuggestionRoom(
  * The agent's new garment marked as its pick for a need, in the garment's
  * own transaction (`tx`): a refusal throws, which rolls the garment back
  * (a need decided or filled during the fetch, the same link marked by a
- * call alongside).
+ * call alongside). It writes no line, since the transaction can still roll
+ * back: the caller that owns it calls `logSuggestedPick` after the commit.
  */
 export async function markSuggestedPick(
-  { db: tx, logger }: ActionDeps<Queryable>,
+  tx: Queryable,
   actor: Actor,
   garmentId: number,
   provenance: Provenance,
@@ -215,6 +216,15 @@ export async function markSuggestedPick(
   if (typeof marked === 'object') throw sameProductRefusal(marked.same);
   if (marked === 'full') throw new HttpError(409, FULL);
   if (marked === 'refused') throw new HttpError(409, DECIDED);
+}
+
+/** The line `garment.suggested`, once the garment's transaction (markSuggestedPick) has committed. */
+export function logSuggestedPick(
+  { logger }: Pick<ActionDeps, 'logger'>,
+  actor: Actor,
+  garmentId: number,
+  provenance: Provenance,
+): void {
   logOp(logger, actor, 'garment.suggested', {
     garmentId,
     needId: provenance.groupId,

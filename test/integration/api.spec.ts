@@ -442,6 +442,7 @@ describe('POST /api/v1/auth/token (sign in a device)', () => {
         surface: 'api',
         tokenId: body.tokenId,
         kind: 'device',
+        address: expect.any(String),
       }),
     ]);
   });

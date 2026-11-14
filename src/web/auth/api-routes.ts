@@ -120,6 +120,7 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           name: deviceName.trim(),
           scope: FULL_SCOPE,
           verifiedPassword: account.password,
+          address: request.ip,
         },
       );
       // A device at the cap evicts, never refuses: only a password changed

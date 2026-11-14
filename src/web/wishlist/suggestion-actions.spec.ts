@@ -211,11 +211,11 @@ describe("Muse's writes are the caller's own wardrobe", () => {
     const provenance = { tokenId: 3, groupId: NEED, note: null, rank: null };
     vi.mocked(markSuggestedProduct).mockResolvedValue('full');
     await expect(
-      markSuggestedPick(deps, owner, PICK, provenance, same.sourceUrl),
+      markSuggestedPick(noStatements, owner, PICK, provenance, same.sourceUrl),
     ).rejects.toMatchObject({ statusCode: 409 });
     vi.mocked(markSuggestedProduct).mockResolvedValue('marked');
     await expect(
-      markSuggestedPick(deps, owner, PICK, provenance, same.sourceUrl),
+      markSuggestedPick(noStatements, owner, PICK, provenance, same.sourceUrl),
     ).resolves.toBeUndefined();
     expect(markSuggestedProduct).toHaveBeenCalledWith(
       noStatements,

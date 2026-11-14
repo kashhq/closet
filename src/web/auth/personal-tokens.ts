@@ -195,6 +195,12 @@ export interface NewToken {
    * the lock: a password changed after the check refuses the mint.
    */
   verifiedPassword: string;
+  /**
+   * The address the mint came from (`request.ip`, which TRUSTED_PROXIES
+   * governs), the audit trail of a credential issued over the network; left
+   * out by the seed CLI.
+   */
+  address?: string;
 }
 
 /**
@@ -217,64 +223,71 @@ export interface NewToken {
  * evicts that kind's least recently used (a native sign-in has no page to
  * ask on), in the same transaction.
  */
-export function createToken(
+export async function createToken(
   { db, logger }: ActionDeps,
   actor: Actor,
-  { kind, name, scope, verifiedPassword }: NewToken,
+  { kind, name, scope, verifiedPassword, address }: NewToken,
 ): Promise<CreateTokenResult> {
   const { userId } = actor;
-  return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ password: user.password })
-      .from(user)
-      .where(eq(user.id, userId))
-      .for('update');
-    if (account?.password !== verifiedPassword) {
-      return { created: false, reason: 'password-changed' } as const;
-    }
-    let tokens = await listTokens(tx, userId, kind);
-    let evictedId: number | undefined;
-    if (tokens.length >= MAX_ACTIVE_TOKENS) {
-      if (kind === 'mcp') {
-        return { created: false, reason: 'too-many', tokens } as const;
+  const result = await db.transaction(
+    async (tx): Promise<CreateTokenResult> => {
+      const [account] = await tx
+        .select({ password: user.password })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (account?.password !== verifiedPassword) {
+        return { created: false, reason: 'password-changed' };
       }
-      evictedId = leastRecentlyUsed(tokens).id;
-      await tx
-        .update(personalAccessToken)
-        .set({ revokedAt: new Date() })
-        .where(eq(personalAccessToken.id, evictedId));
-      tokens = tokens.filter((token) => token.id !== evictedId);
-    }
-    const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-    const [row] = await tx
-      .insert(personalAccessToken)
-      .values({
-        userId,
-        kind,
-        name,
-        tokenHash: hashToken(token),
-        tokenPrefix: token.slice(0, DISPLAY_LENGTH),
-        // The app's clock, not the column's default: idleExpired judges it
-        // against the app's `now`, beside last_used_at, which it stamps.
-        createdAt: new Date(),
-        ...scope,
-      })
-      .returning(listingColumns);
+      let tokens = await listTokens(tx, userId, kind);
+      let evictedId: number | undefined;
+      if (tokens.length >= MAX_ACTIVE_TOKENS) {
+        if (kind === 'mcp') {
+          return { created: false, reason: 'too-many', tokens };
+        }
+        evictedId = leastRecentlyUsed(tokens).id;
+        await tx
+          .update(personalAccessToken)
+          .set({ revokedAt: new Date() })
+          .where(eq(personalAccessToken.id, evictedId));
+        tokens = tokens.filter((token) => token.id !== evictedId);
+      }
+      const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
+      const [row] = await tx
+        .insert(personalAccessToken)
+        .values({
+          userId,
+          kind,
+          name,
+          tokenHash: hashToken(token),
+          tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+          // The app's clock, not the column's default: idleExpired judges it
+          // against the app's `now`, beside last_used_at, which it stamps.
+          createdAt: new Date(),
+          ...scope,
+        })
+        .returning(listingColumns);
+      return {
+        created: true,
+        id: row.id,
+        token,
+        tokens: [row, ...tokens],
+        evictedId,
+      };
+    },
+  );
+  // After the commit: a rollback must leave no line for a token never minted.
+  if (result.created) {
     logOp(logger, actor, 'token.created', {
-      tokenId: row.id,
+      tokenId: result.id,
       kind,
       readOnly: scope.readOnly,
       ownWardrobeOnly: scope.ownWardrobeOnly,
-      evictedId,
+      evictedId: result.evictedId,
+      address,
     });
-    return {
-      created: true,
-      id: row.id,
-      token,
-      tokens: [row, ...tokens],
-      evictedId,
-    } as const;
-  });
+  }
+  return result;
 }
 
 /**

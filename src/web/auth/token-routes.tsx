@@ -134,6 +134,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         name,
         scope,
         verifiedPassword: password,
+        address: request.ip,
       });
       if (!result.created) {
         logger.warn(`Token refused for user ${userId}: ${result.reason}`);

@@ -46,6 +46,7 @@ describe('agent access tokens', () => {
   });
 
   it('shows a new token once, with the command that connects Claude Code', async () => {
+    t.logs.clear();
     const res = await t.inject({
       method: 'POST',
       url: '/auth/tokens',
@@ -66,6 +67,14 @@ describe('agent access tokens', () => {
     expect(row.tokenHash).toBe(hashToken(token));
     expect(row.tokenHash).not.toContain(token);
     expect(row.tokenPrefix).toBe(token.slice(0, 11));
+    // The audit trail of a credential issued over the network names where from.
+    expect(t.logs.ops('token.created')).toEqual([
+      expect.objectContaining({
+        tokenId: row.id,
+        surface: 'page',
+        address: expect.any(String),
+      }),
+    ]);
 
     const listed = await page();
     expect(listed.body).toContain('Laptop');
