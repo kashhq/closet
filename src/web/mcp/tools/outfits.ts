@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { LIST_LIMIT_MAX } from '../../api/resource';
+import { LIST_LIMIT_MAX, type Projection, project } from '../../api/resource';
 import { DEFAULT_OCCASION } from '../../../wardrobe/occasions';
 import { planOutfit } from '../../calendar/entry-actions';
 import { replaceEntryOutfit, replaceMessage } from '../../calendar/replace';
@@ -15,26 +15,61 @@ import {
   type ToolOutfit,
 } from '../../outfits/queries';
 import { OUTFIT_PAGE_SIZE } from '../../outfits/page-size';
-import { piecesToBuy } from '../../outfits/references';
+import {
+  OutfitGarmentResource,
+  OutfitListItem,
+  outfitListRecord,
+  type OutfitGarmentRecord,
+  type OutfitListRecord,
+} from '../../outfits/outfit-resource';
 import { actorOf, defineTool, originOf } from '../tool';
-import { agentNameOf } from '../../write-origin';
 import { isoDate, occasionInput, rowId } from './common';
 
-function outfitOut(outfit: ToolOutfit) {
-  return {
-    id: outfit.id,
-    name: outfit.name,
-    notes: outfit.notes,
-    // Who made it (#659): person, agent, or a one-off (idea, planner).
-    origin: outfit.origin,
-    // One of Muse's proposals (#335): its note and the owner's reaction.
-    proposal: outfit.proposal,
-    // Your agent made it over MCP (#682): its token's name.
-    agent: agentNameOf(outfit.agent),
-    garments: outfit.garments.map(({ id, name }) => ({ id, name })),
-    // Incomplete (#335): it cannot be planned or packed until these are bought.
-    toBuy: piecesToBuy(outfit.garments).map(({ id, name }) => ({ id, name })),
-  };
+/**
+ * The outfit resources as an agent reads them (#711): the API's records
+ * (outfit-resource.ts), nulls kept; no photo URLs (an agent cannot fetch a
+ * signed /file URL), and `agent` the agent's bare name, as every tool's.
+ * Also a trip outfit's and a calendar entry's garments.
+ */
+export const OUTFIT_GARMENT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  category: 'keep',
+  role: 'keep',
+  status: 'keep',
+  thumbUrl: 'omit',
+  // Read only by the outfit page and the calendar; null elsewhere, which
+  // an agent would read as "in the closet".
+  away: 'omit',
+} as const satisfies Projection<OutfitGarmentRecord>;
+
+export const OUTFIT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  notes: 'keep',
+  // Who made it (#659): person, agent, or a one-off (idea, planner).
+  origin: 'keep',
+  garments: 'own',
+  // Incomplete (#335): the pieces to buy first, by id and name.
+  toBuy: 'own',
+  // One of Muse's proposals (#335): its note and the owner's reaction.
+  proposal: 'keep',
+  agent: 'own',
+} as const satisfies Projection<OutfitListRecord>;
+
+export function outfitGarmentForAgent(garment: OutfitGarmentRecord) {
+  return project(garment, OutfitGarmentResource, OUTFIT_GARMENT_FOR_MCP, {});
+}
+
+function outfitForAgent(outfit: ToolOutfit) {
+  const record = outfitListRecord(outfit);
+  return project(record, OutfitListItem, OUTFIT_FOR_MCP, {
+    garments: record.garments.map(outfitGarmentForAgent),
+    toBuy: record.garments
+      .filter((garment) => record.toBuy.includes(garment.id))
+      .map(({ id, name }) => ({ id, name })),
+    agent: record.agent?.name ?? null,
+  });
 }
 
 /** create_outfit's log line: the outfit made, or the one its garments already were. */
@@ -85,7 +120,7 @@ export const outfitTools = [
         limit,
         proposed: false,
       });
-      return { outfits: outfits.map(outfitOut), next };
+      return { outfits: outfits.map(outfitForAgent), next };
     },
   }),
 
@@ -97,7 +132,7 @@ export const outfitTools = [
     input: z.object({ id: rowId().describe('The outfit id.') }),
     writes: false,
     async run({ id }, ctx) {
-      return outfitOut(await requireOutfit(ctx.db, actorOf(ctx), id));
+      return outfitForAgent(await requireOutfit(ctx.db, actorOf(ctx), id));
     },
   }),
 

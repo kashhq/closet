@@ -1,14 +1,14 @@
 import { CloneType, type Static, Type } from '@sinclair/typebox';
 import { OCCASIONS } from '../../wardrobe/occasions';
 import { PLANNED_BY } from '../../wardrobe/week';
-import { literals, withoutNulls } from '../api/resource';
+import { asResource, literals } from '../api/resource';
 import { MAX_PICKED } from '../gallery/pick';
 import { OUTFIT_NAME_MAX, outfitText } from '../outfits/queries';
 import {
   OutfitGarmentResource,
   outfitNameNeedsGarments,
   outfitOrGarments,
-  toOutfitGarment,
+  outfitGarmentRecord,
 } from '../outfits/outfit-resource';
 import { IsoDateSchema, RowId } from '../schemas';
 import { SelfiePhoto, toSelfiePhoto } from '../selfies/selfie-resource';
@@ -63,9 +63,11 @@ export const CalendarEntryResource = Type.Object(
 );
 type CalendarEntryResource = Static<typeof CalendarEntryResource>;
 
-export function toCalendarEntryResource(
-  entry: CalendarEntry,
-): CalendarEntryResource {
+/**
+ * An entry, nulls kept: the API's CalendarEntry (toCalendarEntryResource)
+ * and what MCP's get_calendar projects (src/web/mcp/tools/calendar.ts).
+ */
+export function calendarEntryRecord(entry: CalendarEntry) {
   return {
     id: entry.id,
     day: entry.day,
@@ -73,16 +75,21 @@ export function toCalendarEntryResource(
     worn: entry.worn,
     plannedBy: entry.plannedBy,
     agent: toAgentResource(entry.agent),
-    ...(entry.selfie && {
-      selfieId: entry.selfie.id,
-      selfiePhoto: toSelfiePhoto(entry.selfie.photo),
-    }),
+    selfieId: entry.selfie?.id ?? null,
+    selfiePhoto: entry.selfie && toSelfiePhoto(entry.selfie.photo),
     outfit: {
       id: entry.outfit.id,
-      ...withoutNulls({ name: entry.outfit.name }),
-      garments: entry.outfit.garments.map(toOutfitGarment),
+      name: entry.outfit.name,
+      garments: entry.outfit.garments.map(outfitGarmentRecord),
     },
   };
+}
+export type CalendarEntryRecord = ReturnType<typeof calendarEntryRecord>;
+
+export function toCalendarEntryResource(
+  entry: CalendarEntry,
+): CalendarEntryResource {
+  return asResource(CalendarEntryResource, calendarEntryRecord(entry));
 }
 
 /**
