@@ -296,6 +296,7 @@ function StripSentinel(props: {
       marker="strip"
       label={t('LOADING_MORE')}
       size="sm"
+      inListbox
     />
   );
 }

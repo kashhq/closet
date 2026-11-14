@@ -76,7 +76,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   const tiles = page.locator('#saved-outfits li');
   await expect(tiles).toHaveCount(1);
   await expect(tiles.first()).toContainText('Sheet outfit');
-  await page.getByRole('tab', { name: 'Worn and planned' }).click();
+  await page.getByRole('link', { name: 'Worn and planned' }).click();
   await expect(page).toHaveURL(/show=one-offs/);
   await expect(tiles.first()).toBeVisible();
   await expect(tiles.first()).not.toContainText('Sheet outfit');

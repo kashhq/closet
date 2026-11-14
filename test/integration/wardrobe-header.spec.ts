@@ -45,9 +45,9 @@ describe('the Wardrobe header and tabs', () => {
   const sheetOf = (html: string) =>
     element(html, /<dialog id="add-sheet"[\s\S]*?<\/dialog>/);
   const tabsOf = (html: string) =>
-    element(html, /<div role="tablist"[^>]*id="wardrobe-tabs">[\s\S]*?<\/div>/);
+    element(html, /<nav [^>]*id="wardrobe-tabs">[\s\S]*?<\/nav>/);
   const activeTab = (html: string) =>
-    /class="tab tab-active" aria-selected="true">([^<]*)</.exec(html)?.[1];
+    /class="tab tab-active" aria-current="page">([^<]*)</.exec(html)?.[1];
 
   const share = async (permission: 'VIEW' | 'MANAGE', cookie: string) => {
     const invite = await t.inject({

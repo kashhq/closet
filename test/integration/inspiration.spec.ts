@@ -121,7 +121,9 @@ describe('inspiration', () => {
       `/inspiration/photo/thumb/${second.fileName}?v=1`,
       `/inspiration/photo/thumb/${first.fileName}?v=1`,
     ]);
-    expect(list.body).toContain('role="tab"');
+    expect(list.body).toMatch(
+      /<a href="\/inspiration" class="tab tab-active" aria-current="page"/,
+    );
     expect(list.body).toContain(text('gallery.TAB_INSPIRATION'));
 
     for (const url of [

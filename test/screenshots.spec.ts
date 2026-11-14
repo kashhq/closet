@@ -9,6 +9,7 @@ import { signUpHeaders } from './support/e2e-session';
 import { openGarmentMenu, openPhotoSheet } from './support/garment-page';
 import { householdToday } from './support/household-today';
 import { fakeSubscription, stubPushManager } from './support/push-stub';
+import { expectReadableTabs } from './support/tab-contrast';
 
 /**
  * Phone-width (390 px) screenshots, and a desktop (1440 px) block, of the key pages with the seed personas
@@ -66,6 +67,13 @@ async function signInAs(page: Page, persona: string): Promise<void> {
 async function shot(page: Page, name: string, url?: string): Promise<void> {
   if (url) await page.goto(url);
   await page.waitForLoadState('networkidle');
+  // Every shot of a page with section tabs, in both themes, proves them
+  // readable (#726); a page without tabs skips it, and so does one with a
+  // sheet open (its backdrop dims the tabs on purpose).
+  const sheetOpen = (await page.locator('dialog[open]').count()) > 0;
+  if (!sheetOpen && (await page.locator('nav.tabs').count()) > 0) {
+    await expectReadableTabs(page);
+  }
   await page.screenshot({
     path: `${DIR}/${name}.png`,
     fullPage: true,

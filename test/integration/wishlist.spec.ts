@@ -255,7 +255,7 @@ describe('the wishlist', () => {
       expect(body).toContain(`href="/wardrobe/${charcoal}/bought"`);
       // A tab of the Wardrobe: its tabs, Wishlist the active one.
       expect(body).toMatch(
-        /<a role="tab" href="\/wardrobe\/wishlist" class="tab tab-active"/,
+        /<a href="\/wardrobe\/wishlist" class="tab tab-active" aria-current="page"/,
       );
       expect(body).toContain('href="/wardrobe/new?to=wishlist"');
       expect(body).toContain('href="/wardrobe/new/from-link?to=wishlist"');

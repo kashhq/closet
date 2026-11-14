@@ -542,7 +542,7 @@ describe('capsules', () => {
       // "New capsule" is the add sheet's, for the owner.
       const sheet = /<dialog id="add-sheet"[\s\S]*?<\/dialog>/.exec(html)![0];
       expect(sheet).toContain('href="/capsules/new"');
-      expect(html).toContain('role="tablist"');
+      expect(html).toContain('aria-label="Wardrobe sections"');
       expect(html).toMatch(/class="tab tab-active"[^>]*>Capsules</);
     });
 

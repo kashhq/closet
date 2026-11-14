@@ -26,7 +26,7 @@ export function OutfitTabs(props: {
   return (
     <LinkTabs
       active={props.active}
-      class="tabs tabs-box tabs-sm mb-4 mx-2"
+      label={t('NAV_OUTFIT_VIEWS')}
       tabs={[
         {
           name: 'saved',

@@ -21,6 +21,11 @@ export function PageSentinel(props: {
   marker: string;
   label: string;
   size?: 'sm' | 'md';
+  /**
+   * A sentinel inside a `role=listbox` strip is not an option: presentational,
+   * and with no status of its own (a live region is not allowed among options).
+   */
+  inListbox?: boolean;
 }) {
   const Element = props.as;
   const marker = { [`data-${props.marker}-more`]: '' };
@@ -30,12 +35,18 @@ export function PageSentinel(props: {
       hx-get={props.href}
       hx-trigger={props.trigger}
       hx-swap="outerHTML"
+      role={props.inListbox ? 'presentation' : undefined}
       {...marker}
     >
       <span
         class={`loading loading-dots ${props.size === 'sm' ? 'loading-sm' : 'loading-md'} text-muted`}
-        aria-label={props.label}
+        aria-hidden="true"
       ></span>
+      {!props.inListbox && (
+        <span class="sr-only" role="status">
+          {props.label}
+        </span>
+      )}
     </Element>
   );
 }

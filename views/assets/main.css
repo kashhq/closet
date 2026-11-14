@@ -182,6 +182,14 @@
   }
 }
 
+/* An inactive tab reads in the muted token, not daisyUI's 50% of the ink
+   (3.4 to 4:1 on both themes, #726). Unlayered, so it beats daisyUI's own
+   rule; the lit tab (aria-current, .tab-active, a checked radio) and hover
+   keep daisyUI's full-ink colour. */
+.tab:not(.tab-active, :checked, :hover, label:has(:checked), [aria-selected='true'], [aria-current='page']) {
+  color: var(--color-muted);
+}
+
 /* Touch hit areas (#636): btn-sm, btn-xs, a tab, a checkbox, radio or
    toggle, a text link (.link) and a badge that is a control keep their
    drawn size on a phone
