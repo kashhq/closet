@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { PostForm } from './form';
+import { PostForm } from '../form';
 
 /**
  * Signing out is a POST (a GET let any cross-site link or image sign someone

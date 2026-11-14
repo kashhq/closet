@@ -1,6 +1,6 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
 import { DEFAULT_OCCASION, OCCASIONS } from '../../wardrobe/occasions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { dayLabel, occasionLabel } from '../date-labels';
 import { defaultsToToday } from '../day-time';
 import { AlreadySavedToast } from '../gallery/already-saved';

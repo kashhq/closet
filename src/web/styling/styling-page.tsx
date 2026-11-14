@@ -6,7 +6,7 @@ import {
   type Occasion,
   OCCASIONS,
 } from '../../wardrobe/occasions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';

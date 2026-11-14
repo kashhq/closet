@@ -1,4 +1,4 @@
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { imageUrl } from '../files/image-url';
 import type { WaitingDraft } from '../files/pending-photos';
 import { pendingPhotoRef } from '../files/queries';

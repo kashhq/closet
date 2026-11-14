@@ -1,7 +1,7 @@
 import type { Idea } from '../../wardrobe/generator';
 import type { ActivewearGap, Occasion } from '../../wardrobe/occasions';
 import { displayTemperature } from '../../weather/temperature';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';

@@ -1,5 +1,5 @@
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { ViewContext } from '../view-context';
 import { AppBar } from './app-bar';
 import { Dock } from './dock';

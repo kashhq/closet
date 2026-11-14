@@ -1,7 +1,7 @@
 import type { OutfitCount } from '../../wardrobe/goes-with';
 import { garmentMarks } from '../../wardrobe/marks';
 import { OUTFIT_DISMISS_REASONS } from '../../wardrobe/suggestions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { imageUrl } from '../files/image-url';
 import { enlargeLabel, PhotoSet, viewerTrigger } from '../files/photo-viewer';
 import { unlocksText } from '../gallery/goes-with';

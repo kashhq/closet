@@ -20,6 +20,7 @@ import { GRID_PAGE_SIZE } from '../wardrobe/grid-page-size';
 import { inCloset, onWishlist, wanted } from '../wardrobe/status';
 import { garmentUrl, needUrl, WISHLIST_PATH } from '../wardrobe/urls';
 import { inboxNeedIdsSql } from '../wishlist/inbox';
+// eslint-disable-next-line closet/no-foreign-page-import -- EMPTY_SEARCH and tilesUrl are wardrobe url rules that belong in wardrobe/urls.ts (#718)
 import { EMPTY_SEARCH, tilesUrl } from '../wardrobe/wardrobe-page';
 import {
   WARM_GARMENT_CAP,

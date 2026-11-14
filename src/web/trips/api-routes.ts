@@ -16,7 +16,7 @@ import { RowId } from '../schemas';
 import { enforceLimit } from '../security/rate-limit';
 import { type Actor, actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
-import { keptDestination, pickedPlace } from '../weather/place-picker';
+import { keptDestination, pickedPlace } from '../weather/place-input';
 import {
   KeptDestination,
   PlaceInput,

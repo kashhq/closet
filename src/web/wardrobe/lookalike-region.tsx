@@ -1,5 +1,5 @@
 import { QUANTITY_MAX } from '../../wardrobe/availability';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import { GarmentThumb } from '../layout/parts';
 import { categoryLabel } from './garment';

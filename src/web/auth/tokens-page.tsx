@@ -4,7 +4,8 @@ import { AppBar } from '../layout/app-bar';
 import { Layout } from '../layout/layout';
 import { CopyableText } from '../share/share-button';
 import type { ViewContext } from '../view-context';
-import { Field, PostForm, UsernameTwin } from './form';
+import { PostForm } from '../form';
+import { Field, UsernameTwin } from './form';
 import { AGENT_ACCESS_SECTION_ID, profileSection } from './urls';
 import {
   MAX_ACTIVE_TOKENS,

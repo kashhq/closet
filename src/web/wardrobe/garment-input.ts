@@ -536,6 +536,20 @@ export interface FormAudience {
   owner: boolean;
 }
 
+/**
+ * Who owns the garment a form saves: the requester in their own wardrobe
+ * (`viewOwner` undefined: authorizeWardrobe's isOwner), and always for a
+ * clone, which lands there. The one rule for both sides of the owner-only
+ * fields (FormAudience): the form renders them only for the
+ * owner, and the routes read them from the post only for the owner.
+ */
+export function formAudience(
+  mode: { kind: 'new' | 'edit' | 'clone' },
+  viewOwner: number | undefined,
+): FormAudience {
+  return { owner: mode.kind === 'clone' || viewOwner === undefined };
+}
+
 /** A stored garment's care fields as the form shows them to `audience`. */
 function storedCareValues(
   stored: CareFields,

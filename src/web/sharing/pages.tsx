@@ -1,13 +1,8 @@
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
-import {
-  Field,
-  Fieldset,
-  PostForm,
-  SubmitButton,
-  UsernameTwin,
-} from '../auth/form';
+import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
+import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
 import { t, type StringKey } from '../i18n';
 import { AppBar } from '../layout/app-bar';
@@ -15,6 +10,7 @@ import { BrandMark } from '../layout/brand-mark';
 import { Layout } from '../layout/layout';
 import { ProfileSection } from '../layout/parts';
 import { CopyableText } from '../share/share-button';
+// eslint-disable-next-line closet/no-foreign-page-import -- sharedBy is a share-page helper that is no markup; it moves to share/ with its next change (#718)
 import { sharedBy } from '../share/share-page';
 import type { ViewContext } from '../view-context';
 import type {

@@ -47,7 +47,7 @@ import {
   CARE_NOTE_MAX,
   type CareFormValues,
   CATEGORY_MAX,
-  type FormAudience,
+  formAudience,
   type GarmentField,
   type GarmentFormValues,
   NAME_MAX,
@@ -82,20 +82,6 @@ export function isWishlistForm(mode: GarmentFormMode): boolean {
     (mode.kind === 'new' && mode.destination.to === 'wishlist') ||
     (mode.kind === 'edit' && mode.wishlist)
   );
-}
-
-/**
- * Who owns the garment a form saves: the requester in their own wardrobe
- * (`viewOwner` undefined: authorizeWardrobe's isOwner), and always for a
- * clone, which lands there. The one rule for both sides of the owner-only
- * fields (FormAudience, garment-input.ts): the form renders them only for the
- * owner, and the routes read them from the post only for the owner.
- */
-export function formAudience(
-  mode: Pick<GarmentFormMode, 'kind'>,
-  viewOwner: number | undefined,
-): FormAudience {
-  return { owner: mode.kind === 'clone' || viewOwner === undefined };
 }
 
 export interface GarmentFormModel {
@@ -474,13 +460,11 @@ function moreDetailsOpen(
   { errors = {}, link, values }: GarmentFormModel,
   wishlist: boolean,
 ): boolean {
-  return (
-    wishlist ||
-    errors.dateAquired !== undefined ||
-    errors.sourceUrl !== undefined ||
-    errors.price !== undefined ||
-    (link !== undefined && values.sourceUrl !== '')
+  const refused = [errors.dateAquired, errors.sourceUrl, errors.price].some(
+    (messages) => messages !== undefined,
   );
+  const linkFilled = link !== undefined && values.sourceUrl !== '';
+  return wishlist || refused || linkFilled;
 }
 
 /**

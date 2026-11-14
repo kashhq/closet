@@ -10,7 +10,7 @@ import {
   GarmentCategory,
   PATTERNS,
 } from '../../wardrobe/properties';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { ChipGroup, FieldMessages, FormField } from '../form-field';
 import type { AvoidedPair } from '../gallery/queries';
 import { IDEAS_ALLOW_PATH } from '../gallery/urls';

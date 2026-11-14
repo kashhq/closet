@@ -3,10 +3,9 @@ import { FormField, inputAttributes } from '../form-field';
 import { t } from '../i18n';
 import { FormPage } from '../layout/form-page';
 import type { ViewContext } from '../view-context';
+import { type PickedPlace, type PlaceAnswer } from '../weather/place-input';
 import {
   fetchedPick,
-  type PickedPlace,
-  type PlaceAnswer,
   PlaceLocationFields,
   PlaceResults,
 } from '../weather/place-picker';

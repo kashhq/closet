@@ -2,12 +2,13 @@ import type { Child } from 'hono/jsx';
 import type { Idea } from '../../wardrobe/generator';
 import type { Occasion } from '../../wardrobe/occasions';
 import { AgentBadge } from '../agent-badge';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { type CalendarEntry, entryPieces } from '../calendar/calendar-view';
 import { dayLabel, occasionLabel } from '../date-labels';
 import { ideaName, type IdeasWeather } from '../gallery/ideas';
 import { adviceChips, ChipList } from '../gallery/chips';
+// eslint-disable-next-line closet/no-foreign-page-import -- Today draws Ideas' Reasons chips; they move to a shared view piece (#718)
 import { Reasons } from '../gallery/ideas-page';
 import type { PoolGarment } from '../gallery/queries';
 import { ideasUrl } from '../gallery/urls';

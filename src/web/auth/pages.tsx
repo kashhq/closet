@@ -30,11 +30,11 @@ import { WEATHER_SETTINGS_ID, WeatherSettings } from '../weather/settings';
 import { WEEK_SETTINGS_ID } from '../week-plan/urls';
 import { WeekTemplateSettings } from '../week-plan/views';
 import { AccountShell } from './account-shell';
+import { PostForm } from '../form';
 import {
   ErrorAlert,
   Field,
   Fieldset,
-  PostForm,
   SubmitButton,
   UsernameTwin,
 } from './form';

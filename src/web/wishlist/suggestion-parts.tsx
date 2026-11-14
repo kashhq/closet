@@ -5,7 +5,7 @@ import {
   OWNER_DISMISS_REASONS,
   type OwnerDismissReason,
 } from '../../wardrobe/suggestions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { unlocksText } from '../gallery/goes-with';
 import { t } from '../i18n';
