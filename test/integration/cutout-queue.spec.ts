@@ -466,8 +466,12 @@ describe('cutout queue', () => {
       cutoutAttempts: 1,
       ...NO_LEASE,
     });
-    expect(t.logs.messages('info', 'Web')).toContain(
-      `Garment ${garmentId} cutout retry ignored (not-allowed)`,
+    expect(t.logs.ops('garment.cutout.requeued')).toContainEqual(
+      expect.objectContaining({
+        garmentId,
+        changed: false,
+        reason: 'not-allowed',
+      }),
     );
   });
 

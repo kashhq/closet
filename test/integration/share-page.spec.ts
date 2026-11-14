@@ -192,8 +192,8 @@ describe('share page', () => {
     expect(second).toMatch(/^[0-9a-f-]{36}$/);
     expect(second).not.toBe(first);
     await expectGone(shareUrl(first, 'garment'));
-    expect(t.logs.messages('info')).toContain(
-      `Garment ${garmentId} no longer shared publicly by user ${t.owner.id}`,
+    expect(t.logs.ops('garment.share.set')).toContainEqual(
+      expect.objectContaining({ garmentId, shared: false }),
     );
   });
 

@@ -292,8 +292,13 @@ describe('the wishlist', () => {
       const id = await createWishlistItem(t, { name: 'Linen shirt' });
       const saved = await get(`/wardrobe/${id}`);
       expect(saved.body).toContain('Linen shirt');
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `Garment ${id} created (wishlist) by user ${ownerId} in wardrobe ${ownerId}`,
+      expect(t.logs.ops('garment.created')).toContainEqual(
+        expect.objectContaining({
+          garmentId: id,
+          userId: ownerId,
+          ownerId,
+          destination: 'wishlist',
+        }),
       );
     });
 

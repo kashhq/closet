@@ -324,15 +324,9 @@ describe('outfit saves', () => {
         .from(weekPlanEntry)
         .where(eq(weekPlanEntry.entryId, entry.id));
       expect(batchRow.outfitCreated).toBe(false);
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((line) =>
-            line.includes(
-              `its garments are already outfit ${planned.id}, nothing created`,
-            ),
-          ),
-      ).toBe(true);
+      expect(t.logs.ops('outfit.created')).toContainEqual(
+        expect.objectContaining({ outfitId: planned.id, changed: false }),
+      );
     });
   });
 
