@@ -134,7 +134,7 @@ export const NewCapsule = Type.Object(
       Type.String({
         format: 'uuid',
         description:
-          'Your id for this create, for retrying it offline: accepted, not yet stored',
+          'Your id for this create, for retrying it offline: a retry answers the first capsule of that id (200), the id of one deleted since is a 410',
       }),
     ),
   },

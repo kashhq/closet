@@ -1326,6 +1326,11 @@ Why: SIGN_IN_ACCOUNT_LIMIT guarded only the API, so distributed guessing through
 Decision: one `createSignInLimits` pair (address, account) in webPlugin, applied by one `signInGuards` both doors spread; every attempt counts (a 429 tells a guesser nothing), so a guesser holds an account shut only while guessing, at most a minute after. A device token unused for 90 days (`last_used_at`, else `created_at`) is refused as revoked on the row `authenticateToken` already reads: no statement, no refusal kind, the bearer gate's 401. Agent tokens never idle out (monthly agents; minted behind the password, scoped). `PUSH_TEST_LIMIT` is 3 a minute per user, answered as the button's own 200 fragment, not a 429 or a toast: nothing failed.
 Consequence: `created_at` is now stamped from the app's clock at mint (the clock-shift tiers would idle out every new token against the column's `now()`). A spec signing one account in more than 5 times a minute, at either door, gets a 429.
 
+## 2026-11-14 — Idempotent creates share one helper and store the client id (#717)
+Why: `brand_size`, `capsule` and `trip` had a `client_id` column and unique constraint, but their API creates only logged the id: a retried create after a lost 201 was a 400 (taken brand, taken capsule name) or a duplicate trip. Outfits and calendar entries do not need it: their own key (a garment set, an outfit on a day) already makes a retry a 200.
+Decision: `createOnce` (`src/db/create-once.ts`): insert with `on conflict (owner, client_id) do nothing`, else find the first row, CL410 is `gone` (410). Garments, brand sizes, capsules and trips use it; the retry's body is ignored. A different client id for a taken name is still the 400. Outfits, picks and entries keep logging the id (a delete-then-retry recreates them; accepted).
+Consequence: a new create of a synced root uses `createOnce`; `api-idempotent-creates.spec.ts` gains a row.
+
 ## 2026-11-14 — Pages carry a weak ETag; the warm revalidates; the garment page names no server today (#708)
 
 Why: the daily warm re-downloaded every warmed page in full (~3 MB a device a day); the server sent no validator, and the garment page changed every day anyway (`data-outbox-day`, the `wear:<id>:<day>` key, "last worn yesterday", Wore today's state), so a validator alone would have saved nothing on the warm's 24 h refetch.

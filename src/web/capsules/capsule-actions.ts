@@ -18,6 +18,7 @@ import {
   type CapsuleFields,
   changeMembership,
   createCapsule,
+  createCapsuleOnce,
   deleteCapsule,
   findCapsule,
   type NameTaken,
@@ -137,6 +138,35 @@ export async function createOwnCapsule(
   );
   const id = await createCapsule(db, wardrobe.access.ownerId, fields);
   return id === 'name-taken' ? id : { ...wardrobe, id };
+}
+
+/**
+ * createOwnCapsule for the API's retried create (`clientId`): 'gone' for
+ * the id of a capsule deleted since, `created: false` for a retry.
+ */
+export async function createOwnCapsuleOnce(
+  db: Db,
+  actor: Actor,
+  ownerId: number | '' | undefined,
+  fields: CapsuleFields,
+  clientId: string,
+): Promise<
+  NameTaken | 'gone' | (AuthorizedWardrobe & { id: number; created: boolean })
+> {
+  const wardrobe = await authorizeWardrobe(
+    db,
+    actor,
+    ownerId,
+    'own',
+    'capsule',
+  );
+  const once = await createCapsuleOnce(
+    db,
+    wardrobe.access.ownerId,
+    fields,
+    clientId,
+  );
+  return typeof once === 'string' ? once : { ...wardrobe, ...once };
 }
 
 /** Rename and notes (the owner's alone), or 'name-taken' for the form to say so. */

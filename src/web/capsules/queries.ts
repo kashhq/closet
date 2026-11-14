@@ -7,6 +7,7 @@ import {
   ownerLocked,
   ownerLockSql,
 } from '../../db/owner-lock';
+import { createOnce } from '../../db/create-once';
 import { isUniqueViolation } from '../../db/errors';
 import { selectScalars } from '../../db/select-scalars';
 import {
@@ -310,7 +311,8 @@ export function capsulesOfGarmentSql(
  * (capsule_owner_id_lower_name_unique). The index is the rule, so a
  * concurrent save cannot slip past a check made first.
  */
-export type NameTaken = 'name-taken';
+const NAME_TAKEN = 'name-taken';
+export type NameTaken = typeof NAME_TAKEN;
 
 /**
  * Creates a capsule in `ownerId`'s wardrobe (the form, the seed): its id,
@@ -333,7 +335,48 @@ export async function createCapsule(
       return row.id;
     });
   } catch (error) {
-    if (isUniqueViolation(error, CAPSULE_NAME_UNIQUE)) return 'name-taken';
+    if (isUniqueViolation(error, CAPSULE_NAME_UNIQUE)) return NAME_TAKEN;
+    throw error;
+  }
+}
+
+/**
+ * createCapsule for a create that carries the client's own id (the API's,
+ * a retried offline create): see createOnce. A retry answers the first
+ * capsule whatever its name now says; another client id for a name taken
+ * is still 'name-taken'.
+ */
+export async function createCapsuleOnce(
+  db: Queryable,
+  ownerId: number,
+  fields: CapsuleFields,
+  clientId: string,
+): Promise<{ id: number; created: boolean } | NameTaken | 'gone'> {
+  try {
+    const once = await createOnce(
+      async () => {
+        const lock = ownerLockCte(db, ownerId);
+        const [row] = await db
+          .with(lock)
+          .insert(capsule)
+          .values({ ownerId: lockedOwnerId(lock), ...fields, clientId })
+          .onConflictDoNothing({ target: [capsule.ownerId, capsule.clientId] })
+          .returning({ id: capsule.id });
+        return row?.id;
+      },
+      async () => {
+        const [first] = await db
+          .select({ id: capsule.id })
+          .from(capsule)
+          .where(
+            and(eq(capsule.ownerId, ownerId), eq(capsule.clientId, clientId)),
+          );
+        return first?.id;
+      },
+    );
+    return once === 'gone' ? once : { id: once.row, created: once.created };
+  } catch (error) {
+    if (isUniqueViolation(error, CAPSULE_NAME_UNIQUE)) return NAME_TAKEN;
     throw error;
   }
 }
@@ -361,7 +404,7 @@ export async function updateCapsule(
       .returning({ id: capsule.id });
     return updated.length > 0 ? 'updated' : 'not-found';
   } catch (error) {
-    if (isUniqueViolation(error, CAPSULE_NAME_UNIQUE)) return 'name-taken';
+    if (isUniqueViolation(error, CAPSULE_NAME_UNIQUE)) return NAME_TAKEN;
     throw error;
   }
 }

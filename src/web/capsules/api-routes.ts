@@ -3,6 +3,8 @@ import { Type } from '@sinclair/typebox';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { refusedBody } from '../api/refused-body';
+import { HttpError } from '../errors';
+import { t } from '../i18n';
 import {
   ListCursor,
   ListLimit,
@@ -17,6 +19,7 @@ import { OwnerId } from '../wardrobe/garment-api-input';
 import {
   capsuleAddress,
   createOwnCapsule,
+  createOwnCapsuleOnce,
   deleteOwnCapsule,
   renameCapsule,
   requireCapsule,
@@ -144,10 +147,10 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['capsules'],
         summary: 'Creates a capsule',
         description:
-          'In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`.',
+          'In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`. With a `clientId`, a retry answers the first capsule of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.',
         querystring: CapsuleQuery,
         body: NewCapsule,
-        response: apiResponses({ 201: CapsuleCreated }),
+        response: apiResponses({ 200: CapsuleCreated, 201: CapsuleCreated }),
       },
     },
     async (request, reply) => {
@@ -161,15 +164,20 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await authorizeWardrobe(db, actor, ownerId, 'own', 'capsule');
         throw refusedBody(form.errors, POINTER_OF_CAPSULE_FIELD);
       }
-      const created = await createOwnCapsule(db, actor, ownerId, form.fields);
-      if (created === 'name-taken') {
+      const client = clientId ? `, client id ${clientId.slice(0, 8)}` : '';
+      const made = clientId
+        ? await createOwnCapsuleOnce(db, actor, ownerId, form.fields, clientId)
+        : await createOwnCapsule(db, actor, ownerId, form.fields);
+      if (made === 'name-taken') {
         throw refusedBody(nameTaken(body).errors, POINTER_OF_CAPSULE_FIELD);
       }
+      if (made === 'gone') throw new HttpError(410, t('CAPSULE_DELETED'));
+      const created = { created: true, ...made };
       logger.info(
-        `Capsule ${created.id} created by user ${created.access.ownerId} (API)${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
+        `Capsule ${created.id} ${created.created ? 'created' : 'already created, retry answered'} by user ${created.access.ownerId} (API)${client}`,
       );
       return reply
-        .status(201)
+        .status(created.created ? 201 : 200)
         .header('Location', apiCapsuleUrl(created.id, created.viewOwner))
         .send({ id: created.id });
     },
