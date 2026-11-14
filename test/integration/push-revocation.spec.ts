@@ -24,7 +24,7 @@ import { captureLogs } from '../support/log-capture';
 import {
   createTestApp,
   PWA_ENV,
-  sessionFingerprintOf,
+  sessionStampOf,
   TEST_PASSWORD,
   type TestApp,
   unescapeHtml,
@@ -246,11 +246,10 @@ describe('push subscriptions revoked with the sessions (PWA_ENABLED=true)', () =
       const email = `race-held-${randomUUID()}@example.com`;
       await t.register(email);
       const userId = await userIdOf(t, email);
-      const fingerprint = await sessionFingerprintOf(t.db, userId);
+      const session = await sessionStampOf(t.db, userId);
       const [deviceId, change] = await interleave(
         t.db,
-        (tx) =>
-          upsertDevice(tx, userId, fingerprint, subscription(), undefined),
+        (tx) => upsertDevice(tx, userId, session, subscription(), undefined),
         () => updatePasswordHash(t.db, userId, 'not-a-hash-race'),
       );
       expect(deviceId).toBeDefined();

@@ -2,9 +2,10 @@ import { loginUrl } from '../../src/web/auth/return-to';
 import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import jwt from 'jsonwebtoken';
+import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import { PassThrough, Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { user } from '../../src/db/schema';
+import { personalAccessToken, user, userDevice } from '../../src/db/schema';
 import { runSetPassword } from '../../src/maintenance/set-password';
 import {
   createSessionTokens,
@@ -14,11 +15,15 @@ import { captureLogs } from '../support/log-capture';
 import { createGarment } from './garments';
 import {
   createTestApp,
+  PWA_ENV,
+  subscribeAs,
   TEST_PASSWORD,
   type TestApp,
+  unescapeHtml,
   uniqueClient,
   userIdOf,
 } from './harness';
+import { mintToken } from './mcp';
 import { planEntry, takeSelfie } from './selfies';
 
 /**
@@ -605,5 +610,202 @@ describe('Clear-Site-Data reaches the page a redirect lands on', () => {
       expect(res.headers['clear-site-data'], url).toBeUndefined();
       expect(markerOf(res), url).toBeUndefined();
     }
+  });
+});
+
+/**
+ * Sign out everywhere (#700): the session version's bump ends every other
+ * session, device token and push subscription; the acting session goes on
+ * with a cookie issued from the bump's own row. Agent tokens and invites
+ * stay (revokeSignIns, src/web/auth/queries.ts).
+ */
+describe('sign out everywhere', () => {
+  let t: TestApp;
+
+  beforeAll(async () => {
+    t = await createTestApp({ ...PWA_ENV, ACCESS_TOKEN_SECRET: SECRET });
+  });
+
+  afterAll(() => t?.cleanup());
+
+  const signOutEverywhere = (
+    cookie: string,
+    payload: Record<string, string> = { currentPassword: TEST_PASSWORD },
+  ) =>
+    t.inject({
+      method: 'POST',
+      url: '/auth/sign-out-everywhere',
+      payload,
+      headers: { cookie },
+    });
+
+  const subscription = () => ({
+    endpoint: `https://fcm.googleapis.com/fcm/send/${randomUUID()}`,
+    keys: {
+      p256dh: createECDH('prime256v1').generateKeys().toString('base64url'),
+      auth: randomBytes(16).toString('base64url'),
+    },
+  });
+
+  const endpointsOf = async (userId: number) =>
+    (
+      await t.db
+        .select({ endpoint: userDevice.pushEndpoint })
+        .from(userDevice)
+        .where(eq(userDevice.userId, userId))
+    ).map((row) => row.endpoint);
+
+  const wardrobeStatus = async (cookie: string) =>
+    (
+      await t.inject({
+        method: 'GET',
+        url: '/wardrobe',
+        headers: { 'sec-fetch-mode': 'navigate', cookie },
+      })
+    ).statusCode;
+
+  it('ends the other session, its device token and its pushes; this session continues; agent tokens stay', async () => {
+    const email = 'everywhere@example.com';
+    const thisDevice = await t.register(email);
+    const otherDevice = await t.login(email);
+    const id = await userIdOf(t, email);
+    const kept = subscription();
+    await subscribeAs(t.db, id, kept);
+    await subscribeAs(t.db, id, subscription());
+    const agent = await mintToken(t, id, 'Laptop');
+    const app = await mintToken(t, id, 'Phone', 'device');
+    if (!agent.created || !app.created) throw new Error('tokens not minted');
+
+    const res = await signOutEverywhere(thisDevice, {
+      currentPassword: TEST_PASSWORD,
+      pushEndpoint: kept.endpoint,
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/auth/profile?signedOutEverywhere=1');
+    expect(res.headers['clear-site-data']).toBeUndefined();
+    const reissued = res.cookies.find((c) => c.name === 'access_token');
+    expect(reissued?.value).toBeTruthy();
+    expect(reissued?.sameSite).toBe('Lax');
+    const survivor = `access_token=${reissued!.value}`;
+
+    // The other session: refused and ended on whatever it sends next.
+    const refused = await t.inject({
+      method: 'GET',
+      url: '/wardrobe',
+      headers: { 'sec-fetch-mode': 'navigate', cookie: otherDevice },
+    });
+    expect(refused.statusCode).toBe(302);
+    expectSessionEnded(refused);
+    expect(t.logs.messages('info', 'Session')).toContain(
+      `Rejected access token (session version 0, now 1 (signed out everywhere or a new password), for user ${id}): cookie cleared, Clear-Site-Data sent`,
+    );
+    // This browser's own earlier cookie is no better than the other's.
+    expect(await wardrobeStatus(thisDevice)).toBe(302);
+
+    // This session goes on, on the reissued cookie.
+    const profile = await t.inject({
+      method: 'GET',
+      url: '/auth/profile?signedOutEverywhere=1',
+      headers: { cookie: survivor },
+    });
+    expect(profile.statusCode).toBe(200);
+    expectNothingCleared(profile);
+    expect(unescapeHtml(profile.body)).toContain(
+      'Every other device has been signed out.',
+    );
+
+    // The native app is signed out; the agent keeps working.
+    expect(
+      (await t.api(app.token, { method: 'GET', url: '/api/v1/me' })).statusCode,
+    ).toBe(401);
+    const [agentRow] = await t.db
+      .select({ revokedAt: personalAccessToken.revokedAt })
+      .from(personalAccessToken)
+      .where(eq(personalAccessToken.id, agent.id));
+    expect(agentRow.revokedAt).toBeNull();
+    expect(await endpointsOf(id)).toEqual([kept.endpoint]);
+    expect(t.logs.messages('info', 'Web')).toContain(
+      `User ${id} signed out everywhere: sessions before version 1, 1 device tokens and 1 other push devices revoked`,
+    );
+  });
+
+  it("an installed app's queued write replayed after it gets the 401 that keeps the record", async () => {
+    const email = 'everywhere-outbox@example.com';
+    const thisDevice = await t.register(email);
+    const phone = await t.login(email);
+    const id = await userIdOf(t, email);
+    const garmentId = await createGarment(t, { name: 'Queued', cookie: phone });
+    expect((await signOutEverywhere(thisDevice)).statusCode).toBe(302);
+
+    const replay = await t.inject({
+      method: 'POST',
+      url: `/wardrobe/${garmentId}/wear`,
+      payload: 'worn=1',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-closet-queued': String(id),
+        'idempotency-key': randomUUID(),
+        'sec-fetch-mode': 'cors',
+        cookie: phone,
+      },
+    });
+    expect(replay.statusCode).toBe(401);
+    expect(replay.headers['hx-redirect']).toBe('/auth/login');
+    expectSessionEnded(replay);
+  });
+
+  it('a wrong password is the form again and ends nothing', async () => {
+    const email = 'everywhere-wrong@example.com';
+    const thisDevice = await t.register(email);
+    const otherDevice = await t.login(email);
+    const res = await signOutEverywhere(thisDevice, {
+      currentPassword: 'NotMyPassword1',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(unescapeHtml(res.body)).toContain('Current password is incorrect');
+    expect(res.cookies.find((c) => c.name === 'access_token')).toBeUndefined();
+    expect(await wardrobeStatus(thisDevice)).toBe(200);
+    expect(await wardrobeStatus(otherDevice)).toBe(200);
+  });
+
+  it('a session issued before #700 (no sv) opens until the first bump', async () => {
+    const email = 'everywhere-legacy@example.com';
+    await t.register(email);
+    const [row] = await t.db.select().from(user).where(eq(user.email, email));
+    const legacy = `access_token=${jwt.sign(
+      {
+        userId: row.id,
+        email: row.email,
+        pwf: passwordFingerprint(row.password),
+      },
+      SECRET,
+      { algorithm: 'HS256', expiresIn: 3600 },
+    )}`;
+    expect(await wardrobeStatus(legacy)).toBe(200);
+
+    const other = await t.login(email);
+    expect((await signOutEverywhere(other)).statusCode).toBe(302);
+    expect(await wardrobeStatus(legacy)).toBe(302);
+  });
+
+  it('a new password bumps the session version too', async () => {
+    const email = 'everywhere-password@example.com';
+    const cookie = await t.register(email);
+    const res = await t.inject({
+      method: 'POST',
+      url: '/auth/change-password',
+      payload: {
+        currentPassword: TEST_PASSWORD,
+        newPassword: NEW_PASSWORD,
+        confirmPassword: NEW_PASSWORD,
+      },
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(302);
+    const [row] = await t.db
+      .select({ version: user.sessionVersion })
+      .from(user)
+      .where(eq(user.email, email));
+    expect(row.version).toBe(1);
   });
 });

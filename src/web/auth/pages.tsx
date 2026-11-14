@@ -48,6 +48,7 @@ import {
   DEVICES_SECTION_ID,
   EXPORT_SECTION_ID,
   profileSection,
+  SIGN_OUT_EVERYWHERE_PATH,
   SIGN_OUT_SECTION_ID,
   STYLE_SECTION_ID,
   TOKENS_PATH,
@@ -66,6 +67,10 @@ const ACCOUNT_SECTION_PATH = profileSection(ACCOUNT_SECTION_ID);
 
 /** "Sign out": the logout page's title, Profile's section and its index entry. */
 const SIGN_OUT_KEY = 'profile.SIGN_OUT' satisfies StringKey;
+
+/** Sign out everywhere: its page's title, legend and button, Profile's link. */
+const SIGN_OUT_EVERYWHERE_KEY =
+  'profile.SIGN_OUT_EVERYWHERE' satisfies StringKey;
 
 /**
  * After a new password: what it ended, and who still has the wardrobe. The
@@ -241,6 +246,8 @@ export function RegisterPage(
 export interface ProfileProps {
   ctx: ViewContext;
   passwordChanged: boolean;
+  /** Sign out everywhere's redirect (#700). */
+  signedOutEverywhere: boolean;
   /** The week template section (#16): the stored slots, and whether it was just saved. */
   week: { slots: readonly TemplateSlot[]; saved: boolean };
   /** The weather section's state; absent with WEATHER_ENABLED=false. */
@@ -260,6 +267,39 @@ export interface ProfileProps {
   };
   /** Sizes (#24): the measurements and the brand notes. */
   sizes: { measurements: BodyMeasurements; brands: BrandSize[] };
+}
+
+/**
+ * The one-shot notices of Profile's redirects, above the sections: a new
+ * password, Sign out everywhere (#700), a device revoked (the last one's
+ * revoke hides its section, so it cannot sit there).
+ */
+function ProfileNotices(props: ProfileProps) {
+  return (
+    <>
+      {props.passwordChanged && (
+        <PasswordChangedNotice
+          shares={props.sharing.outbound.filter((share) => share.acceptedAt)}
+        />
+      )}
+      {props.signedOutEverywhere && (
+        <div role="status" class="alert alert-success">
+          <span>{t('profile.SIGNED_OUT_EVERYWHERE')}</span>
+        </div>
+      )}
+      {props.devices.notice && (
+        <div role="status" class="alert alert-success">
+          <span>
+            {t(
+              props.devices.notice === 'revoked'
+                ? 'devices.REVOKED'
+                : 'devices.ALREADY_REVOKED',
+            )}
+          </span>
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -297,23 +337,7 @@ export function ProfilePage(props: ProfileProps) {
     <Layout ctx={ctx} title={t('PROFILE')}>
       <AppBar ctx={ctx} title={t('PROFILE')} />
       <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-4">
-        {props.passwordChanged && (
-          <PasswordChangedNotice
-            shares={props.sharing.outbound.filter((share) => share.acceptedAt)}
-          />
-        )}
-        {/* Above the sections: the last device's revoke hides its section. */}
-        {props.devices.notice && (
-          <div role="status" class="alert alert-success">
-            <span>
-              {t(
-                props.devices.notice === 'revoked'
-                  ? 'devices.REVOKED'
-                  : 'devices.ALREADY_REVOKED',
-              )}
-            </span>
-          </div>
-        )}
+        <ProfileNotices {...props} />
         <nav
           aria-label={t('profile.SECTIONS')}
           class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1"
@@ -347,6 +371,12 @@ export function ProfilePage(props: ProfileProps) {
         <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
           <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>
           <SignOutForm />
+          <p class="text-sm text-muted">
+            {t('profile.SIGN_OUT_EVERYWHERE_LINK_HINT')}
+          </p>
+          <a href={SIGN_OUT_EVERYWHERE_PATH} class="btn btn-sm self-start">
+            {t(SIGN_OUT_EVERYWHERE_KEY)}
+          </a>
         </ProfileSection>
         <a href="/about" class="link link-hover text-sm self-center">
           {t('ABOUT_TITLE')}
@@ -584,6 +614,43 @@ export function ChangePasswordPage(props: {
               other device's go with its session. */}
           {props.ctx.pwaEnabled && <PushEndpointField />}
           <SubmitButton label={t('CHANGE_PASSWORD')} />
+        </Fieldset>
+      </PostForm>
+    </AccountShell>
+  );
+}
+
+/**
+ * Sign out everywhere (#700), behind the current password (step-up rule).
+ * Not an `endsSession` form: this device stays signed in with a new cookie,
+ * so the worker keeps its session caches, as after a new password.
+ */
+export function SignOutEverywherePage(props: {
+  ctx: ViewContext;
+  wrongPassword?: boolean;
+}) {
+  return (
+    <AccountShell
+      ctx={props.ctx}
+      title={t(SIGN_OUT_EVERYWHERE_KEY)}
+      back={profileSection(SIGN_OUT_SECTION_ID)}
+    >
+      <p class="text-sm text-muted">{t('profile.SIGN_OUT_EVERYWHERE_HINT')}</p>
+      <PostForm action={SIGN_OUT_EVERYWHERE_PATH}>
+        <Fieldset legend={t(SIGN_OUT_EVERYWHERE_KEY)}>
+          <UsernameTwin email={props.ctx.user?.email} />
+          <Field
+            id="currentPassword"
+            label={t('CURRENT_PASSWORD')}
+            type="password"
+            autocomplete="current-password"
+            errors={
+              props.wrongPassword ? [t('WRONG_CURRENT_PASSWORD')] : undefined
+            }
+          />
+          {/* Keeps this device's notifications; every other device's go. */}
+          {props.ctx.pwaEnabled && <PushEndpointField />}
+          <SubmitButton label={t(SIGN_OUT_EVERYWHERE_KEY)} />
         </Fieldset>
       </PostForm>
     </AccountShell>

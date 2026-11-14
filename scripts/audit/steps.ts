@@ -1125,6 +1125,15 @@ const pages: Step[] = [
     request: () => get('/auth/change-password'),
     expect: 200,
   }),
+  // Its POST is not walked: it would end the persona's other sessions.
+  http({
+    ...ACCOUNT,
+    name: 'Sign out everywhere page',
+    kind: 'page',
+    route: 'GET /auth/sign-out-everywhere',
+    request: () => get('/auth/sign-out-everywhere'),
+    expect: 200,
+  }),
   http({
     ...ACCOUNT,
     name: 'Delete account page',

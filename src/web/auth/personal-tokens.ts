@@ -23,9 +23,10 @@ import type { SessionUser } from './session';
  * prefix to tell tokens apart on Agent Access. A fast hash is right here:
  * the token is 256 random bits, so there is nothing to guess, and a slow
  * one would cost every call. A token acts exactly as its user; a new
- * password revokes every token of both kinds (revokeAllTokensStatement, in
+ * password revokes every token of both kinds (revokeTokensStatement, in
  * updatePasswordHash), as it ends every session; so does a database
- * restore (maintenance:after-restore, #908).
+ * restore (maintenance:after-restore, #908). Sign out everywhere revokes
+ * the device tokens only (#700): an agent token is not a sign-in.
  */
 
 /** Characters of the token the profile shows: the fixed prefix and four more. */
@@ -238,15 +239,17 @@ export async function revokeToken(
 }
 
 /**
- * Revokes every token of the user, of both kinds, but `keepTokenId` (the
- * token making the change, once a token-authenticated route can change a
- * password; another user's id keeps nothing), returning each revoked
- * token's kind: a new password, in updatePasswordHash.
+ * Revokes the user's tokens in force: every one of both kinds, or only
+ * `kind`'s, but `keepTokenId` (the token making the change, once a
+ * token-authenticated route can change a password; another user's id keeps
+ * nothing), returning each revoked token's kind. A new password revokes
+ * both kinds, Sign out everywhere only the device tokens (revokeSignIns,
+ * queries.ts).
  */
-export function revokeAllTokensStatement(
+export function revokeTokensStatement(
   db: Queryable,
   userId: number,
-  keepTokenId?: number,
+  only: { kind?: TokenKind; keepTokenId?: number } = {},
 ) {
   return db
     .update(personalAccessToken)
@@ -254,9 +257,12 @@ export function revokeAllTokensStatement(
     .where(
       and(
         inForce(userId),
-        keepTokenId === undefined
+        only.kind === undefined
           ? undefined
-          : ne(personalAccessToken.id, keepTokenId),
+          : eq(personalAccessToken.kind, only.kind),
+        only.keepTokenId === undefined
+          ? undefined
+          : ne(personalAccessToken.id, only.keepTokenId),
       ),
     )
     .returning({ kind: personalAccessToken.kind });
@@ -264,7 +270,7 @@ export function revokeAllTokensStatement(
 
 /**
  * Every user's tokens in force, of both kinds, revoked in one transaction,
- * per user through revokeAllTokensStatement (a new password's), keeping
+ * per user through revokeTokensStatement (a new password's), keeping
  * none: the post-restore command's (#908). Returns each user's revoked
  * kinds, in id order. No user lock, unlike a password change: a token
  * minted meanwhile is one its owner just stepped up for against the
@@ -281,7 +287,7 @@ export function revokeEveryonesTokens(
       .orderBy(personalAccessToken.userId);
     const revoked: { userId: number; kinds: TokenKind[] }[] = [];
     for (const { userId } of holders) {
-      const rows = await revokeAllTokensStatement(tx, userId);
+      const rows = await revokeTokensStatement(tx, userId);
       revoked.push({ userId, kinds: rows.map((row) => row.kind) });
     }
     return revoked;

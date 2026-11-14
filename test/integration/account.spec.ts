@@ -183,13 +183,99 @@ describe('account', () => {
       expect(sessionCookie(res)).toBeDefined();
     });
 
-    it('the session cookie lives 365 days, SameSite=Lax, never Secure', async () => {
+    it('the session cookie lives 365 days, SameSite=Lax', async () => {
       const res = await postLogin(email, TEST_PASSWORD);
       expect(res.statusCode).toBe(302);
       const cookie = sessionSetCookie(res);
       expect(cookie).toMatch(/;\s*Max-Age=31536000(;|$)/);
       expect(cookie).toMatch(/;\s*SameSite=Lax(;|$)/i);
-      expect(cookie).not.toMatch(/;\s*Secure(;|$)/i);
+    });
+
+    // Secure exactly when the request arrived over https (#700): judged by
+    // request.protocol, which believes X-Forwarded-Proto only from a
+    // TRUSTED_PROXIES peer (the harness trusts inject's 127.0.0.1). The HTTP
+    // twin's plain-http login keeps working without it.
+    describe('Secure only over https', () => {
+      const HTTPS = {
+        origin: 'https://localhost',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'localhost',
+      };
+      const UNTRUSTED_PEER = '203.0.113.70';
+
+      /** Every cookie the answer sets or clears, by name, as Set-Cookie says it. */
+      const setCookies = (res: LightMyRequestResponse) => {
+        const header = res.headers['set-cookie'];
+        const all = Array.isArray(header) ? header : [header ?? ''];
+        return new Map(all.map((line) => [line.split('=')[0], line]));
+      };
+      const isSecure = (line: string | undefined) =>
+        /;\s*Secure(;|$)/i.test(line ?? '');
+
+      /** Login, then sign out: the set, the clear and the cache-clear marker. */
+      const signInAndOut = async (
+        headers: Record<string, string>,
+        remoteAddress?: string,
+      ) => {
+        const login = await t.inject({
+          method: 'POST',
+          url: '/auth/login',
+          payload: { email, password: TEST_PASSWORD },
+          headers: { ...uniqueClient(), ...headers },
+          anonymous: true,
+          remoteAddress,
+        });
+        expect(login.statusCode).toBe(302);
+        const session = sessionCookie(login)!;
+        const profile = await t.inject({
+          method: 'GET',
+          url: '/auth/profile',
+          headers: { ...headers, cookie: session },
+          remoteAddress,
+        });
+        expect(profile.statusCode).toBe(200);
+        const logout = await t.inject({
+          method: 'POST',
+          url: '/auth/logout',
+          headers: { ...headers, cookie: session },
+          remoteAddress,
+        });
+        expect(logout.statusCode).toBe(303);
+        const out = setCookies(logout);
+        return {
+          set: setCookies(login).get('access_token'),
+          cleared: out.get('access_token'),
+          marker: out.get('cache_clear_pending'),
+        };
+      };
+
+      it('over https through a trusted proxy, the set, the clear and the marker are Secure', async () => {
+        const cookies = await signInAndOut(HTTPS);
+        expect(cookies.marker).toBeDefined();
+        for (const [name, line] of Object.entries(cookies)) {
+          expect(isSecure(line), name).toBe(true);
+          expect(line, name).toMatch(/;\s*SameSite=Lax(;|$)/i);
+        }
+      });
+
+      it.each([
+        ['over plain http (the twin)', {}, undefined],
+        [
+          'when an untrusted peer claims https',
+          { 'x-forwarded-proto': 'https' },
+          UNTRUSTED_PEER,
+        ],
+      ])(
+        '%s, none is Secure and login works',
+        async (_label, headers, peer) => {
+          const cookies = await signInAndOut(headers, peer);
+          expect(cookies.marker).toBeDefined();
+          for (const [name, line] of Object.entries(cookies)) {
+            expect(isSecure(line), name).toBe(false);
+            expect(line, name).toMatch(/;\s*SameSite=Lax(;|$)/i);
+          }
+        },
+      );
     });
 
     it('a sixth login attempt within a minute is refused with 429', async () => {

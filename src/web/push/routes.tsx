@@ -2,7 +2,7 @@ import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebo
 import { Type } from '@sinclair/typebox';
 import type { Db } from '../../db/client';
 import { loginRequired, sessionUserId } from '../auth/require-session';
-import { endSession, sessionFingerprint } from '../auth/session';
+import { endSession, sessionStamp } from '../auth/session';
 import { profileSection } from '../auth/urls';
 import { t } from '../i18n';
 import type { Logger } from '../../logger';
@@ -123,12 +123,12 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
       const deviceId = await upsertDevice(
         db,
         userId,
-        sessionFingerprint(request),
+        sessionStamp(request),
         request.body,
         request.headers['user-agent']?.slice(0, USER_AGENT_LIMIT),
       );
-      // The password changed after the session gate let this request in
-      // (#512): answered as the gate answers an ended session's fetch.
+      // The password changed, or Sign out everywhere ran, after the session
+      // gate let this request in (#512, #700): answered as the gate answers an ended session's fetch.
       if (deviceId === undefined) {
         logger.info(
           `User ${userId}'s push subscription refused: the session ended under it`,

@@ -4,11 +4,7 @@ import { SHARE_PERMISSIONS } from '../../db/schema';
 import { verifyPassword } from '../auth/passwords';
 import { loginRequired, sessionUserId } from '../auth/require-session';
 import { loginUrl } from '../auth/return-to';
-import {
-  endSession,
-  sessionAccount,
-  sessionFingerprint,
-} from '../auth/session';
+import { endSession, sessionAccount, sessionStamp } from '../auth/session';
 import { t } from '../i18n';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage, wantsFragment } from '../render';
@@ -125,7 +121,7 @@ export const sharingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         }
       }
       const invite = await createInvite(db, id, permission, {
-        fingerprint: sessionFingerprint(request),
+        session: sessionStamp(request),
       });
       // The password changed after the session gate let this request in:
       // answered as the gate answers an ended session (as /push/subscribe

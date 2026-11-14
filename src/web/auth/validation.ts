@@ -65,6 +65,15 @@ export const ChangePasswordBody = Type.Object({
 });
 export type ChangePasswordBody = Static<typeof ChangePasswordBody>;
 
+// Sign out everywhere (#700) asks for the password: the acting session
+// survives it, so a stolen cookie must not be able to sign the owner out of
+// every other device and keep itself. The push endpoint as above.
+export const SignOutEverywhereBody = Type.Object({
+  currentPassword: Password,
+  [PUSH_ENDPOINT_FIELD]: Type.Optional(Type.String({ maxLength: 2048 })),
+});
+export type SignOutEverywhereBody = Static<typeof SignOutEverywhereBody>;
+
 /** Account deletion asks for the account's own credentials again. */
 export const DeleteAccountBody = Credentials;
 export type DeleteAccountBody = Static<typeof Credentials>;

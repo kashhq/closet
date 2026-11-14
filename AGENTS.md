@@ -143,7 +143,7 @@ The detail of each rule, its code and its spec: `src/web/security/AGENTS.md`. Wh
 - **Refusals do not reveal ids**: unseeable is a 404 like an unknown id; seeable but not changeable is a 403 (`WardrobeAccess`; the matrix is `test/integration/authorization-*.routes.ts`).
 - **Outbound fetches** of a user-supplied URL or a third-party API go only through `createOutboundFetcher` (`make guard-check`).
 - **Redirect targets** from the user go through `safeReturnTo`; a path carrying a secret sets `config: { secretPath: true }`; log lines name requests through `loggableUrl()`; public pages never show an email.
-- **Sessions**: signing out is `POST /auth/logout`; a new password ends every other session, personal access token and push subscription.
+- **Sessions**: signing out is `POST /auth/logout`; a new password ends every other session, personal access token and push subscription; Sign out everywhere (`/auth/sign-out-everywhere`, behind the password) every other session, device token and push subscription (the session version, `sv`, #700).
 
 ### Config and logging
 
@@ -158,7 +158,7 @@ In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 - **daisyUI semantic tokens, no hardcoded colors** (ESLint: palette classes, `chip-N`, colours in `style`). Muted text is `text-muted`; `text-faint` never for text; ESLint refuses `text-base-content/0`–`/69`; no `opacity-*` on text.
 - **No runtime CDN imports**: client packages from `public/modules/` (`CLIENT_MODULES`) or `public/vendor/`; zero external requests (`delivery.spec.ts`).
 - **Postgres in every tier**; no second driver for test speed.
-- **Cookies stay `Secure`-less** (the HTTP twin has no TLS: `secure: true` breaks login); `SameSite=Lax` must stay (CSRF).
+- **Cookies are `Secure` only when the request is https** (`sessionCookieOptions`, `src/web/auth/session.ts`: `request.protocol`, which believes `X-Forwarded-Proto` only from `TRUSTED_PROXIES`); never a blanket `secure: true`: the HTTP twin has no TLS and its login would break (#700). `SameSite=Lax` must stay (CSRF).
 - **Offline-first per `frontend-pwa.md`**: cached reads show freshness; unreachable writes are disabled with a reason, never dropped, except wears, washes and packing ticks, which the page's outbox queues and replays (`data-offline-queue`, `src/web/shell/outbox.md`, #178); heartbeat, not `navigator.onLine`.
 - **"Today" is `todayIn(APP_TIMEZONE, now)`** in app and tests (`t.today()`, `householdToday()`): a UTC date is tomorrow on a New York evening. ESLint's `no-restricted-syntax` refuses `toISOString().slice/substring/split` and `toLocaleDateString`; a new consumer gets a row in `test/integration/today.spec.ts`.
 

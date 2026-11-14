@@ -14,7 +14,7 @@ import { invitePath } from '../../src/web/sharing/urls';
 import { createGarment, garmentRow, garmentsNamed } from './garments';
 import {
   createTestApp,
-  sessionFingerprintOf,
+  sessionStampOf,
   TEST_PASSWORD,
   TestApp,
   unescapeHtml,
@@ -913,10 +913,10 @@ describe('wardrobe share lifecycle', () => {
 
     it('an invite minted while the password waits goes with it; one that waited for the password is refused', async () => {
       const grantor = await signUpAs('mint-race');
-      const fingerprint = await sessionFingerprintOf(t.db, grantor.id);
+      const session = await sessionStampOf(t.db, grantor.id);
       const [minted, change] = await interleave(
         t.db,
-        (tx) => mintInvite(tx, grantor.id, 'VIEW', { fingerprint }),
+        (tx) => mintInvite(tx, grantor.id, 'VIEW', { session }),
         () => updatePasswordHash(t.db, grantor.id, 'not-a-hash-held'),
       );
       expect(minted).toBeDefined();

@@ -4,7 +4,7 @@ import type { Db } from '../../db/client';
 import { markSecretChecked } from '../../metrics/request-timing';
 import type { StringKey } from '../i18n';
 import {
-  type PasswordChange,
+  type SessionsEnded,
   type PasswordChangeKeeps,
   updatePasswordHash,
 } from './queries';
@@ -95,6 +95,6 @@ export async function setPassword(
   userId: number,
   password: string,
   keep?: PasswordChangeKeeps,
-): Promise<PasswordChange> {
+): Promise<SessionsEnded> {
   return updatePasswordHash(db, userId, await hashPassword(password), keep);
 }

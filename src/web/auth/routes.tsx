@@ -23,7 +23,7 @@ import {
   type SignInLimit,
   signInGate,
 } from './sign-in';
-import { PROFILE_PATH, revokeNotice } from './urls';
+import { PROFILE_PATH, revokeNotice, SIGN_OUT_EVERYWHERE_PATH } from './urls';
 import { loginUrl, REGISTER_PATH, signInReturnTo } from './return-to';
 import {
   ChangePasswordPage,
@@ -33,12 +33,18 @@ import {
   ProfilePage,
   REGISTER_FIELDS,
   RegisterPage,
+  SignOutEverywherePage,
   UPDATE_EMAIL_FIELDS,
   UpdateEmailPage,
 } from './pages';
 import { hashPassword, setPassword, verifyPassword } from './passwords';
 import { listTokens } from './personal-tokens';
-import { insertUser, normalizeEmail, updateEmail } from './queries';
+import {
+  endOtherSessions,
+  insertUser,
+  normalizeEmail,
+  updateEmail,
+} from './queries';
 import { sessionUserId } from './require-session';
 import { findWeekTemplate } from '../week-plan/template';
 import {
@@ -49,6 +55,7 @@ import {
 } from './session';
 import {
   ChangePasswordBody,
+  SignOutEverywhereBody,
   DeleteAccountBody,
   type FieldErrors,
   hasErrors,
@@ -65,6 +72,7 @@ import {
 // no value is a 400.
 const ProfileQuery = Type.Object({
   passwordChanged: Type.Optional(Type.String()),
+  signedOutEverywhere: Type.Optional(Type.String()),
   // Profile › Devices' revoke redirect (1: signed out, 0: nothing to sign
   // out); anything else shows nothing.
   deviceRevoked: Type.Optional(Type.String()),
@@ -307,6 +315,7 @@ export const authRoutes: FastifyPluginCallbackTypebox<
         <ProfilePage
           ctx={viewContext(reply)}
           passwordChanged={query.passwordChanged === '1'}
+          signedOutEverywhere={query.signedOutEverywhere === '1'}
           week={{ slots, saved: query.weekSaved === '1' }}
           weather={
             weatherSettings && {
@@ -440,6 +449,47 @@ export const authRoutes: FastifyPluginCallbackTypebox<
         `Password changed for user ${id}: other sessions, ${revokedTokens.mcp} MCP tokens, ${revokedTokens.device} device tokens, ${revokedDevices} other push devices and ${revokedInvites} unanswered invites revoked`,
       );
       return reply.redirect(`${PROFILE_PATH}?passwordChanged=1`, 302);
+    },
+  );
+
+  app.get(SIGN_OUT_EVERYWHERE_PATH, async (_request, reply) =>
+    renderPage(reply, <SignOutEverywherePage ctx={viewContext(reply)} />),
+  );
+
+  // Sign out everywhere (#700): every other session, device token and push
+  // subscription ends (endOtherSessions); this one continues on a cookie
+  // issued from the bump's own row. Behind the password (step-up rule).
+  app.post(
+    SIGN_OUT_EVERYWHERE_PATH,
+    {
+      config: { rateLimit: ACCOUNT_LIMIT, checksPassword: true },
+      schema: { body: SignOutEverywhereBody },
+    },
+    async (request, reply) => {
+      const id = sessionUserId(request);
+      const { password } = sessionAccount(request);
+      if (!(await verifyPassword(request.body.currentPassword, password))) {
+        logger.info(
+          `Sign out everywhere refused for user ${id}: wrong current password`,
+        );
+        return renderPage(
+          reply,
+          <SignOutEverywherePage ctx={viewContext(reply)} wrongPassword />,
+          { status: 400 },
+        );
+      }
+      const {
+        account: bumped,
+        revokedTokens,
+        revokedDevices,
+      } = await endOtherSessions(db, id, {
+        endpoint: request.body.pushEndpoint || undefined,
+      });
+      setSessionCookie(reply, tokens.issue(bumped));
+      logger.info(
+        `User ${id} signed out everywhere: sessions before version ${bumped.sessionVersion}, ${revokedTokens.device} device tokens and ${revokedDevices} other push devices revoked`,
+      );
+      return reply.redirect(`${PROFILE_PATH}?signedOutEverywhere=1`, 302);
     },
   );
 

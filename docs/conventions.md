@@ -19,7 +19,7 @@ Use the pino child the module was given (`logger.child({ logger })` in `createAp
 The root's Conventions are the upstream rules we kept (once `.github/prompts/boilerplate.prompt.md`, deleted 2026-11-11), plus ours. The ones with more to say than the root's line:
 
 - **One database: Postgres.** Every tier (integration, Playwright, page audit, CI) runs on Postgres. Do not reintroduce a second driver for test speed: the scratch-database harness is as fast as in-memory SQLite was.
-- **Cookies stay `Secure`-less.** The HTTP twin is served over the private network without TLS; its name is in the homelab repo. Adding `secure: true` to `setSessionCookie` (`src/web/auth/session.ts`) makes login silently never stick over the HTTP twin. `SameSite=Lax` is set and must stay (CSRF). If a secure cookie is ever wanted it must be driven by a `COOKIE_SECURE` env var defaulting to false.
+- **Cookies are `Secure` only when the request is https** (#700). The HTTP twin is served over the private network without TLS; its name is in the homelab repo. A blanket `secure: true` makes login silently never stick over the HTTP twin, so `sessionCookieOptions` (`src/web/auth/session.ts`), the one source of every session and cache-clear cookie's attributes, sets it from `request.protocol`, which reads `X-Forwarded-Proto` only from a `TRUSTED_PROXIES` peer: production gets it once that list covers Caddy. `SameSite=Lax` is set and must stay (CSRF).
 - **Offline-first UX per `frontend-pwa.md`.** Reads render from cache with a freshness indicator, writes that cannot reach the server are disabled with an explanation, never silently dropped. Connectivity detection is active (heartbeat), not `navigator.onLine`.
 
 ## "Today"

@@ -146,6 +146,7 @@ describe('app shell', () => {
         '/auth/update-email',
         '/auth/change-password',
         '/auth/delete-account',
+        '/auth/sign-out-everywhere',
         '/auth/profile/style',
         '/auth/tokens',
         '/about',
