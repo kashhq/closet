@@ -49,6 +49,7 @@ import {
   stampedServerTiming,
   PAGES_CACHE,
 } from '../../src/web/page-cache';
+import { StoreGate } from '../../src/web/store-gate';
 import {
   isWarmedDetailPage,
   parseWarmList,
@@ -234,9 +235,9 @@ const MAX_ENTRIES: Readonly<Record<string, number>> = {
  * its plugin touched since this worker started, so a cold worker's drop
  * would forget nothing. CacheExpiration asks for a limit (asserted in
  * development builds); delete() reads none, so a retired cache's is nominal.
- * The rows go first: an entry stored between the two steps then keeps its
- * fresh row (the other order deleted it, so maxEntries never counted or
- * evicted that entry), and a cache that is gone implies its rows are.
+ * The rows go first, so a cache that is gone implies its rows are. No order
+ * of the two survives a store landing between them: a session cache's drop
+ * runs under storeGate (emptySessionCaches), which no store overlaps.
  */
 async function deleteCacheAndMetadata(name: string): Promise<boolean> {
   await new CacheExpiration(name, {
@@ -365,7 +366,7 @@ interface RevalidationResult {
 /**
  * The session caches' generation (#121, #226). Every drop starts a new one; a
  * page or image request records the one it started in (handlerWillStart in
- * pageStore and imageStore), and its answer is stored, or claims the cache,
+ * pageStore and sessionStore), and its answer is stored, or claims the cache,
  * only while that generation is still current. So a slow answer fetched for
  * the account before a sign-out, a sign-in or an account switch never lands
  * in the next session's cache. In memory on purpose: a stopped worker takes
@@ -414,6 +415,9 @@ let ownership: Promise<unknown> = Promise.resolve();
 // read while SESSION_ENDING's drop is still deleting the caches).
 let lastDrop: Promise<void> = Promise.resolve();
 
+// Stores into the session caches and their drops never overlap (sessionStore).
+const storeGate = new StoreGate();
+
 function serialized<T>(work: () => Promise<T>): Promise<T> {
   const run = ownership.then(work);
   ownership = run.catch(() => undefined);
@@ -441,7 +445,9 @@ async function emptySessionCaches(
   event: ExtendableEvent,
   reason: string,
 ): Promise<void> {
-  await Promise.all(SESSION_CACHES.map(deleteCacheAndMetadata));
+  await storeGate.emptying(() =>
+    Promise.all(SESSION_CACHES.map(deleteCacheAndMetadata)),
+  );
   console.info(
     `[sw] ${reason}: ${SESSION_CACHES.join(', ')} dropped (generation ${generation})`,
   );
@@ -546,6 +552,59 @@ function claimPageCache(
     await writeRecord(OWNER_KEY, account);
     return true;
   });
+}
+
+// Every store into a session cache, page or image, passes here last (#226,
+// #1019). It stores only for a request of the current generation: an answer
+// that started before a drop (a slow page or photo for the previous account,
+// landing after a sign-out, a sign-in or an account switch) never enters the
+// next session's cache. And it holds a storeGate token from this check to
+// the ExpirationPlugin's row (cacheDidUpdate, which therefore runs after it:
+// keep this plugin last in every list), so a drop never deletes between a
+// put and its row, and a store that waits out a drop is the new session's.
+// The token is released in cacheDidUpdate, or in handlerDidComplete when the
+// put failed; a StrategyHandler built by hand must run both hooks.
+const sessionStore: WorkboxPlugin = {
+  handlerWillStart: async ({ request, state }) => {
+    if (state) state.generation = generationFor(request);
+  },
+  cacheWillUpdate: async ({ request, response, state }) => {
+    if (!state) return response;
+    releaseStore(state);
+    const release = await admitStore(
+      startedIn(state),
+      new URL(request.url).pathname,
+    );
+    if (!release) return null;
+    state.release = release;
+    return response;
+  },
+  cacheDidUpdate: async ({ state }) => releaseStore(state),
+  handlerDidComplete: async ({ state }) => releaseStore(state),
+};
+
+function releaseStore(state: { release?: unknown } | undefined): void {
+  if (typeof state?.release !== 'function') return;
+  state.release();
+  state.release = undefined;
+}
+
+/**
+ * A storeGate token for a store started in generation `since`, or undefined
+ * when a drop has made it stale. Waits out every drop begun or queued first;
+ * the generation check and the admission are one synchronous step, so a drop
+ * starting later is waited for by the token instead (emptying).
+ */
+async function admitStore(
+  since: number,
+  path: string,
+): Promise<(() => void) | undefined> {
+  for (;;) {
+    await Promise.all([lastDrop, storeGate.idle()]);
+    if (isStale(since, path)) return undefined;
+    const release = storeGate.begin();
+    if (release) return release;
+  }
 }
 
 // Every page either strategy stores, after the 200 filter: a rendered page
@@ -701,6 +760,7 @@ const pageRules: WorkboxPlugin[] = [
 const pagePlugins: WorkboxPlugin[] = [
   ...pageRules,
   new ExpirationPlugin({ maxEntries: PAGE_ENTRIES, purgeOnQuotaError: true }),
+  sessionStore,
 ];
 
 /**
@@ -745,7 +805,7 @@ const pages = new ServerFirstPages({
 // purge, ensureOfflinePage) write it.
 const offlinePage = new NetworkFirst({
   cacheName: PAGES_CACHE,
-  plugins: pageRules,
+  plugins: [...pageRules, sessionStore],
 });
 
 /**
@@ -828,7 +888,7 @@ const pageWarmer = new PageRefresh({
 // NetworkFirst's cached answer.
 const offlinePageRefresh = new PageRefresh({
   cacheName: PAGES_CACHE,
-  plugins: pageRules,
+  plugins: [...pageRules, sessionStore],
 });
 
 /**
@@ -978,29 +1038,6 @@ registerRoute(
 );
 registerRoute(isPageRequest, pages);
 
-// An image is stored only for a request of the current generation (#226): a
-// photo the previous account's page asked for, landing after a sign-out, a
-// sign-in or an account switch, never enters the next session's cache.
-// Workbox writes after cacheWillUpdate, so a drop can still fall between the
-// two; cacheDidUpdate then takes the copy out again. Either that check sees
-// the new generation, or the write finished before the drop began, which
-// deletes it with the cache.
-const imageStore: WorkboxPlugin = {
-  handlerWillStart: async ({ request, state }) => {
-    if (state) state.generation = generationFor(request);
-  },
-  cacheWillUpdate: async ({ request, response, state }) =>
-    isStale(startedIn(state), new URL(request.url).pathname) ? null : response,
-  cacheDidUpdate: async ({ cacheName, request, state }) => {
-    if (startedIn(state) === generation) return;
-    const cache = await self.caches.open(cacheName);
-    await cache.delete(request);
-    console.info(
-      `[sw] ${new URL(request.url).pathname} stored across a drop: deleted`,
-    );
-  },
-};
-
 const CUTOUT_PREFIX = '/file/nobg/';
 const THUMB_PREFIX = '/file/thumb/';
 
@@ -1035,12 +1072,12 @@ const images = new CacheFirst({
   cacheName: IMAGES_CACHE,
   plugins: [
     new CacheableResponsePlugin({ statuses: [200] }),
-    imageStore,
     cutoutStandIn,
     new ExpirationPlugin({
       maxEntries: IMAGE_ENTRIES,
       purgeOnQuotaError: true,
     }),
+    sessionStore,
   ],
 });
 
@@ -1153,7 +1190,8 @@ async function revalidateForPage(
   // A strategy's handler outside a fetch event: it applies the page cache's
   // plugins (key, store and read rules) and holds the event open until
   // destroyed. Strategy.handle runs handlerWillStart; here it is ours to run
-  // (pageStore takes the generation in it).
+  // (pageStore and sessionStore take the generation in it; sessionStore's
+  // handlerDidComplete releases a store's token, so the finally runs it).
   const handler = new StrategyHandler(tabRoots, { event, request });
   try {
     await handler.runCallbacks('handlerWillStart', { event, request });
@@ -1166,6 +1204,7 @@ async function revalidateForPage(
     await handler.doneWaiting().catch((error: unknown) => {
       console.warn('[sw] revalidation cleanup failed', error);
     });
+    await handler.runCallbacks('handlerDidComplete', { event, request });
     handler.destroy();
   }
 }
