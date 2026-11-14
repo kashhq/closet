@@ -69,15 +69,23 @@ export function judgeSender(
     domain,
   });
   if (!allowedSenders.includes(sender)) return refuse('sender-not-allowed');
-  const topmost = authenticationResults[0];
-  if (topmost === undefined) return refuse('no-authentication-results');
+  const failure = authenticationFailure(authenticationResults[0], domain);
+  return failure ? refuse(failure) : { trusted: true, sender };
+}
+
+/** Why the topmost header does not vouch for `domain`, or undefined. */
+function authenticationFailure(
+  topmost: string | undefined,
+  domain: string | null,
+): UntrustedReason | undefined {
+  if (topmost === undefined) return 'no-authentication-results';
   const results = parseAuthenticationResults(topmost);
-  if (results === null) return refuse('unreadable-authentication-results');
-  if (!isFastmail(results.authservId)) return refuse('foreign-authserv');
-  if (hasConflict(results.methods)) return refuse('conflicting-results');
+  if (results === null) return 'unreadable-authentication-results';
+  if (!isFastmail(results.authservId)) return 'foreign-authserv';
+  if (hasConflict(results.methods)) return 'conflicting-results';
   return domain !== null && vouchesFor(results.methods, domain)
-    ? { trusted: true, sender }
-    : refuse('authentication-failed');
+    ? undefined
+    : 'authentication-failed';
 }
 
 interface MethodResult {

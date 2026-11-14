@@ -234,7 +234,7 @@ describe('judgeSender', () => {
 
 describe('parseAuthenticationResults', () => {
   it('reads the authserv-id, each method and its properties, without comments', () => {
-    const parsed = parseAuthenticationResults(FASTMAIL_PASS);
+    const parsed = parseAuthenticationResults(FASTMAIL_PASS)!;
     expect(parsed.authservId).toBe('mx6.messagingengine.com');
     expect(
       parsed.methods.map(({ method, result, properties }) => [

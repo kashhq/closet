@@ -43,7 +43,7 @@ import { judgeSender } from './trust';
  * products it names listed for
  * ORDER_MAIL_OWNER's account to review. Run by server.ts's timer through
  * pollOrderMailWhole inside metrics.timeJob('order_mail'), so a failure
- * (JMAP unreachable or refusing, an unknown owner, a failing email) counts
+ * (JMAP unreachable or refusing, a deleted owner, a failing email) counts
  * as the job's.
  *
  * Each email gets its own outcome (#693). A decided one is recorded once
@@ -74,8 +74,8 @@ export interface OrderMailDeps {
   fetcher: OutboundFetcher;
   /** ORDER_MAIL_SENDERS, lower case. */
   senders: readonly string[];
-  /** ORDER_MAIL_OWNER, normalized. */
-  ownerEmail: string;
+  /** ORDER_MAIL_OWNER's account, resolved once at boot (createApp, #706). */
+  ownerId: number;
   /** APP_TIMEZONE: which day an email arrived. */
   timeZone: string;
   logger: Logger;
@@ -93,10 +93,13 @@ export interface PollSummary {
   parked: number;
 }
 
-/** The configured owner names no closet account: the poll cannot list anything. */
+/**
+ * The boot's ORDER_MAIL_OWNER account was deleted since: the poll cannot
+ * list anything until the next boot names a live account.
+ */
 export class OrderMailOwnerError extends Error {
   constructor() {
-    super('ORDER_MAIL_OWNER names no closet account');
+    super("ORDER_MAIL_OWNER's account no longer exists");
     this.name = 'OrderMailOwnerError';
   }
 }
@@ -121,12 +124,13 @@ export async function pollOrderMail(deps: OrderMailDeps): Promise<PollSummary> {
   const { db, logger } = deps;
   const started = performance.now();
   const mailbox = await deps.jmap.open();
-  // The owner and the watermark in one statement, so the JMAP session comes
-  // first (#173: the watermark needs its account id). An unknown owner still
+  // The owner check and the watermark in one statement, so the JMAP session
+  // comes first (#173: the watermark needs its account id). A deleted owner
   // fails the run before anything is read or written.
-  const start = await pollStart(db, deps.ownerEmail, mailbox.accountId);
-  const { ownerId, watermark } = start;
-  if (ownerId === undefined) throw new OrderMailOwnerError();
+  const { ownerId } = deps;
+  const start = await pollStart(db, ownerId, mailbox.accountId);
+  const { watermark } = start;
+  if (!start.ownerExists) throw new OrderMailOwnerError();
   const ids = await mailbox.inboxIds(watermark);
   const failing = new Set(start.failing.map(({ emailId }) => emailId));
   // A failing email at the watermark is the query's first (its `after` is

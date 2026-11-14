@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { garment, orderEmail, orderItem } from '../../src/db/schema';
+import { ConfigError } from '../../src/config';
+import { garment, orderEmail, orderItem, user } from '../../src/db/schema';
 import { PartialFailure } from '../../src/metrics/partial-failure';
 import { t as text } from '../../src/web/i18n';
 import { JmapError } from '../../src/web/wardrobe/order-mail/jmap';
 import {
-  OrderMailOwnerError,
   pollOrderMail,
   pollOrderMailWhole,
 } from '../../src/web/wardrobe/order-mail/poll';
@@ -482,8 +482,9 @@ describe('order email import', () => {
     });
   });
 
-  it('fails the run when ORDER_MAIL_OWNER names no account', async () => {
-    const other = await createTestApp(
+  // #706: ORDER_MAIL_OWNER is an account id from the boot on.
+  it('refuses the boot, naming the key, when ORDER_MAIL_OWNER names no account', async () => {
+    const boot = createTestApp(
       {
         ORDER_MAIL_JMAP_TOKEN: TOKEN,
         ORDER_MAIL_SENDERS: SENDER,
@@ -491,10 +492,51 @@ describe('order email import', () => {
       },
       { outboundFetch: sites.outboundFetch, orderMail: jmap.options },
     );
+    await expect(boot).rejects.toThrow(ConfigError);
+    await expect(boot).rejects.toThrow(
+      /ORDER_MAIL_OWNER: names no closet account/,
+    );
+    await expect(boot).rejects.not.toThrow(/nobody@example\.com/);
+  });
+
+  it("stays the boot's account when its email changes and another account takes the old one", async () => {
+    const other = await createTestApp(
+      {
+        ORDER_MAIL_JMAP_TOKEN: TOKEN,
+        ORDER_MAIL_SENDERS: SENDER,
+        ORDER_MAIL_OWNER: OWNER_EMAIL,
+      },
+      { outboundFetch: sites.outboundFetch, orderMail: jmap.options },
+    );
     try {
-      await expect(pollOrderMail(other.orderMail!)).rejects.toThrow(
-        OrderMailOwnerError,
-      );
+      await other.db
+        .update(user)
+        .set({ email: 'renamed@example.com' })
+        .where(eq(user.id, other.owner.id));
+      const newcomer = await other.register(OWNER_EMAIL);
+      // The poll lists for the id, never for whoever holds the address.
+      expect(other.orderMail!.ownerId).toBe(other.owner.id);
+
+      const list = await other.inject({
+        method: 'GET',
+        url: '/wardrobe/orders',
+      });
+      expect(list.statusCode).toBe(200);
+      const menu = await other.inject({ method: 'GET', url: '/wardrobe' });
+      expect(menu.body).toContain('href="/wardrobe/orders"');
+
+      const refused = await other.inject({
+        method: 'GET',
+        url: '/wardrobe/orders',
+        headers: { cookie: newcomer },
+      });
+      expect(refused.statusCode).toBe(404);
+      const theirs = await other.inject({
+        method: 'GET',
+        url: '/wardrobe',
+        headers: { cookie: newcomer },
+      });
+      expect(theirs.body).not.toContain('href="/wardrobe/orders"');
     } finally {
       await other.cleanup();
     }
@@ -597,7 +639,7 @@ describe('order email import', () => {
       expect(since.filter((c) => c === 'Email/get body')).toHaveLength(1);
       expect(await listedNames()).toContain('After Tee');
       const { accountId } = await emailRow('Mpoison001');
-      const start = await pollStart(t.db, OWNER_EMAIL.toLowerCase(), accountId);
+      const start = await pollStart(t.db, t.owner.id, accountId);
       expect(start.watermark).toEqual(new Date('2026-09-28T09:00:00Z'));
       expect(start.failing).toEqual([]);
       jmap.failBodyOf('Mpoison001', undefined);

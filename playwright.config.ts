@@ -3,11 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
-import {
-  APP_ORIGIN,
-  E2E_SENTRY_DSN,
-  ORDER_REVIEW_OWNER,
-} from './test/support/e2e-session';
+import { APP_ORIGIN, E2E_SENTRY_DSN } from './test/support/e2e-session';
 
 // The committed .env's public defaults (APP_NAME) for the specs, under
 // whatever the environment sets, as the server reads them (src/config.ts).
@@ -29,12 +25,9 @@ process.env.PASSWORD_HASH_ROUNDS ??= '4';
 // Production runs with the metrics on: the pages load the timing beacon
 // (public/js/vitals.js); the scenarios run with it in the page, as users do.
 process.env.METRICS_ENABLED ??= 'true';
-// The order mail on (#25), against the test server's JMAP stand-in
-// (test/support/jmap-stub.ts, never Fastmail): the poll runs beside the
-// scenarios as it does in production. Its owner is the fixed account.
-process.env.ORDER_MAIL_JMAP_TOKEN ??= 'fmu1-e2e-stand-in';
-process.env.ORDER_MAIL_SENDERS ??= 'orders-owner@example.com';
-process.env.ORDER_MAIL_OWNER ??= ORDER_REVIEW_OWNER;
+// The order mail stays off: its boot needs ORDER_MAIL_OWNER's account to
+// exist already (#706), which a fresh e2e database never has, and no
+// scenario reads the review list (test/integration/order-mail.spec.ts does).
 // Error tracking on, as production runs it (Bugsink): signed-in pages load
 // public/js/errors.js. The DSN is Bugsink's stand-in on a port nothing
 // listens on; the server's events fail to send, logged and dropped, never

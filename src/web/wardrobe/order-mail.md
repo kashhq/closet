@@ -2,7 +2,7 @@
 
 Part of the Wardrobe (`AGENTS.md` in this directory). Plan: `docs/plans/2026-09-28-order-email-import.md`. Owner setup: `docs/operations.md`, Order email import (the token: Settings › Privacy & Security › Manage API tokens, Email and Read-only access ticked; [Fastmail's help](https://www.fastmail.help/hc/en-us/articles/5254602856719-API-tokens)).
 
-The owner forwards order emails to a dedicated Fastmail account. Closet polls it through JMAP with a read-only token and lists the products it finds for review. **Opt-in**: without `ORDER_MAIL_JMAP_TOKEN`, `createApp()` builds nothing, so there is no timer or menu entry and the review list's routes answer 404. With the token, `ORDER_MAIL_SENDERS` and `ORDER_MAIL_OWNER` are required, and `loadConfig` refuses the boot without them.
+The owner forwards order emails to a dedicated Fastmail account. Closet polls it through JMAP with a read-only token and lists the products it finds for review. **Opt-in**: without `ORDER_MAIL_JMAP_TOKEN`, `createApp()` builds nothing, so there is no timer or menu entry and the review list's routes answer 404. With the token, `ORDER_MAIL_SENDERS` and `ORDER_MAIL_OWNER` are required, and `loadConfig` refuses the boot without them. **The owner is an account id, resolved once at boot** (#706, `resolveOrderMailOwner` in `app.ts`, before Photos): no account with the address refuses the boot with a `ConfigError` naming the key, so the owner signs up before setting the token. The routes, `ViewContext.orderReview` and the poll compare ids from then on, so an email change, or another account taking the old address, moves nothing until the next boot (where an address no account holds stops it). Every test tier boots with the account already there: the harness inserts its owner first, the page audit seeds before its order-mail boot, and Playwright runs with the order mail off.
 
 ## Layout
 
@@ -19,7 +19,7 @@ The owner forwards order emails to a dedicated Fastmail account. Closet polls it
 `scheduleMinutely({ everyMinutes: ORDER_MAIL_POLL_MINUTES })` runs `pollOrderMailWhole`, wrapped in `metrics.timeJob('order_mail')`: a failure is the job's `failure` outcome and a Bugsink event. Each run:
 
 1. Opens the JMAP session.
-2. Reads `ORDER_MAIL_OWNER`'s account, the watermark (the oldest failing email's `received_at` in the session's account, else the newest) and the failing emails in one statement (`pollStart`, #173; the watermark needs the session's account id, so the owner is looked up after the session). No account is `OrderMailOwnerError`, before any email is read or recorded.
+2. Checks that the boot's owner account still exists, and reads the watermark (the oldest failing email's `received_at` in the session's account, else the newest) and the failing emails, in one statement (`pollStart`, #173; the watermark needs the session's account id, so it runs after the session). An owner deleted since the boot is `OrderMailOwnerError`, before any email is read or recorded.
 3. Queries the inbox from the watermark (inclusive), parks a failing email at the watermark that the answer lacks (it left the inbox: `gone`), drops the settled ids (decided or parked) and takes at most `MAX_EMAILS_PER_POLL` (5).
 4. Fetches the envelopes (From, `Authentication-Results`) and judges each sender.
 5. Fetches the body of a trusted email only.
@@ -32,7 +32,7 @@ Statements per run: 2 when nothing is new (the poll every few minutes), plus per
 
 ## The review list
 
-`GET /wardrobe/orders`, and `POST /wardrobe/orders/:id/add` and `/dismiss`, both native `PostForm`s (disabled offline). They answer only the `ORDER_MAIL_OWNER` account; anyone else, and everyone with the order mail off, gets a 404. They are registered even when off: unregistered, `/wardrobe/orders` fell to `/wardrobe/:id`, whose id check answered 400. The Wardrobe's ⋯ menu links the list when `ViewContext.orderReview` is set.
+`GET /wardrobe/orders`, and `POST /wardrobe/orders/:id/add` and `/dismiss`, both native `PostForm`s (disabled offline). They answer only the `ORDER_MAIL_OWNER` account, by the id the boot resolved; anyone else, and everyone with the order mail off, gets a 404. They are registered even when off: unregistered, `/wardrobe/orders` fell to `/wardrobe/:id`, whose id check answered 400. The Wardrobe's ⋯ menu links the list when `ViewContext.orderReview` is set.
 
 "Add to closet" runs `importLink` on the stored product link and renders the ordinary new-garment form for the closet. The form carries the photo choices, the order's day as `dateAquired`, the stored price when the page has none in dollars, and `orderItem` (hidden, with a notice). `POST /wardrobe` resolves `orderItem` in `postedDestination`: the requester's own pending item in their own wardrobe, else a 404 before anything is stored. It then marks the item `added` in the garment's own transaction (`WithGarment`, as a plan candidate link). A page that cannot be fetched now opens the form with the stored details and a notice. Fetching counts against a `LINK_IMPORT_LIMIT` checker of its own.
 

@@ -81,10 +81,11 @@ interface WebConfig {
   /** Web Push identity; set exactly when PWA_ENABLED (no /push routes otherwise). */
   vapid: VapidConfig | undefined;
   /**
-   * ORDER_MAIL_OWNER, normalized, when the order mail is on (#25): the one
-   * account whose review list exists (/wardrobe/orders); a 404 for all otherwise.
+   * ORDER_MAIL_OWNER's account id, resolved at boot, when the order mail is
+   * on (#25, #706): the one account whose review list exists
+   * (/wardrobe/orders); a 404 for all otherwise.
    */
-  orderMailOwner: string | undefined;
+  orderMailOwnerId: number | undefined;
   /**
    * The build's release (src/build-info.ts): /health/ready's `version` and
    * the MCP server's version.
@@ -256,7 +257,7 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // id check answered 400.
   await app.register(orderReviewRoutes, {
     ...options,
-    orderMailOwner: options.config.orderMailOwner,
+    orderMailOwnerId: options.config.orderMailOwnerId,
   });
   // WEATHER_ENABLED=false: no /weather route, so nothing stores a location.
   const { weather } = options;

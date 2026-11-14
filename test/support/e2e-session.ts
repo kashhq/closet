@@ -115,9 +115,3 @@ export async function submitLogin(page: Page, email: string): Promise<void> {
   await page.locator('#password').fill(E2E_PASSWORD);
   await page.getByRole('button', { name: 'Login' }).click();
 }
-
-/**
- * The order mail's owner on the e2e server (playwright.config.ts sets
- * ORDER_MAIL_OWNER to it): the one account with a review list (#25).
- */
-export const ORDER_REVIEW_OWNER = 'orders-owner@example.com';
