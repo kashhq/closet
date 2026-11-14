@@ -1,7 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { type Static, Type } from '@sinclair/typebox';
 import { FEELINGS } from '../../weather/temperature';
-import { sessionUserId } from '../auth/require-session';
 import { type IsoDate, todayIn } from '../../calendar-date';
 import {
   DestinationBody,
@@ -14,7 +13,7 @@ import { RowId } from '../schemas';
 import { safeReturnTo } from '../security/return-to';
 import { actorOf, type Actor } from '../sharing/access';
 import { viewContext } from '../view-context';
-import { nudgeTemperatureOffset } from '../weather/queries';
+import { nudgeWeatherOffset } from '../weather/weather-actions';
 import { aimIdeas } from './aim';
 import {
   dailySeed,
@@ -240,15 +239,11 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       `${IDEAS_PATH}/feedback`,
       { schema: { body: FeedbackBody } },
       async (request, reply) => {
-        const ownerId = sessionUserId(request);
         const state = postedState(request.body);
-        const offset = await nudgeTemperatureOffset(
-          db,
-          ownerId,
+        await nudgeWeatherOffset(
+          { db, logger },
+          actorOf(request),
           request.body.feeling,
-        );
-        logger.info(
-          `Temperature feedback from user ${ownerId} in the gallery: ${request.body.feeling}, offset now ${offset}`,
         );
         return reply.redirect(ideasUrl(state), 303);
       },
