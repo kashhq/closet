@@ -6,7 +6,6 @@ import type { ApiOptions } from '../api/plugin';
 import { outfitText } from '../outfits/queries';
 import { actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
-import { garmentNotFound } from '../wardrobe/garment-access';
 import {
   askedIdeas,
   ClashParams,
@@ -23,7 +22,7 @@ import {
 } from './idea-resource';
 import { ideasWith } from './ideas';
 import { pickGarments } from './pick';
-import { allowPair, avoidPair } from './queries';
+import { allowGarmentPair, avoidGarmentPair } from './pair-actions';
 import { BY_PERSON } from '../write-origin';
 
 const CLASH_PATH = '/garments/:id/clashes/:otherId';
@@ -33,7 +32,7 @@ const CLASH_PATH = '/garments/:id/clashes/:otherId';
  * apiPlugin, each calling what its page twin calls (operations.ts names the
  * twin): ideasFor's statement (ideasWith) for the Ideas tab and Styling's
  * Shuffle, pickGarments for a card's pick and Styling's Save of a new
- * outfit, avoidPair and allowPair for "Clashes" and "Allow again". Ideas
+ * outfit, avoidGarmentPair and allowGarmentPair for "Clashes" and "Allow again". Ideas
  * are private like outfits (AGENTS.md): the token's user's own closet,
  * capsules and outfits; there is no `?ownerId=`, and a garment or capsule
  * of anyone else's is the 404 of an unknown id.
@@ -119,14 +118,8 @@ export const galleryApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const ownerId = actorOf(request).userId;
       const { id, otherId } = request.params;
-      const outcome = await avoidPair(db, ownerId, id, otherId);
-      if (outcome === 'not-found') throw garmentNotFound();
-      logger.info(
-        `Garments ${id} and ${otherId} ${outcome === 'added' ? 'avoided' : 'already avoided'} together by user ${ownerId} (API)`,
-      );
-      return { changed: outcome === 'added' };
+      return avoidGarmentPair({ db, logger }, actorOf(request), id, otherId);
     },
   );
 
@@ -146,10 +139,7 @@ export const galleryApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id, otherId } = request.params;
-      await allowPair(db, actor, id, otherId);
-      logger.info(
-        `Garments ${id} and ${otherId} allowed together again by user ${actor.userId} (API)`,
-      );
+      await allowGarmentPair({ db, logger }, actor, id, otherId);
       return reply.status(204).send(null);
     },
   );

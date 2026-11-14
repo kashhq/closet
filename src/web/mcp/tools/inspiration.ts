@@ -14,7 +14,6 @@ import {
   INSPIRATION_MAX_PIECES,
   type InspirationDetail,
   listInspirations,
-  setInspirationPieces,
   wishlisted,
 } from '../../inspiration/queries';
 import { typesOfRole } from '../../inspiration/piece-input';
@@ -22,9 +21,10 @@ import {
   type LookRecreation,
   recreateOwnLook,
 } from '../../inspiration/recreation';
+import { setLookPieces } from '../../inspiration/look-actions';
 import { addLinkedInspiration } from '../../inspiration/writes';
 import { LinkImportError, REFUSALS } from '../../wardrobe/link-import/import';
-import { defineTool, type ToolContext } from '../tool';
+import { actorOf, defineTool, type ToolContext } from '../tool';
 import { rowId } from './common';
 
 /**
@@ -229,14 +229,11 @@ export const inspirationTools = [
     idempotent: true,
     async run(args, ctx) {
       const pieces = args.pieces.map(lookPiece);
-      const set = await setInspirationPieces(
-        ctx.db,
+      await setLookPieces(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
         args.id,
-        ctx.userId,
         pieces,
-      );
-      ctx.webLogger.info(
-        `Inspiration ${args.id} pieces set by user ${ctx.userId} (MCP): ${set.kept} kept, ${set.removed} removed, ${set.added} added`,
       );
       return recreationOut(await lookRecreation(ctx, args.id));
     },

@@ -3,6 +3,7 @@ import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyReply } from 'fastify';
 import { todayIn } from '../../calendar-date';
 import { sessionUserId } from '../auth/require-session';
+import { actorOf } from '../sharing/access';
 import { AutosaveSaved } from '../autosave';
 import { HttpError } from '../errors';
 import { INSPIRATION_PHOTO_ROOT } from '../files/image-url';
@@ -23,11 +24,16 @@ import {
 import { LINK_INPUT_MAX, linkIn } from '../wardrobe/link-import/link-text';
 import { InspirationListPage } from './list-page';
 import { NewInspirationPage } from './new-page';
-import { PieceBody, pieceKindValue, readPiece } from './piece-input';
 import {
-  addInspirationPiece,
-  addPieceToWishlist,
-  deleteInspirationPiece,
+  addLookPiece,
+  changeLookPiece,
+  editLookText,
+  findLookPiece,
+  removeLookPiece,
+  saveLookAsOutfit,
+} from './look-actions';
+import { PieceBody, readPiece } from './piece-input';
+import {
   findInspiration,
   INSPIRATION_MAX_PIECES,
   INSPIRATION_NOTE_MAX,
@@ -35,11 +41,9 @@ import {
   isOwnInspirationPhoto,
   listInspirations,
   MAX_PIECE_POSITION,
-  updateInspirationPiece,
-  updateInspirationText,
 } from './queries';
 import { RecreatePage } from './recreate-page';
-import { type PostedChoice, saveRecreation } from './recreate-writes';
+import type { PostedChoice } from './recreate-writes';
 import { recreateOwnLook } from './recreation';
 import { ShareConfirmPage } from './share-confirm-page';
 import { shareFallback } from './share-fallback';
@@ -261,14 +265,12 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: TextBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
       const title = request.body.title.trim();
       const note = request.body.note.trim();
-      await updateInspirationText(db, id, userId, {
+      await editLookText({ db, logger }, actorOf(request), id, {
         title: title || null,
         note: note || null,
       });
-      logger.info(`Inspiration ${id} title and note saved by user ${userId}`);
       if (!request.headers['hx-request']) {
         return reply.redirect(inspirationUrl(id), 303);
       }
@@ -308,12 +310,8 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: PieceBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
       const piece = readPiece(request.body);
-      const position = await addInspirationPiece(db, id, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) added by user ${userId}`,
-      );
+      await addLookPiece({ db, logger }, actorOf(request), id, piece);
       return reply.redirect(inspirationPiecesUrl(id), 303);
     },
   );
@@ -323,11 +321,13 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams, body: PieceBody } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
       const piece = readPiece(request.body);
-      await updateInspirationPiece(db, id, position, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) saved by user ${userId}`,
+      await changeLookPiece(
+        { db, logger },
+        actorOf(request),
+        id,
+        position,
+        piece,
       );
       if (!request.headers['hx-request']) {
         return reply.redirect(inspirationPiecesUrl(id), 303);
@@ -341,11 +341,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
-      await deleteInspirationPiece(db, id, position, userId);
-      logger.info(
-        `Inspiration ${id} piece ${position} removed by user ${userId}`,
-      );
+      await removeLookPiece({ db, logger }, actorOf(request), id, position);
       return reply.redirect(inspirationPiecesUrl(id), 303);
     },
   );
@@ -380,18 +376,11 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: ChoicesBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
-      const saved = await saveRecreation(
-        db,
-        userId,
+      const { outfit } = await saveLookAsOutfit(
+        { db, logger },
+        actorOf(request),
         id,
         postedChoices(request.body),
-      );
-      const { outfit } = saved;
-      logger.info(
-        outfit.alreadySaved
-          ? `Inspiration ${id} recreated by user ${userId}: its ${saved.garments} garment(s) are already outfit ${outfit.id}, nothing created`
-          : `Inspiration ${id} saved as outfit ${outfit.id} by user ${userId} with ${saved.garments} garment(s)`,
       );
       const flag = alreadySavedParam(outfit);
       return reply.redirect(
@@ -409,13 +398,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
-      const found = await addPieceToWishlist(db, userId, id, position);
-      logger.info(
-        found.created
-          ? `Inspiration ${id} piece ${position} added to the wishlist of user ${userId} as garment ${found.garmentId}`
-          : `Inspiration ${id} piece ${position} already on the wishlist of user ${userId} as garment ${found.garmentId}, nothing created`,
-      );
+      await findLookPiece({ db, logger }, actorOf(request), id, position);
       return reply.redirect(recreatePieceUrl(id, position), 303);
     },
   );
