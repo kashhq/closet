@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import { Forbidden, NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
@@ -37,6 +38,7 @@ const OWNER = 1;
 const NEED = 30;
 const PICK = 10;
 const noStatements = {} as Db;
+const deps = { db: noStatements, logger: captureLogs().logger };
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: 2,
   surface: 'page',
@@ -209,11 +211,11 @@ describe("Muse's writes are the caller's own wardrobe", () => {
     const provenance = { tokenId: 3, groupId: NEED, note: null, rank: null };
     vi.mocked(markSuggestedProduct).mockResolvedValue('full');
     await expect(
-      markSuggestedPick(noStatements, owner, PICK, provenance, same.sourceUrl),
+      markSuggestedPick(deps, owner, PICK, provenance, same.sourceUrl),
     ).rejects.toMatchObject({ statusCode: 409 });
     vi.mocked(markSuggestedProduct).mockResolvedValue('marked');
     await expect(
-      markSuggestedPick(noStatements, owner, PICK, provenance, same.sourceUrl),
+      markSuggestedPick(deps, owner, PICK, provenance, same.sourceUrl),
     ).resolves.toBeUndefined();
     expect(markSuggestedProduct).toHaveBeenCalledWith(
       noStatements,
@@ -227,14 +229,14 @@ describe("Muse's writes are the caller's own wardrobe", () => {
   it('answers the new need, or a 409 naming the one of that name', async () => {
     const need = { name: 'Blazer', budget: null, note: null, tokenId: 3 };
     vi.mocked(createOptionGroup).mockResolvedValue({ ok: true, id: NEED });
-    await expect(createNeed(noStatements, owner, need)).resolves.toBe(NEED);
+    await expect(createNeed(deps, owner, need)).resolves.toBe(NEED);
     vi.mocked(createOptionGroup).mockResolvedValue({
       ok: false,
       reason: 'dismissed',
       id: NEED,
       dismissedReason: 'not_now',
     });
-    await expect(createNeed(noStatements, owner, need)).rejects.toMatchObject({
+    await expect(createNeed(deps, owner, need)).rejects.toMatchObject({
       statusCode: 409,
       message: expect.stringContaining(`id ${NEED}, not_now`),
     });

@@ -16,20 +16,24 @@ import { findGarment } from '../../wardrobe/queries';
 import {
   checkSuggestionRoom,
   createNeed,
+  finishAgentRound,
   markSuggestedPick,
 } from '../../wishlist/suggestion-actions';
 import { readSuggestionFeedback } from '../../wishlist/feedback';
 import { notifyRounds, QUIET_PERIOD_MS } from '../../wishlist/round-end';
-import { finishRound, ROUND_SUMMARY_MAX } from '../../wishlist/rounds';
+import { ROUND_SUMMARY_MAX } from '../../wishlist/rounds';
 import {
   type MusePick,
   type Need,
   readInbox,
   type SetAsideRow,
 } from '../../wishlist/inbox';
-import { actorOf, defineTool } from '../tool';
+import { actorOf, defineTool, type ToolContext } from '../tool';
 import { priceInput, rowId } from './common';
 import { addGarmentFromLink } from './link-import';
+
+/** What the write actions take (#712): the tool's database and the Web logger its op line goes to. */
+const deps = (ctx: ToolContext) => ({ db: ctx.db, logger: ctx.webLogger });
 
 /**
  * Muse's tools (#337; docs/plans/2026-10-05-muse-suggestions.md section
@@ -177,7 +181,7 @@ export const suggestionTools = [
         tokenId: ctx.tokenId,
         all: all ?? false,
       });
-      ctx.webLogger.info(
+      ctx.webLogger.debug(
         `Suggestion feedback read by user ${ctx.userId} (MCP, token ${ctx.tokenId}${all ? ', all' : ''}): ${feedback.needs.length} needs, ${feedback.picksSetAside.length} set aside, ${feedback.purchases.length} purchases, ${feedback.outfits.length} outfits`,
       );
       return feedback;
@@ -214,15 +218,12 @@ export const suggestionTools = [
     writes: true,
     idempotent: false,
     async run({ name, budget, note }, ctx) {
-      const id = await createNeed(ctx.db, actorOf(ctx), {
+      const id = await createNeed(deps(ctx), actorOf(ctx), {
         name,
         budget: budget === undefined ? null : budget.toFixed(2),
         note: note ?? null,
         tokenId: ctx.tokenId,
       });
-      ctx.webLogger.info(
-        `Need ${id} created by user ${ctx.userId} (MCP, token ${ctx.tokenId})`,
-      );
       return { id };
     },
   }),
@@ -300,7 +301,7 @@ export const suggestionTools = [
           // link marked by a call alongside, rolls the garment back.
           withGarment: (tx, garmentId) =>
             markSuggestedPick(
-              tx,
+              { db: tx, logger: ctx.webLogger },
               actor,
               garmentId,
               {
@@ -312,9 +313,6 @@ export const suggestionTools = [
               args.url,
             ),
         },
-      );
-      ctx.webLogger.info(
-        `Garment ${saved.id} suggested for need ${args.groupId} by user ${ctx.userId} (MCP, token ${ctx.tokenId}${args.rank === undefined ? '' : `, rank ${args.rank}`})`,
       );
       const garment = (await findGarment(ctx.db, saved.id, ctx.userId))!;
       return {
@@ -356,7 +354,7 @@ export const suggestionTools = [
     idempotent: true,
     async run({ garmentIds, note, name }, ctx) {
       const proposed = await proposeOutfitTo(
-        ctx.db,
+        deps(ctx),
         actorOf(ctx),
         { garmentIds, name: name ?? null },
         { tokenId: ctx.tokenId, note: note ?? null },
@@ -364,9 +362,6 @@ export const suggestionTools = [
       if ('alreadyProposed' in proposed) {
         return { id: proposed.id, alreadyProposed: proposed.alreadyProposed };
       }
-      ctx.webLogger.info(
-        `Outfit ${proposed.id} proposed by user ${ctx.userId} (MCP, token ${ctx.tokenId}, ${proposed.slots} slots)`,
-      );
       return { id: proposed.id };
     },
   }),
@@ -394,23 +389,17 @@ export const suggestionTools = [
     writes: true,
     idempotent: false,
     async run({ summary, feedbackUntil }, ctx) {
-      const finished = await finishRound(ctx.db, ctx.userId, {
+      const finished = await finishAgentRound(deps(ctx), actorOf(ctx), {
         tokenId: ctx.tokenId,
         summary: summary ?? null,
         feedbackUntil: feedbackUntil ?? null,
       });
       if (!finished.ok) {
-        ctx.webLogger.info(
-          `Round of user ${ctx.userId} ended with nothing new (MCP, token ${ctx.tokenId}${feedbackUntil ? ', feedback read' : ''})`,
-        );
         return { round: null, feedbackRead: feedbackUntil !== undefined };
       }
       const [notified] = await notifyRounds(ctx.push, ctx.webLogger, [
         { ...finished, ownerId: ctx.userId },
       ]);
-      ctx.webLogger.info(
-        `Round ${finished.id} finished by user ${ctx.userId} (MCP, token ${ctx.tokenId}): ${finished.outfits} outfits, ${finished.pieces} pieces, ${notified} devices notified`,
-      );
       return {
         round: {
           id: finished.id,

@@ -208,7 +208,7 @@ export type Proposed =
  * declined, are a 409 saying which; a proposal already made is the answer.
  */
 export async function proposeOutfitTo(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { garmentIds: readonly number[]; name: string | null },
   proposal: OutfitProposalInput,
@@ -225,7 +225,15 @@ export async function proposeOutfitTo(
     { name: input.name, slots },
     proposal,
   );
-  if (proposed.ok) return proposed;
+  if (proposed.ok) {
+    logOp(logger, actor, 'outfit.proposed', {
+      outfitId: proposed.id,
+      changed: !('alreadyProposed' in proposed),
+      slots: 'slots' in proposed ? proposed.slots : undefined,
+      tokenId: proposal.tokenId,
+    });
+    return proposed;
+  }
   if (proposed.reason === 'owners') {
     throw new HttpError(
       409,

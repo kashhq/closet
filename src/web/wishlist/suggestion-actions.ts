@@ -4,6 +4,7 @@ import {
   type SuggestionDecision,
 } from '../../wardrobe/suggestions';
 import { HttpError } from '../errors';
+import { type ActionDeps, logOp } from '../op-log';
 import { t } from '../i18n';
 import type { WebOptions } from '../plugin';
 import { NotFound, type Resource } from '../refusals';
@@ -22,6 +23,7 @@ import {
   suggestionRoom,
 } from './decisions';
 import { type NeedDetail, readNeed } from './inbox';
+import { type FinishOutcome, finishRound, type RoundEnd } from './rounds';
 
 type Db = WebOptions['db'];
 
@@ -166,7 +168,7 @@ export async function checkSuggestionRoom(
  * call alongside).
  */
 export async function markSuggestedPick(
-  tx: Queryable,
+  { db: tx, logger }: ActionDeps<Queryable>,
   actor: Actor,
   garmentId: number,
   provenance: Provenance,
@@ -182,6 +184,12 @@ export async function markSuggestedPick(
   if (typeof marked === 'object') throw sameProductRefusal(marked.same);
   if (marked === 'full') throw new HttpError(409, FULL);
   if (marked === 'refused') throw new HttpError(409, DECIDED);
+  logOp(logger, actor, 'garment.suggested', {
+    garmentId,
+    needId: provenance.groupId,
+    tokenId: provenance.tokenId,
+    rank: provenance.rank,
+  });
 }
 
 /**
@@ -190,12 +198,18 @@ export async function markSuggestedPick(
  * set aside (never proposed again).
  */
 export async function createNeed(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   need: NeedInput,
 ): Promise<number> {
   const created = await createOptionGroup(db, actor.userId, need);
-  if (created.ok) return created.id;
+  if (created.ok) {
+    logOp(logger, actor, 'need.created', {
+      needId: created.id,
+      tokenId: need.tokenId,
+    });
+    return created.id;
+  }
   if (created.reason === 'chosen') {
     throw new HttpError(
       409,
@@ -212,4 +226,26 @@ export async function createNeed(
     409,
     `The owner set that need aside (id ${created.id}, ${created.dismissedReason ?? 'with a note'}): never propose it again`,
   );
+}
+
+/**
+ * The agent's finish_round (finishRound): a round stored, or none when
+ * nothing is new (`changed: false`; the feedback cursor may still have
+ * moved). The caller notifies the owner after (notifyRounds).
+ */
+export async function finishAgentRound(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  round: Extract<RoundEnd, { tokenId: number }>,
+): Promise<FinishOutcome> {
+  const finished = await finishRound(db, actor.userId, round);
+  logOp(logger, actor, 'round.finished', {
+    roundId: finished.ok ? finished.id : null,
+    changed: finished.ok,
+    outfits: finished.ok ? finished.outfits : 0,
+    pieces: finished.ok ? finished.pieces : 0,
+    tokenId: round.tokenId,
+    feedbackRead: round.feedbackUntil !== null,
+  });
+  return finished;
 }

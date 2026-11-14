@@ -196,7 +196,9 @@ describe('the outfit path for its owner', () => {
       id: OUTFIT,
       slots: 1,
     });
-    await expect(proposeOutfitTo(db, owner, asked, proposal)).resolves.toEqual({
+    await expect(
+      proposeOutfitTo(deps, owner, asked, proposal),
+    ).resolves.toEqual({
       ok: true,
       id: OUTFIT,
       slots: 1,
@@ -208,7 +210,7 @@ describe('the outfit path for its owner', () => {
       id: OUTFIT,
     });
     await expect(
-      proposeOutfitTo(db, owner, asked, proposal),
+      proposeOutfitTo(deps, owner, asked, proposal),
     ).rejects.toMatchObject({
       statusCode: 409,
       message: `These garments are an outfit of the owner's own already (outfit ${OUTFIT})`,
@@ -220,7 +222,7 @@ describe('the outfit path for its owner', () => {
       dismissedReason: null,
     });
     await expect(
-      proposeOutfitTo(db, owner, asked, proposal),
+      proposeOutfitTo(deps, owner, asked, proposal),
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
