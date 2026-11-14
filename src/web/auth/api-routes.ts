@@ -6,6 +6,7 @@ import type { ApiOptions } from '../api/plugin';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { IsoDateSchema } from '../schemas';
+import { actorOf } from '../sharing/access';
 import {
   createToken,
   FULL_SCOPE,
@@ -113,8 +114,8 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { account } = check;
       const result = await createToken(
         { db, logger },
+        { userId: account.id, surface: 'api' },
         {
-          userId: account.id,
           kind: 'device',
           name: deviceName.trim(),
           scope: FULL_SCOPE,
@@ -129,9 +130,6 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         );
         throw new HttpError(401, t('LOGIN_FAILED'));
       }
-      logger.info(
-        `User ${account.id} signed in a device: token ${result.id} from ${request.ip}${result.evictedId === undefined ? '' : `, evicting token ${result.evictedId}`}`,
-      );
       // The only time the token exists in a response: nothing may store it.
       reply.header('Cache-Control', 'no-store').status(201);
       return { token: result.token, tokenId: result.id };
@@ -151,14 +149,11 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { user, tokenId } = request.accessToken!;
-      // False only when something revoked it since this request
+      const { tokenId } = request.accessToken!;
+      // Unchanged only when something revoked it since this request
       // authenticated (a new password, Profile › Devices): signed out
       // either way, which is what the client asked for.
-      const revoked = await revokeToken(db, user.id, 'device', tokenId);
-      logger.info(
-        `User ${user.id} signed out device token ${tokenId}${revoked ? '' : ' (already revoked)'}`,
-      );
+      await revokeToken({ db, logger }, actorOf(request), 'device', tokenId);
       return reply.status(204).send(null);
     },
   );

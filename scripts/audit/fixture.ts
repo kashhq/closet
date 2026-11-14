@@ -550,8 +550,8 @@ export async function createFixture(options: {
     if (!row) throw new Error(`No account ${id}`);
     return build.tokens.createToken(
       { db: closet.db, logger },
+      { userId: id, surface: 'page' },
       {
-        userId: id,
         kind: 'mcp',
         name,
         // The audit calls every tool, writes included.

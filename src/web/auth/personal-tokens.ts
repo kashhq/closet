@@ -2,14 +2,18 @@ import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { TOKEN_PREFIX, type TokenKind } from '../../credential-names';
 import type { Db, Queryable } from '../../db/client';
-import type { Logger } from '../../logger';
 import { markSecretChecked } from '../../metrics/request-timing';
 import {
   personalAccessToken,
   type SharePermission,
   user,
 } from '../../db/schema';
-import { type ShareReadAhead, sharePermissionSql } from '../sharing/access';
+import { type ActionDeps, logOp } from '../op-log';
+import {
+  type Actor,
+  type ShareReadAhead,
+  sharePermissionSql,
+} from '../sharing/access';
 import type { SessionUser } from './session';
 
 /**
@@ -180,7 +184,6 @@ export type CreateTokenResult =
   | { created: false; reason: 'password-changed' };
 
 export interface NewToken {
-  userId: number;
   kind: TokenKind;
   /** Already trimmed and bounded (TOKEN_NAME_MAX). */
   name: string;
@@ -215,9 +218,11 @@ export interface NewToken {
  * ask on), in the same transaction.
  */
 export function createToken(
-  { db, logger }: { db: Db; logger: Logger },
-  { userId, kind, name, scope, verifiedPassword }: NewToken,
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  { kind, name, scope, verifiedPassword }: NewToken,
 ): Promise<CreateTokenResult> {
+  const { userId } = actor;
   return db.transaction(async (tx) => {
     const [account] = await tx
       .select({ password: user.password })
@@ -239,9 +244,6 @@ export function createToken(
         .set({ revokedAt: new Date() })
         .where(eq(personalAccessToken.id, evictedId));
       tokens = tokens.filter((token) => token.id !== evictedId);
-      logger.info(
-        `User ${userId} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${evictedId}, the least recently used`,
-      );
     }
     const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
     const [row] = await tx
@@ -258,6 +260,13 @@ export function createToken(
         ...scope,
       })
       .returning(listingColumns);
+    logOp(logger, actor, 'token.created', {
+      tokenId: row.id,
+      kind,
+      readOnly: scope.readOnly,
+      ownWardrobeOnly: scope.ownWardrobeOnly,
+      evictedId,
+    });
     return {
       created: true,
       id: row.id,
@@ -275,11 +284,12 @@ export function createToken(
  * is, and a stale tab's second tap is no error page.
  */
 export async function revokeToken(
-  db: Db,
-  userId: number,
+  { db, logger }: ActionDeps,
+  actor: Actor,
   kind: TokenKind,
   id: number,
 ): Promise<boolean> {
+  const { userId } = actor;
   const revoked = await db
     .update(personalAccessToken)
     .set({ revokedAt: new Date() })
@@ -291,6 +301,11 @@ export async function revokeToken(
       ),
     )
     .returning({ id: personalAccessToken.id });
+  logOp(logger, actor, 'token.revoked', {
+    tokenId: id,
+    kind,
+    changed: revoked.length > 0,
+  });
   return revoked.length > 0;
 }
 

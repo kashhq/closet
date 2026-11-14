@@ -460,8 +460,8 @@ describe('agent access tokens', () => {
       const first = await minted(id, 'New phone');
       expect(first.evictedId).toBe(ids[7]);
       expect(await revokedAtOf(ids[7])).not.toBeNull();
-      expect(JSON.stringify(t.logs.records)).toContain(
-        `User ${id} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${ids[7]}, the least recently used`,
+      expect(t.logs.ops('token.created')).toContainEqual(
+        expect.objectContaining({ userId: id, evictedId: ids[7] }),
       );
       expect(JSON.stringify(t.logs.records)).not.toContain(first.token);
 
@@ -555,8 +555,13 @@ describe('agent access tokens', () => {
         '/auth/profile?deviceRevoked=1#devices',
       );
       expect(await revokedAtOf(phone.id)).not.toBeNull();
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `User ${id} revoked device token ${phone.id}`,
+      expect(t.logs.ops('token.revoked')).toContainEqual(
+        expect.objectContaining({
+          userId: id,
+          tokenId: phone.id,
+          kind: 'device',
+          changed: true,
+        }),
       );
       const landed = await t.inject({
         method: 'GET',

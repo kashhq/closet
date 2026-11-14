@@ -65,8 +65,8 @@ export async function mintToken(
     .where(eq(user.id, userId));
   return createToken(
     { db: t.db, logger: t.logger },
+    { userId, surface: kind === 'device' ? 'api' : 'page' },
     {
-      userId,
       kind,
       name,
       scope,

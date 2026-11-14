@@ -5,6 +5,7 @@ import type { WebOptions } from '../plugin';
 import { renderPage } from '../render';
 import { RowId } from '../schemas';
 import { ACCOUNT_LIMIT } from '../security/rate-limit';
+import { actorOf } from '../sharing/access';
 import { viewContext } from '../view-context';
 import {
   createToken,
@@ -128,16 +129,12 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         return refuse({ passwordError: t('WRONG_CURRENT_PASSWORD') });
       }
 
-      const result = await createToken(
-        { db, logger },
-        {
-          userId,
-          kind: 'mcp',
-          name,
-          scope,
-          verifiedPassword: password,
-        },
-      );
+      const result = await createToken({ db, logger }, actorOf(request), {
+        kind: 'mcp',
+        name,
+        scope,
+        verifiedPassword: password,
+      });
       if (!result.created) {
         logger.warn(`Token refused for user ${userId}: ${result.reason}`);
         // The password moved between the check and the mint: ask for the
@@ -147,9 +144,6 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ? refuse({ passwordError: t('agentAccess.PASSWORD_CHANGED') })
           : refuse({ notice: result.reason, tokens: result.tokens });
       }
-      logger.info(
-        `User ${userId} created access token ${result.id} (${scope.readOnly ? 'read-only' : 'read-write'}${scope.ownWardrobeOnly ? ', own wardrobe only' : ''})`,
-      );
       // The only time the token exists in a response: nothing may store it.
       reply.header('Cache-Control', 'no-store');
       return renderPage(
@@ -168,10 +162,13 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     `${TOKENS_PATH}/:id/revoke`,
     { schema: { params: TokenParams } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const { id } = request.params;
-      const revoked = await revokeToken(db, userId, 'mcp', id);
-      logRevoke(userId, 'access token', id, revoked);
+      const revoked = await revokeToken(
+        { db, logger },
+        actorOf(request),
+        'mcp',
+        id,
+      );
       return reply.redirect(`${TOKENS_PATH}?revoked=${revoked ? 1 : 0}`, 303);
     },
   );
@@ -181,29 +178,19 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     `${DEVICES_PATH}/:id/revoke`,
     { schema: { params: TokenParams } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const { id } = request.params;
-      const revoked = await revokeToken(db, userId, 'device', id);
-      logRevoke(userId, 'device token', id, revoked);
+      const revoked = await revokeToken(
+        { db, logger },
+        actorOf(request),
+        'device',
+        id,
+      );
       return reply.redirect(
         `${PROFILE_PATH}?deviceRevoked=${revoked ? 1 : 0}#${DEVICES_SECTION_ID}`,
         303,
       );
     },
   );
-
-  function logRevoke(
-    userId: number,
-    what: string,
-    id: number,
-    revoked: boolean,
-  ) {
-    logger.info(
-      revoked
-        ? `User ${userId} revoked ${what} ${id}`
-        : `User ${userId} found no ${what} ${id} to revoke`,
-    );
-  }
 
   done();
 };
