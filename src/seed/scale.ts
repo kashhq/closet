@@ -29,6 +29,9 @@ export const SCALE_HISTORY_DAYS = 3 * 365;
  */
 const ACQUIRED_SPREAD_DAYS = 180;
 
+/** Outfit draws before the seed gives up: ten per outfit, far past what the demo bible discards. */
+const MAX_OUTFIT_DRAWS = SCALE_OUTFITS * 10;
+
 export function scalePersona(demo: Persona): Persona {
   const garments = grownCloset(demo.garments);
   return {
@@ -92,11 +95,20 @@ function grownOutfits(
   const outfits = [...demo];
   const bases = demo.filter((o) => o.name !== null);
   for (let n = 0; outfits.length < SCALE_OUTFITS; n += 1) {
+    // Draws are discarded (a garment drawn twice, a repeated set), so a
+    // bible whose combinations run out must stop the seed, not hang it.
+    if (n === MAX_OUTFIT_DRAWS) {
+      throw new Error(
+        `The scale persona drew ${n} outfits and found only ${outfits.length} of ${SCALE_OUTFITS} distinct ones: the demo bible's categories no longer have the combinations`,
+      );
+    }
     const base = bases[n % bases.length];
     const garmentIds = base.garmentIds.map((id) => {
       const same = pool.get(byId.get(id)!.fields.category)!;
       return same[Math.floor(random.next() * same.length)];
     });
+    // Two slots of one category (layered tops) may draw the same garment.
+    if (new Set(garmentIds).size < garmentIds.length) continue;
     const key = [...garmentIds].sort().join();
     if (seen.has(key)) continue;
     seen.add(key);

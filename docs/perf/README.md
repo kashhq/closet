@@ -101,7 +101,7 @@ upload's cutout never runs while another step is measured.
 (cd ../pgvault-dev && docker compose up -d --wait)
 npm run audit:pages -- --only '#159' --compare docs/perf/baseline.json
 npm run audit:pages -- --persona scale --only '#164' --compare docs/perf/baseline-scale.json
-make perf-compare             # both personas, whole walk (about 40 minutes, most of it rate limits), on a throwaway Postgres
+make perf-compare             # both personas, whole walk (about 36 minutes, most of it rate-limit waits), on a throwaway Postgres
 ```
 
 A report names its persona, and `--compare` refuses a baseline of the other

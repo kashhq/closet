@@ -196,7 +196,8 @@ ci-metrics:
 
 # The page audit over both personas against their committed baselines (docs/perf/README.md): prints
 # every step whose statements, rows or bytes changed and every time past the noise, and exits 0.
-# For a perf-sensitive PR and the publisher's occasional check; a few minutes each, scale the longer.
+# For a perf-sensitive PR and the publisher's occasional check: about 36 minutes for both, most of it
+# waiting out rate limits (scale's walk is about 18); `npm run audit:pages -- --only` times a few steps.
 # Output under scripts/results/ (gitignored), on a throwaway Postgres.
 perf-compare:
 	@$(PG) up $(PG_CONTAINER) >/dev/null
