@@ -2,7 +2,7 @@
 // They resolve a relative specifier on disk, because `no-restricted-imports` only sees the
 // specifier's text and an import never says `.tsx`. Direct imports only: a view reached through
 // a re-export is not followed. Type-only imports are erased at runtime, so they are not judged.
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -14,13 +14,21 @@ const PAGE_MODULE = /(^|[\\/])(routes|[^\\/]+-routes|[^\\/]+-page)\.tsx$/;
 // Shared view pieces, not a feature's pages (layout/form-page.tsx is FormPage).
 const SHARED_DIRS = new Set(['layout']);
 
+// The exact file first (`./x.tsx`), then the ESM spelling of a TypeScript file (`./x.js` for
+// x.ts or x.tsx), then the extensionless suffixes.
 function resolved(from, specifier) {
   if (!specifier.startsWith('.')) return null;
   const base = resolve(dirname(from), specifier);
-  for (const suffix of SUFFIXES) {
-    if (existsSync(base + suffix)) return base + suffix;
+  const candidates = [base];
+  if (base.endsWith('.js')) {
+    const stem = base.slice(0, -'.js'.length);
+    candidates.push(`${stem}.ts`, `${stem}.tsx`);
   }
-  return null;
+  candidates.push(...SUFFIXES.map((suffix) => base + suffix));
+  return (
+    candidates.find((file) => existsSync(file) && statSync(file).isFile()) ??
+    null
+  );
 }
 
 /** `src/web/<feature>/...` -> the feature's directory name; null for the web root and non-web files. */
