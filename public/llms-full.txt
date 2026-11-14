@@ -9,10 +9,10 @@ Closet is a self-hosted fork of Libre Closet, licensed under the AGPL-3.0. It is
 ## Features
 
 ### Garment catalog
-Each garment has a photo, category, brand, size, colors, washing details, acquisition date and notes. Photos have their background removed on upload and are stored as optimized WebP. Categories are customizable and filterable.
+Each garment has a photo, category, brand, size, colors, washing details, acquisition date and notes. Photos are uploaded to the server, which removes the background (BiRefNet, running server-side) and stores them as optimized WebP; nothing is processed in the browser. Categories are customizable and filterable.
 
-### Outfit builder
-Combine garments into saved outfits with a visual builder.
+### Outfit composer
+Combine garments into saved outfits with a visual composer, with suggested outfits from the garments you own.
 
 ### Outfit calendar
 Schedule outfits on a calendar to plan the week and see what has been worn.
@@ -23,13 +23,23 @@ Share a wardrobe with another user through an invite link, with view-only or edi
 ### Offline-tolerant PWA
 Installs to the home screen and renders cached reads without a connection. Web Push notifications are supported when VAPID keys are configured.
 
-### Multilingual
-English, Italian, French, Russian, German and Spanish.
+### Wears, laundry and trips
+Log what was worn and washed, see what is available, and pack for a trip from a packing list.
+
+### Wishlist and inspiration
+Keep a wishlist of garments to buy and a library of saved looks to recreate from your own wardrobe.
+
+### Agent access
+`/mcp` exposes the wardrobe to Claude and other agents with personal access tokens.
+
+### Language
+English only.
 
 ## Routes
 
-- /wardrobe - garment catalog (the root path redirects here)
-- /outfits - saved outfits and the outfit builder
+- / - Today, the home screen
+- /wardrobe - garment catalog
+- /outfits - saved outfits and the outfit composer
 - /calendar - outfit schedule
 - /about - about and license attribution
 - /auth/login - sign in (always required)
@@ -39,7 +49,7 @@ English, Italian, French, Russian, German and Spanish.
 ```bash
 docker run -d \
   -p 3000:3000 \
-  -v closet_data:/app/data \
+  -v closet_data:/app/data -e DATA_PATH=/app/data \
   -e ACCESS_TOKEN_SECRET="$(openssl rand -hex 32)" \
   -e DATABASE_HOST=<postgres host> -e DATABASE_NAME=closet \
   -e DATABASE_USER=closet -e DATABASE_PASS=<password> \
@@ -53,9 +63,9 @@ characters. See the README for docker-compose and environment variable options.
 
 - **License:** AGPL-3.0
 - **Backend:** Fastify (TypeScript), server-rendered JSX (hono/jsx)
-- **Frontend:** htmx + hyperscript, Tailwind + daisyUI (server-rendered, no client framework)
+- **Frontend:** htmx, Tailwind + daisyUI (server-rendered, no client framework)
 - **Database:** PostgreSQL (Drizzle ORM)
-- **Images:** client-side background removal (ONNX runtime), sharp for WebP
+- **Images:** server-side background removal (BiRefNet on ONNX runtime, in a child process), sharp for WebP; photos are processed on the server, never in the browser
 - **Offline:** Workbox service worker, Web Push
 - **Storage:** local disk
 - **Auth:** JWT session cookie, login always required

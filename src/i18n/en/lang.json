@@ -480,7 +480,7 @@
   "ABOUT_NOTICES": "Third-party notices",
   "ABOUT_NOTICES_DESC": "The fonts, libraries and icons {appName} is built on, with their licences, and the source of the weather data.",
   "ABOUT_TECH": "Technology",
-  "ABOUT_TECH_DESC": "Built with NestJS, HTMX, PostgreSQL, Docker, and ONNX runtime for client-side AI background removal. The progressive web app works offline on desktop and mobile.",
+  "ABOUT_TECH_DESC": "Built with Fastify, server-rendered JSX views and htmx, Drizzle ORM and PostgreSQL, in a Docker image. Background removal runs on the server with the BiRefNet model, so your photos are processed on the server and never in your browser. The progressive web app tolerates being offline on desktop and mobile.",
   "LOGIN_TITLE": "Sign in",
   "LOGIN_OG_TITLE": "Sign In — {appName}",
   "LOGIN_OG_DESC": "Sign in to {appName} to manage your wardrobe, build outfits, and plan looks.",

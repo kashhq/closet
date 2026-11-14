@@ -35,3 +35,13 @@ fi
 while IFS= read -r closet_named; do
   [ -e "$closet_named" ] || docs_fail "AGENTS.md names $closet_named, which does not exist"
 done < <(grep -oE '`[A-Za-z0-9_./-]+/(AGENTS|CLAUDE)\.md`' AGENTS.md | tr -d '`' | sort -u)
+
+# The stack as /about and the llms files tell a stranger it (#641): upstream's claims (NestJS,
+# hyperscript, client-side cutouts) went stale in the rebuild, and photos are processed on the
+# server, which is a privacy fact.
+closet_stale_stack=$(grep -n -i -E 'nestjs|hyperscript|client-side' src/i18n/en/lang.json public/*.txt || true)
+if [ -n "$closet_stale_stack" ]; then
+  while IFS= read -r closet_hit; do
+    docs_fail "stale stack claim (NestJS, hyperscript or client-side): $closet_hit"
+  done <<<"$closet_stale_stack"
+fi

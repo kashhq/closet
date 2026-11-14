@@ -8,18 +8,19 @@ Closet is a self-hosted fork of Libre Closet (AGPL-3.0). It runs as a server-ren
 
 ## Routes
 
+- / - Today, the home screen
 - /wardrobe - garment catalog
-- /outfits - saved outfits and the outfit builder
+- /outfits - saved outfits and the outfit composer
 - /calendar - outfit schedule
 - /about - about and license attribution
 - /auth/login - sign in (always required)
 
 ## Tech Stack
 
-- Fastify (TypeScript), server-rendered JSX (hono/jsx)
-- htmx + hyperscript, Tailwind + daisyUI
+- Fastify 5 (TypeScript), server-rendered JSX (hono/jsx), no client framework
+- htmx, Tailwind + daisyUI
 - PostgreSQL (Drizzle ORM)
-- Client-side background removal (ONNX runtime)
+- Server-side background removal (BiRefNet on ONNX runtime, in a child process); photos are processed on the server, never in the browser
 - Workbox service worker, Web Push
 - Photos stored on local disk
 
