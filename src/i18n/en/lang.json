@@ -1683,6 +1683,7 @@
     "BRAND_REQUIRED": "Name the brand.",
     "SIZE_OR_NOTE": "Add the size you wear there, a note, or both.",
     "BRAND_TAKEN": "You have a row for this brand already: change that one.",
+    "BRAND_DELETED": "This brand note was removed since, so it was not saved again.",
     "YOUR_SIZE": "Your size in {brand}: {size}",
     "BRAND_NOTE": "{brand}: {note}",
     "saved": {
