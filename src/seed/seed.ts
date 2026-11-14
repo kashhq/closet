@@ -68,19 +68,20 @@ import {
 import { saveWeekTemplate } from '../web/week-plan/template';
 import { type ArtSubject, garmentSvg } from './art';
 import {
-  isPersonaKey,
+  isSeedKey,
   loadPersona,
   type Persona,
   PERSONA_KEYS,
-  type PersonaKey,
   type PersonaWeather,
   type SeedGarment,
+  type SeedKey,
   type SeedSizes,
   type SeedWishlistItem,
   slotRank,
 } from './persona';
 import { mirrorSelfieSvg, SELFIE_ROOMS } from './selfie-art';
 import { PLANNED_DAYS, type SimulatedLife, simulate } from './simulate';
+import { scalePersona } from './scale';
 import { forecastDayOf } from './weather';
 import { BY_PERSON } from '../web/write-origin';
 
@@ -803,7 +804,7 @@ export async function linkPersonas(
   deps: SeedDeps,
   personas: Persona[],
 ): Promise<void> {
-  const idOf = async (key: PersonaKey) => {
+  const idOf = async (key: SeedKey) => {
     const persona = personas.find((p) => p.key === key)!;
     return (
       await findUserByEmail(deps.db, normalizeEmail(persona.account.email))
@@ -819,6 +820,14 @@ export async function linkPersonas(
 
 // ---- The command -------------------------------------------------------------
 
+/** Every persona the command knows: the bibles' and the scale one, which `all` leaves out. */
+function loadPersonas(): Persona[] {
+  const bibles = PERSONA_KEYS.map(loadPersona);
+  return [...bibles, scalePersona(bibles.find((p) => p.key === 'demo')!)];
+}
+
+const SEED_KEYS = [...PERSONA_KEYS, 'scale'];
+
 export interface SeedCommand extends SeedDeps {
   /** The arguments after the script name. */
   args: string[];
@@ -828,7 +837,7 @@ export interface SeedCommand extends SeedDeps {
   now: Date;
 }
 
-const USAGE = `Usage: npm run seed -- --persona <${PERSONA_KEYS.join('|')}|all> [--persona ...]
+const USAGE = `Usage: npm run seed -- --persona <${SEED_KEYS.join('|')}|all> [--persona ...]
                      [--reset | --remove] [--anchor YYYY-MM-DD]
                      [--share-with <email>] [--password-stdin] [--token]
 `;
@@ -854,7 +863,7 @@ export async function runSeed(command: SeedCommand): Promise<number> {
 }
 
 interface SeedOptions {
-  personas: PersonaKey[];
+  personas: SeedKey[];
   mode: 'seed' | 'reset' | 'remove';
   anchor?: IsoDate;
   shareWith?: string;
@@ -909,9 +918,9 @@ function modeOf(values: {
 
 // The --persona values as keys (`all` is every one); undefined for none or
 // a name that is not a persona.
-function readPersonas(named: string[]): PersonaKey[] | undefined {
+function readPersonas(named: string[]): SeedKey[] | undefined {
   if (named.includes('all')) return [...PERSONA_KEYS];
-  const keys = [...new Set(named.filter(isPersonaKey))];
+  const keys = [...new Set(named.filter(isSeedKey))];
   return keys.length > 0 && keys.length === new Set(named).size
     ? keys
     : undefined;
@@ -924,7 +933,7 @@ async function seedCommand(
   // Every input is read and checked before the first write, --reset's and
   // --remove's deletions included: a broken bible, an unknown --share-with
   // or a password the rules refuse leaves every persona as it was (#119).
-  const personas = PERSONA_KEYS.map(loadPersona);
+  const personas = loadPersonas();
   const chosen = personas.filter((p) => options.personas.includes(p.key));
   const grantee = await shareTarget(command, options.shareWith, chosen);
   const password =

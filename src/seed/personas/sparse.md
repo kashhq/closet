@@ -12,7 +12,7 @@ below are what the seed writes.
 | Email | sparse@closet.invalid |
 | First name | Dana |
 | Last name | Marsh |
-| Shares with | demo (MANAGE) |
+| Shares with | demo (MANAGE), scale (MANAGE) |
 
 She shared her wardrobe with Theo, MANAGE: "can you sort this out, you like this stuff". The seed makes
 the share whenever both personas exist, whichever was seeded first.

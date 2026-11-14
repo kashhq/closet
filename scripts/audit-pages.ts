@@ -6,7 +6,12 @@ import { parseArgs } from 'node:util';
 import { Client } from 'pg';
 import sharp from 'sharp';
 import { Budgets } from './audit/budget';
-import { createFixture, type Fixture } from './audit/fixture';
+import {
+  AUDIT_PERSONAS,
+  type AuditPersona,
+  createFixture,
+  type Fixture,
+} from './audit/fixture';
 import {
   type AuditReport,
   compareReports,
@@ -39,6 +44,7 @@ import {
  *   --warmup N          untimed runs first (default 3)
  *   --out PREFIX        writes PREFIX.md and PREFIX.json (default scripts/results/audit);
  *                       the app's log goes to scripts/results/<name>.app.log
+ *   --persona NAME      demo (default: 83 garments) or scale (500 garments, 3 years; src/seed/scale.ts)
  *   --only TEXT         only steps whose issue (#159), name or target contains TEXT
  *   --compare FILE      diff this run against a report (PREFIX.compare.md, and stdout)
  *   --explain           EXPLAIN (ANALYZE, BUFFERS) each step's slowest statements (PREFIX.explain.md)
@@ -55,6 +61,7 @@ const OPTIONS = {
   runs: { type: 'string', default: '20' },
   warmup: { type: 'string', default: '3' },
   out: { type: 'string', default: 'scripts/results/audit' },
+  persona: { type: 'string', default: 'demo' },
   only: { type: 'string' },
   compare: { type: 'string' },
   explain: { type: 'boolean', default: false },
@@ -66,6 +73,31 @@ function count(value: string, name: string, minimum: number): number {
     throw new Error(`--${name} must be a whole number of at least ${minimum}`);
   }
   return parsed;
+}
+
+function auditPersona(value: string): AuditPersona {
+  const persona = AUDIT_PERSONAS.find((name) => name === value);
+  if (!persona) {
+    throw new Error(`--persona must be one of ${AUDIT_PERSONAS.join(', ')}`);
+  }
+  return persona;
+}
+
+/** The report to compare against: a run of the same persona, or a refusal. */
+async function readBaseline(
+  file: string,
+  persona: AuditPersona,
+): Promise<AuditReport> {
+  const baseline = parseReport(
+    await readFile(resolve(PROJECT_ROOT, file), 'utf8'),
+    file,
+  );
+  if (baseline.persona !== persona) {
+    throw new Error(
+      `${file} is the ${baseline.persona} persona's run; this is ${persona}'s`,
+    );
+  }
+  return baseline;
 }
 
 function selected(step: Step, only: string | undefined): boolean {
@@ -248,12 +280,10 @@ async function main(): Promise<void> {
   const { values } = parseArgs({ options: OPTIONS, strict: true });
   const runs = count(values.runs, 'runs', 1);
   const warmup = count(values.warmup, 'warmup', 0);
+  const persona = auditPersona(values.persona);
   const out = resolve(PROJECT_ROOT, values.out);
   const baseline = values.compare
-    ? parseReport(
-        await readFile(resolve(PROJECT_ROOT, values.compare), 'utf8'),
-        values.compare,
-      )
+    ? await readBaseline(values.compare, persona)
     : undefined;
   assertUniqueIds(AUDIT_PHASES.flatMap((phase) => phase.steps));
   const phases = AUDIT_PHASES.map((phase) => ({
@@ -262,13 +292,19 @@ async function main(): Promise<void> {
   })).filter((phase) => phase.steps.length > 0);
   if (phases.length === 0) throw new Error(`No step matches "${values.only}"`);
 
-  console.log('Booting dist/ on a scratch database and seeding Theo...');
+  console.log(
+    `Booting dist/ on a scratch database and seeding Theo (${persona})...`,
+  );
   const bootStarted = performance.now();
   await mkdir(dirname(out), { recursive: true });
   // Beside the other runs' output, never in docs/perf/ with a baseline.
   await mkdir(RESULTS, { recursive: true });
   const appLog = join(RESULTS, `${basename(out)}.app.log`);
-  const fixture = await createFixture({ photo: await testPhoto(), appLog });
+  const fixture = await createFixture({
+    persona,
+    photo: await testPhoto(),
+    appLog,
+  });
   console.log(
     `Ready in ${((performance.now() - bootStarted) / 1000).toFixed(1)} s (data in ${fixture.dataPath}).`,
   );
@@ -307,6 +343,7 @@ async function main(): Promise<void> {
     version: REPORT_VERSION,
     createdAt: new Date().toISOString(),
     commit: fixture.build.buildInfo.loadBuildInfo(undefined).release,
+    persona,
     machine: {
       cpus: cpu.length,
       model: cpu[0]?.model.trim() ?? 'unknown',

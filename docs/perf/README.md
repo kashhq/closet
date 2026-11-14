@@ -1,12 +1,41 @@
 # Page performance
 
 `npm run audit:pages` (#157) measures every page, fragment, action, MCP tool
-and background job the page audits name (#158 to #174, epic #156), as the
-demo persona, on the production build. `baseline.md` and `baseline.json` in
-this directory are that run on `main` (last regenerated 2026-09-28 at
-`3c9aa94`, after merging main's photo rotate and garment page changes, load
-average 7.9 rising to 25.4 as other agents' runs started: times from it are
-rough, counts exact); every page PR shows its before and after against them.
+and background job the page audits name (#158 to #174, epic #156), on the
+production build, over one of two seeded personas (#707):
+
+| Persona | Closet | Baseline |
+| --- | --- | --- |
+| `demo` (default) | Theo: 83 garments, 26 outfits, 13 weeks of wears | `baseline.md`, `baseline.json` |
+| `scale` | Theo grown to the 0.1 target: 500 garments, 1,000 outfits, 1,095 days (1,043 worn entries, 4,550 wears), Dana sharing her wardrobe | `baseline-scale.md`, `baseline-scale.json` |
+
+Both baselines are that run on `main` at `08d9927` (2026-11-14, Apple M4
+10 cores, Node 22.23.3; demo: load average 2.6 rising to 8.3, scale: 10.1
+falling to 2.7, other agents' runs sharing the box: times from them are
+rough, counts and bytes exact). Every page PR shows its before and after
+against the one that fits it; a perf-sensitive one against both
+(`make perf-compare`).
+
+**The scale persona** is a generator over demo's bible, not a second bible
+(`src/seed/scale.ts`, `src/seed/AGENTS.md`): demo's rows first and
+unchanged, then clones of its garments and swaps of its outfits' garments
+within a category. `npm run seed -- --persona scale` (never in `--persona
+all`) is deterministic (`scale.spec.ts`; `test/integration/seed.spec.ts`
+for the rows) and took 42 s on this box at load 8 (3 s for demo): the
+generated art of 500 garments is most of it. Seeding is part of the audit's
+"Ready in": 47 s for scale, 6 s for demo.
+
+## The threshold
+
+A **page or fragment read** at scale is over the line when its p50 is above
+**50 ms** (a phone's 100 ms budget is half server), it sends more than
+**15 statements**, or its body is above **256 KB** decompressed (HTML the
+phone parses on every visit). Statements and bytes are exact; a time is
+over only past the noise below. A page over the line is a finding for the
+owner to schedule, not a failing gate: `make perf-compare` prints what
+moved, it does not fail. Writes, MCP tools and jobs are read for their
+statements and times too, but the hashing steps (sign-in, register, change
+password: 220 to 440 ms by design) and the photo pipeline are not pages.
 
 ## What it does
 
@@ -16,8 +45,8 @@ rough, counts exact); every page PR shows its before and after against them.
    error tracking and the order mail on) on a throwaway database on the shared local Postgres
    (`TEST_DATABASE_URL`, default pgvault-dev on :5432) and a temporary
    `DATA_PATH`. The database is dropped at the end, whatever happened.
-2. Seeds Theo (`demo`) and Dana (`sparse`, who shares her wardrobe with
-   Theo) through the seed, anchored on today, runs `ANALYZE` (a production
+2. Seeds Theo (`--persona`, `demo` or `scale`) and Dana (`sparse`, who
+   shares her wardrobe with Theo) through the seed, anchored on today, runs `ANALYZE` (a production
    database has planner statistics; a fresh one guesses), and signs in as
    Theo.
 3. Walks `scripts/audit/steps.ts`: pages over the seed as it is, then the
@@ -41,8 +70,11 @@ Per step it records:
 | KB, Wire KB | The body as the browser reads it, and as sent with `Accept-Encoding: br, gzip` |
 
 The report's last section, **Not walked**, lists route templates and MCP tools no step
-requested. It is empty; a new route should keep it so by joining its audit
-issue's group in `steps.ts`.
+requested. It should be empty; a new route should keep it so by joining its audit
+issue's group in `steps.ts`. At `08d9927` it is not: 148 entries, the `/api/v1` routes
+(#190) and the later pages' fragments, inspiration, the style rules, the
+shopping list and the bulk actions among them (the list is in each baseline's
+`unwalked`; the first baseline of this issue was at 2 before them).
 
 **How SQL is recorded**: `test/support/query-recorder.ts` wraps
 node-postgres's `Client.prototype.query` in the audit's own process, only
@@ -68,7 +100,12 @@ upload's cutout never runs while another step is measured.
 ```bash
 (cd ../pgvault-dev && docker compose up -d --wait)
 npm run audit:pages -- --only '#159' --compare docs/perf/baseline.json
+npm run audit:pages -- --persona scale --only '#164' --compare docs/perf/baseline-scale.json
+make perf-compare             # both personas, whole walk (about 40 minutes, most of it rate limits), on a throwaway Postgres
 ```
+
+A report names its persona, and `--compare` refuses a baseline of the other
+one.
 
 - `--only TEXT` keeps the steps whose issue (`#159`), name or target contains
   TEXT; the rest are skipped (and the Not walked check with them).
@@ -89,6 +126,7 @@ so the next PR compares against the new state:
 
 ```bash
 npm run audit:pages -- --out docs/perf/baseline
+npm run audit:pages -- --persona scale --out docs/perf/baseline-scale
 ```
 
 ## Noise

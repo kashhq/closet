@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check migration-check secrets-check actionlint-check install
+.PHONY: help ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check migration-check secrets-check actionlint-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -57,7 +57,8 @@ E2E_FLOOR := 10
 help:
 	@echo "make ci-deps          — npm ci (patches applied by postinstall)"
 	@echo "make install          — once per checkout or worktree: materialize devkit/, devkit-check, then point core.hooksPath at .githooks"
-	@echo "make ci-quick         — ci-guards, secrets-check, ci-lint, ci-typecheck (the two git hooks split it: scripts/ci/hooks.conf)"
+	@echo "make perf-compare     — the page audit over the demo and scale personas against docs/perf/'s baselines; prints regressions"
+	@echo "make ci-quick        — ci-guards, secrets-check, ci-lint, ci-typecheck (the two git hooks split it: scripts/ci/hooks.conf)"
 	@echo "make ci-guards        — devkit-check, toolchain-check, release-check, workflows-check, actionlint-check, docs-check, layer-check, guard-check, migration-check"
 	@echo "make ci-lint          — prettier format:check, eslint lint:check (both cached), then the changed-file rules"
 	@echo "make ci-typecheck     — tsc over the server (incremental) and views/assets"
@@ -192,6 +193,18 @@ ci-smoke:
 # and origin/main fetched.
 ci-metrics:
 	devkit/bin/metrics_collect.sh check
+
+# The page audit over both personas against their committed baselines (docs/perf/README.md): prints
+# every step whose statements, rows or bytes changed and every time past the noise, and exits 0.
+# For a perf-sensitive PR and the publisher's occasional check; a few minutes each, scale the longer.
+# Output under scripts/results/ (gitignored), on a throwaway Postgres.
+perf-compare:
+	@$(PG) up $(PG_CONTAINER) >/dev/null
+	@trap '$(PG) down $(PG_CONTAINER)' EXIT INT TERM; \
+	  TEST_DATABASE_URL=$$($(PG) url $(PG_CONTAINER)) || exit 1; \
+	  export TEST_DATABASE_URL; \
+	  npm run audit:pages -- --persona demo --compare docs/perf/baseline.json --out scripts/results/audit-demo \
+	    && npm run audit:pages -- --persona scale --compare docs/perf/baseline-scale.json --out scripts/results/audit-scale
 
 metrics-snapshot:
 	devkit/bin/metrics_collect.sh snapshot
