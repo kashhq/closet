@@ -10,6 +10,7 @@ import { BrandMark } from '../layout/brand-mark';
 import { Layout } from '../layout/layout';
 import { ProfileSection } from '../layout/parts';
 import { CopyableText } from '../share/share-button';
+// eslint-disable-next-line closet/no-foreign-page-import -- sharedBy is a share-page helper that is no markup; it moves to share/ with its next change (#718)
 import { sharedBy } from '../share/share-page';
 import type { ViewContext } from '../view-context';
 import type {
