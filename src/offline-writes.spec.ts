@@ -36,6 +36,8 @@ import {
   retryDelayMs,
   routesThroughOutbox,
   showsQueuedWrite,
+  showsSyncedWrite,
+  intentEnding,
   type StoredRecord,
   syncedWritePaths,
   takesDay,
@@ -761,6 +763,33 @@ describe('after a sync, the worker’s refetch', () => {
   );
 });
 
+describe('showsSyncedWrite', () => {
+  it('asks for the server copy of a page that draws any saved write, and of no other', () => {
+    const saved = ['/wardrobe/41/wear', '/trips/7/packed'];
+    expect(showsSyncedWrite(saved, '/trips/7')).toBe(true);
+    expect(showsSyncedWrite(saved, '/laundry')).toBe(true);
+    expect(showsSyncedWrite(saved, '/wardrobe/4')).toBe(false);
+    expect(showsSyncedWrite([], '/trips/7')).toBe(false);
+  });
+});
+
+describe('intentEnding', () => {
+  it('leaves a region that never showed the intent alone, whatever ended it (#876)', () => {
+    for (const end of ['saved', 'failed', 'discarded'] as const) {
+      expect(intentEnding(undefined, end), end).toBe('none');
+      expect(intentEnding('', end), end).toBe('none');
+    }
+  });
+
+  it('puts a failed or discarded intent back, and keeps a saved one as the server’s', () => {
+    for (const mark of ['flipped', 'ticked']) {
+      expect(intentEnding(mark, 'failed'), mark).toBe('revert');
+      expect(intentEnding(mark, 'discarded'), mark).toBe('revert');
+      expect(intentEnding(mark, 'saved'), mark).toBe('confirm');
+    }
+  });
+});
+
 describe('queuedWritesGoneAtClaim', () => {
   it('deletes every other account’s records when the cache gets a new owner, keeping the claimant’s', () => {
     for (const owner of ['7', undefined]) {
@@ -833,6 +862,16 @@ describe('packedCount', () => {
 
   it('ignores a queued record that agrees with the server', () => {
     expect(packedCount(1, [{ served: true, queued: true }])).toBe(1);
+  });
+
+  it('keeps a saved tick’s line once it is folded into the served count (#823)', () => {
+    const waiting = [{ served: false, queued: true }];
+    expect(packedCount(1, waiting)).toBe(2);
+    // endIntent's confirm: the row's served state and the counter's number
+    // take the saved tick; with nothing pending the line stays 2, not 1.
+    const served = packedCount(1, waiting);
+    expect(packedCount(served, [{ served: true, queued: undefined }])).toBe(2);
+    expect(packedCount(1, [{ served: true, queued: undefined }])).toBe(1);
   });
 });
 

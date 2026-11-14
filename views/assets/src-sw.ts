@@ -80,7 +80,6 @@ import {
 } from '../../src/web/inspiration/share-target';
 import {
   OUTBOX_SYNCED,
-  PAGES_RENEWED,
   queuedWritesGoneAtClaim,
   showsQueuedWrite,
   syncedWritePaths,
@@ -1189,11 +1188,10 @@ async function revalidateForPage(
  * the copy, as a warm's does. Marked as the worker's (WARM_REQUEST_HEADER):
  * no person waits on it.
  *
- * Renewing a copy makes a later REVALIDATE_PAGE of it find nothing new, so
- * the worker itself tells every tab it controls which copies changed
- * (PAGES_RENEWED, with the server's markup): a tab showing one swaps it in
- * as a revalidation's (freshness.js). Nothing is told after a drop: those
- * copies are gone, and a session change reloads its pages.
+ * The tabs are told nothing: a page on screen that shows a saved write
+ * fetches its own server copy (outbox:synced, freshness.js), which also
+ * covers the pages this walk cannot renew (never cached, no worker, the
+ * walk stopped; #900).
  */
 async function refetchSyncedPages(
   event: ExtendableMessageEvent,
@@ -1208,52 +1206,18 @@ async function refetchSyncedPages(
       writes.some((write) => showsQueuedWrite(write, url.pathname))
     );
   });
-  const renewed: RenewedPage[] = [];
-  let unchanged = 0;
   const walk = await refetchInTurn(
     due,
-    async (key) => {
-      // Read before the fetch: the refetch's store replaces it.
-      const before = await (await cache.match(key))?.text();
-      const refetched = await refetchCachedPage(event, key, run, 'refetch');
-      if (refetched.verdict === 'stored') {
-        const html = await refetched.answer.text();
-        if (html === before) unchanged += 1;
-        else {
-          renewed.push({
-            url: refetched.url,
-            fragment: refetched.fragment,
-            html,
-            fetchedAt: Date.now(),
-          });
-        }
-      }
-      return refetched;
-    },
+    (key) => refetchCachedPage(event, key, run, 'refetch'),
     () => generation !== run,
   );
-  const told =
-    renewed.length > 0 && generation === run
-      ? await tellRenewedPages(renewed)
-      : 0;
   const summary =
     `${writes.length} synced write(s): ${due.length} cached page(s), ` +
-    `${renewed.length} renewed (${told} tab(s) told), ${unchanged} unchanged, ` +
-    `${walk.removed} removed, ${walk.kept} kept, ${walk.failed} failed`;
+    `${walk.stored} renewed, ${walk.removed} removed, ${walk.kept} kept, ` +
+    `${walk.failed} failed`;
   if (walk.stop) console.info(`[sw] ${summary}, stopped: ${walk.stop}`);
   else console.info(`[sw] ${summary}`);
 }
-
-// What refetchCachedPage tells its walk (refetchInTurn); a stored page
-// carries the answer, for a sync's comparison.
-type Refetched =
-  | {
-      verdict: 'stored';
-      answer: Response;
-      url: string;
-      fragment: boolean;
-    }
-  | Exclude<RefetchStep, { verdict: 'stored' }>;
 
 /**
  * A cached page or `|hx` fragment fetched again by the worker itself (the
@@ -1272,7 +1236,7 @@ async function refetchCachedPage(
   key: Request,
   run: number,
   what: string,
-): Promise<Refetched> {
+): Promise<RefetchStep> {
   const url = pageUrlOfCacheKey(key.url);
   const fragment = url !== key.url;
   const headers: Record<string, string> = { [WARM_REQUEST_HEADER]: '1' };
@@ -1294,7 +1258,7 @@ async function refetchCachedPage(
   const verdict: RefetchVerdict = refetchVerdict(answer);
   switch (verdict) {
     case 'stored':
-      return { verdict, answer, url, fragment };
+      return { verdict };
     case 'deleted':
       return {
         verdict,
@@ -1316,26 +1280,6 @@ async function refetchCachedPage(
       await endFetchedSession(event, run, `${new URL(url).pathname} (${what})`);
       return { verdict, stop: 'signed out' };
   }
-}
-
-/** A copy the refetch renewed, as PAGES_RENEWED carries it. */
-interface RenewedPage {
-  url: string;
-  /** The `|hx` copy: what a URL-pushing fragment's display asks for. */
-  fragment: boolean;
-  html: string;
-  /** When the server's answer arrived (epoch ms). */
-  fetchedAt: number;
-}
-
-/**
- * Every tab this worker controls gets the whole list; each finds what it
- * shows (freshness.js). Returns how many were told.
- */
-async function tellRenewedPages(pages: RenewedPage[]): Promise<number> {
-  const tabs = await self.clients.matchAll({ type: 'window' });
-  for (const tab of tabs) tab.postMessage({ type: PAGES_RENEWED, pages });
-  return tabs.length;
 }
 
 /**

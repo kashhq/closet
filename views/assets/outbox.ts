@@ -64,6 +64,10 @@ import {
   packedCount,
   OUTBOX_MAX_PENDING,
   OUTBOX_SYNCED,
+  OUTBOX_SYNCED_EVENT,
+  intentEnding,
+  type IntentEnd,
+  showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
   queueableKindOf,
@@ -215,14 +219,18 @@ const channel = openOutboxChannel();
 /**
  * A committed write: re-rendered here, announced to the other tabs. Every
  * readwrite transaction goes through it, so no tab shows a store it has
- * not re-read.
+ * not re-read. `reverted` is filled by `work` with the keys it discarded:
+ * their regions are put back before any render can read the records gone
+ * and keep their intents as saved, here at once and in the other tabs with
+ * the same message.
  */
 async function write(
   work: (store: IDBObjectStore) => void,
-  { drain = false } = {},
+  { drain = false, reverted = [] as string[] } = {},
 ): Promise<void> {
   await transact('readwrite', work);
-  channel?.postMessage({ drain } satisfies OutboxChange);
+  revertRegions(reverted);
+  channel?.postMessage({ drain, reverted } satisfies OutboxChange);
   void refresh();
 }
 
@@ -286,22 +294,29 @@ async function isQueued(record: OutboxRecord): Promise<boolean> {
  * A replay's answer applied to its record (`next` in its place, or deleted)
  * only if it is still queued, in one transaction: a newer intent for its
  * key that replaced it while it was in flight must not get the old one
- * back beside it. Whether it was still queued.
+ * back beside it. Whether it was still queued. A `discard` deletes it
+ * unsaved: its regions are put back (write's `reverted`).
  */
 async function settle(
   record: OutboxRecord,
   next?: OutboxRecord,
+  { discard = false } = {},
 ): Promise<boolean> {
   let queued = false;
-  await write((objects) => {
-    const request = objects.getKey(record.id);
-    request.onsuccess = () => {
-      queued = request.result !== undefined;
-      if (!queued) return;
-      if (next) objects.put(next);
-      else objects.delete(record.id);
-    };
-  });
+  const reverted: string[] = [];
+  await write(
+    (objects) => {
+      const request = objects.getKey(record.id);
+      request.onsuccess = () => {
+        queued = request.result !== undefined;
+        if (!queued) return;
+        if (next) objects.put(next);
+        else objects.delete(record.id);
+        if (discard) reverted.push(record.key);
+      };
+    },
+    { reverted },
+  );
   return queued;
 }
 
@@ -409,7 +424,10 @@ const intentOf = (record: OutboxRecord | undefined) =>
 /**
  * A region with a pending record is marked and shows the intent it waits
  * to save; one whose record failed shows the server's state again; one
- * whose record was saved keeps what it shows, now the server's too.
+ * whose record was saved keeps what it shows, now the server's too
+ * (endIntent). A record gone from the store without failing was saved:
+ * a Discard puts its regions back before any render (write's `reverted`),
+ * and a session boundary's deletion leaves the page anyway.
  */
 function renderRegions(records: OutboxRecord[]): void {
   const waiting = new Map(
@@ -428,8 +446,7 @@ function renderRegions(records: OutboxRecord[]): void {
       continue;
     }
     delete region.dataset.outbox;
-    if (failed.has(key)) showServerState(region);
-    delete region.dataset[INTENT_MARK];
+    endIntent(region, failed.has(key) ? 'failed' : 'saved');
   }
 }
 
@@ -458,28 +475,47 @@ function showIntent(region: HTMLElement, record: OutboxRecord): void {
 }
 
 /**
- * A failed record's region back to what the server rendered (the notice
- * says it was not saved): a tick to its markup's `checked`, a flipped
- * control flipped back.
+ * A region whose record is no longer pending, its intent mark gone
+ * (intentEnding: only a region that showed the intent changes). Put back
+ * (failed: the notice says it was not saved; discarded): a tick to its
+ * markup's `checked`, a flipped control flipped back. Saved: a flipped
+ * control already shows the server's state; a tick becomes the row's
+ * served state (`defaultChecked`), and every counter of its section counts
+ * it as served (`data-packed-served`), so renderPackedCounts keeps the
+ * line once nothing is pending instead of the page-load number (#823).
  */
-function showServerState(region: HTMLElement): void {
+function endIntent(region: HTMLElement, end: IntentEnd): void {
   const mark = region.dataset[INTENT_MARK];
-  if (mark === 'ticked') {
-    const checkbox = region.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    );
-    if (checkbox) checkbox.checked = checkbox.defaultChecked;
-  } else if (mark === 'flipped') {
-    flip(region);
+  delete region.dataset[INTENT_MARK];
+  const ending = intentEnding(mark, end);
+  if (ending === 'none') return;
+  const checkbox = region.querySelector<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  if (mark === 'flipped') {
+    if (ending === 'revert') flip(region);
+  } else if (checkbox && ending === 'revert') {
+    checkbox.checked = checkbox.defaultChecked;
+  } else if (checkbox && checkbox.checked !== checkbox.defaultChecked) {
+    for (const counter of region
+      .closest('section')
+      ?.querySelectorAll<HTMLElement>('[data-packed-served]') ?? []) {
+      counter.dataset.packedServed = String(
+        packedCount(Number(counter.dataset.packedServed), [
+          { served: checkbox.defaultChecked, queued: checkbox.checked },
+        ]),
+      );
+    }
+    checkbox.defaultChecked = checkbox.checked;
   }
 }
 
-/** A discarded record's region back to the server's state, its intent mark gone. */
-function revertRegions(key: string): void {
+/** Discarded records' regions back to the server's state (write's `reverted`). */
+function revertRegions(keys: readonly string[]): void {
+  if (keys.length === 0) return;
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    if (regionKey(region) !== key) continue;
-    showServerState(region);
-    delete region.dataset[INTENT_MARK];
+    const key = regionKey(region);
+    if (key !== undefined && keys.includes(key)) endIntent(region, 'discarded');
   }
 }
 
@@ -1086,23 +1122,41 @@ const drain = singleFlight(async (reason: string) => {
       ttlMs: SAVED_TOAST_MS,
     });
   }
-  if (result.saved > 0) refetchSyncedPages(result.savedPaths);
+  if (result.saved > 0) announceSynced(result.savedPaths);
 });
 
 /**
- * The worker refetches its cached copies of the pages that show what was
- * saved (src-sw.ts, OUTBOX_SYNCED), so one reopened offline later shows it,
- * and tells every open tab which changed (PAGES_RENEWED), this one
- * included: freshness.js swaps in the server's copy of a page on screen
- * among them, so its counts and lines are the server's. A failure needs
- * neither: its region is put back here (showServerState). Without a
- * controlling worker there is nothing cached and nobody to tell.
+ * What a sync saved, told to whoever shows it. The worker refetches its
+ * cached copies of the pages that show it (src-sw.ts, OUTBOX_SYNCED), so
+ * one reopened offline later shows it; without a controlling worker there
+ * is nothing cached. Every open tab, this one included, takes the server's
+ * copy of the page on screen when it shows one of them (showSynced), so its
+ * counts and lines are the server's, worker or not. A failure needs none of
+ * it: its region is put back here (endIntent).
  */
-function refetchSyncedPages(paths: string[]): void {
+function announceSynced(paths: string[]): void {
   navigator.serviceWorker?.controller?.postMessage({
     type: OUTBOX_SYNCED,
     paths,
   });
+  channel?.postMessage({ drain: false, synced: paths } satisfies OutboxChange);
+  showSynced(paths);
+}
+
+/**
+ * freshness.js fetches the server's copy of a page that shows a saved
+ * write (OUTBOX_SYNCED_EVENT): the outbox draws only the controls, and the
+ * page's counts and lines ("Worn once", the laundry, a trip's summary) come
+ * with the server's markup.
+ */
+function showSynced(paths: readonly string[]): void {
+  if (!showsSyncedWrite(paths, location.pathname)) return;
+  console.info(
+    `[outbox] ${location.pathname.split('/')[1] || 'today'} shows ${paths.length} saved change(s): asking for the server's copy`,
+  );
+  document.dispatchEvent(
+    new CustomEvent(OUTBOX_SYNCED_EVENT, { detail: { paths } }),
+  );
 }
 
 /**
@@ -1220,8 +1274,8 @@ const arrivals = new BodyArrivals(
  * The day what `element` shows is of, for its day labels: a live answer's
  * own, else the page's (src/page-day.ts's pageDay: the stamp freshness.js
  * keeps on `#freshness`, from the load, the cached copy's arrival or its
- * last revalidation, kept in htmx's history snapshots; else, without a
- * service worker, when the body arrived).
+ * last revalidation, kept in htmx's history snapshots; else, without
+ * freshness.js (PWA_ENABLED off), when the body arrived).
  */
 function pageDayOf(element: Element, timeZone: string): string {
   return (
@@ -1348,11 +1402,14 @@ const actionStore: StuckActionStore<OutboxRecord> = {
       ? (await recordsOf(account)).find((r) => r.id === id)
       : undefined;
   },
-  settle,
+  // Try again puts the cleared copy back; Discard's delete (no `next`) is
+  // the only settle here without one, and leaves the write unsaved.
+  settle: (record, next) => settle(record, next, { discard: !next }),
 };
 
 // A stuck write's notice: Try again clears its count and drains; Discard
-// deletes it and puts its region back to the server's state.
+// deletes it, and its regions go back to the server's state (settle's
+// `discard`, in every tab).
 document.addEventListener('click', (event) => {
   if (!(event.target instanceof Element)) return;
   const retry = event.target.closest('[data-outbox-retry]');
@@ -1387,7 +1444,6 @@ document.addEventListener('click', (event) => {
       } else {
         const record = await discardStuck(actionStore, exclusively, id);
         if (!record) return;
-        revertRegions(record.key);
         console.info(`[outbox] ${name(record)} discarded by the user`);
         announce('textOutboxDiscarded', record);
       }
@@ -1403,7 +1459,10 @@ document.addEventListener('click', (event) => {
 // Another tab wrote: what is shown is re-read; a put is drained here too
 // when this tab can reach the server (the lock keeps it to one drainer).
 channel?.addEventListener('message', (event: MessageEvent<OutboxChange>) => {
+  // Before the re-read, which would take the discarded records for saved.
+  revertRegions(event.data.reverted ?? []);
   void refresh();
+  if (event.data.synced) showSynced(event.data.synced);
   if (event.data.drain) void schedule('another tab');
 });
 

@@ -1,8 +1,9 @@
 /**
  * Installed-app plumbing, loaded by the layout when PWA_ENABLED: service
  * worker registration and the update flow, the freshness indicator of pages
- * served from the worker's cache (freshness.js), warming the wardrobe for
- * offline reading and Web Push on signed-in pages (push.js), the install dialog in a browser tab that can install the app,
+ * served from a cache (freshness.js, with or without a worker), warming the
+ * wardrobe for offline reading and Web Push on signed-in pages (push.js),
+ * the install dialog in a browser tab that can install the app,
  * and pull to refresh for iOS standalone (which has none of its own). Lives
  * in the head so hx-boost body swaps never re-run it; anything that touches
  * the body re-applies itself after a swap. The last two libraries are
@@ -315,10 +316,12 @@ const standalone =
   window.matchMedia('(display-mode: standalone)').matches;
 const signedIn = document.documentElement.hasAttribute('data-signed-in');
 
+// Also without a service worker (an http: origin): history snapshots are
+// cached reads too, and a synced page still takes the server's copy.
+watchFreshness();
 if ('serviceWorker' in navigator) {
   registerServiceWorker();
   announceSessionBoundaries();
-  watchFreshness();
   if (signedIn) warmForOffline();
 }
 if (standalone && signedIn) {

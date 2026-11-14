@@ -1,7 +1,10 @@
 /**
  * The freshness indicator (frontend-pwa.md: reads render from cache with a
- * "last updated" timestamp). Started by pwa.js where there is a service
- * worker.
+ * "last updated" timestamp). Started by pwa.js on every page, with or
+ * without a service worker: htmx's history snapshots and the back-forward
+ * cache are caches too, and a page no worker controls (the HTTP twin, which
+ * has no `navigator.serviceWorker` at all) still takes the server's copy
+ * after a sync.
  *
  * What is on screen came from the network (live: nothing to say) or from a
  * cache: the service worker's (views/assets/src-sw.ts: a tab root opened
@@ -12,10 +15,11 @@
  * A cached page asks the worker to revalidate itself as soon as this script
  * runs (checkDocument), and again whenever the device comes back online
  * while showing one (connectivity:change): the same REVALIDATE_PAGE request
- * every time. Once the outbox has saved queued writes, the worker renews
- * the cached pages that show them and says which (PAGES_RENEWED), so any
- * page on screen among them, live or cached, takes the server's copy the
- * same way. When the server's page differs it is swapped in at once if
+ * every time. Once the outbox has saved queued writes a page on screen
+ * shows (outbox:synced, outbox.js), the page fetches its server copy
+ * itself and takes it the same way, live or cached, controlled or not: the
+ * worker renews only the copies it cached, so asking it would find nothing
+ * new (#900). When the server's page differs it is swapped in at once if
  * the page is untouched (no tap, key or wheel yet, scrolled to the top, no
  * dialog open); otherwise a toast offers it ("Newer version of this page",
  * Refresh), so content never moves under a thumb or a half-typed form. When
@@ -32,9 +36,9 @@ const CACHED_AT_HEADER = 'X-SW-Cached-At';
 // module), for a full navigation a document's own script cannot read any
 // other way (#240).
 const CACHED_AT_TIMING_NAME = 'cache';
-// The worker's list of the copies a sync renewed (src/offline-writes.ts's
-// PAGES_RENEWED, duplicated for the same reason).
-const PAGES_RENEWED = 'PAGES_RENEWED';
+// Queued writes saved that the page shows (src/offline-writes.ts's
+// OUTBOX_SYNCED_EVENT, duplicated for the same reason).
+const OUTBOX_SYNCED_EVENT = 'outbox:synced';
 // Online, a revalidation lands within a few hundred ms: the age waits this
 // long so a copy about to be replaced does not flash it.
 const REVALIDATION_GRACE_MS = 1_000;
@@ -164,6 +168,8 @@ function onRevalidated(id, { outcome, html, fetchedAt }) {
   } else if (outcome === 'updated') {
     console.info(`[freshness] ${path}: newer copy offered`);
     update({ quietUntil: 0 });
+    // One offer at a time: the newest copy replaces an older one's.
+    display.offer?.dismiss();
     display.offer = showToast({
       text: strings().textNewerPage,
       kind: 'info',
@@ -186,9 +192,12 @@ function onRevalidated(id, { outcome, html, fetchedAt }) {
   }
 }
 
-/** Posts to the controlling worker; its answers come back on a port. */
+/**
+ * Posts to the controlling worker; its answers come back on a port.
+ * `navigator.serviceWorker` is undefined without a secure context.
+ */
 function ask(message, onAnswer) {
-  const worker = navigator.serviceWorker.controller;
+  const worker = navigator.serviceWorker?.controller;
   if (!worker) return;
   const channel = new MessageChannel();
   channel.port1.onmessage = (event) => onAnswer(event.data);
@@ -221,6 +230,38 @@ function checkDocument() {
     { type: 'REVALIDATE_PAGE', url: display.url, fragment: false },
     (answer) => onRevalidated(id, answer),
   );
+}
+
+/**
+ * The server's copy of the display, fetched by the page itself (a
+ * fragment's with HX-Request, as its request was), taken as a
+ * revalidation's `updated`: swapped in if untouched, else offered. Only a
+ * 200 HTML answer that was not redirected is a copy of this page; anything
+ * else (unreachable, signed out, an error page) leaves the page as the
+ * outbox drew it, and the next revalidation or load asks again.
+ */
+async function takeServerCopy() {
+  const { id, url, fragment } = display;
+  const path = location.pathname;
+  let html;
+  try {
+    const response = await fetch(url, {
+      headers: fragment ? { 'HX-Request': 'true' } : {},
+      cache: 'no-cache',
+    });
+    const type = response.headers.get('Content-Type') ?? '';
+    if (!response.ok || response.redirected || !type.includes('text/html')) {
+      console.info(
+        `[freshness] ${path}: server copy after a sync answered ${response.status}, kept`,
+      );
+      return;
+    }
+    html = await response.text();
+  } catch (error) {
+    console.info(`[freshness] ${path}: server copy after a sync failed`, error);
+    return;
+  }
+  onRevalidated(id, { outcome: 'updated', html, fetchedAt: Date.now() });
 }
 
 export function watchFreshness() {
@@ -294,23 +335,11 @@ export function watchFreshness() {
   document.addEventListener('connectivity:change', (event) => {
     if (event.detail.state === 'online' && display.fromCache) revalidate();
   });
-  // Queued writes saved (outbox.js, #178): what is on screen shows them only
-  // as the outbox drew them, live or cached; the counts and lines come with
-  // the server's copy. The worker has already stored it (refetchSyncedPages
-  // in src-sw.ts), so asking REVALIDATE_PAGE now would find nothing new: the
-  // copy comes with the message, and is taken as a revalidation's would be.
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type !== PAGES_RENEWED) return;
-    const fragment = display.fragment !== null;
-    const renewed = event.data.pages.find(
-      (page) => page.url === display.url && page.fragment === fragment,
-    );
-    if (!renewed) return;
-    onRevalidated(display.id, {
-      outcome: 'updated',
-      html: renewed.html,
-      fetchedAt: renewed.fetchedAt,
-    });
+  // Queued writes saved that the page shows (outbox.js, #178): what is on
+  // screen shows them only as the outbox drew them; the counts and lines
+  // come with the server's copy, fetched here.
+  document.addEventListener(OUTBOX_SYNCED_EVENT, () => {
+    void takeServerCopy();
   });
 
   setInterval(render, TICK_MS);

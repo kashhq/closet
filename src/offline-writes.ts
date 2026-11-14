@@ -443,18 +443,49 @@ export const REPLAY_TIMEOUT_MS = 15_000;
  * writes (plan section 5): `{ type, paths }`, the saved records' paths. The
  * worker refetches the cached pages that show them (`showsQueuedWrite`), so
  * a page reopened offline later shows the synced state, not the one cached
- * before the tap (views/assets/src-sw.ts, refetchSyncedPages).
+ * before the tap (views/assets/src-sw.ts, refetchSyncedPages). The pages
+ * on screen take the server's copy themselves (OUTBOX_SYNCED_EVENT).
  */
 export const OUTBOX_SYNCED = 'OUTBOX_SYNCED';
 
 /**
- * The worker's answer to every tab it controls once that refetch is done:
- * `{ type, pages: [{ url, fragment, html, fetchedAt }] }`, each cached page
- * (or `|hx` fragment) whose server copy differs from the one it replaced. A
- * tab showing one swaps it in as a revalidation's (public/js/freshness.js,
- * which spells this string itself: it cannot import a TS module).
+ * The document event every tab whose page shows a saved write gets once a
+ * drain (its own or another tab's) saved it: `detail.paths`. freshness.js
+ * (which spells this string itself: it cannot import a TS module) fetches
+ * the page's server copy and takes it as a revalidation's `updated`, so its
+ * counts and lines are the server's whether or not a worker controls the
+ * page, cached it, or could refetch it (#900).
  */
-export const PAGES_RENEWED = 'PAGES_RENEWED';
+export const OUTBOX_SYNCED_EVENT = 'outbox:synced';
+
+/** Whether a page (its pathname) shows any of a sync's saved writes. */
+export function showsSyncedWrite(
+  writePaths: readonly string[],
+  pagePath: string,
+): boolean {
+  return writePaths.some((write) => showsQueuedWrite(write, pagePath));
+}
+
+/** How a record stopped being pending, as the page learns it. */
+export type IntentEnd = 'saved' | 'failed' | 'discarded';
+
+/**
+ * What a region does once its record is no longer pending (outbox.ts,
+ * endIntent): only a region that showed the intent has anything to undo or
+ * keep (#876); one whose markup was already in the record's state shows
+ * the server's and is left alone. A failed or discarded intent is put back
+ * to the server's state (`revert`); a saved one is now the server's state
+ * (`confirm`): a tick becomes the row's served state, and its counter's
+ * served number with it (#823), so the line never falls back to the
+ * page-load count.
+ */
+export function intentEnding(
+  mark: string | undefined,
+  end: IntentEnd,
+): 'none' | 'revert' | 'confirm' {
+  if (mark !== 'flipped' && mark !== 'ticked') return 'none';
+  return end === 'saved' ? 'confirm' : 'revert';
+}
 
 /**
  * Which queued writes go when a page claims the worker's page cache

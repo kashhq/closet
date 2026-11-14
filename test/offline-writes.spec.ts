@@ -210,17 +210,23 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(offlineBanner).toBeVisible();
     await wore.click();
     await expect(banner).toHaveText('2 changes waiting to sync');
-    await page.goto(tripUrl);
-    await expect(offlineBanner).toBeVisible();
-    await page.getByRole('checkbox', { name: /Navy chinos/ }).check();
-    await expect(pendingChips).toHaveCount(1);
-    await expect(banner).toHaveText('3 changes waiting to sync');
-    expect(saved).toEqual([]);
 
     // Reopened offline, the page shows what waits, from the records.
     await page.goto(`/wardrobe/${chinos}`);
     await expect(undo).toBeVisible();
     await expect(pendingChips).toHaveCount(1);
+
+    // The tick is the last tap, and its page stays on screen through the sync.
+    await page.goto(tripUrl);
+    await expect(offlineBanner).toBeVisible();
+    const tick = page.getByRole('checkbox', { name: /Navy chinos/ });
+    const summary = page.locator('#trip-packed-summary');
+    await expect(summary).toContainText('0 of 1 packed');
+    await tick.check();
+    await expect(pendingChips).toHaveCount(1);
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(banner).toHaveText('3 changes waiting to sync');
+    expect(saved).toEqual([]);
 
     // The tee goes meanwhile (elsewhere): its wear cannot be saved.
     expect(
@@ -238,13 +244,27 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(notice).toContainText(
       'Gone tee, Wore today: not saved, it was deleted.',
     );
-    await page.reload();
+    // The synced tick keeps its count (#823: not the page-load 0), and the
+    // page, touched and with no worker to renew it, is offered the server's
+    // copy, which brings the same (#900).
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(tick).toBeChecked();
+    // Marked so the server's copy is told apart from the outbox's drawing.
+    await summary.evaluate((element) => {
+      element.dataset.drawn = '';
+    });
+    await page
+      .locator('#toast-host > div', { hasText: 'Newer version of this page' })
+      .getByRole('button', { name: 'Refresh' })
+      .click();
+    await expect(page.locator('#trip-packed-summary[data-drawn]')).toHaveCount(
+      0,
+    );
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(tick).toBeChecked();
+    await page.goto(`/wardrobe/${chinos}`);
     await expect(undo).toBeVisible();
     await expect(notice).toBeVisible();
-    await page.goto(tripUrl);
-    await expect(
-      page.getByRole('checkbox', { name: /Navy chinos/ }),
-    ).toBeChecked();
 
     // A declined deletion keeps it: the form's own confirm comes after the
     // outbox's hold, which must not have discarded anything yet.
