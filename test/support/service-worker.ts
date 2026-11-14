@@ -87,6 +87,46 @@ export function cachedImages(page: Page): Promise<string[]> {
 }
 
 /**
+ * Every URL Workbox's expiration keeps a row for (its `workbox-expiration`
+ * IndexedDB, one row per URL an ExpirationPlugin saw stored), as
+ * `<cache> <path and query>`. Read only once a row has been written:
+ * opening a database that does not exist yet would create it without its
+ * store, and Workbox's own open would then find no store to write to.
+ */
+export function expirationUrls(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const name = 'workbox-expiration';
+    if (!(await indexedDB.databases()).some((db) => db.name === name)) {
+      return [];
+    }
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open(name);
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error ?? new Error(`open ${name}`));
+    });
+    try {
+      const rows = await new Promise<{ cacheName: string; url: string }[]>(
+        (resolve, reject) => {
+          const all = db
+            .transaction('cache-entries')
+            .objectStore('cache-entries')
+            .getAll();
+          all.onsuccess = () => resolve(all.result);
+          all.onerror = () =>
+            reject(all.error ?? new Error('read cache-entries'));
+        },
+      );
+      return rows.map((row) => {
+        const url = new URL(row.url);
+        return `${row.cacheName} ${url.pathname}${url.search}`;
+      });
+    } finally {
+      db.close();
+    }
+  });
+}
+
+/**
  * The context's pages never post WARM_PAGES (pwa.js, #286), so the worker
  * never warms the wardrobe. For a spec whose cache contents or offline
  * pages are its own visits' alone: a warm running beside it would fill the

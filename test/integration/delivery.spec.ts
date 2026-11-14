@@ -8,6 +8,11 @@ import { PUBLIC_DIR } from '../../src/static-assets';
 import { REPLAY_TIMEOUT_MS } from '../../src/offline-writes';
 import { createGarment, jpegPhoto, uploadPhoto } from './garments';
 import { HEALTH_LIMIT } from '../../src/web/security/rate-limit';
+import { LIVE_HEADER, LIVE_VALUE } from '../../src/web/health/routes';
+import {
+  LIVE_HEADER as CLIENT_LIVE_HEADER,
+  LIVE_VALUE as CLIENT_LIVE_VALUE,
+} from '../../public/js/live-answer.js';
 import {
   createTestApp,
   PWA_ENV,
@@ -219,6 +224,25 @@ describe('delivery (PWA_ENABLED=true)', () => {
         expect(res.body).toBe('');
       },
     );
+
+    // A captive portal's 200 is not this server (#731): the heartbeat's
+    // verdict (public/js/live-answer.js) asks for the route's own header,
+    // in the spelling the route sends.
+    it("marks /health/live as the server's own, as the heartbeat checks", async () => {
+      expect([LIVE_HEADER, LIVE_VALUE]).toEqual([
+        CLIENT_LIVE_HEADER,
+        CLIENT_LIVE_VALUE,
+      ]);
+      for (const method of ['HEAD', 'GET'] as const) {
+        const res = await t.inject({
+          method,
+          url: '/health/live',
+          headers: uniqueClient(),
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.headers[LIVE_HEADER.toLowerCase()]).toBe(LIVE_VALUE);
+      }
+    });
 
     it('limits /health/ready and /healthz together per address, never /health/live', async () => {
       const client = uniqueClient();

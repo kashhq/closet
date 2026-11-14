@@ -59,6 +59,7 @@ function importMap(version: string) {
       push: `/js/push.js${v}`,
       freshness: `/js/freshness.js${v}`,
       'age-label': `/js/age-label.js${v}`,
+      'live-answer': `/js/live-answer.js${v}`,
       'single-flight': `/js/single-flight.js${v}`,
       'select-count': `/js/select-count.js${v}`,
       'recap-export': `/js/recap-export.js${v}`,
