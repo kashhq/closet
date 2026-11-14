@@ -279,7 +279,9 @@
    4rem with pt-20 (the bar and a 1rem gutter), or pt-16 when their first
    row sits flush under it (the Wardrobe tabs). */
 /* The app bar's height, once: the bar's own and what a bar sticky between it
-   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). */
+   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). It is
+   in rem, so it grows with the text size like the pages' pt-20 and the
+   two-line title clamp it holds (#1028): at 100% text nothing differs. */
 :root {
   --app-bar-h: 4rem;
 }
@@ -298,12 +300,17 @@
 /* Keyboard focus and scripted scrolling stop short of the fixed bars: a
    focused control is scrolled into view clear of the app bar and, where the
    dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
-   the rail, and on a page without one). */
+   the rail, and on a page without one), and of an action bar fixed above it
+   (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, which grows with the
+   text like the rest in rem; the sticky bar in Styling's flow needs none). */
 html {
   scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
 }
 :root:has(.dock) {
   scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
+}
+:root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
+  scroll-padding-bottom: calc(var(--spacing-dock) + 3.5rem + 0.5rem);
 }
 
 /* Below the rail, the dock's labels give way when the text is too large for
