@@ -23,9 +23,9 @@ import {
  * src/web/health/AGENTS.md). Public, static paths (static-prefixes.ts: no
  * session, no access line), `no-store` so no cache answers for the server.
  *
- * - GET /health/live checks nothing: 200 while the process serves.
- *   public/js/connectivity.js probes it with HEAD, so the offline banner
- *   never says "offline" because a dependency is down.
+ * - GET /health/live checks nothing: 200 while the process serves, with
+ *   LIVE_HEADER. public/js/connectivity.js probes it with HEAD, so the
+ *   offline banner never says "offline" because a dependency is down.
  * - GET /health/ready runs the checks (checks.ts): 200 up, 503 down.
  *   The image's HEALTHCHECK, scripts/smoke-image.sh and devkit's
  *   contract probe read it. Rate-limited (HEALTH_LIMIT).
@@ -33,6 +33,15 @@ import {
  *   whose cached connectivity.js still HEADs it (Fastify answers HEAD
  *   from the GET route, without the body).
  */
+/**
+ * Says an answer is this server's /health/live (#731): connectivity.js's
+ * heartbeat counts a 2xx as online only with it (public/js/live-answer.js,
+ * whose constants test/integration/delivery.spec.ts holds equal to these),
+ * so a captive portal's own 200 on the plain-HTTP twin is not online.
+ */
+export const LIVE_HEADER = 'X-Closet-Live';
+export const LIVE_VALUE = 'up';
+
 export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   app,
   { config, db, logger, jobs, cutouts, photos, proxyWatch, orderMailWatch },
@@ -60,7 +69,10 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
     '/health/live',
     { config: { public: true } },
     async (_request, reply) =>
-      reply.header('Cache-Control', 'no-store').send({ status: 'up' }),
+      reply
+        .header('Cache-Control', 'no-store')
+        .header(LIVE_HEADER, LIVE_VALUE)
+        .send({ status: 'up' }),
   );
 
   const ready = async (request: FastifyRequest, reply: FastifyReply) => {

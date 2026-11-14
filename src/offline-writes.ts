@@ -104,6 +104,14 @@ export function queueableKindOf(path: string): QueueableKind | undefined {
  */
 export const REPLAY_HEADER = 'X-Closet-Queued';
 
+/**
+ * The server's word on a replay (answerReplay, replayRefused in
+ * src/web/offline-writes.ts): `changed` or `unchanged` on its 204, the
+ * refusal's reason on a 409. The outbox takes a 204 for saved only with it
+ * (replayVerdict).
+ */
+export const OUTCOME_HEADER = 'X-Closet-Outcome';
+
 /** Whether a request is a replay, from Node's lower-cased headers. */
 export function isReplayRequest(
   headers: Record<string, string | string[] | undefined>,
@@ -347,7 +355,9 @@ export function reasonTextName(reason: ReplayFailure | undefined): string {
 }
 
 /**
- * A replay's answer (src/web/offline-writes.ts): 204 saved, 401 signed out,
+ * A replay's answer (src/web/offline-writes.ts): 204 saved when it carries
+ * `X-Closet-Outcome: changed | unchanged` (answerReplay; a 204 without it
+ * is not ours, a captive portal's, and is retried as unreachable), 401 signed out,
  * 404 gone (a deleted garment, entry or trip), 410 saved (a queued wear's
  * client id names a wear that landed and was deleted since, #196a: the tap
  * was saved once and a later write undid it), a 409 refused for the reason
@@ -362,8 +372,15 @@ export function replayVerdict(
   status: number,
   outcome: string | null,
 ): ReplayVerdict {
-  if (status === 204)
-    return { verdict: 'saved', changed: outcome === 'changed' };
+  if (status === 204) {
+    // Only the replay contract's own 204 is saved: a captive portal or an
+    // intercepting proxy on the plain-HTTP twin answers 204 too, and taking
+    // that for saved would drop the record (#731).
+    if (outcome === 'changed' || outcome === 'unchanged') {
+      return { verdict: 'saved', changed: outcome === 'changed' };
+    }
+    return UNAVAILABLE;
+  }
   if (status === 409 && isRefusal(outcome)) {
     return { verdict: 'failed', reason: outcome };
   }

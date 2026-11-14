@@ -68,6 +68,7 @@ import {
   type QueueableKind,
   queueableKindOf,
   reasonTextName,
+  OUTCOME_HEADER,
   REPLAY_HEADER,
   REPLAY_TIMEOUT_MS,
   type ReplayFailure,
@@ -942,10 +943,7 @@ async function send(record: OutboxRecord, url: URL): Promise<ReplayVerdict> {
         'Idempotency-Key': record.id,
       },
     });
-    return replayVerdict(
-      response.status,
-      response.headers.get('X-Closet-Outcome'),
-    );
+    return replayVerdict(response.status, response.headers.get(OUTCOME_HEADER));
   } catch {
     if (controller.signal.aborted) {
       console.info(

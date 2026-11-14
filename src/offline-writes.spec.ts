@@ -302,6 +302,10 @@ describe('replayVerdict', () => {
   it.each([
     [204, 'changed', { verdict: 'saved', changed: true }],
     [204, 'unchanged', { verdict: 'saved', changed: false }],
+    // A captive portal's or a proxy's 204 (#731): no outcome of the
+    // contract, so not saved; retried without counting toward stuck.
+    [204, null, { verdict: 'retry', cause: 'unreachable' }],
+    [204, 'too-old', { verdict: 'retry', cause: 'unreachable' }],
     [401, null, { verdict: 'signed-out' }],
     // The login redirect, opaque under `redirect: 'manual'`: kept for the
     // sign-in, never failed.

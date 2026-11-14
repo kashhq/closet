@@ -1,7 +1,8 @@
 import { expect, test } from './support/fixtures';
-import { CACHED_AT_TIMING_NAME } from '../src/web/page-cache';
+import { CACHED_AT_TIMING_NAME, PAGES_CACHE } from '../src/web/page-cache';
 import { signIn } from './support/e2e-session';
 import {
+  cachedPaths,
   cachePage,
   waitForServiceWorker,
   withoutWarming,
@@ -124,6 +125,20 @@ test.describe('installed app delivery', () => {
     const saved = page.locator('main').getByRole('link');
     await expect(saved).toHaveText(['Wardrobe', 'Outfits']);
     await expect(page.locator('#connectivity-banner')).toBeHidden();
+    await context.setOffline(false);
+
+    // A quota error purges the pages cache whole, the offline page with it
+    // (purgeOnQuotaError). The next page stored online warms it again
+    // (ensureOfflinePage, #731), so an unvisited page offline is still the
+    // offline page, not the browser's error.
+    await page.evaluate((name) => caches.delete(name), PAGES_CACHE);
+    await cachePage(page, '/outfits');
+    await expect.poll(() => cachedPaths(page)).toContain('/offline.html');
+    await context.setOffline(true);
+    await page.goto('/calendar');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Offline' }),
+    ).toBeVisible();
     await context.setOffline(false);
   });
 });

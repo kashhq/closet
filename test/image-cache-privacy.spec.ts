@@ -12,6 +12,7 @@ import {
   cachedImages,
   cachedPaths,
   cachePage,
+  expirationUrls,
   networkSwitch,
   waitForServiceWorker,
   withoutWarming,
@@ -144,6 +145,16 @@ test.describe('the image cache belongs to one session', () => {
     await cachePage(page, '/wardrobe');
     const photos = await photoUrls(page);
     await cacheImages(page, photos);
+    // Workbox's expiration keeps a row per stored URL (its own IndexedDB):
+    // the first account's photos and its garment's page are there now.
+    await cachePage(page, `/wardrobe/${garmentId}`);
+    const firstRows = [
+      ...photos.map((url) => `images-v2 ${url}`),
+      `pages-v2 /wardrobe/${garmentId}`,
+    ];
+    await expect
+      .poll(() => expirationUrls(page))
+      .toEqual(expect.arrayContaining(firstRows));
 
     // A selfie is its owner's alone: the worker keeps none, neither its
     // <img> loads nor the photo opened as a document, which is no page and
@@ -198,6 +209,11 @@ test.describe('the image cache belongs to one session', () => {
       expect(leftAtPost).toBeUndefined();
     });
     await expect.poll(() => cachedAnywhere(page, photos)).toEqual([]);
+    // The drop forgets those rows with the caches (#731): no URL of the
+    // first account outlives its session on the device.
+    expect(
+      (await expirationUrls(page)).filter((row) => firstRows.includes(row)),
+    ).toEqual([]);
 
     await network('offline');
     const everything = [...photos, ...selfies];

@@ -10,6 +10,7 @@
  * toast when the server answers again. Loaded by the layout on every page,
  * with or without a service worker.
  */
+import { isLiveAnswer } from 'live-answer';
 import { singleFlight } from 'single-flight';
 import { showToast } from 'toast';
 
@@ -138,14 +139,15 @@ async function serverReachable() {
     // /health/live checks nothing, so a down dependency is never shown as
     // "offline" (src/web/health). HEAD, not GET: an unread body keeps the
     // request open until the abort signal fires, 5 s per probe
-    // (Playwright's networkidle waited on it).
+    // (Playwright's networkidle waited on it). Only an answer with the
+    // route's own header counts: a captive portal's 200 is not online.
     const res = await fetch('/health/live', {
       method: 'HEAD',
       cache: 'no-store',
       credentials: 'omit',
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    return res.ok;
+    return isLiveAnswer(res);
   } catch {
     return false;
   }
