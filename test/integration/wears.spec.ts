@@ -616,7 +616,7 @@ describe('wears and washes', () => {
 
     it('prompts the owner from the wardrobe when something needs a wash', async () => {
       const grid = await t.inject({ method: 'GET', url: '/wardrobe' });
-      expect(grid.body).toMatch(/\d+ garments need a wash/);
+      expect(grid.body).toMatch(/\d+ to wash/);
       expect(grid.body).toContain('href="/laundry"');
     });
 

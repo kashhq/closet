@@ -19,6 +19,9 @@ import { pageErrors } from './support/page-errors';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+/** The 64 px app bar, the tabs, the scope row and a chip row (measured ~230 px); the six-row layout put the grid near 300. */
+const CHROME_BEFORE_GRID_PX = 250;
+
 /** The page's htmx, for its config (src/web/layout/layout.tsx, HTMX_CONFIG). */
 interface HtmxWindow {
   htmx: { config: { timeout: number } };
@@ -124,7 +127,7 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   });
   await page.locator('.dock a[href="/wardrobe"]').click();
   await expect(page).toHaveURL(/\/wardrobe$/);
-  await expect(page.getByText('1 garment needs a wash')).toBeVisible();
+  await expect(page.getByText('1 to wash')).toBeVisible();
   expect(
     await page.evaluate(
       () => 'survivor' in document.getElementById('toast-host')!,
@@ -133,10 +136,18 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await expect(toast).toContainText(text('wear.status.WORE_TODAY'));
 
   // The wardrobe prompts the laundry; Mark washed empties the hamper.
-  await expect(page.getByText('1 garment needs a wash')).toBeVisible();
+  await expect(page.getByText('1 to wash')).toBeVisible();
+  // Chrome stays slim (#732): the app bar, tabs, scope row and one chip row,
+  // no weather line and one banner each, so the first garment starts within
+  // CHROME_BEFORE_GRID_PX of the top of the screen at 390 px.
+  const firstTile = await page
+    .locator('#wardrobe-grid > *')
+    .first()
+    .boundingBox();
+  expect(firstTile!.y).toBeLessThanOrEqual(CHROME_BEFORE_GRID_PX);
   await page
     .locator('#wardrobe-main')
-    .getByRole('link', { name: 'Laundry' })
+    .getByRole('link', { name: '1 to wash' })
     .click();
   await expect(
     page

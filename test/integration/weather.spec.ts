@@ -517,19 +517,8 @@ describe('weather', () => {
 
       const wardrobe = await t.inject({ method: 'GET', url: '/wardrobe' });
       expectFullPage(wardrobe);
-      expect(wardrobe.body).toContain('hx-get="/weather/summary"');
-      // Filtering swaps #wardrobe-main alone; the line sits outside it.
-      const fragment = await t.inject({
-        method: 'GET',
-        url: '/wardrobe?category=tops',
-        headers: HX_FRAGMENT,
-      });
-      expect(fragment.body).not.toContain('/weather/summary');
-      const selecting = await t.inject({
-        method: 'GET',
-        url: '/wardrobe?select=1',
-      });
-      expect(selecting.body).not.toContain('/weather/summary');
+      // The catalog has no weather line (#732).
+      expect(wardrobe.body).not.toContain('/weather/summary');
     });
 
     // #158: Today is the day's own data (network first, not a byte-stable

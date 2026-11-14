@@ -90,7 +90,7 @@ describe('tagging mode', () => {
     const res = await t.inject({ method: 'GET', url: '/wardrobe' });
     expectNoRawI18nKeys(res);
     // Tote, Heavy tee, Blank tee; not the tagged or the archived one.
-    expect(res.body).toContain('3 garments need details');
+    expect(res.body).toContain('3 to tag');
     expect(res.body).toContain('href="/wardrobe/tag"');
   });
 
@@ -352,6 +352,6 @@ describe('tagging mode', () => {
     expectNoRawI18nKeys(res);
     expect(res.body).toContain('Every garment has its details.');
     const wardrobe = await t.inject({ method: 'GET', url: '/wardrobe' });
-    expect(wardrobe.body).not.toContain('need details');
+    expect(wardrobe.body).not.toContain('to tag');
   });
 });
