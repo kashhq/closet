@@ -11,7 +11,7 @@ import type { WebOptions } from '../plugin';
 import { renderPage } from '../render';
 import { viewContext } from '../view-context';
 import { InsightsPage } from './insights-page';
-import { readInsights, readRecap } from './queries';
+import { readDefaultRecap, readInsights, readRecap } from './queries';
 import { RecapPage } from './recap-page';
 import { recapPeriod, recapYear } from './recap-period';
 import { INSIGHTS_PATH, RECAP_PATH } from './urls';
@@ -76,11 +76,18 @@ export const insightsRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const userId = sessionUserId(request);
       const today = todayIn(config.timeZone, new Date());
-      const period = recapPeriod(recapYear(request.query.year, today), today);
       const started = performance.now();
-      const recap = await readRecap(db, userId, period);
+      // Without ?year= the page opens on the latest year worth recapping.
+      const recap =
+        request.query.year === undefined
+          ? await readDefaultRecap(db, userId, today)
+          : await readRecap(
+              db,
+              userId,
+              recapPeriod(recapYear(request.query.year, today), today),
+            );
       logger.debug(
-        `Recap ${period.year} for user ${userId}: ${recap.wears} wear(s), ${recap.piecesWorn} piece(s), ${recap.additions.count} added in ${Math.round(performance.now() - started)} ms`,
+        `Recap ${recap.period.year} for user ${userId}: ${recap.wears} wear(s), ${recap.piecesWorn} piece(s), ${recap.additions.count} added in ${Math.round(performance.now() - started)} ms`,
       );
       return renderPage(
         reply,

@@ -804,6 +804,7 @@
   "PRODUCT_LINK": "Product link",
   "PRODUCT_LINK_PLACEHOLDER": "https://… the page you bought it from",
   "PRICE": "Price",
+  "PRICE_PER_PIECE": "Price per piece",
   "PRICE_PLACEHOLDER": "e.g. 49.90",
   "VIEW_PRODUCT": "View product",
   "linkImport": {

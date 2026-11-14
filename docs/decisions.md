@@ -1372,3 +1372,9 @@ Consequence: a score input that reads more of a layer joins `layerKinds`' key. T
 **Why:** upstream's Title Case, "Login"/"Logout" and three meanings each of Style and Closet made the app read as two products.
 **Decision:** sentence case; Sign in / Sign out / Create account; Wardrobe is the section and what is shared, Closet the garments you own (as against the wishlist), "All garments" the unscoped capsule scope, Styling the composer, Style profile the taste profile (`docs/conventions.md#copy`). The nouns follow the nav and the sharing copy; "closet" stays in running prose about what you own.
 **Consequence:** `src/i18n/copy-voice.spec.ts` fails a Title Case label outside its proper-noun allowlist and any Login/Logout/Register. The garment form shows a category through its label (`Tops`), and the server still stores it lower case.
+
+## 2026-11-14 — The recap opens on a year worth recapping; price is per piece (#733)
+
+**Why:** on January 1 the Year in review opened on the new year's empty state; and the demo's socks row held the 6-pack's price ($105) in a field that insights multiplies by quantity, overstating Theo's closet by $525.
+**Decision:** `GET /wardrobe/recap` without `?year=` reads this year, and only if it has fewer than `RECAP_MIN_WEARS` one more statement for the latest earlier year that has enough (`readDefaultRecap`); an explicit `?year=` and the API keep their year. `price` stays per piece (insights' `totalCost` was right); the bible row is $17.50, and the garment form labels the field "Price per piece" when quantity > 1 (server-rendered from the saved quantity).
+**Consequence:** the scale persona, derived from the demo bible, has a closet value $525 lower per demo-derived copy; its committed baselines were not regenerated here.
