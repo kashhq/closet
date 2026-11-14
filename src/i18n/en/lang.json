@@ -67,6 +67,8 @@
   "SERVER_BUSY": "Closet is busy right now. Try again in a moment.",
   "WEAR_DELETED": "This wear was removed since, so it was not saved again.",
   "WEAR_CLIENT_ID_TAKEN": "This saved wear was already used for another garment.",
+  "CAPSULE_DELETED": "This capsule was removed since, so it was not saved again.",
+  "TRIP_DELETED": "This trip was removed since, so it was not saved again.",
   "GARMENT_DELETED": "This garment was removed since, so it was not saved again.",
   "REQUEST_ID": "Request ID",
   "RETURN_TO_HOME": "Return to Home",
@@ -1683,6 +1685,7 @@
     "BRAND_REQUIRED": "Name the brand.",
     "SIZE_OR_NOTE": "Add the size you wear there, a note, or both.",
     "BRAND_TAKEN": "You have a row for this brand already: change that one.",
+    "BRAND_DELETED": "This brand note was removed since, so it was not saved again.",
     "YOUR_SIZE": "Your size in {brand}: {size}",
     "BRAND_NOTE": "{brand}: {note}",
     "saved": {
