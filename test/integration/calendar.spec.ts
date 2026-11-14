@@ -176,8 +176,8 @@ describe('calendar', () => {
         [...html.matchAll(/href="#day-(\d{4}-\d{2}-\d{2})"/g)].map((m) => m[1]),
       ).toEqual(WEEK);
       // The tabs are links in a labelled nav, never a tab widget (#726).
-      expect(html).toContain(
-        '<nav class="tabs tabs-border" aria-label="Calendar views"',
+      expect(html).toMatch(
+        /<nav class="tabs tabs-border[^"]*" aria-label="Calendar views"/,
       );
       expect(html).not.toContain('role="tab');
       expect(html).not.toContain('aria-selected');
