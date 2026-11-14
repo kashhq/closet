@@ -56,7 +56,7 @@ export function CapsulesPage(props: {
           <ul class="flex flex-col gap-6" id="capsule-list">
             <CapsuleEntry
               href={wardrobeUrl(viewOwner)}
-              name={t('CLOSET')}
+              name={t('ALL_GARMENTS')}
               count={model.closet.count}
               strip={model.closet.strip}
             />

@@ -17,7 +17,7 @@ export function CalendarTabs({ active }: { active: CalendarTab }) {
   return (
     <LinkTabs
       active={active}
-      class="tabs tabs-box tabs-sm mb-4"
+      label={t('NAV_CALENDAR_VIEWS')}
       tabs={[
         { name: 'week', href: CALENDAR_PATH, label: t('calendar.TAB_WEEK') },
         {

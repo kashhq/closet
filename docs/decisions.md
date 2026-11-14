@@ -1362,8 +1362,18 @@ Why: at 500 garments "Edit an outfit", "Style this" and Shuffle sent 315 to 411 
 Decision: `roleWindowsSql` reads a role's first page and a page either side of each chosen garment; a deep window gets a leading sentinel (`GET /styling/garments?after=`) and snap-strip.js keeps the chosen item in place when a page lands before it (the strip's new contract). The generator scores each kind of layer once per base and draws the rotation order only until the best passing layer turns up, which gives the pinned output exactly. A resume cursor was rejected: a page past what fits needs every draw judged (the near misses are sorted), and the sentinel, API and MCP would each have carried it.
 Consequence: a score input that reads more of a layer joins `layerKinds`' key. The anchor is put back at `htmx:afterSwap`, never `htmx:load` (after htmx's settle delay, too late), and a newer page arriving mid-scroll waits for `scrollend`, so the instant scroll back never cuts a fling short.
 
+## 2026-11-14 — Section tabs are one nav, one look, readable (#726)
+
+**Why:** `LinkTabs` took its class from callers (underline on Wardrobe, boxed on Outfits and Calendar, left edges 8 px apart), daisyUI dimmed inactive tabs to 3.4-4:1, and `role=tablist` promised a widget the links are not.
+**Decision:** `LinkTabs` renders `<nav class="tabs tabs-border mb-4 px-4" aria-label>` with `aria-current="page"` and takes no class; `main.css` (`@layer utilities`) sets the inactive `.tabs-border > a.tab` to `--color-muted`. A bar needs a `label` (distinct where a page has two: Saved's list tabs). `PageSentinel` is presentational inside a listbox strip (`inListbox`) and elsewhere is a bare spinner (`aria-hidden`, no live region: `#toast-host` is the one polite region).
+**Consequence:** `test/support/tab-contrast.ts` (called from `screenshots.spec.ts`' `shot`, light and dark) asserts 4.5:1 on every inactive tab. `LinkTabs` owns the spacing (`mb-4 px-4`) once for every bar; callers add no wrapper.
+
+## 2026-11-14 — One copy voice, held by a spec over lang.json (#729)
+**Why:** upstream's Title Case, "Login"/"Logout" and three meanings each of Style and Closet made the app read as two products.
+**Decision:** sentence case; Sign in / Sign out / Create account; Wardrobe is the section and what is shared, Closet the garments you own (as against the wishlist), "All garments" the unscoped capsule scope, Styling the composer, Style profile the taste profile (`docs/conventions.md#copy`). The nouns follow the nav and the sharing copy; "closet" stays in running prose about what you own.
+**Consequence:** `src/i18n/copy-voice.spec.ts` fails a Title Case label outside its proper-noun allowlist and any Login/Logout/Register. The garment form shows a category through its label (`Tops`), and the server still stores it lower case.
+
 ## 2026-11-14 — An operation logs once, in its domain action, as an op with fields (#712)
 Why: each door formatted the same outcome by hand (`Trip 5 outfit 9 worn by user 2 ...; API`, `(MCP)`), so a Loki query for one operation needed three patterns, the ids sat in prose, and a new door meant a new template.
 Decision: `Actor` carries `surface` (`actorOf(request)` from `surfaceOf`, `actorOf(ctx)` `mcp`); a write action takes `{ db, logger }` (`ActionDeps`) and ends with `logOp` (`src/web/op-log.ts`): `{ op, userId, surface, ...ids }`, the op its message, named `<entity>[.<part>].<past participle>`, a no-op the same op with `changed: false`. Trips and calendar converted; a replay is the queued-write hook's own line. A `logger` on the Actor was rejected: it is identity, spec'd with `toEqual`, and built where no logger is.
 Consequence: `guards.conf [op-logs]` bans `logger.info` in `api-routes.ts` and `mcp/tools`, 21 files and 81 calls in its shrink-only `known` lines, converted by the recipe in docs/conventions.md#logging. Specs read `t.logs.ops(op)`.
-

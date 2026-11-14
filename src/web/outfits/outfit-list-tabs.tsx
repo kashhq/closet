@@ -11,7 +11,7 @@ export function OutfitListTabs(props: { list: OutfitList; href: string }) {
   return (
     <LinkTabs
       active={props.list}
-      class="tabs tabs-border tabs-sm mx-2"
+      label={t('NAV_OUTFIT_LISTS')}
       tabs={[
         {
           name: 'kept',

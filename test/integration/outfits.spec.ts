@@ -221,7 +221,7 @@ describe('outfits', () => {
 
       const empty = await createOutfit({}, []);
       expect(await savedSlots(empty)).toEqual([]);
-      // A blank name is no name: the pages say "Untitled Outfit".
+      // A blank name is no name: the pages say "Untitled outfit".
       expect((await outfitRow(empty)).name).toBeNull();
     });
 

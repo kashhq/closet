@@ -75,7 +75,6 @@ export function SavedOutfitButtons(props: {
           href={props.more}
           trigger="revealed"
           marker="picker"
-          label={t('outfits.LOADING_MORE')}
         />
       )}
     </>

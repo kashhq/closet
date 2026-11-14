@@ -68,7 +68,7 @@ characters. See the README for docker-compose and environment variable options.
 - **Images:** server-side background removal (BiRefNet on ONNX runtime, in a child process), sharp for WebP; photos are processed on the server, never in the browser
 - **Offline:** Workbox service worker, Web Push
 - **Storage:** local disk
-- **Auth:** JWT session cookie, login always required
+- **Auth:** JWT session cookie, signing in always required
 - **Deploy:** Docker image on GHCR
 
 ## Links

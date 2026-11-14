@@ -578,7 +578,6 @@ export function GarmentTiles(props: {
           })}
           trigger="revealed"
           marker="wardrobe"
-          label={t('LOADING_MORE')}
         />
       )}
     </>
@@ -911,7 +910,9 @@ function CapsuleScope(props: {
         class={`btn btn-sm rounded-full max-w-32 flex-nowrap ${current ? 'btn-primary' : 'btn-outline'}`}
         aria-label={t('CAPSULE')}
       >
-        <span class="truncate">{current ? current.name : t('CLOSET')}</span>
+        <span class="truncate">
+          {current ? current.name : t('ALL_GARMENTS')}
+        </span>
         <span aria-hidden="true">▾</span>
       </summary>
       <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-300 z-20 w-56 mt-1 p-2">
@@ -921,7 +922,7 @@ function CapsuleScope(props: {
             aria-current={current ? undefined : 'true'}
             class={current ? undefined : 'menu-active'}
           >
-            {t('CLOSET')}
+            {t('ALL_GARMENTS')}
           </a>
         </li>
         {props.capsules.map((capsule) => (

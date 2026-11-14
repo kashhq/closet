@@ -255,7 +255,7 @@ describe('the wishlist', () => {
       expect(body).toContain(`href="/wardrobe/${charcoal}/bought"`);
       // A tab of the Wardrobe: its tabs, Wishlist the active one.
       expect(body).toMatch(
-        /<a role="tab" href="\/wardrobe\/wishlist" class="tab tab-active"/,
+        /<a href="\/wardrobe\/wishlist" class="tab tab-active" aria-current="page"/,
       );
       expect(body).toContain('href="/wardrobe/new?to=wishlist"');
       expect(body).toContain('href="/wardrobe/new/from-link?to=wishlist"');
@@ -308,7 +308,7 @@ describe('the wishlist', () => {
       const form = await get(`/wardrobe/new?to=wishlist&replaces=${merino}`);
       expect(form.statusCode).toBe(200);
       expect(form.body).toContain(`<option value="${merino}" selected="">`);
-      expect(form.body).toMatch(/name="category"[^>]*value="tops"/);
+      expect(form.body).toMatch(/name="category"[^>]*value="Tops"/);
       // What belonged to the old one is not carried over.
       expect(form.body).not.toContain('value="Grey merino"');
       // A garment outside the wardrobe is a 404 like an unknown one.

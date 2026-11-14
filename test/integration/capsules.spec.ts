@@ -536,13 +536,13 @@ describe('capsules', () => {
           /<h2 class="text-lg font-semibold truncate">([^<]*)</g,
         ),
       ].map((match) => match[1]);
-      expect(cards[0]).toBe('Closet');
+      expect(cards[0]).toBe('All garments');
       expect(cards.slice(1)).toEqual([...cards.slice(1)].sort());
       expect(cards).toContain('Travel');
       // "New capsule" is the add sheet's, for the owner.
       const sheet = /<dialog id="add-sheet"[\s\S]*?<\/dialog>/.exec(html)![0];
       expect(sheet).toContain('href="/capsules/new"');
-      expect(html).toContain('role="tablist"');
+      expect(html).toContain('aria-label="Wardrobe sections"');
       expect(html).toMatch(/class="tab tab-active"[^>]*>Capsules</);
     });
 

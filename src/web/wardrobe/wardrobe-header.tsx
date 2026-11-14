@@ -445,7 +445,7 @@ export function WardrobeTabs(props: {
   return (
     <LinkTabs
       active={props.active}
-      class="tabs tabs-border px-2"
+      label={t('NAV_WARDROBE_VIEWS')}
       id="wardrobe-tabs"
       tabs={[
         tab('closet', t('CLOSET')),
