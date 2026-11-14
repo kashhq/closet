@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import { Forbidden, NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
@@ -38,6 +39,7 @@ const OWNER = 1;
 const CAPSULE = 20;
 const GARMENT = 10;
 const noStatements = {} as Db;
+const deps = { db: noStatements, logger: captureLogs().logger };
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: 2,
   surface: 'page',
@@ -53,15 +55,12 @@ const members = { add: [GARMENT], remove: [] };
 
 /** A MANAGE share or ownership: membership, from either side. */
 const managerWriters: [string, (actor: Actor) => Promise<unknown>][] = [
-  [
-    'setCapsuleMembers',
-    (a) => setCapsuleMembers(noStatements, a, address, members),
-  ],
+  ['setCapsuleMembers', (a) => setCapsuleMembers(deps, a, address, members)],
   [
     'setGarmentCapsules',
     (a) =>
       setGarmentCapsules(
-        noStatements,
+        deps,
         a,
         { id: GARMENT, ownerId: OWNER },
         { add: [CAPSULE], remove: [] },
@@ -71,9 +70,9 @@ const managerWriters: [string, (actor: Actor) => Promise<unknown>][] = [
 
 /** The owner's alone: a MANAGE grantee is refused them too. */
 const ownerWriters: [string, (actor: Actor) => Promise<unknown>][] = [
-  ['createOwnCapsule', (a) => createOwnCapsule(noStatements, a, OWNER, fields)],
-  ['renameCapsule', (a) => renameCapsule(noStatements, a, address, fields)],
-  ['deleteOwnCapsule', (a) => deleteOwnCapsule(noStatements, a, address)],
+  ['createOwnCapsule', (a) => createOwnCapsule(deps, a, OWNER, fields)],
+  ['renameCapsule', (a) => renameCapsule(deps, a, address, fields)],
+  ['deleteOwnCapsule', (a) => deleteOwnCapsule(deps, a, address)],
   [
     'requireCapsule for the edit form',
     (a) => requireCapsule(noStatements, a, address, 'own'),
@@ -135,7 +134,7 @@ describe('the capsule access path refuses before it reads or writes', () => {
     ).rejects.toMatchObject({ message: 'Capsule not found' });
     await expect(
       setGarmentCapsules(
-        noStatements,
+        deps,
         stranger,
         { id: GARMENT, ownerId: OWNER },
         { add: [CAPSULE], remove: [] },
@@ -144,7 +143,7 @@ describe('the capsule access path refuses before it reads or writes', () => {
     // MCP names the wardrobe (#188b-1).
     await expect(
       setCapsuleMembers(
-        noStatements,
+        deps,
         stranger,
         { ...address, unseen: 'wardrobe' },
         members,
@@ -169,12 +168,7 @@ describe('the capsule access path for whoever may', () => {
       capsules: new Set([CAPSULE]),
       garments: new Set([GARMENT]),
     });
-    const changed = await setCapsuleMembers(
-      noStatements,
-      manager,
-      address,
-      members,
-    );
+    const changed = await setCapsuleMembers(deps, manager, address, members);
     expect(changed).toMatchObject({ added: 1, removed: 0, viewOwner: OWNER });
     expect(changeMembership).toHaveBeenCalledWith(noStatements, OWNER, {
       add: { capsuleIds: [CAPSULE], garmentIds: [GARMENT] },
@@ -190,11 +184,11 @@ describe('the capsule access path for whoever may', () => {
       garments: new Set(),
     });
     await expect(
-      setCapsuleMembers(noStatements, owner, address, members),
+      setCapsuleMembers(deps, owner, address, members),
     ).rejects.toMatchObject({ statusCode: 404, resource: 'capsule' });
     await expect(
       setGarmentCapsules(
-        noStatements,
+        deps,
         owner,
         { id: GARMENT, ownerId: '' },
         { add: [CAPSULE], remove: [] },
@@ -205,26 +199,27 @@ describe('the capsule access path for whoever may', () => {
   it('answers a taken name for the form, and a vanished capsule as not found', async () => {
     vi.mocked(createCapsule).mockResolvedValue('name-taken');
     await expect(
-      createOwnCapsule(noStatements, owner, undefined, fields),
+      createOwnCapsule(deps, owner, undefined, fields),
     ).resolves.toBe('name-taken');
     vi.mocked(updateCapsule).mockResolvedValue('name-taken');
-    await expect(
-      renameCapsule(noStatements, owner, address, fields),
-    ).resolves.toBe('name-taken');
+    await expect(renameCapsule(deps, owner, address, fields)).resolves.toBe(
+      'name-taken',
+    );
     vi.mocked(updateCapsule).mockResolvedValue('not-found');
     await expect(
-      renameCapsule(noStatements, owner, address, fields),
+      renameCapsule(deps, owner, address, fields),
     ).rejects.toMatchObject({ statusCode: 404, resource: 'capsule' });
     vi.mocked(deleteCapsule).mockResolvedValue(false);
-    await expect(
-      deleteOwnCapsule(noStatements, owner, address),
-    ).rejects.toMatchObject({ statusCode: 404, resource: 'capsule' });
+    await expect(deleteOwnCapsule(deps, owner, address)).rejects.toMatchObject({
+      statusCode: 404,
+      resource: 'capsule',
+    });
   });
 
   it("creates the capsule in the actor's own wardrobe", async () => {
     vi.mocked(createCapsule).mockResolvedValue(CAPSULE);
     await expect(
-      createOwnCapsule(noStatements, owner, '', fields),
+      createOwnCapsule(deps, owner, '', fields),
     ).resolves.toMatchObject({ id: CAPSULE, viewOwner: undefined });
     expect(createCapsule).toHaveBeenCalledWith(noStatements, OWNER, fields);
   });

@@ -501,13 +501,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const selection = await selected(access, request);
       const { capsuleId } = request.body;
       const { added } = await setCapsuleMembers(
-        db,
+        { db, logger },
         actorOf(request),
         { id: capsuleId, ownerId: request.query.ownerId },
         { add: selection.ids, remove: [] },
-      );
-      logger.info(
-        `Bulk capsule ${capsuleId} by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${added} added, ${selection.ids.length} selected${allNote(selection)}`,
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
