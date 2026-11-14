@@ -261,6 +261,41 @@ describe('garment edit, clone and archive', () => {
       });
     });
 
+    // The form shows a built-in category by its label ("Tops") and posts what
+    // it shows; the stored key must survive a save and a suggestion pick (#729).
+    it('keeps a built-in category when the form is posted back unchanged or a suggestion is picked', async () => {
+      const id = await createFullGarment({ category: 'tops' });
+      const form = (await get(`/wardrobe/${id}/edit`, alice.cookie)).body;
+      const shown = /name="category"[^>]*value="([^"]*)"/.exec(form)?.[1];
+      expect(shown).toBeDefined();
+
+      const unchanged = await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: shown },
+        alice.cookie,
+      );
+      expect(unchanged.statusCode).toBe(302);
+      expect((await load(id)).category).toBe('tops');
+
+      const suggestions = [...form.matchAll(/<option value="([^"]*)"/g)].map(
+        (match) => match[1],
+      );
+      const picked = suggestions.find((value) => /^tops$/i.test(value));
+      expect(picked).toBeDefined();
+      await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: 'jacket' },
+        alice.cookie,
+      );
+      const pickedRes = await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: picked },
+        alice.cookie,
+      );
+      expect(pickedRes.statusCode).toBe(302);
+      expect((await load(id)).category).toBe('tops');
+    });
+
     it('refuses a field longer than the form allows with a 400, writing nothing', async () => {
       const id = await createFullGarment();
       const res = await post(

@@ -536,7 +536,7 @@ describe('capsules', () => {
           /<h2 class="text-lg font-semibold truncate">([^<]*)</g,
         ),
       ].map((match) => match[1]);
-      expect(cards[0]).toBe('Closet');
+      expect(cards[0]).toBe('All garments');
       expect(cards.slice(1)).toEqual([...cards.slice(1)].sort());
       expect(cards).toContain('Travel');
       // "New capsule" is the add sheet's, for the owner.

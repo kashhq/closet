@@ -273,7 +273,7 @@ describe('calendar', () => {
       expect(unescapeHtml(tuesday)).toContain(
         `/styling?outfit=${brunch}&returnTo=%2Fcalendar%3Fweek%3D2030-10-08%23day-2030-10-08"`,
       );
-      expect(hasText(saturday, 'Untitled Outfit')).toBe(true);
+      expect(hasText(saturday, 'Untitled outfit')).toBe(true);
       expect(saturday).toContain(`hx-post="/calendar/${untitledEntry}/delete"`);
       // 2030 is ahead: a planned day has no worn pill.
       expect(saturday).not.toContain(`/calendar/${untitledEntry}/worn`);
@@ -283,7 +283,7 @@ describe('calendar', () => {
           expect(hasText(column, 'Brunch look')).toBe(false);
         }
         if (date !== '2030-10-12') {
-          expect(hasText(column, 'Untitled Outfit')).toBe(false);
+          expect(hasText(column, 'Untitled outfit')).toBe(false);
         }
       }
 

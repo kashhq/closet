@@ -170,12 +170,12 @@ function Scope({ model }: { model: IdeasPageModel }) {
         {capsules.length > 0 && (
           <details class="dropdown">
             <summary class="btn btn-sm btn-outline rounded-full">
-              {capsule ? capsule.name : t('gallery.ALL_GARMENTS')} ▾
+              {capsule ? capsule.name : t('ALL_GARMENTS')} ▾
             </summary>
             <ul class="dropdown-content menu bg-base-100 rounded-box shadow-md z-20 w-56 mt-1">
               <li>
                 <a href={ideasUrl({ ...state, capsuleId: undefined })}>
-                  {t('gallery.ALL_GARMENTS')}
+                  {t('ALL_GARMENTS')}
                 </a>
               </li>
               {capsules.map((option) => (

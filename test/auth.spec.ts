@@ -64,7 +64,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
   );
   await page.locator('#confirmPassword').press('Tab');
   await checked;
-  await page.getByRole('button', { name: 'Register' }).click();
+  await page.getByRole('button', { name: 'Create account' }).click();
   // A plain registration lands on Today (#661).
   await page.waitForURL((url) => url.pathname === '/' && url.search === '');
 
@@ -76,7 +76,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
   await page.locator('#avatar').click();
   await page
     .locator('#sign-out')
-    .getByRole('button', { name: 'Logout' })
+    .getByRole('button', { name: 'Sign out' })
     .click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   // Signed out, the wardrobe bounces to login, which returns there (#661).
@@ -91,7 +91,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
       response.url().endsWith('/auth/login') &&
       response.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   expect((await refusal).status()).toBe(401);
   await expect(page.locator('[role="alert"]')).toHaveText(
     'Incorrect email or password',
@@ -103,7 +103,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
   // The refused post's page kept the returnTo: signing in lands on the
   // wardrobe it bounced from.
   await page.locator('#password').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/wardrobe$/);
   await expect(page.locator('#avatar')).toHaveText(
     email.charAt(0).toUpperCase(),

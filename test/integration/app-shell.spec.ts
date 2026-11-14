@@ -63,7 +63,7 @@ describe('app shell', () => {
       );
     });
 
-    it('signed out: Login everywhere, and Register on the login page', async () => {
+    it('signed out: Sign in everywhere, and Create account on the sign-in page', async () => {
       const about = await t.inject({
         method: 'GET',
         url: '/about',
@@ -200,7 +200,7 @@ describe('app shell', () => {
       const accepted = unescapeHtml(
         (await get('/auth/profile', bob.cookie)).body,
       );
-      expect(accepted).toContain('Shared With You');
+      expect(accepted).toContain('Shared with you');
       expect(accepted).toContain(alice.email);
       expect(accepted).not.toContain('Alice laptop');
     });
@@ -285,7 +285,7 @@ describe('app shell', () => {
       });
       expect(res.statusCode).toBe(200);
       expectFullPage(res);
-      expect(pageTitle(res.body)).toBe('Wardrobe Invitation');
+      expect(pageTitle(res.body)).toBe('Wardrobe invitation');
     });
   });
 

@@ -110,7 +110,7 @@ export interface SaveDraft {
   scheduleOccasion?: Occasion;
 }
 
-const ALL_GARMENTS_KEY = 'gallery.ALL_GARMENTS' satisfies StringKey;
+const ALL_GARMENTS_KEY = 'ALL_GARMENTS' satisfies StringKey;
 const SAVE_CHANGES_KEY = 'styling.SAVE_CHANGES' satisfies StringKey;
 
 // The page's own script (public/js/styling.js, through the importmap): an

@@ -78,22 +78,22 @@ export function webManifest(config: {
         url: '/',
       },
       {
-        name: 'My Wardrobe',
+        name: 'My wardrobe',
         short_name: 'Wardrobe',
         description: 'Browse your clothing items',
         url: '/wardrobe',
       },
       {
-        // Styling (#42), the dock's Style: composing an outfit is the
+        // Styling (#42), the dock's Styling: composing an outfit is the
         // shortcut; Outfits is a tap away in the dock.
         name: 'Style an outfit',
-        short_name: 'Style',
+        short_name: 'Styling',
         description: 'Compose an outfit from your wardrobe',
         url: '/styling',
       },
       {
-        name: 'Add Garment',
-        short_name: 'Add Garment',
+        name: 'Add garment',
+        short_name: 'Add garment',
         description: 'Catalog a new clothing item',
         url: '/wardrobe/new',
       },
