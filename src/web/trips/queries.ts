@@ -9,6 +9,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { Db, Queryable } from '../../db/client';
+import { createOnce } from '../../db/create-once';
 import { lockedOwnerId, ownerLockCte, ownerLocked } from '../../db/owner-lock';
 import {
   outfit,
@@ -265,11 +266,61 @@ export function createTripAt(
 ): Promise<{ id: number; away: number }> {
   return db.transaction(async (tx) => {
     const id = await createTrip(tx, ownerId, fields);
-    // Just inserted under the owner's lock this transaction holds: never false.
-    if (place) await setTripDestination(tx, id, ownerId, place);
-    const away = await removeAwayAutoEntries(tx, ownerId, fields, today);
-    return { id, away };
+    return finishNewTrip(tx, id, ownerId, fields, place, today);
   });
+}
+
+/** What a new trip carries beyond its row, in the creating transaction. */
+async function finishNewTrip(
+  tx: Queryable,
+  id: number,
+  ownerId: number,
+  fields: TripFields,
+  place: { name: string; location: PickedLocation } | null,
+  today: IsoDate,
+): Promise<{ id: number; away: number }> {
+  // Just inserted under the owner's lock this transaction holds: never false.
+  if (place) await setTripDestination(tx, id, ownerId, place);
+  const away = await removeAwayAutoEntries(tx, ownerId, fields, today);
+  return { id, away };
+}
+
+/**
+ * createTripAt for a create that carries the client's own id (the API's, a
+ * retried offline create): see createOnce. A retry answers the first trip
+ * as it was saved (`away` 0, nothing else written), whatever the retry's
+ * dates or place say; 'gone' for the id of a trip deleted since.
+ */
+export async function createTripOnce(
+  db: Db,
+  ownerId: number,
+  fields: TripFields,
+  place: { name: string; location: PickedLocation } | null,
+  today: IsoDate,
+  clientId: string,
+): Promise<{ row: { id: number; away: number }; created: boolean } | 'gone'> {
+  return createOnce(
+    () =>
+      db.transaction(async (tx) => {
+        const lock = ownerLockCte(tx, ownerId);
+        const [row] = await tx
+          .with(lock)
+          .insert(trip)
+          .values({ ownerId: lockedOwnerId(lock), ...fields, clientId })
+          .onConflictDoNothing({ target: [trip.ownerId, trip.clientId] })
+          .returning({ id: trip.id });
+        return row
+          ? finishNewTrip(tx, row.id, ownerId, fields, place, today)
+          : undefined;
+      }),
+    async () => {
+      const [first] = await db
+        .select({ id: trip.id })
+        .from(trip)
+        .where(and(eq(trip.ownerId, ownerId), eq(trip.clientId, clientId)));
+      return first && { id: first.id, away: 0 };
+    },
+  );
 }
 
 /**

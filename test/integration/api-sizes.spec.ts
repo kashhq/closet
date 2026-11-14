@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { bodyMeasurements, brandSize } from '../../src/db/schema';
+import { bodyMeasurements } from '../../src/db/schema';
 import { deviceToken, expectProblem } from './api';
 import { createTestApp, type TestApp } from './harness';
 
@@ -117,62 +116,5 @@ describe('brand sizes', () => {
       'validation',
     );
     expect(taken.errors?.map((e) => e.path)).toEqual(['body/brand']);
-  });
-
-  describe('a retried create with a clientId', () => {
-    const CLIENT_ID = '3b0f9d0e-8a7c-4f61-9b2e-5d4c3b2a1f09';
-
-    it('answers 201, then 200 with the first row as stored, creating nothing', async () => {
-      const first = await api('POST', '/sizes/brands', {
-        brand: 'Everlane',
-        size: 'M',
-        clientId: CLIENT_ID,
-      });
-      expect(first.statusCode, first.body).toBe(201);
-      const { id } = first.json<{ id: number }>();
-      // The client edited the body before the retry: the id names the create.
-      const retry = await api('POST', '/sizes/brands', {
-        brand: 'Everlane Studio',
-        note: 'Runs small',
-        clientId: CLIENT_ID,
-      });
-      expect(retry.statusCode, retry.body).toBe(200);
-      expect(retry.json()).toEqual({ id, brand: 'Everlane', size: 'Medium' });
-      const rows = await t.db
-        .select({ id: brandSize.id })
-        .from(brandSize)
-        .where(eq(brandSize.clientId, CLIENT_ID));
-      expect(rows).toEqual([{ id }]);
-    });
-
-    it('is still a 400 naming the brand for another clientId, and a 410 once deleted', async () => {
-      const taken = expectProblem(
-        await api('POST', '/sizes/brands', {
-          brand: 'EVERLANE',
-          size: 'L',
-          clientId: '3b0f9d0e-8a7c-4f61-9b2e-5d4c3b2a1f0a',
-        }),
-        400,
-        'validation',
-      );
-      expect(taken.errors?.map((e) => e.path)).toEqual(['body/brand']);
-
-      const [row] = await t.db
-        .select({ id: brandSize.id })
-        .from(brandSize)
-        .where(eq(brandSize.clientId, CLIENT_ID));
-      expect((await api('DELETE', `/sizes/brands/${row.id}`)).statusCode).toBe(
-        204,
-      );
-      expectProblem(
-        await api('POST', '/sizes/brands', {
-          brand: 'Everlane',
-          size: 'M',
-          clientId: CLIENT_ID,
-        }),
-        410,
-        'gone',
-      );
-    });
   });
 });

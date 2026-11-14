@@ -12364,7 +12364,7 @@
         "tags": [
           "trips"
         ],
-        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`.",
+        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -12442,7 +12442,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet stored",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first trip of that id (200), the id of one deleted since is a 410",
                     "type": "string"
                   }
                 }
@@ -12451,6 +12451,25 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "TripCreated",
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -18126,7 +18145,7 @@
         "tags": [
           "capsules"
         ],
-        "description": "In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`.",
+        "description": "In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`. With a `clientId`, a retry answers the first capsule of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18150,7 +18169,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet stored",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first capsule of that id (200), the id of one deleted since is a 410",
                     "type": "string"
                   }
                 }
@@ -18172,6 +18191,25 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "CapsuleCreated",
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -19963,7 +20001,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet deduplicated",
+                    "description": "Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look",
                     "type": "string"
                   }
                 }
@@ -20064,7 +20102,7 @@
                   },
                   "clientId": {
                     "format": "uuid",
-                    "description": "Your id for this create, for retrying it offline: accepted, not yet deduplicated",
+                    "description": "Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look",
                     "type": "string"
                   }
                 }

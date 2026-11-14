@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
+import { createOnce } from '../../db/create-once';
 import { lockedOwnerId, ownerLockCte, ownerLocked } from '../../db/owner-lock';
-import { isDeletedClientId, isUniqueViolation } from '../../db/errors';
+import { isUniqueViolation } from '../../db/errors';
 import { selectScalars } from '../../db/select-scalars';
 import {
   BRAND_SIZE_UNIQUE,
@@ -300,31 +301,36 @@ export async function addBrandSizeOnce(
   clientId: string,
 ): Promise<{ row: BrandSize; created: boolean } | BrandTaken | 'gone'> {
   try {
-    return await db.transaction(async (tx) => {
-      const lock = ownerLockCte(tx, userId);
-      const [row] = await tx
-        .with(lock)
-        .insert(brandSize)
-        .values({
-          userId: lockedOwnerId(lock),
-          ...fields,
-          brandKey: brandKey(fields.brand),
-          clientId,
-        })
-        .onConflictDoNothing({ target: [brandSize.userId, brandSize.clientId] })
-        .returning(BRAND_SIZE);
-      if (row) return { row, created: true };
-      const [first] = await tx
-        .select(BRAND_SIZE)
-        .from(brandSize)
-        .where(
-          and(eq(brandSize.userId, userId), eq(brandSize.clientId, clientId)),
-        );
-      return { row: first, created: false };
-    });
+    return await createOnce(
+      async () => {
+        const lock = ownerLockCte(db, userId);
+        const [row] = await db
+          .with(lock)
+          .insert(brandSize)
+          .values({
+            userId: lockedOwnerId(lock),
+            ...fields,
+            brandKey: brandKey(fields.brand),
+            clientId,
+          })
+          .onConflictDoNothing({
+            target: [brandSize.userId, brandSize.clientId],
+          })
+          .returning(BRAND_SIZE);
+        return row;
+      },
+      async () => {
+        const [first] = await db
+          .select(BRAND_SIZE)
+          .from(brandSize)
+          .where(
+            and(eq(brandSize.userId, userId), eq(brandSize.clientId, clientId)),
+          );
+        return first;
+      },
+    );
   } catch (error) {
     if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return BRAND_TAKEN;
-    if (isDeletedClientId(error)) return 'gone';
     throw error;
   }
 }
