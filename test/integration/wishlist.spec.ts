@@ -308,7 +308,7 @@ describe('the wishlist', () => {
       const form = await get(`/wardrobe/new?to=wishlist&replaces=${merino}`);
       expect(form.statusCode).toBe(200);
       expect(form.body).toContain(`<option value="${merino}" selected="">`);
-      expect(form.body).toMatch(/name="category"[^>]*value="tops"/);
+      expect(form.body).toMatch(/name="category"[^>]*value="Tops"/);
       // What belonged to the old one is not carried over.
       expect(form.body).not.toContain('value="Grey merino"');
       // A garment outside the wardrobe is a 404 like an unknown one.

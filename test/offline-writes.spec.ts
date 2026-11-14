@@ -253,7 +253,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await page.getByLabel('Password').fill(E2E_PASSWORD);
     // The sheet is asked after the outbox's hold, the form's own confirm.
     const confirmSheet = page.locator('#confirm-sheet');
-    await page.getByRole('button', { name: 'Delete Account' }).click();
+    await page.getByRole('button', { name: 'Delete account' }).click();
     await expect(confirmSheet).toContainText(
       'Are you sure you want to delete your account?',
     );
@@ -266,7 +266,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await page.locator('#avatar').click();
     await page
       .locator('#sign-out')
-      .getByRole('button', { name: 'Logout' })
+      .getByRole('button', { name: 'Sign out' })
       .click();
     await expect(confirmSheet).toContainText(
       '1 change has not synced. Sign out and discard it?',

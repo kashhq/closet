@@ -197,7 +197,7 @@ async function checkFilterSheet(page: Page) {
   await sheet.getByRole('radio', { name: 'Tops', exact: true }).click();
   await shirtType.click();
   await sheet.getByRole('radio', { name: 'Blue', exact: true }).click();
-  await sheet.getByRole('button', { name: 'Apply Filters' }).click();
+  await sheet.getByRole('button', { name: 'Apply filters' }).click();
   await expect(tiles).toHaveCount(1);
   await expect(tiles.first()).toContainText('Blue shirt');
 
@@ -217,7 +217,7 @@ async function checkFilterSheet(page: Page) {
   // The group offers what the closet holds: Clear, T-shirt, Shirt.
   for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowLeft');
   await expect(types.getByRole('radio', { name: '× Clear' })).toBeChecked();
-  await sheet.getByRole('button', { name: 'Apply Filters' }).click();
+  await sheet.getByRole('button', { name: 'Apply filters' }).click();
   // The type alone is cleared: both blue tops stay, the red one is out.
   await expect(tiles).toHaveCount(2);
   await expect(page.locator('#wardrobe-grid')).not.toContainText('Red shirt');

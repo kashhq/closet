@@ -90,7 +90,7 @@ export async function switchAccount(page: Page, email: string): Promise<void> {
   await page.locator('#avatar').click();
   await page
     .locator('#sign-out')
-    .getByRole('button', { name: 'Logout' })
+    .getByRole('button', { name: 'Sign out' })
     .click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   await submitLogin(page, email);
@@ -113,5 +113,5 @@ export async function submitLogin(page: Page, email: string): Promise<void> {
   );
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }

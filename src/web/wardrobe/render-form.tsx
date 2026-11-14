@@ -186,10 +186,7 @@ function formModel(
       viewOwner: model.mode.kind === 'clone' ? undefined : model.viewOwner,
     },
     repairs: repairs && { ...repairs, entries: context.repairs ?? [] },
-    categories: categorySuggestions(context.categories).map((value) => ({
-      value,
-      label: categoryLabel(value),
-    })),
+    categories: categorySuggestions(context.categories).map(categoryLabel),
   };
 }
 

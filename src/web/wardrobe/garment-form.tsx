@@ -88,7 +88,7 @@ export interface GarmentFormModel {
   mode: GarmentFormMode;
   values: GarmentFormValues;
   /** The category suggestions (built-in, then the wardrobe's own). */
-  categories: { value: string; label: string }[];
+  categories: string[];
   /** The shared wardrobe the form was opened in; undefined for one's own. */
   viewOwner: number | undefined;
   errors?: FieldErrors<GarmentField>;
@@ -259,7 +259,7 @@ function NameAndCategory(props: { model: GarmentFormModel; category: string }) {
           type="text"
           name="category"
           list="category-suggestions"
-          value={values.category}
+          value={categoryLabel(values.category)}
           maxlength={CATEGORY_MAX}
           required
           placeholder={t('TYPE_OR_SELECT_CATEGORY')}
@@ -267,8 +267,8 @@ function NameAndCategory(props: { model: GarmentFormModel; category: string }) {
           {...REFRESH_PROPERTIES}
         />
         <datalist id="category-suggestions">
-          {model.categories.map((suggestion) => (
-            <option value={suggestion.value}>{suggestion.label}</option>
+          {model.categories.map((label) => (
+            <option value={label} />
           ))}
         </datalist>
       </FormField>

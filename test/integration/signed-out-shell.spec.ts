@@ -32,7 +32,7 @@ describe('the signed-out shell', () => {
 
   it.each([
     ['login', '/auth/login', 'Sign in'],
-    ['register', '/auth/register', 'Register'],
+    ['register', '/auth/register', 'Create account'],
   ])('%s: its own h1, the mark, one primary button', async (_, url, title) => {
     const res = await signedOut(url);
     expect(res.statusCode).toBe(200);
