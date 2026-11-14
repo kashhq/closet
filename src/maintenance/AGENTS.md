@@ -18,6 +18,8 @@
                        a secret rotation, retrim-thumbs.ts + .cli.ts (`npm run maintenance:retrim-thumbs`):
                        the #373 backfill of cutouts' trimmed thumbs, sync-prune.ts (pruneSyncTombstones:
                        the changes feed's deletions past 90 days, raising sync_floor; src/web/sync/AGENTS.md),
+                       weather-prune.ts (pruneWeatherCaches: forecast and normals rows no home, here or trip
+                       location sits at, last attempted over 30 days ago; src/weather/AGENTS.md),
                        after-restore.ts + .cli.ts (`npm run maintenance:after-restore`, #653: the post-restore
                        command), repoint-cutout.ts + .cli.ts (`npm run maintenance:repoint-cutout`: a row
                        pointed at a cutout set in storage, through the state machine)
@@ -85,6 +87,7 @@ What each job sends to Postgres (#173). Production pays a round trip per stateme
 | Order mail poll | 2, or 1 + per new email: 1 (no products) or 4 | new emails | none |
 | Prunes (reminder, re-plan claims) | 1 each | nothing | none |
 | Sync tombstone prune | 1 per 1000 tombstones pruned, +1 for the short batch that ends it | tombstones past 90 days | none (`sync_tombstone` filtered on `deleted_at`, no index: a household's deletions) |
+| Weather cache prune | 2 (a delete per cache) | nothing | none (both caches are a household's few locations; the anti-joins read `user_weather` and `trip`) |
 | Muse round close | 1, + 4 per round closed (`finishRound`: begin, lock, round, commit) and 1 for the batch's devices | rounds left open, which are rare | none (`quietRounds`: Muse's rows only, partial indexes) |
 
 The morning reminders read the mornings' forecasts (`refreshForecastsFor`), who of them is due a re-plan (`replanCandidates` with their ids) and the evenings' days (`eveningDays`) once for the minute, in parallel, then send every message in one batch (`PushSender.sendEach`: the devices of all of them read in one statement at send time, never earlier, so a device revoked or moved meanwhile gets nothing). The re-plan's transaction reads its auto entries with the day's claim in one statement (`claimAutoEntries`, a data-modifying CTE) and its week, pool, memory and outfits' garments in a second (`weekSql`, `outfitGarmentStatesSql`). The cutout job's per-photo 8 is the lease's price: the claim and the result each lock the row, ask the state machine and write (see Background removal). Reconciliation's per-row deletes stay per row on purpose (`removeOrphanedRows`: one bad row must not cancel the sweep).

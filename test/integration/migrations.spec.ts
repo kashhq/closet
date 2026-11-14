@@ -62,8 +62,12 @@ describe('migrations', () => {
         'garment_owner_id_status_id_index',
         'garment_replaces_garment_id_index',
         'garment_owner_id_category_id_index',
+        // The owner_id foreign key's, with the sync feed's keyset (#709: the
+        // single-column indexes beside them were dropped).
+        'outfit_owner_id_revision_index',
+        'garment_wear_owner_id_revision_index',
+        'week_plan_owner_id_revision_index',
         'garment_photo_id_unique',
-        'outfit_owner_id_index',
         // Also the index of outfit_slot.outfit_id.
         'outfit_slot_pkey',
         'outfit_slot_garment_id_index',
@@ -90,7 +94,6 @@ describe('migrations', () => {
         'garment_wear_garment_id_day_index',
         'garment_wear_outfit_calendar_id_garment_id_unique',
         'garment_wear_garment_id_day_single_unique',
-        'garment_wear_owner_id_index',
         // The generator reads an owner's avoided pairs (also the owner_id
         // foreign key's); each garment's foreign key has its own.
         'generator_avoid_pkey',
@@ -113,7 +116,6 @@ describe('migrations', () => {
         // the user_id foreign key's).
         'week_template_pkey',
         'week_template_user_id_weekday_day_unique',
-        'week_plan_owner_id_index',
         'week_plan_entry_week_plan_id_index',
         'week_replan_pkey',
         // Sizes (#24): one row per brand per user, any case (also the

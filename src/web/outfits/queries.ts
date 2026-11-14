@@ -201,9 +201,10 @@ export interface OutfitPage<T> {
  * next page's cursor, as one scalar subquery. Every paged list of outfits
  * reads through it: savedOutfitsSql (the Saved tab and the pickers) and
  * listOutfitsPage (list_outfits, GET /api/v1/outfits). It reads one row
- * more than the page, only to say there is a next. `outfit_owner_id_index`
- * narrows to the owner's rows; at household size the top-N sort over them
- * costs what an (owner, id) index would.
+ * more than the page, only to say there is a next. The planner walks
+ * `outfit_pkey` backward and filters the owner (its plan with and without
+ * the single-column owner index, dropped in #709, was the same); at
+ * household size that stops within a few rows of the page.
  */
 function outfitPageSql<T>(
   row: SQL,

@@ -477,6 +477,13 @@
       "when": 1794667755354,
       "tag": "0067_token-scope",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1794670978929,
+      "tag": "0068_drop-redundant-owner-indexes",
+      "breakpoints": true
     }
   ]
 }
