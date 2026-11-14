@@ -49,7 +49,13 @@
 import { singleFlight } from 'single-flight';
 import { confirmAction } from 'confirm-sheet';
 import { showToast } from 'toast';
-import { todayIn } from '../../src/calendar-date';
+import { parseIsoDate, todayIn } from '../../src/calendar-date';
+import {
+  dayOfStamp,
+  dayText,
+  wearQueuesOn,
+  wornState,
+} from '../../src/page-day';
 import {
   enqueue,
   isChecklist,
@@ -78,11 +84,7 @@ import {
   retryStuck,
   type StuckActionStore,
 } from '../../src/offline-writes';
-import {
-  openOutboxChannel,
-  outbox,
-  type OutboxChange,
-} from './outbox-store';
+import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
 
 type Fields = Record<string, string | string[]>;
 
@@ -144,6 +146,8 @@ const SAVED_TOAST_MS = 3_000;
 const REFUSAL_TOAST_MS = 6_000;
 
 const REGION = '[data-outbox-key]';
+// public/js/freshness.js's, on the document whenever its stamp is set.
+const FRESHNESS_CHANGE = 'freshness:change';
 const QUEUE_FORM = 'form[data-offline-queue]';
 const ALTERNATE = ':scope > template[data-outbox-state]';
 const FULL_MARK = 'outboxFull';
@@ -378,7 +382,7 @@ function renderPackedCounts(records: OutboxRecord[]): void {
       served:
         region.querySelector<HTMLInputElement>('input[name="packed"]')
           ?.defaultChecked ?? false,
-      queued: intentOf(waiting.get(region.dataset.outboxKey ?? '')),
+      queued: intentOf(waiting.get(regionKey(region))),
     }));
     if (rows.every((row) => row.queued === undefined)) {
       if (counter.dataset.counted === undefined) continue;
@@ -411,7 +415,7 @@ function renderRegions(records: OutboxRecord[]): void {
     records.filter((r) => !isPending(r)).map((r) => r.key),
   );
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    const key = region.dataset.outboxKey ?? '';
+    const key = regionKey(region);
     const record = waiting.get(key);
     if (record) {
       showIntent(region, record);
@@ -468,7 +472,7 @@ function showServerState(region: HTMLElement): void {
 /** A discarded record's region back to the server's state, its intent mark gone. */
 function revertRegions(key: string): void {
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    if (region.dataset.outboxKey !== key) continue;
+    if (regionKey(region) !== key) continue;
     showServerState(region);
     delete region.dataset[INTENT_MARK];
   }
@@ -642,11 +646,8 @@ const kindOf = (region: HTMLElement) =>
   queueableKindOf(region.dataset.outboxPath ?? '');
 
 function draftOf(region: HTMLElement, fields: Fields): Draft | undefined {
-  const {
-    outboxKey: key,
-    outboxPath: path,
-    outboxLabel: label,
-  } = region.dataset;
+  const { outboxPath: path, outboxLabel: label } = region.dataset;
+  const key = regionKey(region);
   const kind = kindOf(region);
   if (!key || !path || !kind) {
     console.warn(`[outbox] a region names no queueable write (${path})`);
@@ -737,18 +738,19 @@ async function queue(
   if (!account || !timeZone || writes.length === 0) return;
   const now = new Date();
   const today = todayIn(timeZone, now);
-  // Wore today's state is its page's day's; a copy from another day would
-  // queue the wrong toggle.
-  if (
-    writes.some(
-      (w) => w.kind === 'wear' && w.region.dataset.outboxDay !== today,
-    )
-  ) {
-    console.info(
-      `[outbox] ${writes[0].key} refused: the page is from another day`,
-    );
-    refuse(text('textOutboxStaleDay'), trigger);
-    return;
+  // Wore today's state is its page's day's (#708): a copy from another day,
+  // a page left open overnight included, would queue the wrong toggle, and
+  // one whose day is unknown queues nothing, never under an unknown day.
+  const wear = writes.find((w) => w.kind === 'wear');
+  if (wear) {
+    const day = pageDayOf(wear.region, timeZone);
+    if (!wearQueuesOn(day, today)) {
+      console.info(
+        `[outbox] ${wear.key} refused: the page is ${day ? `of ${day}` : 'of an unknown day'}, the tap of ${today}`,
+      );
+      refuse(text('textOutboxStaleDay'), trigger);
+      return;
+    }
   }
   const queued = writes.map((w) => toRecord(w, account, now.getTime(), today));
   const keys = queued.map((record) => record.key).join(', ');
@@ -1177,6 +1179,85 @@ document.addEventListener(
   true,
 );
 
+// ---- The page's day (#708) ------------------------------------------------------
+
+/**
+ * The day what `element` shows is of: a live htmx answer's own
+ * (`data-as-of-day`, Wore today's and Washed's), else the page's, from the
+ * stamp freshness.js keeps on `#freshness` (the load, the cached copy's
+ * arrival, or its last revalidation; kept in htmx's history snapshots).
+ * Undefined while the page has none (no worker).
+ */
+function pageDayOf(element: Element, timeZone: string): string | undefined {
+  const answered = element.closest<HTMLElement>('[data-as-of-day]');
+  if (answered) return parseIsoDate(answered.dataset.asOfDay);
+  return dayOfStamp(
+    document.getElementById('freshness')?.dataset.fetchedAt,
+    timeZone,
+  );
+}
+
+/**
+ * A region's record key: its own, plus the page's day for a wear (one record
+ * per garment and day, `wear:41:2026-11-12`; src/offline-writes.ts). A wear
+ * region on a page of no known day keys no record (queue refuses its tap).
+ */
+function regionKey(region: HTMLElement): string {
+  const key = region.dataset.outboxKey ?? '';
+  if (kindOf(region) !== 'wear') return key;
+  const day = pageDayOf(region, appStatus().timeZone ?? '');
+  return day ? `${key}:${day}` : key;
+}
+
+/**
+ * Words every `<time data-day-label>` against its day (src/web/day-time.tsx)
+ * and sets each Wore today row to its state on that day (wear-section.tsx:
+ * the undo when Wore today wore it, the calendar's badge when an entry did).
+ * Before the queued intents (renderRegions), on every load, swap and stamp
+ * change; idempotent. A row whose intent is shown (flipped) already shows
+ * the other state: its new server state is then what it shows.
+ */
+function showPageDay(): void {
+  const timeZone = appStatus().timeZone;
+  if (!timeZone) return;
+  const now = todayIn(timeZone, new Date());
+  const { lang } = document.documentElement;
+  for (const time of document.querySelectorAll<HTMLTimeElement>(
+    'time[data-day-label]',
+  )) {
+    const day = parseIsoDate(time.dateTime);
+    const kind = time.dataset.dayLabel === 'date' ? 'date' : 'relative';
+    if (!day) continue;
+    time.textContent = dayText(
+      day,
+      pageDayOf(time, timeZone) ?? now,
+      kind,
+      lang,
+    );
+  }
+  for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
+    if (kindOf(region) !== 'wear') continue;
+    const state = wornState(
+      region.dataset.wornOn,
+      region.dataset.wornBy,
+      pageDayOf(region, timeZone) ?? now,
+    );
+    const badge = region.nextElementSibling;
+    region.hidden = state === 'entry';
+    if (badge instanceof HTMLElement && badge.matches('[data-worn-by-entry]')) {
+      badge.hidden = state !== 'entry';
+    }
+    const shownUndo =
+      region.querySelector<HTMLInputElement>(':scope > form input[name="worn"]')
+        ?.value === '0';
+    const flipped = region.dataset[INTENT_MARK] === 'flipped';
+    const served = flipped ? !shownUndo : shownUndo;
+    if (served === (state === 'single')) continue;
+    if (flipped) delete region.dataset[INTENT_MARK];
+    else flip(region);
+  }
+}
+
 // ---- Wiring -------------------------------------------------------------------
 
 document.addEventListener('click', (event) => {
@@ -1273,9 +1354,20 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // A boosted navigation or a swap brings regions (and #app-status) anew.
-document.addEventListener('htmx:afterSettle', () => void refresh());
+document.addEventListener('htmx:afterSettle', () => {
+  showPageDay();
+  void refresh();
+});
+
+// The page's stamp moved (freshness.js: another display, a revalidation
+// that found the copy current, a re-stamped copy): so may its day.
+document.addEventListener(FRESHNESS_CHANGE, () => {
+  showPageDay();
+  void refresh();
+});
 
 async function start(): Promise<void> {
+  showPageDay();
   if (!pageAccount()) return;
   try {
     await claimForAccount();

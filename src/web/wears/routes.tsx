@@ -121,7 +121,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       reply,
       <WearStatus
         garment={status.garment}
-        panel={{ summary: status.summary, today: day }}
+        panel={{ summary: status.summary, answeredOn: day }}
         after={result.after}
       />,
     );

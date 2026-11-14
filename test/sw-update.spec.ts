@@ -178,6 +178,19 @@ test.describe('service worker update', () => {
       )
       .toEqual([]);
     expect(refetches.since(dueIds, 'answered')).toEqual(dueIds);
+    // The new build serves the same pages (only its worker changed), so each
+    // page was asked with its copy's tag and confirmed by a 304 (#708): its
+    // copy stored again with a new stamp, one, never a second Server-Timing
+    // entry. A fragment carries no tag and is fetched whole.
+    const asked = refetches.list.filter(
+      (r) => !r.held && r.outcome === 'answered' && dueIds.includes(r.id),
+    );
+    for (const { id, conditional } of asked) {
+      expect(conditional, id).toBe(!id.endsWith('|hx'));
+    }
+    for (const copy of await storedPages(page)) {
+      expect(copy.stamps, copy.id).toBe(1);
+    }
 
     // Offline again, the tab root opens at once from B's own copy.
     await setNetwork('offline');
@@ -291,26 +304,32 @@ function keyId(url: string, fragment: boolean): string {
 interface StoredPage {
   id: string;
   cachedAt: number;
+  /** Its Server-Timing's arrival stamps: one, however often re-stamped. */
+  stamps: number;
 }
 
 /** pages-v2's pages and fragments in the cache's own order, with their stamps. */
 async function storedPages(page: Page): Promise<StoredPage[]> {
   const stored = await page.evaluate(async () => {
     const cache = await caches.open('pages-v2');
-    const copies: { url: string; cachedAt: number }[] = [];
+    const copies: { url: string; cachedAt: number; stamps: number }[] = [];
     for (const key of await cache.keys()) {
       if (new URL(key.url).origin !== location.origin) continue;
       const copy = await cache.match(key);
       copies.push({
         url: key.url,
         cachedAt: Number(copy?.headers.get('X-SW-Cached-At') ?? 0),
+        stamps: (copy?.headers.get('Server-Timing') ?? '')
+          .split(',')
+          .filter((entry) => entry.trim().startsWith('cache;')).length,
       });
     }
     return copies;
   });
-  return stored.map(({ url, cachedAt }) => ({
+  return stored.map(({ url, cachedAt, stamps }) => ({
     id: keyId(url, /(?:\||%7C)hx$/i.test(url)),
     cachedAt,
+    stamps,
   }));
 }
 
@@ -326,6 +345,8 @@ function activationTime(page: Page): Promise<number> {
 interface Refetch {
   id: string;
   outcome: 'answered' | 'cut';
+  /** Sent with If-None-Match: the stored copy's ETag (#708). */
+  conditional: boolean;
   /** Asked while `hold` cut every one. */
   held: boolean;
 }
@@ -356,12 +377,13 @@ async function recordRefetches(context: BrowserContext) {
     }
     const id = keyId(route.request().url(), headers['hx-request'] === 'true');
     const held = recorder.hold;
+    const conditional = headers['if-none-match'] !== undefined;
     if (held || id === recorder.cut) {
-      recorder.list.push({ id, outcome: 'cut', held });
+      recorder.list.push({ id, outcome: 'cut', held, conditional });
       await route.abort('internetdisconnected');
       return;
     }
-    recorder.list.push({ id, outcome: 'answered', held });
+    recorder.list.push({ id, outcome: 'answered', held, conditional });
     await route.fallback();
   });
   return recorder;

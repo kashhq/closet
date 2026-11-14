@@ -12,7 +12,10 @@ import { GRID_PAGE_SIZE } from '../wardrobe/grid-page-size';
 /** The warm list's route (src/web/shell/routes.tsx). */
 export const WARM_LIST_PATH = '/offline/warm';
 
-/** A warm re-fetches a copy older than this, and runs at most this often. */
+/**
+ * A warm asks again for a copy older than this (with its ETag: an unchanged
+ * page answers 304 and costs its headers, #708), and runs at most this often.
+ */
 export const WARM_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -23,11 +26,16 @@ export const WARM_USAGE_BUDGET_BYTES = 50 * 1024 * 1024;
 
 /**
  * Caps on what one device warms (docs/plans/2026-09-28-caching-and-offline.md,
- * section 2): the newest first, about 20 MB at the cap. The demo wardrobe
- * (83 garments, 26 outfits) is well under both.
+ * section 2): the newest first. The garments cover the 0.1 target closet
+ * (500, #708), the outfits its newest quarter; about 21 MB at the caps
+ * (7.7 KB a garment page, 5.7 an outfit's, ~25 KB a thumb), inside
+ * WARM_USAGE_BUDGET_BYTES. Raised once an unchanged page cost a warm only
+ * its headers (send()'s ETag, PageRefresh's 304); each page is still a
+ * request a day, so the outfits stop short of all of them. The demo
+ * wardrobe (83 garments, 26 outfits) is well under both.
  */
-export const WARM_GARMENT_CAP = 300;
-export const WARM_OUTFIT_CAP = 80;
+export const WARM_GARMENT_CAP = 500;
+export const WARM_OUTFIT_CAP = 250;
 
 /**
  * The Muse inbox's pages a warm names (#333): the inbox itself, its needs'

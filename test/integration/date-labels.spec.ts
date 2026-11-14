@@ -117,8 +117,14 @@ describe('date labels', () => {
     expect(await text(`/wardrobe/${garmentId}`)).toContain(
       dateLabel(daysAgo(500), t.today()),
     );
-    expect(await text(`/wardrobe/${garmentId}`)).toContain(
-      `Last washed ${dateLabel(daysAgo(20), t.today())}`,
+    // The garment page's are worded by its script (src/page-day.ts, #708);
+    // before it runs, the date with its year.
+    const garmentPage = await t.inject({
+      method: 'GET',
+      url: `/wardrobe/${garmentId}`,
+    });
+    expect(garmentPage.body).toContain(
+      `<time datetime="${daysAgo(20)}" data-day-label="relative">`,
     );
     expect(dateLabel(daysAgo(500), t.today())).toMatch(
       /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/,

@@ -189,6 +189,67 @@ export function cachedAt(headers: {
 }
 
 /**
+ * A stored copy's Server-Timing with its arrival stamp (CACHED_AT_TIMING_NAME)
+ * set to `stampMs`: the server's entries kept, any earlier stamp replaced, so
+ * a copy re-stamped on a 304 (#708) carries exactly one, the one
+ * freshness.js finds first.
+ */
+export function stampedServerTiming(
+  timing: string | null,
+  stampMs: string,
+): string {
+  const kept = (timing ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(
+      (entry) =>
+        entry !== '' && entry.split(';')[0].trim() !== CACHED_AT_TIMING_NAME,
+    );
+  return [...kept, `${CACHED_AT_TIMING_NAME};desc="${stampMs}"`].join(', ');
+}
+
+interface HeadersOf {
+  status: number;
+  headers: { get(name: string): string | null };
+}
+
+/**
+ * The If-None-Match a worker's refetch sends (#708; send(),
+ * src/web/render.ts): the stored copy's ETag, only for a copy of the account
+ * that owns the cache (`owner`, OWNER_KEY); none for another's, a copy
+ * without one, or no copy.
+ */
+export function revalidationTag(
+  copy: HeadersOf | undefined,
+  owner: string | undefined,
+): string | undefined {
+  if (!copy || owner === undefined || pageAccount(copy.headers) !== owner) {
+    return undefined;
+  }
+  return copy.headers.get('ETag') ?? undefined;
+}
+
+/**
+ * Whether a refetch's 304 confirms the stored copy, which is then stored
+ * again with a new stamp, its body unchanged: a 304 naming the copy's tag
+ * and its account, which still owns the cache. Anything else stores nothing.
+ */
+export function confirmsCopy(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): boolean {
+  const account = pageAccount(copy.headers);
+  return (
+    answer.status === 304 &&
+    owner !== undefined &&
+    account === owner &&
+    pageAccount(answer.headers) === account &&
+    answer.headers.get('ETag') === copy.headers.get('ETag')
+  );
+}
+
+/**
  * A page request the server redirected to the login page, which then
  * rendered for nobody (a followed redirect: htmx's boosted XHR, a
  * revalidation): nobody is signed in any more. The session gate is what

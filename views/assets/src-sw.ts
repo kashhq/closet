@@ -19,8 +19,8 @@ import {
 import {
   bypassesWorker,
   CACHED_AT_HEADER,
-  CACHED_AT_TIMING_NAME,
   cachedAt,
+  confirmsCopy,
   endedSession,
   forbidsStorage,
   type FreshPage,
@@ -41,9 +41,11 @@ import {
   renderedAccount,
   type Revalidation,
   revalidationOutcome,
+  revalidationTag,
   sentToLogin,
   serverUnavailable,
   servesStaleWhileRevalidate,
+  stampedServerTiming,
   PAGES_CACHE,
 } from '../../src/web/page-cache';
 import {
@@ -82,11 +84,7 @@ import {
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
-import {
-  openOutboxChannel,
-  outbox,
-  type OutboxChange,
-} from './outbox-store';
+import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
@@ -508,7 +506,7 @@ const pageStore: WorkboxPlugin = {
     if (account === undefined) return null;
     const claimed = await claimPageCache(account, since, path, event);
     if (!claimed || forbidsStorage(response.headers)) return null;
-    return copyResponse(response, (init) => {
+    return stampedCopy(response, (init) => {
       const headers = new Headers(init.headers);
       // A landing page's Clear-Site-Data (#244, createCacheClearRelay) was a
       // one-time instruction to the browser, not part of the page: a copy
@@ -520,17 +518,39 @@ const pageStore: WorkboxPlugin = {
       // A document's own script cannot read this header directly, only
       // Server-Timing (page-cache.ts's CACHED_AT_TIMING_NAME): freshness.js
       // reads it back through Navigation Timing and asks for
-      // REVALIDATE_PAGE itself once it does.
-      const timing = headers.get('Server-Timing');
-      const cacheEntry = `${CACHED_AT_TIMING_NAME};desc="${cachedAtMs}"`;
+      // REVALIDATE_PAGE itself once it does. A copy stored again on a 304
+      // (PageRefresh) has its earlier stamp replaced, never a second one.
       headers.set(
         'Server-Timing',
-        timing ? `${timing}, ${cacheEntry}` : cacheEntry,
+        stampedServerTiming(headers.get('Server-Timing'), cachedAtMs),
       );
       return { ...init, headers };
     });
   },
 };
+
+/**
+ * The response to store, through `modifier`. A network answer goes through
+ * Workbox's copyResponse, which refuses one of another origin. A copy this
+ * cache already holds, stored again on a confirming 304 (PageRefresh), has
+ * no URL (Cache Storage keeps none for a response built by copyResponse),
+ * which copyResponse would take for another origin's: it is ours, by key.
+ */
+function stampedCopy(
+  response: Response,
+  modifier: (init: ResponseInit) => ResponseInit,
+): Promise<Response> | Response {
+  if (!confirmedResponses.has(response)) {
+    return copyResponse(response, modifier);
+  }
+  const copy = response.clone();
+  const init = modifier({
+    headers: new Headers(copy.headers),
+    status: copy.status,
+    statusText: copy.statusText,
+  });
+  return new Response(copy.body, init);
+}
 
 // A copy is only read back for the account that owns the cache. Workbox
 // writes an answer after cacheWillUpdate has claimed for it, so a drop can
@@ -663,12 +683,50 @@ const offlinePage = new NetworkFirst({
  * filter, the generation and owner checks, the stamp), never the cached
  * one: a warm wants a fresh copy or a failure it can stop on, where
  * NetworkFirst would answer an unreachable server with the old copy.
+ *
+ * Conditional (#708): a stored copy of the cache's owner sends its ETag
+ * (revalidationTag), and a 304 confirming it (confirmsCopy) stores the
+ * copy again through the same plugins, so only its stamp changes: an
+ * unchanged page costs its headers. The answer is then that copy, a 200, so
+ * every caller reads a page as before; `confirmedCopies` says it was one.
+ * Set explicitly, If-None-Match also keeps the browser's HTTP cache out of
+ * it (Fetch: the request's cache mode becomes no-store), so the 304 is ours.
  */
 class PageRefresh extends Strategy {
-  protected _handle(request: Request, handler: StrategyHandler) {
-    return handler.fetchAndCachePut(request);
+  protected async _handle(
+    request: Request,
+    handler: StrategyHandler,
+  ): Promise<Response> {
+    // Owner-checked on the way out (servedCopies), and read again below.
+    const copy = await handler.cacheMatch(request);
+    const tag = revalidationTag(copy, await readRecord(OWNER_KEY));
+    if (!copy || !tag) return handler.fetchAndCachePut(request);
+    const headers = new Headers(request.headers);
+    headers.set('If-None-Match', tag);
+    const answer = await handler.fetch(new Request(request, { headers }));
+    if (answer.status !== 304) {
+      await handler.cachePut(request, answer.clone());
+      return answer;
+    }
+    await lastDrop;
+    if (!confirmsCopy(answer, copy, await readRecord(OWNER_KEY))) {
+      console.warn(
+        `[sw] ${new URL(request.url).pathname}: a 304 for another copy, nothing stored`,
+      );
+      return answer;
+    }
+    const again = copy.clone();
+    confirmedResponses.add(again);
+    await handler.cachePut(request, again);
+    confirmedCopies.add(request);
+    return copy;
   }
 }
+
+/** The requests a PageRefresh answered with its copy, confirmed by a 304. */
+const confirmedCopies = new WeakSet<Request>();
+/** Those copies as handed to the page plugins to store again (stampedCopy). */
+const confirmedResponses = new WeakSet<Response>();
 
 const pageWarmer = new PageRefresh({
   cacheName: PAGES_CACHE,
@@ -1214,6 +1272,8 @@ interface WarmTally {
   images: number;
   /** Already cached and young enough: not fetched. */
   fresh: number;
+  /** Asked again and confirmed by a 304: re-stamped, no body (#708). */
+  unchanged: number;
   /** Pages of garments and outfits gone from the list. */
   removed: number;
   /** Answered 404: deleted since the list was made. */
@@ -1436,6 +1496,7 @@ async function runWarm(event: ExtendableMessageEvent): Promise<void> {
     pages: 0,
     images: 0,
     fresh: 0,
+    unchanged: 0,
     removed: 0,
     refused: 0,
     failed: 0,
@@ -1452,6 +1513,7 @@ async function runWarm(event: ExtendableMessageEvent): Promise<void> {
   const summary =
     `${tally.pages} pages, ${tally.images} images in ` +
     `${((Date.now() - startedAt) / 1000).toFixed(1)} s (${tally.fresh} fresh, ` +
+    `${tally.unchanged} unchanged, ` +
     `${tally.removed} removed, ${tally.refused} refused, ` +
     `${tally.failed} failed, added ${formatBytes(usage - usageAtStart)}, ` +
     `usage ${formatBytes(usage)} of ${formatBytes(quota)})`;
@@ -1697,7 +1759,8 @@ async function drainWarm(
           }
           return;
         }
-        if (answer.ok) tally[job.tally] += 1;
+        if (confirmedCopies.has(job.request)) tally.unchanged += 1;
+        else if (answer.ok) tally[job.tally] += 1;
         else if (answer.status === 404) {
           tally.refused += 1;
           // Deleted since the list was made: the 200-only plugin keeps the
