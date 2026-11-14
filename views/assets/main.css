@@ -309,7 +309,7 @@ html {
 :root:has(.dock) {
   scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
 }
-:root:has(.dock):has(.fixed.bottom-dock) {
+:root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
   scroll-padding-bottom: calc(var(--spacing-dock) + 3.5rem + 0.5rem);
 }
 
