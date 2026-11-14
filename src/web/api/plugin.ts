@@ -7,7 +7,7 @@ import { capsuleApiRoutes } from '../capsules/api-routes';
 import { galleryApiRoutes } from '../gallery/api-routes';
 import { lookApiRoutes } from '../inspiration/api-routes';
 import type { InspirationLinkLimit } from '../inspiration/writes';
-import type { SignInLimit } from '../auth/sign-in';
+import type { SignInLimits } from '../auth/sign-in';
 import { type BearerRefusalLimit, createBearerGate } from '../auth/bearer-gate';
 import { insightsApiRoutes } from '../insights/api-routes';
 import { outfitApiRoutes } from '../outfits/api-routes';
@@ -39,7 +39,7 @@ import { refuseQueryToken, signInAgain } from './token-auth';
 import { declareQuerystring, jsonApiValidator } from './validator';
 
 export type ApiOptions = WebOptions &
-  SignInLimit &
+  SignInLimits &
   BearerRefusalLimit &
   LinkImportLimit &
   InspirationLinkLimit &

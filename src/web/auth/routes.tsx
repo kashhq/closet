@@ -20,8 +20,8 @@ import { LOGOUT_PATH } from './logout';
 import {
   checkSignIn,
   failedSignInFor,
-  type SignInLimit,
-  signInGate,
+  type SignInLimits,
+  signInGuards,
 } from './sign-in';
 import { PROFILE_PATH, revokeNotice, SIGN_OUT_EVERYWHERE_PATH } from './urls';
 import { loginUrl, REGISTER_PATH, signInReturnTo } from './return-to';
@@ -117,10 +117,10 @@ const replacedNote = (replaced: number | undefined) =>
  * POST (see form.tsx); a refusal re-renders its page with a 4xx.
  */
 export const authRoutes: FastifyPluginCallbackTypebox<
-  WebOptions & SignInLimit
+  WebOptions & SignInLimits
 > = (
   app,
-  { config, db, tokens, photos, logger, weather, signInLimit },
+  { config, db, tokens, photos, logger, weather, signInLimits },
   done,
 ) => {
   // DISABLE_REGISTRATION: every registration route sends the visitor to the
@@ -153,8 +153,9 @@ export const authRoutes: FastifyPluginCallbackTypebox<
     '/auth/login',
     {
       config: { public: true },
-      // SIGN_IN_LIMIT, shared with the API's device sign-in (sign-in.ts).
-      onRequest: signInGate(signInLimit, logger),
+      // SIGN_IN_LIMIT and SIGN_IN_ACCOUNT_LIMIT, each one budget with the
+      // API's device sign-in (sign-in.ts).
+      ...signInGuards(signInLimits, logger),
       schema: { body: LoginBody },
     },
     async (request, reply) => {
@@ -333,6 +334,7 @@ export const authRoutes: FastifyPluginCallbackTypebox<
           devices={{
             tokens: tokenList.filter((token) => token.kind === 'device'),
             timeZone: config.timeZone,
+            now: new Date(),
             notice: revokeNotice(query.deviceRevoked),
           }}
           sizes={{ measurements, brands }}

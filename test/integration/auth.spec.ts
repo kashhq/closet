@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { loginUrl } from '../../src/web/auth/return-to';
 import {
   createTestApp,
@@ -249,6 +258,14 @@ describe('sessions', () => {
     const WEEK = '/calendar?week=2026-11-09';
     const HIDDEN = (path: string) =>
       `type="hidden" name="returnTo" value="${path}"`;
+
+    // An account per test: the cases sign in more than
+    // SIGN_IN_ACCOUNT_LIMIT allows one account a minute (#705).
+    let email: string;
+    beforeEach(async () => {
+      email = `lands-${randomUUID()}@example.com`;
+      await t.register(email);
+    });
 
     const signInFrom = (returnTo?: unknown, password = TEST_PASSWORD) =>
       t.inject({

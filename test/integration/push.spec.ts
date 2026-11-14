@@ -11,6 +11,7 @@ import {
 } from 'vitest';
 import webpush, { type PushSubscription } from 'web-push';
 import { user, userDevice } from '../../src/db/schema';
+import { PUSH_TEST_LIMIT } from '../../src/web/security/rate-limit';
 import { createTestApp, PWA_ENV, TestApp } from './harness';
 import { expectFragment, expectFullPage } from './pages';
 
@@ -458,6 +459,37 @@ describe('web push (PWA_ENABLED=true)', () => {
       expect(res.body).toContain('Test sent to 1 of your devices.');
       expect(res.body).toContain(
         'The test could not be delivered to 1 of your devices.',
+      );
+    });
+
+    // #705: a looping client must not get the VAPID identity throttled.
+    it('sends PUSH_TEST_LIMIT tests a minute per user, then answers its fragment saying to wait, sending nothing', async () => {
+      const { cookie } = await userWithDevices(1);
+      const other = await userWithDevices(1);
+      const send = vi
+        .spyOn(webpush, 'sendNotification')
+        .mockResolvedValue(DELIVERED);
+
+      for (let i = 0; i < PUSH_TEST_LIMIT.max; i++) {
+        const res = await sendTest(cookie);
+        expect(res.body).toContain('Test sent to 1 of your devices.');
+      }
+      t.logs.clear();
+      const limited = await sendTest(cookie);
+
+      expect(limited.statusCode).toBe(200);
+      expectFragment(limited);
+      expect(limited.body).toContain('Try again in a minute.');
+      expect(limited.body).not.toContain('Test sent');
+      expect(send).toHaveBeenCalledTimes(PUSH_TEST_LIMIT.max);
+      expect(t.logs.messages('warn')).toEqual([
+        expect.stringMatching(
+          /^Rate limit reached: POST \/push\/test for user \d+: nothing sent$/,
+        ),
+      ]);
+      // Per user: another account's test still goes.
+      expect((await sendTest(other.cookie)).body).toContain(
+        'Test sent to 1 of your devices.',
       );
     });
   });

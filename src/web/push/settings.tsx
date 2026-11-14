@@ -125,8 +125,16 @@ export function PushSignedOut() {
   return <push-signed-out hidden></push-signed-out>;
 }
 
-/** POST /push/test's answer, swapped under the button. */
-export function TestResult({ report }: { report: SendReport }) {
+/**
+ * POST /push/test's answer, swapped under the button: what the send
+ * reached, or `rate-limited` past PUSH_TEST_LIMIT (nothing was sent).
+ */
+export function TestResult({
+  report,
+}: {
+  report: SendReport | 'rate-limited';
+}) {
+  if (report === 'rate-limited') return <p>{t('PUSH_TEST_TOO_SOON')}</p>;
   if (report.devices === 0) return <p>{t('PUSH_TEST_NO_DEVICES')}</p>;
   return (
     <>

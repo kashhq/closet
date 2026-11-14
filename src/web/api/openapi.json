@@ -10,7 +10,7 @@
       "deviceToken": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A device token from POST /api/v1/auth/token, valid until revoked."
+        "description": "A device token from POST /api/v1/auth/token, valid until revoked or unused for 90 days."
       }
     },
     "schemas": {
