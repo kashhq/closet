@@ -23,10 +23,9 @@ import {
   weatherOnly,
 } from '../weather/weather-resource';
 import { tripForecast } from './forecast';
-import { createTripAt, createTripOnce, listTrips } from './queries';
-import { HttpError } from '../errors';
-import { t } from '../i18n';
+import { listTrips } from './queries';
 import {
+  addTrip,
   addTripItem,
   copyTripExtras,
   editTrip,
@@ -99,8 +98,8 @@ const deleted = { 204: Type.Null({ description: 'Deleted' }) };
 /**
  * Trips and packing on /api/v1 (#194a; plan section 6), registered by
  * apiPlugin, each calling what its page twin calls (operations.ts names the
- * twin): trip-actions.ts for one trip, listTrips and createTripAt for the
- * list and a new one. Trips are private (src/web/trips/AGENTS.md): only the
+ * twin): trip-actions.ts for one trip and a new one (addTrip), listTrips
+ * for the list. The actions log every write; these routes log nothing. Trips are private (src/web/trips/AGENTS.md): only the
  * token's user's own are reached, there is no `?ownerId=`, and another's
  * trip, trip outfit or extra is the 404 of an unknown id. The ticks are
  * set-state per garment and per extra, so a queued retry is a no-op.
@@ -111,6 +110,8 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   done,
 ) => {
   const today = () => todayIn(config.timeZone, new Date());
+  // What every trip write takes; each logs its own outcome (trip-actions.ts).
+  const deps = { db, logger };
 
   /**
    * plan_trip_outfit's two paths, as the MCP tool takes them: a saved
@@ -127,7 +128,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     if (garmentIds === undefined) {
       if (outfitId === undefined) throw outfitOrGarments();
       const outcome = await planTripOutfit(
-        db,
+        deps,
         actor,
         { ...slot, outfitId },
         BY_PERSON,
@@ -135,7 +136,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       return { outfitId, outfitCreated: false, added: outcome === 'added' };
     }
     if (outfitId !== undefined) throw outfitOrGarments();
-    const picked = await pickIdeaForTrip(db, actor, {
+    const picked = await pickIdeaForTrip(deps, actor, {
       ...slot,
       garmentIds,
       name: input.name?.trim() || undefined,
@@ -220,7 +221,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
+      const actor = actorOf(request);
       const { clientId, place, ...fields } = request.body;
       const form = readTripForm(fields);
       if (!form.ok) throw refusedBody(form.errors, POINTER_OF_TRIP_FIELD);
@@ -228,30 +229,17 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       if (place) {
         await enforceLimit(weatherLimits.destination, request, {
           logger,
-          who: `user ${userId}`,
+          who: `user ${actor.userId}`,
         });
       }
-      const picked = place ? pickedPlace(place) : null;
-      const once = clientId
-        ? await createTripOnce(
-            db,
-            userId,
-            form.fields,
-            picked,
-            today(),
-            clientId,
-          )
-        : {
-            row: await createTripAt(db, userId, form.fields, picked, today()),
-            created: true,
-          };
-      if (once === 'gone') throw new HttpError(410, t('TRIP_DELETED'));
-      const { id, away } = once.row;
-      logger.info(
-        `Trip ${id} ${once.created ? 'created' : 'already created, retry answered'} by user ${userId} (API): ${form.fields.startsOn} to ${form.fields.endsOn}${place && once.created ? ', destination located' : ''}${away > 0 ? `, ${away} planned entr(ies) removed from its days` : ''}${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
-      );
+      const { id, created } = await addTrip(deps, actor, {
+        fields: form.fields,
+        place: place ? pickedPlace(place) : null,
+        today: today(),
+        clientId,
+      });
       return reply
-        .status(once.created ? 201 : 200)
+        .status(created ? 201 : 200)
         .header('Location', `${API_PREFIX}/trips/${id}`)
         .send({ id });
     },
@@ -280,11 +268,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await requireTrip(db, actor, id);
         throw refusedBody(form.errors, POINTER_OF_TRIP_FIELD);
       }
-      const saved = await editTrip(db, actor, id, form.fields, today());
-      logger.info(
-        `Trip ${id} updated by user ${actor.userId} (API): ${form.fields.startsOn} to ${form.fields.endsOn}${saved.undated > 0 ? `, ${saved.undated} outfit(s) moved to any day` : ''}${saved.locationCleared ? ', destination location cleared' : ''}${saved.away > 0 ? `, ${saved.away} planned entr(ies) removed from its days` : ''}`,
-      );
-      return { undated: saved.undated, locationCleared: saved.locationCleared };
+      return editTrip(deps, actor, id, form.fields, today());
     },
   );
 
@@ -302,10 +286,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const actor = actorOf(request);
-      const { id } = request.params;
-      await removeTrip(db, actor, id);
-      logger.info(`Trip ${id} deleted by user ${actor.userId} (API)`);
+      await removeTrip(deps, actorOf(request), request.params.id);
       return reply.status(204).send(null);
     },
   );
@@ -330,12 +311,10 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const actor = actorOf(request);
-      const { id } = request.params;
-      const { day, occasion } = request.body;
-      const planned = await planOnTrip(actor, id, request.body);
-      logger.info(
-        `Outfit ${planned.outfitId}${planned.outfitCreated ? ' (new)' : ''} ${planned.added ? 'added to' : 'already on'} trip ${id} by user ${actor.userId} (API; ${day ?? 'any day'}${occasion ? `, ${occasion}` : ''})`,
+      const planned = await planOnTrip(
+        actorOf(request),
+        request.params.id,
+        request.body,
       );
       return reply.status(planned.added ? 201 : 200).send(planned);
     },
@@ -355,16 +334,8 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
       const { id, tripOutfitId } = request.params;
-      const removed = await takeOffTrip(db, actor, {
-        tripId: id,
-        tripOutfitId,
-      });
-      logger.info(
-        `Outfit ${removed.outfitId} taken off trip ${id} by user ${actor.userId} (API; trip outfit ${tripOutfitId}; ${removed.unpacked} packed mark(s) removed with its garments)`,
-      );
-      return removed;
+      return takeOffTrip(deps, actorOf(request), { tripId: id, tripOutfitId });
     },
   );
 
@@ -382,20 +353,16 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
       const { id, tripOutfitId } = request.params;
       const at = new Date();
       const day = todayIn(config.timeZone, at);
       const wore = await wearTripOutfit(
-        db,
-        actor,
+        deps,
+        actorOf(request),
         { tripId: id, tripOutfitId },
         { at, today: day },
       );
-      const { entryId, scheduled, worn } = wore.worn;
-      logger.info(
-        `Trip ${id} outfit ${wore.outfitId} worn by user ${actor.userId} on ${day} (${wore.occasion}; API): entry ${entryId} ${scheduled === 'scheduled' ? 'planned' : 'already planned'}, ${worn.changed ? `marked worn (${worn.wears} wears logged)` : 'already worn'}`,
-      );
+      const { entryId, worn } = wore.worn;
       return {
         outfitId: wore.outfitId,
         day,
@@ -423,17 +390,13 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
       const { id, garmentId } = request.params;
       const { packed } = request.body;
-      const { changed } = await tickTripGarment(db, actor, {
+      const { changed } = await tickTripGarment(deps, actorOf(request), {
         tripId: id,
         garmentId,
         packed,
       });
-      logger.info(
-        `Trip ${id} packing set by user ${actor.userId} (API): garment ${garmentId} ${packed ? 'packed' : 'unpacked'}${changed ? '' : ', already so'}`,
-      );
       return { garmentId, packed, changed };
     },
   );
@@ -455,12 +418,13 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const actor = actorOf(request);
-      const { id } = request.params;
-      const added = (await addTripItem(db, actor, id, request.body.label)) > 0;
-      logger.info(
-        `Trip ${id} extra ${added ? 'added' : 'already there'} by user ${actor.userId} (API)`,
-      );
+      const added =
+        (await addTripItem(
+          deps,
+          actorOf(request),
+          request.params.id,
+          request.body.label,
+        )) > 0;
       return reply.status(added ? 201 : 200).send({ added });
     },
   );
@@ -480,17 +444,12 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
       const { id, itemId } = request.params;
-      const { packed } = request.body;
-      const { item, changed } = await tickTripItem(db, actor, {
+      const { item, changed } = await tickTripItem(deps, actorOf(request), {
         tripId: id,
         itemId,
-        packed,
+        packed: request.body.packed,
       });
-      logger.info(
-        `Trip ${id} extras set by user ${actor.userId} (API): extra ${itemId} ${packed ? 'packed' : 'unpacked'}${changed ? '' : ', already so'}`,
-      );
       return { ...item, changed };
     },
   );
@@ -509,12 +468,8 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id, itemId } = request.params;
-      await removeTripExtra(db, actor, { tripId: id, itemId });
-      logger.info(
-        `Trip ${id} extra ${itemId} removed by user ${actor.userId} (API)`,
-      );
+      await removeTripExtra(deps, actorOf(request), { tripId: id, itemId });
       return reply.status(204).send(null);
     },
   );
@@ -534,16 +489,10 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
-      const { id } = request.params;
-      const { fromTripId } = request.body;
-      const added = await copyTripExtras(db, actor, {
-        fromTripId,
-        toTripId: id,
+      const added = await copyTripExtras(deps, actorOf(request), {
+        fromTripId: request.body.fromTripId,
+        toTripId: request.params.id,
       });
-      logger.info(
-        `Trip ${id}: ${added} extra(s) copied from trip ${fromTripId} by user ${actor.userId} (API)`,
-      );
       return { added };
     },
   );
@@ -600,13 +549,8 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           logger,
           who: `user ${actor.userId}`,
         });
-        const { id } = request.params;
         const place = pickedPlace(request.body);
-        await locateTrip(db, actor, id, place);
-        // The user, never the place: where someone travels is theirs.
-        logger.info(
-          `Trip ${id} destination located by user ${actor.userId} (API)`,
-        );
+        await locateTrip(deps, actor, request.params.id, place);
         return keptDestination(place);
       },
     );

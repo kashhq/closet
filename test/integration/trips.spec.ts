@@ -369,7 +369,13 @@ describe('trips', () => {
           and(eq(tripOutfit.tripId, id), eq(tripOutfit.outfitId, dayOutfit)),
         );
       expect(rows).toEqual([{ day: days[0], occasion: 'daytime' }]);
-      expect(t.logs.messages('info', 'Web').at(-1)).toMatch(/already on trip/);
+      expect(t.logs.ops('trip.outfit.added').at(-1)).toMatchObject({
+        tripId: id,
+        outfitId: dayOutfit,
+        day: days[0],
+        occasion: 'evening',
+        changed: false,
+      });
     });
 
     it('refuses a day outside the trip (400) and someone else’s outfit (404)', async () => {
@@ -865,7 +871,10 @@ describe('trips', () => {
         );
       expect(entries).toEqual([{ occasion: 'work' }]);
       expect(await t.db.$count(garmentWear)).toBe(wearsBefore + 2);
-      expect(t.logs.messages('info', 'Web').at(-1)).toMatch(/already worn$/);
+      expect(t.logs.ops('trip.outfit.worn').at(-1)).toMatchObject({
+        tripId: id,
+        changed: false,
+      });
       const after = unescapeHtml((await get(`/trips/${id}`)).body);
       expect(after).toContain('✓ Worn');
       expect(after).not.toContain(`/trips/${id}/outfits/${row.id}/wear`);
@@ -965,9 +974,12 @@ describe('trips', () => {
       expect(entries).toEqual([
         { occasion: 'evening', plannedBy: 'user', wornAt: expect.any(Date) },
       ]);
-      expect(t.logs.messages('info', 'Web').at(-1)).toMatch(
-        /already planned, marked worn \(2 wears logged\)$/,
-      );
+      expect(t.logs.ops('trip.outfit.worn').at(-1)).toMatchObject({
+        outfitId: layers,
+        entryPlanned: false,
+        changed: true,
+        wears: 2,
+      });
     });
 
     it('is refused (409) for an outfit of another day of the trip, as a page left open past midnight posts it', async () => {
@@ -1056,13 +1068,10 @@ describe('trips', () => {
         longitude: -97.74,
         timeZone: 'America/Chicago',
       });
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Trip ${id} created by user \\d+: .*, destination located$`,
-          ),
-        ),
-      );
+      // Located, and never where: the place is the person's.
+      const created = t.logs.ops('trip.created').at(-1);
+      expect(created).toMatchObject({ tripId: id, located: true });
+      expect(JSON.stringify(created)).not.toContain(label);
       const page = unescapeHtml((await get(`/trips/${id}`)).body);
       expect(page).toMatch(/<button type="submit"[^>]*>\s*Change\s*</);
       const weather = await get(`/trips/${id}/weather`);

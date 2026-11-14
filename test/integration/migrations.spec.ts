@@ -403,14 +403,14 @@ describe('migrations', () => {
       a: { ...NO_MATCHER, color: 'red' as const },
       b: { ...NO_MATCHER, color: 'green' as const },
     };
-    await addOutfitRule(t.db, { userId: rulesOnly }, rule);
+    await addOutfitRule(t.db, { userId: rulesOnly, surface: 'page' }, rule);
     await saveStyleProfile(t.db, profiled, {
       styles: ['classic'],
       budget: null,
       palette: null,
       notes: null,
     });
-    await addOutfitRule(t.db, { userId: profiled }, rule);
+    await addOutfitRule(t.db, { userId: profiled, surface: 'page' }, rule);
     // As production is before 0069: the rule wrote no profile row.
     await asFixture(t.db, (tx) =>
       tx.delete(styleProfile).where(eq(styleProfile.userId, rulesOnly)),
@@ -457,7 +457,7 @@ describe('migrations', () => {
     // The triggers are back: the next rule stamps the profile.
     await addOutfitRule(
       t.db,
-      { userId: profiled },
+      { userId: profiled, surface: 'page' },
       { ...rule, kind: 'always' },
     );
     expect((await profileOf(profiled)).revision).toBe(

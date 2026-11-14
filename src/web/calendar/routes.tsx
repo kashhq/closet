@@ -6,7 +6,6 @@ import type { WebOptions } from '../plugin';
 import {
   answerReplay,
   isReplay,
-  replayNote,
   replayRefused,
   requestTap,
 } from '../offline-writes';
@@ -58,9 +57,10 @@ import {
   calendarEntryNotFound,
   removeEntry,
   requireEntry,
+  restoreEntry,
 } from './entry-actions';
-import { findEntries, type Scheduled } from './queries';
-import { replaceEntryOutfit, replaceMessage } from './replace';
+import { findEntries } from './queries';
+import { replaceEntryOutfit } from './replace';
 import {
   CALENDAR_MONTH_PATH,
   CALENDAR_PATH,
@@ -120,34 +120,6 @@ const WornBody = Type.Union([
 ]);
 
 /** The log line for what POST /calendar/:id/worn did. */
-function wornMessage(
-  id: number,
-  ownerId: number,
-  outcome: { worn: boolean; changed: boolean; wears: number },
-): string {
-  const state = outcome.worn ? 'worn' : 'not worn';
-  if (!outcome.changed) {
-    return `Calendar entry ${id} already ${state} for user ${ownerId}`;
-  }
-  const wears = `${outcome.wears} wears ${outcome.worn ? 'logged' : 'removed'}`;
-  return `Calendar entry ${id} marked ${state} by user ${ownerId} (${wears})`;
-}
-
-function scheduleMessage(
-  ownerId: number,
-  entry: { outfitId: number; day: string; occasion: string },
-  scheduled: Scheduled,
-): string {
-  const { outfitId, day, occasion } = entry;
-  if (scheduled.outcome === 'scheduled') {
-    return `Outfit ${outfitId} scheduled on ${day} (${occasion}) by user ${ownerId}`;
-  }
-  const adopted = scheduled.adopted
-    ? "; the week planner's entry is the user's now"
-    : '';
-  return `Outfit ${outfitId} already scheduled on ${day} for user ${ownerId}; ${occasion} not added${adopted}`;
-}
-
 /** `?planned=`: a batch id or 'none'; anything else is no banner. */
 function parsePlanned(value: string | undefined): number | 'none' | undefined {
   if (value === 'none') return 'none';
@@ -166,6 +138,9 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   { db, config, logger, photos },
   done,
 ) => {
+  // What every entry write takes; each logs its own outcome (entry-actions.ts).
+  const deps = { db, logger };
+
   // The plan page's day (and its sentinel's): navigation state, so none
   // (missing or malformed) is today, all day.
   const planDestination = (parsed: OutfitDestination): DayDestination =>
@@ -386,19 +361,15 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const occasion = request.body.occasion ?? DEFAULT_OCCASION;
       if (replace !== undefined) {
         const target = { entryId: replace, day: date, occasion };
-        const replaced = await replaceEntryOutfit(
-          db,
-          actor,
-          target,
-          { outfitId },
-          BY_PERSON,
-        );
-        logger.info(replaceMessage(actor.userId, target, replaced));
+        await replaceEntryOutfit(deps, actor, target, { outfitId }, BY_PERSON);
         return reply.redirect(weekUrl(week ?? date), 302);
       }
-      const entry = { outfitId, day: date, occasion };
-      const scheduled = await planOutfit(db, actor, entry, BY_PERSON);
-      logger.info(scheduleMessage(actor.userId, entry, scheduled));
+      await planOutfit(
+        deps,
+        actor,
+        { outfitId, day: date, occasion },
+        BY_PERSON,
+      );
       return reply.redirect(weekUrl(week ?? date), 302);
     },
   );
@@ -421,7 +392,7 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { id } = request.params;
       const week = request.body?.week;
       const htmx = Boolean(request.headers['hx-request']);
-      const removed = await removeEntry({ db, photos, logger }, actor, id, {
+      const removed = await removeEntry({ ...deps, photos }, actor, id, {
         asksFirst: htmx && request.body?.confirmed !== '1',
       });
       const target = weekUrl(week);
@@ -464,19 +435,7 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const actor = actorOf(request);
       const removed = undo.take(actor.userId, request.body.token);
       if (!removed) throw calendarEntryNotFound();
-      const scheduled = await planOutfit(
-        db,
-        actor,
-        {
-          outfitId: removed.outfitId,
-          day: removed.day,
-          occasion: removed.occasion,
-        },
-        removed.plannedBy === 'auto' ? 'planner' : BY_PERSON,
-      );
-      logger.info(
-        `Calendar entry ${scheduled.entryId} restored (${removed.plannedBy}) by user ${actor.userId} (Undo)`,
-      );
+      await restoreEntry(deps, actor, removed);
       const target = weekUrl(removed.day);
       if (request.headers['hx-request']) {
         announce(reply, t('CALENDAR_RESTORED'));
@@ -506,7 +465,7 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const posted = request.body?.worn;
       const now = new Date();
       const today = todayIn(config.timeZone, now);
-      const outcome = await markEntryWorn(db, actor, {
+      const outcome = await markEntryWorn(deps, actor, {
         entryId: id,
         worn: posted === undefined ? undefined : posted === '1',
         at: now,
@@ -514,14 +473,11 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         tap: requestTap(request, request.body?.at, config.timeZone),
       });
       if (outcome === 'future') {
-        logger.info(`Calendar entry ${id}: not marked worn, its day is ahead`);
         throw replayRefused(reply, 'future', {
           message: 'A planned day cannot be marked worn yet',
+          logDetail: `calendar entry ${id}'s day is ahead`,
         });
       }
-      logger.info(
-        `${wornMessage(id, actor.userId, outcome)}${replayNote(request)}`,
-      );
       if (isReplay(request)) return answerReplay(reply, outcome.changed);
       const back = safeReturnTo(
         request.body?.returnTo,

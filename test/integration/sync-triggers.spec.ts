@@ -291,7 +291,11 @@ describe('the sync triggers', () => {
       const userId = await newUser('rules-first@example.com');
       expect(await profileOf(userId)).toBeUndefined();
 
-      const id = await addOutfitRule(t.db, { userId }, colours('red', 'green'));
+      const id = await addOutfitRule(
+        t.db,
+        { userId, surface: 'page' },
+        colours('red', 'green'),
+      );
       if (id === 'duplicate') throw new Error('duplicate');
       const added = await profileOf(userId);
       expect(added).toEqual({
@@ -299,7 +303,7 @@ describe('the sync triggers', () => {
         styles: null,
       });
 
-      await deleteOutfitRule(t.db, { userId }, id);
+      await deleteOutfitRule(t.db, { userId, surface: 'page' }, id);
       const removed = await profileOf(userId);
       expect(removed.revision).toBe(await revisionOf(userId));
       expect(removed.revision).toBeGreaterThan(added.revision);
@@ -312,7 +316,7 @@ describe('the sync triggers', () => {
       expect(
         await addOutfitRule(
           t.db,
-          { userId },
+          { userId, surface: 'page' },
           {
             kind: 'never',
             a: { ...NO_MATCHER, garmentId: coat },
@@ -340,7 +344,11 @@ describe('the sync triggers', () => {
         palette: null,
         notes: null,
       });
-      await addOutfitRule(t.db, { userId }, colours('blue', 'black'));
+      await addOutfitRule(
+        t.db,
+        { userId, surface: 'page' },
+        colours('blue', 'black'),
+      );
 
       await deleteAccount(
         { db: t.db, photos: t.photos, logger: t.logger },
@@ -366,7 +374,11 @@ describe('the sync triggers', () => {
           `rules-race-${String(ruleFirst)}@example.com`,
         );
         const rule = (db: Queryable) =>
-          addOutfitRule(db, { userId }, colours('red', 'black'));
+          addOutfitRule(
+            db,
+            { userId, surface: 'page' },
+            colours('red', 'black'),
+          );
         const save = (db: Queryable) =>
           saveStyleProfile(db, userId, {
             styles: ['minimal'],

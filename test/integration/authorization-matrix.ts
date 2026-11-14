@@ -596,7 +596,7 @@ export function describeMatrix(
       if (brandSizeId === 'brand-taken') throw new Error(`${brand} is taken`);
       const outfitRuleId = await addOutfitRule(
         t.db,
-        { userId: t.owner.id },
+        { userId: t.owner.id, surface: 'page' },
         {
           kind: 'never',
           a: { ...NO_MATCHER, garmentId },

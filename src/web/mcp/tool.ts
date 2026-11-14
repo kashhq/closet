@@ -100,8 +100,8 @@ export function defineTool<Input extends z.ZodObject>(
  */
 export function actorOf(ctx: Pick<ToolContext, 'userId' | 'scope'>): Actor {
   return ctx.scope.ownWardrobeOnly
-    ? { userId: ctx.userId, ownWardrobeOnly: true }
-    : { userId: ctx.userId };
+    ? { userId: ctx.userId, surface: 'mcp', ownWardrobeOnly: true }
+    : { userId: ctx.userId, surface: 'mcp' };
 }
 
 /**

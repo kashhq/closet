@@ -234,9 +234,18 @@ describe('changing a planned outfit in place', () => {
       ]);
       // The outfit it held was the person's: it stays in their list.
       expect(await outfitExists(first)).toBe(true);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${entryId} (${day} evening) changed by user ${t.owner.id}: outfit ${first} -> outfit ${second}`,
-      );
+      expect(t.logs.ops('calendar.entry.changed').at(-1)).toMatchObject({
+        userId: t.owner.id,
+        surface: 'page',
+        entryId,
+        day,
+        occasion: 'evening',
+        previousOutfitId: first,
+        outfitId: second,
+        changed: true,
+        outfitCreated: false,
+        plannerOutfitsRemoved: 0,
+      });
     });
 
     it('refuses the outfit already on the day, naming its occasion, and changes nothing', async () => {
@@ -372,9 +381,12 @@ describe('changing a planned outfit in place', () => {
       );
       expect(await entriesFor(day, 'all-day')).toEqual([changed]);
       expect(await t.db.$count(outfit)).toBe(2);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${entryId} (${day} all-day) already holds outfit ${changed.outfitId} for user ${t.owner.id}; nothing changed`,
-      );
+      expect(t.logs.ops('calendar.entry.changed').at(-1)).toMatchObject({
+        entryId,
+        outfitId: changed.outfitId,
+        changed: false,
+        adopted: false,
+      });
     });
 
     it('two replaces at the same moment change the entry once', async () => {
@@ -383,12 +395,12 @@ describe('changing a planned outfit in place', () => {
       const entryId = await plan(planned, day, 'evening');
       const idea = [tops[1], bottoms[1], shoes[0]];
       const target = { entryId, day, occasion: 'evening' as const };
-      const owner = { userId: t.owner.id };
+      const owner = { userId: t.owner.id, surface: 'page' as const };
       const [first, second] = await interleave(
         t.db,
         (tx) =>
           replaceEntryOutfit(
-            tx,
+            { db: tx, logger: t.logger },
             owner,
             target,
             {
@@ -399,7 +411,7 @@ describe('changing a planned outfit in place', () => {
           ),
         () =>
           replaceEntryOutfit(
-            t.db,
+            { db: t.db, logger: t.logger },
             owner,
             target,
             {

@@ -23,10 +23,7 @@ import {
   insertEntry,
   scheduleOutfit,
 } from '../../src/web/calendar/queries';
-import {
-  replaceEntryOutfit,
-  replaceMessage,
-} from '../../src/web/calendar/replace';
+import { replaceEntryOutfit } from '../../src/web/calendar/replace';
 import { pickIdea } from '../../src/web/outfits/pick';
 import type { Actor } from '../../src/web/sharing/access';
 import { setGarmentStatus } from '../../src/web/wardrobe/status';
@@ -311,7 +308,7 @@ describe('the owner lock', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    owner = { userId: t.owner.id };
+    owner = { userId: t.owner.id, surface: 'page' };
     tops = [
       await garmentIn('White tee', 'tops', 'white'),
       await garmentIn('Grey tee', 'tops', 'grey'),
@@ -362,7 +359,7 @@ describe('the owner lock', () => {
           }),
         () =>
           replaceEntryOutfit(
-            t.db,
+            { db: t.db, logger: t.logger },
             owner,
             { entryId, day, occasion: 'work' },
             { outfitId: chosen },
@@ -395,7 +392,7 @@ describe('the owner lock', () => {
       const [replace, schedule] = await interleave(
         (tx) =>
           replaceEntryOutfit(
-            tx,
+            { db: tx, logger: t.logger },
             owner,
             { entryId, day, occasion: 'work' },
             { outfitId: chosen },
@@ -454,7 +451,7 @@ describe('the owner lock', () => {
       );
       const target = { entryId, day, occasion: 'all-day' as const };
       const outcome = await replaceEntryOutfit(
-        t.db,
+        { db: t.db, logger: t.logger },
         owner,
         target,
         {
@@ -470,13 +467,17 @@ describe('the owner lock', () => {
       expect(await entriesOn(day)).toEqual([
         { id: entryId, outfitId, occasion: 'all-day', plannedBy: 'user' },
       ]);
-      expect(replaceMessage(t.owner.id, target, outcome)).toBe(
-        `Calendar entry ${entryId} (${day} all-day) already holds outfit ${outfitId}; taken over from the week planner by user ${t.owner.id}`,
-      );
+      expect(t.logs.ops('calendar.entry.changed').at(-1)).toMatchObject({
+        userId: t.owner.id,
+        entryId,
+        outfitId,
+        changed: false,
+        adopted: true,
+      });
 
       // The person's own entry: nothing to take over.
       const again = await replaceEntryOutfit(
-        t.db,
+        { db: t.db, logger: t.logger },
         owner,
         target,
         {
@@ -492,7 +493,7 @@ describe('the owner lock', () => {
       const garmentIds = [tops[1], bottoms[1], shoes[1]];
       const { entryId, outfitId } = await autoEntry(garmentIds, day, 'work');
       const outcome = await replaceEntryOutfit(
-        t.db,
+        { db: t.db, logger: t.logger },
         owner,
         { entryId, day, occasion: 'work' },
         { garmentIds, origin: 'idea' },

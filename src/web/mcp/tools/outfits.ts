@@ -2,7 +2,7 @@ import * as z from 'zod';
 import { LIST_LIMIT_MAX, type Projection, project } from '../../api/resource';
 import { DEFAULT_OCCASION } from '../../../wardrobe/occasions';
 import { planOutfit } from '../../calendar/entry-actions';
-import { replaceEntryOutfit, replaceMessage } from '../../calendar/replace';
+import { replaceEntryOutfit } from '../../calendar/replace';
 import { newOutfitSlots } from '../../outfits/gone-garments';
 import { requireOutfit } from '../../outfits/outfit-actions';
 import {
@@ -208,14 +208,11 @@ export const outfitTools = [
       if (replaceEntryId !== undefined) {
         const target = { entryId: replaceEntryId, day: date, occasion };
         const replaced = await replaceEntryOutfit(
-          ctx.db,
+          { db: ctx.db, logger: ctx.webLogger },
           actorOf(ctx),
           target,
           { outfitId },
           originOf(ctx),
-        );
-        ctx.webLogger.info(
-          replaceMessage(ctx.userId, target, replaced, ' (MCP)'),
         );
         return {
           outcome: replaced.outcome,
@@ -228,16 +225,13 @@ export const outfitTools = [
         };
       }
       const scheduled = await planOutfit(
-        ctx.db,
+        { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         { outfitId, day: date, occasion: occasion ?? DEFAULT_OCCASION },
         originOf(ctx),
       );
       // Already there: the occasion it kept.
       const { outcome, occasion: kept } = scheduled;
-      ctx.webLogger.info(
-        `Outfit ${outfitId} ${outcome} on ${date} (${kept}) for user ${ctx.userId} (MCP)${outcome === 'already-scheduled' && scheduled.adopted ? "; the week planner's entry is the user's now" : ''}`,
-      );
       return { outcome, date, occasion: kept };
     },
   }),
