@@ -282,9 +282,15 @@ describe('parseAuthenticationResults', () => {
       'x-tls',
       'x-vs',
     ]);
-    expect(parseAuthenticationResults('mx1.messagingengine.com; none')).toEqual(
-      { authservId: 'mx1.messagingengine.com', methods: [] },
-    );
+    for (const header of [
+      'mx1.messagingengine.com; none',
+      'mx1.messagingengine.com; none;',
+    ]) {
+      expect(parseAuthenticationResults(header)).toEqual({
+        authservId: 'mx1.messagingengine.com',
+        methods: [],
+      });
+    }
   });
 
   it('keeps a quoted value whole, unquoted', () => {

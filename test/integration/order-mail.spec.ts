@@ -7,6 +7,7 @@ import { PartialFailure } from '../../src/metrics/partial-failure';
 import { t as text } from '../../src/web/i18n';
 import { JmapError } from '../../src/web/wardrobe/order-mail/jmap';
 import {
+  OrderMailOwnerError,
   pollOrderMail,
   pollOrderMailWhole,
 } from '../../src/web/wardrobe/order-mail/poll';
@@ -483,6 +484,19 @@ describe('order email import', () => {
   });
 
   // #706: ORDER_MAIL_OWNER is an account id from the boot on.
+  // The inbox is never queried (no JMAP method called), so nothing is
+  // delivered: an email here would move the watermark the later tests use.
+  it("fails the run before the inbox is queried or a row written when the boot's owner account is gone", async () => {
+    const rows = (await t.db.select().from(orderEmail)).length;
+    const calls = jmap.calls.length;
+    // An id no account has: the owner's account deleted since the boot.
+    await expect(
+      pollOrderMail({ ...t.orderMail!, ownerId: 2_000_000_000 }),
+    ).rejects.toThrow(OrderMailOwnerError);
+    expect(jmap.calls.slice(calls)).toEqual([]);
+    expect(await t.db.select().from(orderEmail)).toHaveLength(rows);
+  });
+
   it('refuses the boot, naming the key, when ORDER_MAIL_OWNER names no account', async () => {
     const boot = createTestApp(
       {

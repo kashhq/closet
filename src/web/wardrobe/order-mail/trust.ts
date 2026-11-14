@@ -261,7 +261,12 @@ class Scanner {
     const end = this.at + 'none'.length;
     if (this.text.slice(this.at, end).toLowerCase() !== 'none') return false;
     const next = this.text[end];
-    if (next !== undefined && !WHITESPACE.has(next) && next !== '(') {
+    if (
+      next !== undefined &&
+      !WHITESPACE.has(next) &&
+      next !== '(' &&
+      next !== ';'
+    ) {
       return false;
     }
     this.at = end;
