@@ -933,34 +933,59 @@ function bestIdea<G extends IdeaGarment>(
   const scores = [...new Set([bare.score, ...layerScores])].sort(
     (a, b) => a - b,
   );
-  // The rotation order, drawn only as far as a score's search needs, and
-  // kept for the next score's.
-  const order = layers.orderFor(base)[Symbol.iterator]();
-  const drawn: number[] = [];
-  const nth = (n: number): number | undefined => {
-    while (drawn.length <= n) {
-      const next = order.next();
-      if (next.done) return undefined;
-      drawn.push(next.value);
-    }
-    return drawn[n];
-  };
+  // Drawn only as far as a score's search needs, and kept for the next's.
+  const order = lazily(layers.orderFor(base));
   for (const score of scores) {
     // A bare base scoring 0 was tried above.
     if (bare.score === score && score !== 0 && rules.passes(bare.garments)) {
       return ideaOf(bare, rules.lockBroken);
     }
-    if (!layerScores.has(score)) continue;
-    for (let n = 0, at = nth(0); at !== undefined; n += 1, at = nth(n)) {
-      const option = judged[layers.kindOf[at]];
-      if (option.score !== score) continue;
-      const garments = [...base, layers.offered[at]];
-      if (rules.passes(garments)) {
-        return ideaOf({ garments, ...option }, rules.lockBroken);
-      }
-    }
+    const layered = layerScores.has(score)
+      ? firstLayerAt(score, { base, layers, judged, order, rules })
+      : undefined;
+    if (layered) return ideaOf(layered, rules.lockBroken);
   }
   return undefined;
+}
+
+/** The first layer in the base's rotation order scoring `score` whose option passes the hard rules. */
+function firstLayerAt<G extends IdeaGarment>(
+  score: number,
+  {
+    base,
+    layers,
+    judged,
+    order,
+    rules,
+  }: {
+    base: readonly G[];
+    layers: Layers<G>;
+    judged: readonly { score: number; problems: IdeaProblem[] }[];
+    order: (n: number) => number | undefined;
+    rules: HardRules<G>;
+  },
+): Option<G> | undefined {
+  for (let n = 0, at = order(0); at !== undefined; n += 1, at = order(n)) {
+    const option = judged[layers.kindOf[at]];
+    if (option.score !== score) continue;
+    const garments = [...base, layers.offered[at]];
+    if (rules.passes(garments)) return { garments, ...option };
+  }
+  return undefined;
+}
+
+/** `items`' nth, drawn from it only once asked for, and kept. */
+function lazily<T>(items: Iterable<T>): (n: number) => T | undefined {
+  const iterator = items[Symbol.iterator]();
+  const drawn: T[] = [];
+  return (n) => {
+    while (drawn.length <= n) {
+      const next = iterator.next();
+      if (next.done) return undefined;
+      drawn.push(next.value);
+    }
+    return drawn[n];
+  };
 }
 
 function ideaOf<G extends IdeaGarment>(
