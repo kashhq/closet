@@ -46,7 +46,8 @@ export interface WearPanel {
    * The household's date a live answer was rendered on (APP_TIMEZONE): set
    * on the htmx answer of Wore today and Washed alone, never on the page,
    * which must read the same tomorrow (#708). Without it the page's script
-   * takes the day from the copy's stamp (views/assets/page-day.ts).
+   * words the page's days against the copy's stamp and judges Wore today on
+   * the tap's day (src/page-day.ts).
    */
   answeredOn?: IsoDate;
 }
@@ -81,9 +82,10 @@ export function WearSection(props: { garment: WearGarment; panel: WearPanel }) {
 
 /**
  * The wear line, the wash state and the row of primary actions. `after` is
- * the tap this answers: when its button is gone from the answer (Washed,
- * once nothing is worn since), focus moves to the wear line, which then
- * says what changed, rather than dropping to the page's start.
+ * the tap this answers: when Washed answers without its button (nothing is
+ * worn since), focus moves to the wear line, which then says what changed,
+ * rather than dropping to the page's start. Wore today is always rendered
+ * (its undo is the page's script's), so htmx keeps focus on it by id.
  */
 export function WearStatus(props: {
   garment: WearGarment;
@@ -99,8 +101,8 @@ export function WearStatus(props: {
     wearsSinceWash: summary.sinceWash,
   });
   const needsWash = limit !== null && dirty > 0;
-  const shows = tapsShown(garment, summary);
-  const lostFocus = props.after !== undefined && !shows[props.after];
+  const offersWashed = washedShown(garment, summary);
+  const lostFocus = props.after === 'wash' && !offersWashed;
   return (
     <div
       id={WEAR_STATUS_ID}
@@ -132,29 +134,27 @@ export function WearStatus(props: {
           <StyleThisLink garmentId={garment.id} viewOwner={undefined} />
         )}
         <WoreToday garment={garment} summary={summary} />
-        {shows.wash && <Washed garment={garment} />}
+        {offersWashed && <Washed garment={garment} />}
       </div>
     </div>
   );
 }
 
 /**
- * Which taps the row offers: Wore today always (the page's script swaps it
- * for the calendar's badge on a day a worn entry wore it, page-day.ts),
- * Washed once something is worn since a wash that is due. The one decision:
- * the row renders from it and WearStatus's focus follows it, so a button is
- * never gone while focus waits on it.
+ * Whether the row offers Washed: once something is worn since a wash that
+ * is due. The one decision: the row renders from it and WearStatus's focus
+ * follows it, so the button is never gone while focus waits on it. Wore
+ * today is always offered (the page's script swaps it for the calendar's
+ * badge on a day a worn entry wore it, src/page-day.ts).
  */
-export function tapsShown(
+export function washedShown(
   garment: Pick<WearGarment, 'category' | 'washAfterWears'>,
   summary: Pick<WearSummary, 'sinceWash'>,
-): Record<WearTap, boolean> {
-  return {
-    wear: true,
-    wash:
-      summary.sinceWash > 0 &&
-      washLimit(garment.category, garment.washAfterWears) !== null,
-  };
+): boolean {
+  return (
+    summary.sinceWash > 0 &&
+    washLimit(garment.category, garment.washAfterWears) !== null
+  );
 }
 
 /**
@@ -225,13 +225,13 @@ function WashState(props: { dirty: number; quantity: number }) {
  * Not WornControl (worn-control.tsx), which marks a calendar entry: this is
  * a garment's own record, in the same words ("Wore …", "✓ Worn …", Undo).
  *
- * Which of the three shows is the page's script's (#708,
- * views/assets/page-day.ts): the server renders Wore today with the undo in
- * the template and the badge hidden, and names the last day worn and how
- * (`data-worn-on`, `data-worn-by`); the script shows the undo or the badge
- * when that day is the page's. The region's key has no day either: the
- * outbox adds the page's, and refuses a tap on a page whose day is not the
- * tap's (its state is that day's).
+ * Which of the three shows is the page's script's (#708, src/page-day.ts,
+ * applied by views/assets/outbox.ts): the server renders Wore today with the
+ * undo in the template and the badge hidden, and names the last day worn
+ * and how (`data-worn-on`, `data-worn-by`); the script shows the undo or the
+ * badge when that day is the tap's (a live answer's own). The region's key
+ * has no day either: the outbox adds that day, and refuses a tap on a live
+ * answer of another day (left open overnight).
  */
 function WoreToday(props: { garment: WearGarment; summary: WearSummary }) {
   const { garment, summary } = props;
@@ -254,9 +254,12 @@ function WoreToday(props: { garment: WearGarment; summary: WearSummary }) {
         </OutboxAlternate>
         <OutboxPending />
       </div>
+      {/* Focusable by script only: it takes focus when the row it
+          replaces had it (showWornState, views/assets/outbox.ts). */}
       <span
         class="badge badge-success self-center"
         hidden
+        tabindex={-1}
         data-worn-by-entry=""
       >
         ✓ {t('wear.WORN_TODAY_CALENDAR')}

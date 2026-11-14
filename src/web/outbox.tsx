@@ -31,8 +31,8 @@ export function queueForm(kind: QueueableKind) {
 
 /**
  * A queued write's region. It names no day: a page reads the same from one
- * day to the next (#708). Wore today's day is the page's, which the outbox
- * reads from the copy's stamp (views/assets/page-day.ts).
+ * day to the next (#708). Wore today's day is the tap's (a live answer's
+ * own), which the outbox adds to its key (src/page-day.ts).
  */
 export function outboxRegion(target: QueuedTarget, label: string) {
   return {

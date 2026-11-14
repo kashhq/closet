@@ -119,7 +119,7 @@ describe('page ETags', () => {
   // The warm refreshes a copy a day old: a garment page whose history did
   // not change must keep its tag across the day (no server-day value in it:
   // "last worn yesterday", Wore today's state and the outbox's day are the
-  // client's, views/assets/page-day.ts).
+  // client's, src/page-day.ts).
   it('keeps an unchanged garment page’s tag from one day to the next', async () => {
     vi.useFakeTimers({
       toFake: ['Date'],
@@ -147,6 +147,43 @@ describe('page ETags', () => {
     vi.setSystemTime(new Date('2026-06-11T16:00:00Z'));
     const second = await get(url);
     expect(second.statusCode).toBe(200);
+    expect(second.body).toBe(first.body);
+    expect(second.headers.etag).toBe(first.headers.etag);
+  });
+
+  // The outfit page is warmed too (WARM_OUTFIT_CAP): its Plan sheet's day
+  // is the client's (defaultsToToday, src/web/day-time.tsx), and a plan
+  // still ahead on both days keeps the Planned list as it was.
+  it('keeps an unchanged outfit page’s tag from one day to the next', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: new Date('2026-06-10T16:00:00Z'),
+    });
+    const held = await createGarment(t, { name: 'Day-stable shirt' });
+    const made = await t.inject({
+      method: 'POST',
+      url: '/outfits',
+      payload: {
+        name: 'Day-stable outfit',
+        category: 'tops',
+        garmentId: String(held),
+      },
+    });
+    const url = String(made.headers.location);
+    expect(url).toMatch(/^\/outfits\/\d+$/);
+    const outfitId = url.split('/').pop()!;
+    const planned = await t.inject({
+      method: 'POST',
+      url: '/calendar',
+      payload: { date: '2026-06-14', outfitId },
+    });
+    expect(planned.statusCode).toBeLessThan(400);
+    const first = await get(url);
+    expect(first.statusCode).toBe(200);
+    expect(first.body).toContain('data-planned-entry');
+    expect(first.body).not.toContain('value="2026-06-10"');
+    vi.setSystemTime(new Date('2026-06-11T16:00:00Z'));
+    const second = await get(url);
     expect(second.body).toBe(first.body);
     expect(second.headers.etag).toBe(first.headers.etag);
   });

@@ -20,6 +20,7 @@ import {
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
+  confirmedHeaders,
   confirmsCopy,
   endedSession,
   forbidsStorage,
@@ -686,9 +687,12 @@ const offlinePage = new NetworkFirst({
  *
  * Conditional (#708): a stored copy of the cache's owner sends its ETag
  * (revalidationTag), and a 304 confirming it (confirmsCopy) stores the
- * copy again through the same plugins, so only its stamp changes: an
- * unchanged page costs its headers. The answer is then that copy, a 200, so
- * every caller reads a page as before; `confirmedCopies` says it was one.
+ * copy again through the same plugins, its body kept and its headers
+ * updated from the 304 (confirmedHeaders: the release, Cache-Control, the
+ * account), so an unchanged page costs its headers. A copy whose updated
+ * headers forbid storage is deleted instead. The answer is then that copy,
+ * a 200, so every caller reads a page as before; `confirmedCopies` says it
+ * was one.
  * Set explicitly, If-None-Match also keeps the browser's HTTP cache out of
  * it (Fetch: the request's cache mode becomes no-store), so the 304 is ours.
  */
@@ -708,18 +712,33 @@ class PageRefresh extends Strategy {
       await handler.cachePut(request, answer.clone());
       return answer;
     }
+    const path = new URL(request.url).pathname;
     await lastDrop;
     if (!confirmsCopy(answer, copy, await readRecord(OWNER_KEY))) {
-      console.warn(
-        `[sw] ${new URL(request.url).pathname}: a 304 for another copy, nothing stored`,
-      );
+      console.warn(`[sw] ${path}: a 304 for another copy, nothing stored`);
       return answer;
     }
-    const again = copy.clone();
+    const confirmed = new Response(copy.body, {
+      status: copy.status,
+      statusText: copy.statusText,
+      headers: confirmedHeaders(copy.headers, answer.headers),
+    });
+    if (forbidsStorage(confirmed.headers)) {
+      // Under its cache key (pageRules' cacheKeyWillBeUsed), as stored.
+      await (
+        await self.caches.open(PAGES_CACHE)
+      ).delete(pageCacheKey(request.url, request.headers));
+      console.info(`[sw] ${path}: confirmed, but now no-store; copy deleted`);
+      return confirmed;
+    }
+    const again = confirmed.clone();
     confirmedResponses.add(again);
-    await handler.cachePut(request, again);
+    if (!(await handler.cachePut(request, again))) {
+      console.info(`[sw] ${path}: confirmed, but refused storage`);
+      return confirmed;
+    }
     confirmedCopies.add(request);
-    return copy;
+    return confirmed;
   }
 }
 

@@ -4,8 +4,9 @@
  * so a page renders byte for byte the same from one day to the next and its
  * ETag holds (send(), src/web/render.ts): the offline warm then refreshes it
  * for the cost of its headers. Pure, for views/assets/outbox.ts, which
- * applies it (src/web/shell/outbox.md); src/web/day-time.tsx and the garment
- * page's Wore today (src/web/wears/wear-section.tsx) are the server's half.
+ * applies it (src/web/shell/outbox.md); src/web/day-time.tsx, the garment
+ * page's Wore today (src/web/wears/wear-section.tsx) and the outfit page's
+ * Plan sheet are the server's half.
  */
 
 import { daysBetween, type IsoDate, todayIn } from './calendar-date';
@@ -54,15 +55,32 @@ export function dayText(
 }
 
 /**
- * Whether a Wore today tap may queue: only from a page of the tap's day
- * (its state is that day's; a page left open overnight is of yesterday), and
- * never from one whose day is unknown, so nothing queues under no day.
+ * The day a page's copy is of: its stamp's (dayOfStamp), else the day the
+ * document loaded (`loadedAt`, performance.timeOrigin): a page without a
+ * service worker never gets a stamp (freshness.js's watchFreshness), and
+ * one loaded from the network is of its load.
+ */
+export function pageDay(
+  stamp: string | undefined,
+  loadedAt: number,
+  timeZone: string,
+): IsoDate {
+  return dayOfStamp(stamp, timeZone) ?? todayIn(timeZone, new Date(loadedAt));
+}
+
+/**
+ * Whether a Wore today tap may queue: its row's state was judged on the
+ * tap's day. `judgedOn` is a live answer's own day (`data-as-of-day`), or
+ * undefined for the page's row, judged on the tap's day itself (wornState
+ * reads `data-worn-on`, which no day changes, and the server's
+ * setWoreToday is idempotent). An answer left on screen overnight is of
+ * yesterday: its undo would undo the wrong day.
  */
 export function wearQueuesOn(
-  pageDay: IsoDate | undefined,
+  judgedOn: IsoDate | undefined,
   tapDay: IsoDate,
 ): boolean {
-  return pageDay !== undefined && pageDay === tapDay;
+  return judgedOn === undefined || judgedOn === tapDay;
 }
 
 /** How a garment was worn on the page's day: its Wore today row's state. */
@@ -70,14 +88,29 @@ export type WornState = 'unworn' | 'single' | 'entry';
 
 /**
  * The garment's last day worn and how (`data-worn-on`, `data-worn-by`,
- * WearSummary.lastWornBy) read on the page's day: worn by Wore today (the
- * undo shows), by a worn calendar entry (the calendar's badge), or not.
+ * WearSummary.lastWornBy) read on `day`, the day a tap would log: worn by
+ * Wore today (the undo shows), by a worn calendar entry (the calendar's
+ * badge), or not.
  */
 export function wornState(
   wornOn: string | undefined,
   wornBy: string | undefined,
-  pageDay: IsoDate,
+  day: IsoDate,
 ): WornState {
-  if (wornOn !== pageDay) return 'unworn';
+  if (wornOn !== day) return 'unworn';
   return wornBy === 'single' || wornBy === 'entry' ? wornBy : 'unworn';
+}
+
+/**
+ * Whether a Wore today row must flip (swap in its template's form) to show
+ * `state`: it shows the undo (`showsUndo`), and a row showing a queued
+ * intent (`flipped`) shows the opposite of what the server rendered.
+ */
+export function wearRowFlips(
+  state: WornState,
+  showsUndo: boolean,
+  flipped: boolean,
+): boolean {
+  const served = flipped ? !showsUndo : showsUndo;
+  return served !== (state === 'single');
 }

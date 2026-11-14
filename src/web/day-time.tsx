@@ -2,8 +2,8 @@ import type { IsoDate } from '../calendar-date';
 import { shortDayYearLabel } from './date-labels';
 
 /**
- * How the page's script words a day (views/assets/page-day.ts, which mirrors
- * date-labels.ts's relativeDay and dateLabel): "relative" reads "today",
+ * How the page's script words a day (src/page-day.ts's dayText, which
+ * mirrors date-labels.ts's relativeDay and dateLabel): "relative" reads "today",
  * "yesterday", "3 days ago" up to six, then as "date" does, "Tue, Sep 29" in
  * the page's year, else "Sep 29, 2025".
  */
@@ -23,3 +23,11 @@ export function DayTime(props: { day: IsoDate; kind: DayLabelKind }) {
     </time>
   );
 }
+
+/**
+ * A date input whose default is the household's today, set by the client
+ * (showPageDay, views/assets/outbox.ts) for the same reason as DayTime: the
+ * outfit page's Plan sheet. Without the script the field starts empty and
+ * `required` asks for a day.
+ */
+export const defaultsToToday = { 'data-value-today': '' } as const;

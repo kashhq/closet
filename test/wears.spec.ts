@@ -93,7 +93,11 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await page.goto(`/wardrobe/${oxford}`);
   const wear = page.locator('#garment-wear');
   await expect(wear.getByText('Worn once')).toBeVisible();
+  // The page's script (showPageDay, #708) swaps Wore today for the badge.
   await expect(wear.getByText('Worn today (calendar)')).toBeVisible();
+  await expect(
+    wear.getByRole('button', { name: 'Wore today', exact: true }),
+  ).toBeHidden();
   await expect(wear.getByText('Needs a wash')).toBeVisible();
   await press(page, wear.getByRole('button', { name: 'Washed' }));
   await expect(wear.getByText('0 since washed')).toBeVisible();

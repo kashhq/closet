@@ -7,6 +7,7 @@ import {
 } from './support/e2e-data';
 import { expectCollagePiecesInsidePlinths } from './support/collage-fit';
 import { E2E_PASSWORD, SAME_ORIGIN, signIn } from './support/e2e-session';
+import { householdToday } from './support/household-today';
 import { pageErrors } from './support/page-errors';
 import { OUTFIT_PAGE_SIZE as PAGE_SIZE } from '../src/web/outfits/page-size';
 
@@ -37,7 +38,11 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
   const sheet = page.locator('#outfit-plan-sheet');
   await expect(sheet).toBeVisible();
-  await sheet.locator('input[name="date"]').fill('2030-10-10');
+  // The day starts at today, set by the page's script (#708: the page
+  // names no today, so it keeps its ETag across days).
+  const day = sheet.locator('input[name="date"]');
+  await expect(day).toHaveValue(householdToday());
+  await day.fill('2030-10-10');
   await sheet.getByRole('radio', { name: 'Evening' }).check();
   await sheet.getByRole('button', { name: 'Plan it' }).click();
 

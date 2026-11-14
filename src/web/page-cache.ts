@@ -250,6 +250,33 @@ export function confirmsCopy(
 }
 
 /**
+ * What a 304 tells its stored copy (RFC 9111 4.3.4, 3.2): every header the
+ * 304 carries replaces the copy's (X-Asset-Version, Cache-Control,
+ * X-Page-Account, Server-Timing, Vary), except those describing the body
+ * it did not send, which stay the copy's. The storage checks then read the
+ * updated headers (forbidsStorage: a route that moved to no-store drops
+ * its copy rather than keeping it).
+ */
+const BODY_HEADERS = new Set([
+  'content-encoding',
+  'content-length',
+  'content-range',
+  'content-type',
+  'transfer-encoding',
+]);
+
+export function confirmedHeaders(
+  stored: Headers,
+  confirming: Headers,
+): Headers {
+  const headers = new Headers(stored);
+  confirming.forEach((value, name) => {
+    if (!BODY_HEADERS.has(name)) headers.set(name, value);
+  });
+  return headers;
+}
+
+/**
  * A page request the server redirected to the login page, which then
  * rendered for nobody (a followed redirect: htmx's boosted XHR, a
  * revalidation): nobody is signed in any more. The session gate is what

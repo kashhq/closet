@@ -4,6 +4,7 @@ import {
   CACHED_AT_HEADER,
   cachedAt,
   CACHED_AT_TIMING_NAME,
+  confirmedHeaders,
   confirmsCopy,
   endedSession,
   forbidsStorage,
@@ -247,6 +248,36 @@ describe('the conditional refetch', () => {
     // The cache changed hands while the 304 was in flight.
     expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '8')).toBe(false);
     expect(confirmsCopy(page('7', 'W/"a"', 304), copy, undefined)).toBe(false);
+  });
+});
+
+describe('confirmedHeaders', () => {
+  it('takes the 304’s headers and keeps the body’s own', () => {
+    const stored = new Headers({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Encoding': 'br',
+      'Cache-Control': 'private, no-cache',
+      'X-Asset-Version': 'old1234',
+      'X-Page-Account': '7',
+      ETag: 'W/"a"',
+    });
+    const updated = confirmedHeaders(
+      stored,
+      new Headers({
+        'Cache-Control': 'no-store',
+        'X-Asset-Version': 'new5678',
+        'X-Page-Account': '7',
+        ETag: 'W/"a"',
+        'Content-Length': '0',
+      }),
+    );
+    expect(updated.get('X-Asset-Version')).toBe('new5678');
+    expect(updated.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(updated.get('Content-Encoding')).toBe('br');
+    expect(updated.get('Content-Length')).toBeNull();
+    // A route moved to no-store: its copy goes rather than being kept.
+    expect(forbidsStorage(updated)).toBe(true);
+    expect(stored.get('Cache-Control')).toBe('private, no-cache');
   });
 });
 

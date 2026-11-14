@@ -1,8 +1,8 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
 import { DEFAULT_OCCASION, OCCASIONS } from '../../wardrobe/occasions';
 import { PostForm } from '../auth/form';
-import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
+import { defaultsToToday } from '../day-time';
 import { AlreadySavedToast } from '../gallery/already-saved';
 import type { AlreadySaved } from '../gallery/urls';
 import { t } from '../i18n';
@@ -62,8 +62,6 @@ export function OutfitPage(props: {
   ctx: ViewContext;
   outfit: OutfitPageDetail;
   entries: OutfitEntries;
-  /** The household's today: the Plan sheet's first day. */
-  today: IsoDate;
   /** The gallery's pick or a save found this outfit already saved (?alreadySaved=). */
   alreadySaved?: AlreadySaved;
   /** A reaction to Muse's proposal came back here (`?decided=`). */
@@ -147,7 +145,7 @@ export function OutfitPage(props: {
         )}
         {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
       </main>
-      {mayBePlanned && <PlanSheet outfitId={outfit.id} today={props.today} />}
+      {mayBePlanned && <PlanSheet outfitId={outfit.id} />}
       <AlreadySavedToast kind={props.alreadySaved} />
       <DecisionToastView toast={props.toast} />
       <Dock ctx={ctx} />
@@ -370,12 +368,13 @@ function GarmentList({
 /**
  * Plan: the outfit on a day, for an occasion, through POST /calendar (a
  * native post; 302 to that day's week, which shows it). Replaces the Saved
- * grid's per-card dropdown (R5). The day starts at today; the occasion is
+ * grid's per-card dropdown (R5). The day starts at today, the client's
+ * (defaultsToToday: the page keeps its ETag across days, #708); the occasion is
  * a row of radios styled as chips, all day checked (the calendar's "+ Plan"
  * sheet's pattern, R6). Planning an outfit already on that day changes
  * nothing (an outfit is on a day once).
  */
-function PlanSheet(props: { outfitId: number; today: IsoDate }) {
+function PlanSheet(props: { outfitId: number }) {
   return (
     <dialog
       id={PLAN_SHEET_ID}
@@ -394,7 +393,7 @@ function PlanSheet(props: { outfitId: number; today: IsoDate }) {
               type="date"
               name="date"
               class="input w-full"
-              value={props.today}
+              {...defaultsToToday}
               required
             />
           </label>

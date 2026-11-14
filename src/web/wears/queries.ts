@@ -113,8 +113,8 @@ export interface WearSummary {
   /**
    * How it was worn on `lastWorn`: by "Wore today" (undoable; it wins when
    * both), through a worn calendar entry, or null, never worn. No "worn
-   * today": the page's script judges that against the page's day (#708,
-   * views/assets/page-day.ts), so the page reads the same tomorrow.
+   * today": the page's script judges that on the tap's day (#708,
+   * src/page-day.ts), so the page reads the same tomorrow.
    */
   lastWornBy: 'single' | 'entry' | null;
   /** Its repairs' costs summed (repairCostSql), for the wear line's cost per wear. */

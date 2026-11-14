@@ -160,7 +160,7 @@ function unchangedFor(
  * gzip and br bodies, which a strong tag must not (RFC 9110 8.8.1), and
  * If-None-Match compares weakly anyway. A page keeps its tag only while it
  * renders byte for byte the same: no clock, nonce or request id in a page,
- * and its day-relative text is the client's (views/assets/page-day.ts).
+ * and its day-relative text is the client's (src/page-day.ts).
  */
 function pageTag(account: number | undefined, html: string): string {
   const hash = createHash('sha256')
