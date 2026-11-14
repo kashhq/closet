@@ -304,7 +304,7 @@ describe('Saved outfits and the outfit page (R5)', () => {
       expect(html).not.toContain(`href="/calendar?week=${addDays(today, -2)}"`);
     });
 
-    it('offers Plan (a sheet posting to /calendar from today) and Edit in Styling', async () => {
+    it('offers Plan (a sheet posting to /calendar, its day the client’s today) and Edit in Styling', async () => {
       const outfit = await newOutfit('Actions');
       const html = await page(`/outfits/${outfit}`);
       const sheet = html.slice(html.indexOf('id="outfit-plan-sheet"'));
@@ -312,9 +312,12 @@ describe('Saved outfits and the outfit page (R5)', () => {
       expect(sheet).toContain(
         `<input type="hidden" name="outfitId" value="${outfit}"/>`,
       );
+      // The page names no today (#708): the script fills the default
+      // (defaultsToToday; the calendar e2e reads it in a browser).
       expect(sheet).toMatch(
-        new RegExp(`<input type="date" name="date"[^>]*value="${today}"`),
+        /<input type="date" name="date"[^>]*data-value-today=""[^>]*required/,
       );
+      expect(sheet).not.toContain(`value="${today}"`);
       expect(sheet).toMatch(/value="all-day"[^>]*checked=""/);
       expect(html).toContain(
         `href="/styling?outfit=${outfit}&returnTo=%2Foutfits%2F${outfit}"`,

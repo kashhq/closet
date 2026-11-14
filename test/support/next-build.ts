@@ -31,12 +31,26 @@ export interface NextBuild {
    * with the returned id (`controllingBuild`).
    */
   deploy(): string;
+  /**
+   * The server's status for each warm request (`X-Closet-Warm`) through the
+   * proxy, in order, keyed by the request's URL and whether it asked for a
+   * fragment: what the worker's refetch was answered, a 304 included, which
+   * its own route sees only as the request.
+   */
+  warmAnswers: WarmAnswer[];
   close(): Promise<void>;
+}
+
+export interface WarmAnswer {
+  url: string;
+  fragment: boolean;
+  status: number;
 }
 
 export async function startNextBuild(): Promise<NextBuild> {
   const upstream = new URL(APP_ORIGIN);
   let build: string | undefined;
+  const warmAnswers: WarmAnswer[] = [];
 
   const server = createServer((req, res) => {
     const path = new URL(req.url ?? '/', 'http://proxy').pathname;
@@ -71,6 +85,13 @@ export async function startNextBuild(): Promise<NextBuild> {
 
     const proxied = forward(req.headers);
     proxied.on('response', (answer) => {
+      if (req.headers['x-closet-warm'] !== undefined) {
+        warmAnswers.push({
+          url: req.url ?? '/',
+          fragment: req.headers['hx-request'] === 'true',
+          status: answer.statusCode ?? 0,
+        });
+      }
       res.writeHead(answer.statusCode ?? 502, answer.headers);
       answer.pipe(res);
     });
@@ -89,6 +110,7 @@ export async function startNextBuild(): Promise<NextBuild> {
       build = `build-${randomUUID()}`;
       return build;
     },
+    warmAnswers,
     async close() {
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) =>

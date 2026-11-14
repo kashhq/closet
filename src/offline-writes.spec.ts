@@ -133,23 +133,20 @@ describe('tapInstant and instantOnDay', () => {
 describe('queuedTarget', () => {
   it('keys each kind so that only the same intent collapses', () => {
     expect([
-      queuedTarget('wear', 41, '2026-11-12'),
+      queuedTarget('wear', 41),
       queuedTarget('wash', 41),
       queuedTarget('entry', 88),
       queuedTarget('packed', 7, 41),
       queuedTarget('item', 7, 3),
     ]).toEqual([
-      { key: 'wear:41:2026-11-12', path: '/wardrobe/41/wear' },
+      // The outbox adds the page's day to a wear's (#708).
+      { key: 'wear:41', path: '/wardrobe/41/wear' },
       { key: 'wash:41', path: '/wardrobe/41/washed' },
       { key: 'entry:88', path: '/calendar/88/worn' },
       { key: 'packed:7:41', path: '/trips/7/packed' },
       { key: 'item:7:3', path: '/trips/7/items/packed' },
     ]);
-    // A wear on another day, or another trip's tick of the same garment,
-    // is another record.
-    expect(queuedTarget('wear', 41, '2026-11-11').key).not.toBe(
-      queuedTarget('wear', 41, '2026-11-12').key,
-    );
+    // Another trip's tick of the same garment is another record.
     expect(queuedTarget('packed', 8, 41).key).not.toBe(
       queuedTarget('packed', 7, 41).key,
     );

@@ -49,7 +49,14 @@
 import { singleFlight } from 'single-flight';
 import { confirmAction } from 'confirm-sheet';
 import { showToast } from 'toast';
-import { todayIn } from '../../src/calendar-date';
+import { parseIsoDate, todayIn } from '../../src/calendar-date';
+import {
+  dayText,
+  pageDay,
+  wearQueuesOn,
+  wearRowFlips,
+  wornState,
+} from '../../src/page-day';
 import {
   enqueue,
   isChecklist,
@@ -78,11 +85,7 @@ import {
   retryStuck,
   type StuckActionStore,
 } from '../../src/offline-writes';
-import {
-  openOutboxChannel,
-  outbox,
-  type OutboxChange,
-} from './outbox-store';
+import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
 
 type Fields = Record<string, string | string[]>;
 
@@ -144,6 +147,8 @@ const SAVED_TOAST_MS = 3_000;
 const REFUSAL_TOAST_MS = 6_000;
 
 const REGION = '[data-outbox-key]';
+// public/js/freshness.js's, on the document whenever its stamp is set.
+const FRESHNESS_CHANGE = 'freshness:change';
 const QUEUE_FORM = 'form[data-offline-queue]';
 const ALTERNATE = ':scope > template[data-outbox-state]';
 const FULL_MARK = 'outboxFull';
@@ -374,11 +379,12 @@ function renderPackedCounts(records: OutboxRecord[]): void {
     const regions = counter
       .closest('section')
       ?.querySelectorAll<HTMLElement>(`${REGION}:has(input[name="packed"])`);
+    // A tick's key never takes a day, so every row has one.
     const rows = Array.from(regions ?? []).map((region) => ({
       served:
         region.querySelector<HTMLInputElement>('input[name="packed"]')
           ?.defaultChecked ?? false,
-      queued: intentOf(waiting.get(region.dataset.outboxKey ?? '')),
+      queued: intentOf(waiting.get(regionKey(region) ?? '')),
     }));
     if (rows.every((row) => row.queued === undefined)) {
       if (counter.dataset.counted === undefined) continue;
@@ -411,7 +417,8 @@ function renderRegions(records: OutboxRecord[]): void {
     records.filter((r) => !isPending(r)).map((r) => r.key),
   );
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    const key = region.dataset.outboxKey ?? '';
+    const key = regionKey(region);
+    if (key === undefined) continue;
     const record = waiting.get(key);
     if (record) {
       showIntent(region, record);
@@ -468,7 +475,7 @@ function showServerState(region: HTMLElement): void {
 /** A discarded record's region back to the server's state, its intent mark gone. */
 function revertRegions(key: string): void {
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    if (region.dataset.outboxKey !== key) continue;
+    if (regionKey(region) !== key) continue;
     showServerState(region);
     delete region.dataset[INTENT_MARK];
   }
@@ -642,11 +649,8 @@ const kindOf = (region: HTMLElement) =>
   queueableKindOf(region.dataset.outboxPath ?? '');
 
 function draftOf(region: HTMLElement, fields: Fields): Draft | undefined {
-  const {
-    outboxKey: key,
-    outboxPath: path,
-    outboxLabel: label,
-  } = region.dataset;
+  const { outboxPath: path, outboxLabel: label } = region.dataset;
+  const key = regionKey(region);
   const kind = kindOf(region);
   if (!key || !path || !kind) {
     console.warn(`[outbox] a region names no queueable write (${path})`);
@@ -737,15 +741,14 @@ async function queue(
   if (!account || !timeZone || writes.length === 0) return;
   const now = new Date();
   const today = todayIn(timeZone, now);
-  // Wore today's state is its page's day's; a copy from another day would
-  // queue the wrong toggle.
-  if (
-    writes.some(
-      (w) => w.kind === 'wear' && w.region.dataset.outboxDay !== today,
-    )
-  ) {
+  // Wore today's row is judged on the tap's day (#708, showPageDay), but a
+  // live answer on screen is its own day's: one left open overnight would
+  // undo the wrong day.
+  const wear = writes.find((w) => w.kind === 'wear');
+  const judgedOn = wear && answeredOn(wear.region);
+  if (wear && !wearQueuesOn(judgedOn, today)) {
     console.info(
-      `[outbox] ${writes[0].key} refused: the page is from another day`,
+      `[outbox] ${wear.key} refused: the answer shown is of ${judgedOn}, the tap of ${today}`,
     );
     refuse(text('textOutboxStaleDay'), trigger);
     return;
@@ -1177,6 +1180,122 @@ document.addEventListener(
   true,
 );
 
+// ---- The page's day (#708) ------------------------------------------------------
+
+/** A live htmx answer's own day (`data-as-of-day`, Wore today's and Washed's). */
+function answeredOn(element: Element): string | undefined {
+  const answered = element.closest<HTMLElement>('[data-as-of-day]');
+  return answered ? parseIsoDate(answered.dataset.asOfDay) : undefined;
+}
+
+/**
+ * The day what `element` shows is of, for its day labels: a live answer's
+ * own, else the page's (src/page-day.ts's pageDay: the stamp freshness.js
+ * keeps on `#freshness`, from the load, the cached copy's arrival or its
+ * last revalidation, kept in htmx's history snapshots; else the load).
+ */
+function pageDayOf(element: Element, timeZone: string): string {
+  return (
+    answeredOn(element) ??
+    pageDay(
+      document.getElementById('freshness')?.dataset.fetchedAt,
+      performance.timeOrigin,
+      timeZone,
+    )
+  );
+}
+
+/**
+ * The day a Wore today row's state is judged on, which its record keys and
+ * a tap logs: a live answer's own (queue refuses one of another day), else
+ * the tap's day, today. `data-worn-on` is the last day worn, whatever the
+ * copy's day, so a copy from yesterday still shows today's state as far as
+ * it knows, and a wear logged elsewhere since is harmless: setWoreToday is
+ * idempotent.
+ */
+function wearDayOf(region: HTMLElement, timeZone: string): string {
+  return answeredOn(region) ?? todayIn(timeZone, new Date());
+}
+
+/**
+ * A region's record key: its own, plus its judged day for a wear (one
+ * record per garment and day, `wear:41:2026-11-12`; src/offline-writes.ts).
+ * Undefined for a wear on a page without the household's time zone (no
+ * `#app-status`): it keys no record, and queue refuses its tap.
+ */
+function regionKey(region: HTMLElement): string | undefined {
+  const key = region.dataset.outboxKey ?? '';
+  if (kindOf(region) !== 'wear') return key;
+  const { timeZone } = appStatus();
+  return timeZone ? `${key}:${wearDayOf(region, timeZone)}` : undefined;
+}
+
+/**
+ * Words every `<time data-day-label>` against its day (src/web/day-time.tsx),
+ * fills every `<input data-value-today>` left at its default with today (the
+ * outfit page's Plan sheet), and sets each Wore today row to its state on
+ * its judged day (wear-section.tsx: the undo when Wore today wore it, the
+ * calendar's badge when an entry did). Before the queued intents
+ * (renderRegions), on every load, swap, return to the app and stamp change;
+ * idempotent. A row whose intent is shown (flipped) already shows the other
+ * state: its new server state is then what it shows.
+ */
+function showPageDay(): void {
+  const timeZone = appStatus().timeZone;
+  if (!timeZone) return;
+  const today = todayIn(timeZone, new Date());
+  const { lang } = document.documentElement;
+  for (const time of document.querySelectorAll<HTMLTimeElement>(
+    'time[data-day-label]',
+  )) {
+    const day = parseIsoDate(time.dateTime);
+    const kind = time.dataset.dayLabel === 'date' ? 'date' : 'relative';
+    if (!day) continue;
+    time.textContent = dayText(day, pageDayOf(time, timeZone), kind, lang);
+  }
+  // The default, not the value: a day the person picked stays.
+  for (const input of document.querySelectorAll<HTMLInputElement>(
+    'input[data-value-today]',
+  )) {
+    input.defaultValue = today;
+  }
+  for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
+    if (kindOf(region) === 'wear') showWornState(region, timeZone);
+  }
+}
+
+/** One Wore today row on its judged day; focus kept on its control. */
+function showWornState(region: HTMLElement, timeZone: string): void {
+  const state = wornState(
+    region.dataset.wornOn,
+    region.dataset.wornBy,
+    wearDayOf(region, timeZone),
+  );
+  // Before any change: hiding the row or swapping its form drops focus to
+  // the body (a live tap's answer has htmx's focus on the server's button).
+  const focused = region.contains(document.activeElement);
+  const badge = region.nextElementSibling;
+  const shownBadge =
+    badge instanceof HTMLElement && badge.matches('[data-worn-by-entry]')
+      ? badge
+      : undefined;
+  region.hidden = state === 'entry';
+  if (shownBadge) shownBadge.hidden = state !== 'entry';
+  const showsUndo =
+    region.querySelector<HTMLInputElement>(':scope > form input[name="worn"]')
+      ?.value === '0';
+  const flipped = region.dataset[INTENT_MARK] === 'flipped';
+  if (wearRowFlips(state, showsUndo, flipped)) {
+    if (flipped) delete region.dataset[INTENT_MARK];
+    else flip(region);
+  }
+  if (!focused || region.contains(document.activeElement)) return;
+  const control = region.hidden
+    ? shownBadge
+    : region.querySelector<HTMLElement>(':scope > form button');
+  control?.focus();
+}
+
 // ---- Wiring -------------------------------------------------------------------
 
 document.addEventListener('click', (event) => {
@@ -1267,15 +1386,28 @@ document.addEventListener('connectivity:change', (event) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  // Back the next morning, Wore today is judged on the new day.
+  showPageDay();
   // Without BroadcastChannel, another tab may have written meanwhile.
   void refresh();
   void schedule('visible');
 });
 
 // A boosted navigation or a swap brings regions (and #app-status) anew.
-document.addEventListener('htmx:afterSettle', () => void refresh());
+document.addEventListener('htmx:afterSettle', () => {
+  showPageDay();
+  void refresh();
+});
+
+// The page's stamp moved (freshness.js: another display, a revalidation
+// that found the copy current, a re-stamped copy): so may its day.
+document.addEventListener(FRESHNESS_CHANGE, () => {
+  showPageDay();
+  void refresh();
+});
 
 async function start(): Promise<void> {
+  showPageDay();
   if (!pageAccount()) return;
   try {
     await claimForAccount();

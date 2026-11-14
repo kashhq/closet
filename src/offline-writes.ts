@@ -55,7 +55,8 @@ export function dayRefusal(
 export interface QueuedTarget {
   /**
    * One record per key, the last intent wins: `wear:41:2026-11-12` (a
-   * garment's wear on a day), `wash:41`, `entry:88`, `packed:7:41` (a
+   * garment's wear on a day; its region names `wear:41` and the outbox adds
+   * the page's day, #708), `wash:41`, `entry:88`, `packed:7:41` (a
    * trip's garment), `item:7:3` (a trip's extra).
    */
   key: string;
@@ -64,13 +65,12 @@ export interface QueuedTarget {
 
 /**
  * The target of a queued write: `id` is the route's `:id` (the garment, the
- * entry, the trip); `part` what the key adds, a wear's day or the trip's
- * garment or extra.
+ * entry, the trip); `part` what the key adds, the trip's garment or extra.
  */
 export function queuedTarget(
   kind: QueueableKind,
   id: number,
-  part?: number | IsoDate,
+  part?: number,
 ): QueuedTarget {
   return {
     key: [kind, id, ...(part === undefined ? [] : [part])].join(':'),
