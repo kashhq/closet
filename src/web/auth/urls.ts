@@ -22,6 +22,12 @@ export const DEVICES_SECTION_ID = 'devices';
 export const EXPORT_SECTION_ID = 'export';
 export const SIGN_OUT_SECTION_ID = 'sign-out';
 
+/**
+ * Sign out everywhere (#700): ends every other session of the account
+ * behind the current password; linked from Profile › Sign out.
+ */
+export const SIGN_OUT_EVERYWHERE_PATH = '/auth/sign-out-everywhere';
+
 /** Agent access: the MCP endpoint's personal access tokens (token-routes.tsx). */
 export const TOKENS_PATH = '/auth/tokens';
 

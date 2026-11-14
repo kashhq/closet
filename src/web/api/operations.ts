@@ -269,6 +269,7 @@ export const PAGE_WRITES: Readonly<
   'POST /auth/change-password': STEP_UP,
   'POST /auth/update-email': STEP_UP,
   'POST /auth/delete-account': STEP_UP,
+  'POST /auth/sign-out-everywhere': STEP_UP,
   'POST /auth/tokens': STEP_UP,
   'POST /auth/tokens/:id/revoke': AGENT_ACCESS,
   'POST /auth/devices/:id/revoke': AGENT_ACCESS,
