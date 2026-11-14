@@ -1075,13 +1075,13 @@ export const outfit = pgTable(
     clientId: clientId(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key.
     index('outfit_owner_id_revision_index').on(table.ownerId, table.revision),
     unique('outfit_owner_id_client_id_unique').on(
       table.ownerId,
       table.clientId,
     ),
-    index('outfit_owner_id_index').on(table.ownerId),
     uniqueIndex('outfit_shareable_id_unique').on(table.shareableId),
     foreignKey({
       name: 'outfit_owner_id_foreign',
@@ -1302,7 +1302,8 @@ export const garmentWear = pgTable(
     clientId: clientId(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key (an account's deletion cascades by it).
     index('garment_wear_owner_id_revision_index').on(
       table.ownerId,
       table.revision,
@@ -1321,8 +1322,6 @@ export const garmentWear = pgTable(
     // The counts (per garment, days after the last wash). Also the index of
     // the garment_id foreign key.
     index('garment_wear_garment_id_day_index').on(table.garmentId, table.day),
-    // The owner_id foreign key's (an account's deletion cascades by it).
-    index('garment_wear_owner_id_index').on(table.ownerId),
     foreignKey({
       name: 'garment_wear_garment_id_foreign',
       columns: [table.garmentId],
@@ -1875,12 +1874,12 @@ export const weekPlan = pgTable(
     updatedAt: syncUpdatedAt(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key.
     index('week_plan_owner_id_revision_index').on(
       table.ownerId,
       table.revision,
     ),
-    index('week_plan_owner_id_index').on(table.ownerId),
     foreignKey({
       name: 'week_plan_owner_id_foreign',
       columns: [table.ownerId],

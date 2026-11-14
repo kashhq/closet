@@ -227,16 +227,17 @@ describe('occasions', () => {
       await plan({ outfitId: String(desk), date: day, occasion: 'work' });
 
       let res: Awaited<ReturnType<typeof t.inject>> | undefined;
-      // #165: the session, then the saved outfits and the day's entries
-      // together; the day's entries bare (which outfits, for which
-      // occasion), with no collage or selfie the page does not draw.
+      // #165, #660: the session, then a page of the saved outfits and the
+      // day's entries in one statement (planContext); the day's entries
+      // bare (which outfits, for which occasion), with no collage or
+      // selfie the page does not draw.
       const read = await recordQueries(async () => {
         res = await t.inject({
           method: 'GET',
           url: `/calendar/plan?for=day:${day}&occasion=evening`,
         });
       });
-      expect(read.statements).toBe(3);
+      expect(read.statements).toBe(2);
       expect(read.sql.join('\n')).not.toMatch(/"selfie"/);
       expectFullPage(res!);
       expectNativePostForms(res!);

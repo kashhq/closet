@@ -22,6 +22,7 @@ import {
   checkCutoutQueue,
   checkDatabase,
   checkJobs,
+  checkOrderMailOwner,
   checkTrustedProxies,
   createStorageCheck,
   type HealthCheck,
@@ -108,6 +109,17 @@ describe('checkTrustedProxies', () => {
       status: 'down',
       required: false,
       fix: 'see docs/operations.md#trusted-proxies',
+    });
+  });
+});
+
+describe('checkOrderMailOwner', () => {
+  it('is optional: down with its fix once the owner account is missing', () => {
+    expect(checkOrderMailOwner(false)).toEqual(up(false));
+    expect(checkOrderMailOwner(true)).toEqual({
+      status: 'down',
+      required: false,
+      fix: 'see docs/operations.md#health',
     });
   });
 });

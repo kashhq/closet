@@ -1,6 +1,6 @@
-import { and, eq, gte, lte, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, or, type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client';
-import { file, garment, outfitCalendar, trip } from '../../db/schema';
+import { file, garment, trip } from '../../db/schema';
 import { selectScalars } from '../../db/select-scalars';
 import type { GarmentStatus } from '../../wardrobe/status';
 import { addDays, type IsoDate } from '../../calendar-date';
@@ -9,7 +9,11 @@ import { weekOf } from '../calendar/calendar-view';
 import { weekUrl } from '../calendar/urls';
 import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { photoRefJson } from '../files/queries';
-import { savedOutfitsSql } from '../outfits/queries';
+import {
+  heldOneOffsSql,
+  ownOutfitIdsSql,
+  savedOutfitsSql,
+} from '../outfits/queries';
 import { outfitUrl } from '../outfits/urls';
 import { tripUrl } from '../trips/urls';
 import { GRID_PAGE_SIZE } from '../wardrobe/grid-page-size';
@@ -41,9 +45,10 @@ import {
  * stale after the user's own edits; they are cached when first opened.
  * Always the requester's own: a grantee's device never warms a wardrobe
  * shared with them. One statement: the garments still owned or wished for,
- * every outfit with its garments' photos (what the Saved tab's two lists
- * read), the one-offs the near-term entries hold, and the needs the inbox
- * shows.
+ * the newest WARM_OUTFIT_CAP kept outfits and the one-offs the near-term
+ * entries hold with their garments' photos (the Saved tab's reader, #660),
+ * every other outfit's id alone (`keep` needs no more), and the needs the
+ * inbox shows.
  */
 export async function warmList(
   db: Db,
@@ -52,20 +57,21 @@ export async function warmList(
 ): Promise<WarmList> {
   const thisWeekStart = weekOf(today).start;
   const nextWeekEnd = weekOf(addDays(thisWeekStart, 7)).end;
-  const { garments, kept, oneOffs, nearTerm, needs, trips } =
+  const { garments, kept, nearTerm, outfitIds, needs, trips } =
     await selectScalars(db, {
       garments: ownGarmentsSql(ownerId),
-      kept: savedOutfitsSql(ownerId, 'kept'),
-      oneOffs: savedOutfitsSql(ownerId, 'one-offs'),
-      nearTerm: plannedOutfitIdsSql(ownerId, thisWeekStart, nextWeekEnd),
+      // No more kept ones can be warmed: the near-term one-offs come first.
+      kept: savedOutfitsSql(ownerId, 'kept', {
+        before: undefined,
+        limit: WARM_OUTFIT_CAP,
+      }),
+      nearTerm: heldOneOffsSql(ownerId, thisWeekStart, nextWeekEnd),
+      outfitIds: ownOutfitIdsSql(ownerId),
       needs: inboxNeedIdsSql(ownerId),
       trips: ownTripsSql(ownerId, today),
     });
   const aheadTrips = trips.filter((row) => row.ahead);
   const warmedTrips = aheadTrips.slice(0, WARM_TRIP_CAP);
-  const planned = new Set(nearTerm);
-  const warmable = [...oneOffs.filter((row) => planned.has(row.id)), ...kept];
-  const unplanned = oneOffs.filter((row) => !planned.has(row.id));
   const closet = garments.filter((row) => row.status === 'closet');
   const warmed = closet.slice(0, WARM_GARMENT_CAP);
   // The inbox, then its needs, then what is still wanted, within the cap.
@@ -77,7 +83,11 @@ export async function warmList(
     .filter((row) => row.wanted)
     .slice(0, WARM_WISHLIST_CAP - inboxPages.length);
   const warmedIds = new Set([...warmed, ...stillWanted].map((row) => row.id));
-  const warmedOutfits = warmable.slice(0, WARM_OUTFIT_CAP);
+  const warmedOutfits = [...nearTerm, ...kept.outfits].slice(
+    0,
+    WARM_OUTFIT_CAP,
+  );
+  const warmedOutfitIds = new Set(warmedOutfits.map((row) => row.id));
 
   const thumbs = new Set<string>();
   const addThumb = (photo: SignablePhotoRef | null) => {
@@ -115,9 +125,9 @@ export async function warmList(
       ...garments
         .filter((row) => !warmedIds.has(row.id))
         .map((row) => garmentUrl(row.id, undefined)),
-      ...[...warmable.slice(WARM_OUTFIT_CAP), ...unplanned].map((row) =>
-        outfitUrl(row.id),
-      ),
+      ...outfitIds
+        .filter((id) => !warmedOutfitIds.has(id))
+        .map((id) => outfitUrl(id)),
       // Trips past the cap and the ended ones still exist: their visited
       // copies stay.
       ...[
@@ -150,27 +160,6 @@ function ownTripsSql(ownerId: number, today: IsoDate): SQL<OwnTrip[]> {
     )
     from ${trip}
     where ${eq(trip.ownerId, ownerId)}
-  )`;
-}
-
-/**
- * The outfits the owner's entries from `from` to `to` hold: the near-term
- * days Today and the calendar open, whose one-offs are warmed though no
- * saved list shows them.
- */
-function plannedOutfitIdsSql(
-  ownerId: number,
-  from: IsoDate,
-  to: IsoDate,
-): SQL<number[]> {
-  return sql<number[]>`(
-    select coalesce(json_agg(distinct ${outfitCalendar.outfitId}), '[]')
-    from ${outfitCalendar}
-    where ${and(
-      eq(outfitCalendar.ownerId, ownerId),
-      gte(outfitCalendar.day, from),
-      lte(outfitCalendar.day, to),
-    )}
   )`;
 }
 

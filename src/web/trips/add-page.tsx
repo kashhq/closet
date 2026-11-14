@@ -7,10 +7,19 @@ import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
 import type { GarmentOutfit } from '../outfits/queries';
 import type { OutfitList } from '../outfits/outfit-list';
-import { SavedOutfitPicker } from '../outfits/saved-outfit-button';
+import {
+  SavedOutfitButtons,
+  SavedOutfitPicker,
+} from '../outfits/saved-outfit-button';
 import type { ViewContext } from '../view-context';
 import type { TripRow } from './queries';
-import { addOutfitUrl, dayAnchor, tripIdeasUrl, tripUrl } from './urls';
+import {
+  addOutfitMoreUrl,
+  addOutfitUrl,
+  dayAnchor,
+  tripIdeasUrl,
+  tripUrl,
+} from './urls';
 
 export interface AddOutfitModel {
   trip: TripRow;
@@ -19,8 +28,10 @@ export interface AddOutfitModel {
   /** The chosen day (one of `days`) and occasion; both optional. */
   day: IsoDate | undefined;
   occasion: Occasion | undefined;
-  /** The owner's outfits of `list` (#659), newest first. */
+  /** A page of the owner's outfits of `list` (#659, #660), newest first. */
   outfits: GarmentOutfit[];
+  /** The id the next page starts below; null on the last. */
+  next: number | null;
   list: OutfitList;
   /** Outfits already on the trip for the chosen day (or without one): adding again changes nothing. */
   onTrip: ReadonlySet<number>;
@@ -116,9 +127,8 @@ export function AddOutfitPage(props: {
           list={model.list}
           href={addOutfitUrl(trip.id, { day, occasion })}
           outfits={model.outfits}
-          noteOf={(outfit) =>
-            model.onTrip.has(outfit.id) ? t('trips.ALREADY_ON_TRIP') : undefined
-          }
+          noteOf={(outfit) => onTripNote(model, outfit)}
+          more={moreUrl(model)}
         >
           <input type="hidden" name="day" value={day ?? ''} />
           <input type="hidden" name="occasion" value={occasion ?? ''} />
@@ -126,5 +136,40 @@ export function AddOutfitPage(props: {
       </main>
       <Dock ctx={ctx} />
     </Layout>
+  );
+}
+
+type AddOutfitsModel = Pick<
+  AddOutfitModel,
+  'trip' | 'day' | 'occasion' | 'outfits' | 'next' | 'list' | 'onTrip'
+>;
+
+/** Already on the trip for the chosen day (or without one): adding again changes nothing. */
+function onTripNote(
+  model: AddOutfitsModel,
+  outfit: GarmentOutfit,
+): string | undefined {
+  return model.onTrip.has(outfit.id) ? t('trips.ALREADY_ON_TRIP') : undefined;
+}
+
+function moreUrl(model: AddOutfitsModel): string | undefined {
+  const { trip, day, occasion, next } = model;
+  return next === null
+    ? undefined
+    : addOutfitMoreUrl(trip.id, { day, occasion }, model.list, next);
+}
+
+/**
+ * A next page of the add page's saved outfits (GET
+ * /trips/:id/outfits/new/more, #660): its buttons and the next sentinel,
+ * landing in the page's form.
+ */
+export function AddOutfitButtons({ model }: { model: AddOutfitsModel }) {
+  return (
+    <SavedOutfitButtons
+      outfits={model.outfits}
+      noteOf={(outfit) => onTripNote(model, outfit)}
+      more={moreUrl(model)}
+    />
   );
 }

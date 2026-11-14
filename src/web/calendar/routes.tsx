@@ -17,11 +17,13 @@ import { DEFAULT_OCCASION } from '../../wardrobe/occasions';
 import {
   type DayDestination,
   DestinationQuery,
+  type OutfitDestination,
   parseDestination,
 } from '../outfits/destination';
-import { selectScalars } from '../../db/select-scalars';
 import { OutfitListQuery, parseOutfitList } from '../outfits/outfit-list';
-import { savedOutfitsSql } from '../outfits/queries';
+import { OUTFIT_PAGE_SIZE } from '../outfits/page-size';
+import { FIRST_OUTFIT_PAGE } from '../outfits/queries';
+import { OutfitCursor } from '../outfits/schemas';
 import {
   IsoDateSchema,
   OccasionSchema,
@@ -47,8 +49,8 @@ import {
   weekOf,
 } from './calendar-view';
 import { MonthPage } from './month-page';
-import { PlanPage } from './plan-page';
-import { dayChoice } from './day-choice';
+import { PlanOutfits, PlanPage } from './plan-page';
+import { planContext } from './day-choice';
 import { OccasionRow } from './occasion-row';
 import {
   markEntryWorn,
@@ -62,6 +64,7 @@ import { replaceEntryOutfit, replaceMessage } from './replace';
 import {
   CALENDAR_MONTH_PATH,
   CALENDAR_PATH,
+  CALENDAR_PLAN_MORE_PATH,
   CALENDAR_PLAN_PATH,
   CALENDAR_RESTORE_PATH,
   weekUrl,
@@ -163,6 +166,17 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   { db, config, logger, photos },
   done,
 ) => {
+  // The plan page's day (and its sentinel's): navigation state, so none
+  // (missing or malformed) is today, all day.
+  const planDestination = (parsed: OutfitDestination): DayDestination =>
+    parsed.kind === 'day'
+      ? parsed
+      : {
+          kind: 'day',
+          day: todayIn(config.timeZone, new Date()),
+          occasion: DEFAULT_OCCASION,
+        };
+
   app.get(
     CALENDAR_PATH,
     {
@@ -270,28 +284,19 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const ownerId = sessionUserId(request);
       const parsed = parseDestination(request.query);
       const list = parseOutfitList(request.query.show);
-      const destination: DayDestination =
-        parsed.kind === 'day'
-          ? parsed
-          : {
-              kind: 'day',
-              day: todayIn(config.timeZone, new Date()),
-              occasion: DEFAULT_OCCASION,
-            };
+      const destination = planDestination(parsed);
       if (parsed.kind === 'none' && request.query.for !== undefined) {
         logger.debug(
           `GET /calendar/plan: no day in ${JSON.stringify(request.query.for)}, planning today`,
         );
       }
-      const [outfits, choice] = await Promise.all([
-        // The owner's own outfits of the list, as every picker lists them
-        // (ownersOutfit, keptOutfit): Muse's proposals are the Outfits
-        // tab's own section (#335), one-offs behind the segment (#659).
-        selectScalars(db, { outfits: savedOutfitsSql(ownerId, list) }).then(
-          (row) => row.outfits,
-        ),
-        dayChoice(db, ownerId, destination),
-      ]);
+      const { page, choice } = await planContext(
+        db,
+        ownerId,
+        destination,
+        list,
+        FIRST_OUTFIT_PAGE,
+      );
       if (destination.replace !== undefined && !choice.replacing) {
         logger.debug(
           `GET /calendar/plan: entry ${destination.replace} is not user ${ownerId}'s on ${destination.day} (${destination.occasion}), planning another`,
@@ -304,10 +309,53 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           model={{
             day: destination.day,
             occasion: destination.occasion,
-            outfits,
+            ...page,
             list,
             ...choice,
           }}
+        />,
+      );
+    },
+  );
+
+  // The plan page's sentinel (hx-trigger="revealed", #660): its saved
+  // outfits below `before`, judged for the same day (and entry), and the
+  // next sentinel. Always a fragment.
+  app.get(
+    CALENDAR_PLAN_MORE_PATH,
+    {
+      schema: {
+        querystring: Type.Object({
+          ...DestinationQuery,
+          ...OutfitListQuery,
+          before: OutfitCursor,
+        }),
+      },
+    },
+    async (request, reply) => {
+      const ownerId = sessionUserId(request);
+      const parsed = parseDestination(request.query);
+      const list = parseOutfitList(request.query.show);
+      const destination = planDestination(parsed);
+      const { before } = request.query;
+      const { page, choice } = await planContext(
+        db,
+        ownerId,
+        destination,
+        list,
+        { before, limit: OUTFIT_PAGE_SIZE },
+      );
+      logger.debug(
+        `GET ${CALENDAR_PLAN_MORE_PATH}: ${page.outfits.length} ${list} outfits of user ${ownerId} below ${before} for ${destination.day}${page.next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(
+        reply,
+        <PlanOutfits
+          destination={destination}
+          list={list}
+          outfits={page.outfits}
+          next={page.next}
+          choice={choice}
         />,
       );
     },

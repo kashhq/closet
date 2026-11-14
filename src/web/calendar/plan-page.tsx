@@ -6,20 +6,26 @@ import { Layout } from '../layout/layout';
 import { ideasUrl } from '../gallery/urls';
 import type { GarmentOutfit } from '../outfits/queries';
 import type { OutfitList } from '../outfits/outfit-list';
-import { SavedOutfitPicker } from '../outfits/saved-outfit-button';
+import {
+  SavedOutfitButtons,
+  SavedOutfitPicker,
+} from '../outfits/saved-outfit-button';
 import { stylingUrl } from '../styling/urls';
 import type { ViewContext } from '../view-context';
 import type { IsoDate } from '../../calendar-date';
 import { type DayChoice, plannedNote } from './day-choice';
 import { dayLabel, occasionLabel } from '../date-labels';
-import { dayUrl, planPageUrl } from './urls';
+import type { DayDestination } from '../outfits/destination';
+import { dayUrl, planMoreUrl, planPageUrl } from './urls';
 
 /** The day's DayChoice (what is on it, the entry `replace` names). */
 export interface PlanModel extends DayChoice {
   day: IsoDate;
   occasion: Occasion;
-  /** The owner's own outfits of `list`, newest first (savedOutfitsSql). */
+  /** A page of the owner's own outfits of `list`, newest first (savedOutfitsSql, #660). */
   outfits: GarmentOutfit[];
+  /** The id the next page starts below; null on the last. */
+  next: number | null;
   /** `?show=` (#659): the kept outfits, or the one-offs. */
   list: OutfitList;
 }
@@ -76,6 +82,7 @@ export function PlanPage(props: { ctx: ViewContext; model: PlanModel }) {
           href={planPageUrl(destination)}
           outfits={model.outfits}
           noteOf={(outfit) => plannedNote(model, outfit.id)}
+          more={moreUrl(destination, model.list, model.next)}
         >
           <input type="hidden" name="date" value={model.day} />
           <input type="hidden" name="occasion" value={model.occasion} />
@@ -91,6 +98,35 @@ export function PlanPage(props: { ctx: ViewContext; model: PlanModel }) {
       </main>
       <Dock ctx={ctx} />
     </Layout>
+  );
+}
+
+/** The next page's address, carrying the entry being changed: its buttons are the same form's. */
+function moreUrl(
+  destination: DayDestination,
+  list: OutfitList,
+  next: number | null,
+): string | undefined {
+  return next === null ? undefined : planMoreUrl(destination, list, next);
+}
+
+/**
+ * A next page of the plan page's saved outfits (GET /calendar/plan/more,
+ * #660): its buttons and the next sentinel, landing in the page's form.
+ */
+export function PlanOutfits(props: {
+  destination: DayDestination;
+  list: OutfitList;
+  outfits: GarmentOutfit[];
+  next: number | null;
+  choice: DayChoice;
+}) {
+  return (
+    <SavedOutfitButtons
+      outfits={props.outfits}
+      noteOf={(outfit) => plannedNote(props.choice, outfit.id)}
+      more={moreUrl(props.destination, props.list, props.next)}
+    />
   );
 }
 

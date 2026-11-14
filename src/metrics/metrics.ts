@@ -49,7 +49,8 @@ export type JobName =
   | 'replan_prune'
   | 'order_mail'
   | 'muse_rounds'
-  | 'sync_prune';
+  | 'sync_prune'
+  | 'weather_prune';
 
 /**
  * A job's ending, closed. `success` and `failure` are the homelab contract

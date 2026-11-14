@@ -5,6 +5,7 @@ import {
   inArray,
   isNotNull,
   lt,
+  lte,
   not,
   or,
   type SQL,
@@ -46,6 +47,7 @@ import { prunePacked, tripsOfOutfit } from '../trips/packed';
 import { detachOutfitWears } from '../wears/queries';
 import { adoptOutfit } from '../week-plan/adopt';
 import type { OutfitList } from './outfit-list';
+import { OUTFIT_PAGE_SIZE } from './page-size';
 import { adoptProposal } from './reactions';
 import {
   offeredIntoSql,
@@ -175,39 +177,96 @@ export interface CreateResult extends SaveResult {
 /** The agent that made the outfit (#682): outfits are their owner's alone. */
 const outfitAgentSql = agentLabelSql(outfit.addedByTokenId, OWNER_READS);
 
+/** Which page of outfits: those below id `before` (the previous page's `next`), `limit` of them. */
+export interface OutfitPageAsk {
+  before: number | undefined;
+  limit: number;
+}
+
+export const FIRST_OUTFIT_PAGE: OutfitPageAsk = {
+  before: undefined,
+  limit: OUTFIT_PAGE_SIZE,
+};
+
+/** A page of outfits, newest first, and the id the next page starts below (null on the last). */
+export interface OutfitPage<T> {
+  outfits: T[];
+  next: number | null;
+}
+
 /**
- * Outfits matching `where`, newest first, each with its chosen garments in
- * slot order (empty slots show nothing) and its proposal when Muse proposed
- * it, as one scalar subquery. Raw SQL, never db.query: the relational
- * query writes every column of a `where` against its root table, which
- * breaks a predicate with a subquery of its own (ownersOutfit).
+ * The one outfit page reader (#660): the outfits matching `where`, newest
+ * first, keyset on the id (unique, so outfits alike in every other way
+ * never repeat or skip between pages), each as `row` builds it, and the
+ * next page's cursor, as one scalar subquery. Every paged list of outfits
+ * reads through it: savedOutfitsSql (the Saved tab and the pickers) and
+ * listOutfitsPage (list_outfits, GET /api/v1/outfits). It reads one row
+ * more than the page, only to say there is a next. The planner walks
+ * `outfit_pkey` backward and filters the owner (its plan with and without
+ * the single-column owner index, dropped in #709, was the same); at
+ * household size that stops within a few rows of the page.
  */
-function toolOutfitsSql(where: SQL, limit?: number): SQL<ToolOutfit[]> {
-  // A page reads the newest `limit` under the table's own name, so every
-  // correlated column below (outfitGarmentsSql's) still names its row.
-  const rows =
-    limit === undefined
-      ? sql`${outfit} where ${where}`
-      : sql`(select * from ${outfit} where ${where} order by ${outfit.id} desc limit ${limit}) as ${outfit}`;
-  return sql<ToolOutfit[]>`(
-    select coalesce(json_agg(json_build_object(
-      'id', ${outfit.id},
-      'name', ${outfit.name},
-      'notes', ${outfit.notes},
-      'origin', ${outfit.origin},
-      'shareableId', ${outfit.shareableId},
-      'agent', ${outfitAgentSql},
-      'garments', ${outfitGarmentsSql()},
-      'proposal', ${proposalSql({ agent: false })}
-    ) order by ${outfit.id} desc), '[]')
+function outfitPageSql<T>(
+  row: SQL,
+  where: SQL,
+  page: OutfitPageAsk,
+): SQL<OutfitPage<T>> {
+  const keyset = and(
+    where,
+    page.before === undefined ? undefined : lt(outfit.id, page.before),
+  );
+  // Under the table's own name, so every correlated column in `row`
+  // (outfitGarmentsSql's) still names its row.
+  const rows = sql`(
+    select *, row_number() over (order by ${outfit.id} desc) as page_position
+    from ${outfit}
+    where ${keyset}
+    order by ${outfit.id} desc
+    limit ${page.limit + 1}
+  ) as ${outfit}`;
+  const shown = sql`page_position <= ${page.limit}`;
+  return sql<OutfitPage<T>>`(
+    select json_build_object(
+      'outfits', coalesce(
+        json_agg(${row} order by ${outfit.id} desc) filter (where ${shown}),
+        '[]'
+      ),
+      'next', case when count(*) > ${page.limit}
+        then min(${outfit.id}) filter (where ${shown}) end
+    )
     from ${rows}
   )`;
 }
 
-/** toolOutfitsSql alone, in one statement. */
+/** An outfit as the MCP tools and the API list answer it: with its notes, share link and proposal. */
+function toolOutfitSql(): SQL {
+  return sql`json_build_object(
+    'id', ${outfit.id},
+    'name', ${outfit.name},
+    'notes', ${outfit.notes},
+    'origin', ${outfit.origin},
+    'shareableId', ${outfit.shareableId},
+    'agent', ${outfitAgentSql},
+    'garments', ${outfitGarmentsSql()},
+    'proposal', ${proposalSql({ agent: false })}
+  )`;
+}
+
+/**
+ * The outfits matching `where` (findOutfit's one), each with its chosen
+ * garments in slot order (empty slots show nothing) and its proposal when
+ * Muse proposed it, in one statement. Raw SQL, never db.query: the
+ * relational query writes every column of a `where` against its root
+ * table, which breaks a predicate with a subquery of its own
+ * (ownersOutfit).
+ */
 async function outfitsWithGarments(db: Db, where: SQL): Promise<ToolOutfit[]> {
   const { outfits } = await selectScalars(db, {
-    outfits: toolOutfitsSql(where),
+    outfits: sql<ToolOutfit[]>`(
+      select coalesce(json_agg(${toolOutfitSql()} order by ${outfit.id} desc), '[]')
+      from ${outfit}
+      where ${where}
+    )`,
   });
   return outfits;
 }
@@ -218,52 +277,35 @@ export type ToolOutfit = OutfitDetail & {
 };
 
 /**
- * The owner's own outfits (ownersOutfit: Muse's proposals not theirs yet
- * are the Outfits tab's own section), with their notes: list_outfits. The
- * Saved tab, the pickers and a trip's add page read savedOutfitsSql.
- */
-export function listOutfits(db: Db, ownerId: number): Promise<ToolOutfit[]> {
-  return outfitsWithGarments(
-    db,
-    and(eq(outfit.ownerId, ownerId), ownersOutfit())!,
-  );
-}
-
-/**
- * listOutfits a page at a time, newest first, for GET /api/v1/outfits: the
- * outfits below id `before`, and the id the next page starts below (null
- * on the last). One statement, as the Saved tab's. `proposed` lists instead
- * Muse's proposals waiting on the owner (museOutfitWaiting: the Outfits
- * tab's From Muse cards and Today's round count).
+ * The owner's outfits a page at a time (outfitPageSql), with their notes:
+ * list_outfits and GET /api/v1/outfits. Their own (ownersOutfit: Muse's
+ * proposals not theirs yet are the Outfits tab's own section), or with
+ * `proposed` Muse's proposals waiting on the owner (museOutfitWaiting: the
+ * Outfits tab's From Muse cards and Today's round count). One statement,
+ * as the Saved tab's; the Saved tab, the pickers and a trip's add page
+ * read savedOutfitsSql.
  */
 export async function listOutfitsPage(
   db: Db,
   ownerId: number,
-  page: {
-    before: number | undefined;
-    limit: number;
+  page: OutfitPageAsk & {
     proposed: boolean;
     /** One of the Saved tab's lists (#659, savedOutfitsSql's rule); absent, every outfit. */
     list?: OutfitList;
   },
-): Promise<{ outfits: ToolOutfit[]; next: number | null }> {
+): Promise<OutfitPage<ToolOutfit>> {
   const { outfits } = await selectScalars(db, {
-    outfits: toolOutfitsSql(
+    outfits: outfitPageSql<ToolOutfit>(
+      toolOutfitSql(),
       and(
         eq(outfit.ownerId, ownerId),
         page.proposed ? museOutfitWaiting() : ownersOutfit(),
-        page.before === undefined ? undefined : lt(outfit.id, page.before),
         page.list && listFilter(page.list),
       )!,
-      // One more than the page: whether there is a next.
-      page.limit + 1,
+      page,
     ),
   });
-  const shown = outfits.slice(0, page.limit);
-  return {
-    outfits: shown,
-    next: outfits.length > page.limit ? shown[shown.length - 1].id : null,
-  };
+  return outfits;
 }
 
 /** The one rule of a Saved list (#659): savedOutfitsSql's, and GET /api/v1/outfits' `show`. */
@@ -325,35 +367,72 @@ export function outfitGarmentsSql({
   )`;
 }
 
+/** A Saved-tab tile or a saved-outfit button: no notes or share link, which nothing there shows. */
+function savedOutfitSql(): SQL {
+  return sql`json_build_object(
+    'id', ${outfit.id},
+    'name', ${outfit.name},
+    'agent', ${outfitAgentSql},
+    'proposed', ${outfit.proposedAt} is not null,
+    'garments', ${outfitGarmentsSql()}
+  )`;
+}
+
 /**
- * The owner's outfits of `list` (#659: the kept ones, keptOutfit, or the
- * one-offs), newest first, as a tile or a saved-outfit button shows it
- * (listOutfits' notes and shareable id feed nothing there), as one scalar
- * subquery: the Saved tab reads it with the outfits' activity
- * (savedContext, page-context.ts, #164), the calendar's plan page alone
- * and a trip's add page with the trip. The one list rule of the three:
- * none filters on its own.
+ * A page of the owner's outfits of `list` (#659: the kept ones, keptOutfit,
+ * or the one-offs), newest first, as a tile or a saved-outfit button shows
+ * it, as one scalar subquery (outfitPageSql, #660): the Saved tab reads it
+ * with the outfits' activity (savedContext, page-context.ts, #164), the
+ * calendar's plan page with the day's entries and a trip's add page with
+ * the trip, each first page and each next page (their sentinels') in one
+ * statement. The one list rule of the three: none filters on its own.
  */
 export function savedOutfitsSql(
   ownerId: number,
   list: OutfitList,
-): SQL<SavedOutfit[]> {
-  return sql<SavedOutfit[]>`(
-    select coalesce(
-      json_agg(
-        json_build_object(
-          'id', ${outfit.id},
-          'name', ${outfit.name},
-          'agent', ${outfitAgentSql},
-          'proposed', ${outfit.proposedAt} is not null,
-          'garments', ${outfitGarmentsSql()}
-        )
-        order by ${outfit.id} desc
-      ),
-      '[]'
-    )
+  page: OutfitPageAsk,
+): SQL<OutfitPage<SavedOutfit>> {
+  return outfitPageSql<SavedOutfit>(
+    savedOutfitSql(),
+    and(eq(outfit.ownerId, ownerId), ownersOutfit(), listFilter(list))!,
+    page,
+  );
+}
+
+/**
+ * Every one of the owner's own outfits' ids (ownersOutfit), newest first:
+ * the warm list's `keep` (#286), which needs no garments.
+ */
+export function ownOutfitIdsSql(ownerId: number): SQL<number[]> {
+  return sql<number[]>`(
+    select coalesce(json_agg(${outfit.id} order by ${outfit.id} desc), '[]')
     from ${outfit}
-    where ${and(eq(outfit.ownerId, ownerId), ownersOutfit(), listFilter(list))}
+    where ${and(eq(outfit.ownerId, ownerId), ownersOutfit())}
+  )`;
+}
+
+/**
+ * The owner's one-offs (not keptOutfit) that their entries from `from` to
+ * `to` hold, as savedOutfitsSql's rows: the warm list's near-term outfits
+ * (#659), which Today and the calendar open though no saved list shows them.
+ */
+export function heldOneOffsSql(
+  ownerId: number,
+  from: IsoDate,
+  to: IsoDate,
+): SQL<SavedOutfit[]> {
+  const held = sql`${outfit.id} in (
+    select ${outfitCalendar.outfitId} from ${outfitCalendar}
+    where ${and(
+      eq(outfitCalendar.ownerId, ownerId),
+      gte(outfitCalendar.day, from),
+      lte(outfitCalendar.day, to),
+    )}
+  )`;
+  return sql<SavedOutfit[]>`(
+    select coalesce(json_agg(${savedOutfitSql()} order by ${outfit.id} desc), '[]')
+    from ${outfit}
+    where ${and(eq(outfit.ownerId, ownerId), ownersOutfit(), not(keptOutfit()), held)}
   )`;
 }
 

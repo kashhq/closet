@@ -1220,6 +1220,7 @@
     "PICK_PROMPT": "Tap an outfit to plan it.",
     "LIST_KEPT": "Your outfits",
     "LIST_ONE_OFFS": "Worn and planned",
+    "LOADING_MORE": "Loading more outfits",
     "NO_ONE_OFFS": "Outfits made for a day or a trip show here: Plan my week's, Wear this, and ideas picked for a day.",
     "OFFLINE_PICK": "Offline: planning an outfit needs a connection.",
     "EDIT": "Edit in Styling",

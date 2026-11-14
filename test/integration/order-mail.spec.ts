@@ -1,12 +1,11 @@
 import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { garment, orderEmail, orderItem } from '../../src/db/schema';
+import { garment, orderEmail, orderItem, user } from '../../src/db/schema';
 import { PartialFailure } from '../../src/metrics/partial-failure';
 import { t as text } from '../../src/web/i18n';
 import { JmapError } from '../../src/web/wardrobe/order-mail/jmap';
 import {
-  OrderMailOwnerError,
   pollOrderMail,
   pollOrderMailWhole,
 } from '../../src/web/wardrobe/order-mail/poll';
@@ -482,19 +481,45 @@ describe('order email import', () => {
     });
   });
 
-  it('fails the run when ORDER_MAIL_OWNER names no account', async () => {
+  // #706: ORDER_MAIL_OWNER is an account id from the boot on.
+  it("stays the boot's account when its email changes and another account takes the old one", async () => {
     const other = await createTestApp(
       {
         ORDER_MAIL_JMAP_TOKEN: TOKEN,
         ORDER_MAIL_SENDERS: SENDER,
-        ORDER_MAIL_OWNER: 'nobody@example.com',
+        ORDER_MAIL_OWNER: OWNER_EMAIL,
       },
       { outboundFetch: sites.outboundFetch, orderMail: jmap.options },
     );
     try {
-      await expect(pollOrderMail(other.orderMail!)).rejects.toThrow(
-        OrderMailOwnerError,
-      );
+      await other.db
+        .update(user)
+        .set({ email: 'renamed@example.com' })
+        .where(eq(user.id, other.owner.id));
+      const newcomer = await other.register(OWNER_EMAIL);
+      // The poll lists for the id, never for whoever holds the address.
+      expect(other.orderMail!.ownerId).toBe(other.owner.id);
+
+      const list = await other.inject({
+        method: 'GET',
+        url: '/wardrobe/orders',
+      });
+      expect(list.statusCode).toBe(200);
+      const menu = await other.inject({ method: 'GET', url: '/wardrobe' });
+      expect(menu.body).toContain('href="/wardrobe/orders"');
+
+      const refused = await other.inject({
+        method: 'GET',
+        url: '/wardrobe/orders',
+        headers: { cookie: newcomer },
+      });
+      expect(refused.statusCode).toBe(404);
+      const theirs = await other.inject({
+        method: 'GET',
+        url: '/wardrobe',
+        headers: { cookie: newcomer },
+      });
+      expect(theirs.body).not.toContain('href="/wardrobe/orders"');
     } finally {
       await other.cleanup();
     }
@@ -597,7 +622,7 @@ describe('order email import', () => {
       expect(since.filter((c) => c === 'Email/get body')).toHaveLength(1);
       expect(await listedNames()).toContain('After Tee');
       const { accountId } = await emailRow('Mpoison001');
-      const start = await pollStart(t.db, OWNER_EMAIL.toLowerCase(), accountId);
+      const start = await pollStart(t.db, t.owner.id, accountId);
       expect(start.watermark).toEqual(new Date('2026-09-28T09:00:00Z'));
       expect(start.failing).toEqual([]);
       jmap.failBodyOf('Mpoison001', undefined);
@@ -897,6 +922,85 @@ describe('order email import', () => {
         items: 0,
       });
     });
+  });
+});
+
+/**
+ * #706: a missing owner turns the order mail off, never the app: an email
+ * change or an account deletion must not make the next deploy an outage.
+ */
+describe('order email import, owner missing', () => {
+  let jmap: JmapStub;
+  let sites: LinkSites;
+  const apps: TestApp[] = [];
+
+  beforeAll(async () => {
+    sites = await startLinkSites();
+    jmap = await startJmapStub(TOKEN);
+  });
+
+  afterAll(async () => {
+    await Promise.all(apps.map((app) => app.cleanup()));
+    await jmap.close();
+    await sites.close();
+  });
+
+  const boot = async (owner: string) => {
+    const app = await createTestApp(
+      {
+        ORDER_MAIL_JMAP_TOKEN: TOKEN,
+        ORDER_MAIL_SENDERS: SENDER,
+        ORDER_MAIL_OWNER: owner,
+      },
+      { outboundFetch: sites.outboundFetch, orderMail: jmap.options },
+    );
+    apps.push(app);
+    return app;
+  };
+  const check = async (app: TestApp) => {
+    const res = await app.inject({ method: 'GET', url: '/health/ready' });
+    expect(res.statusCode).toBe(200);
+    return res.json().checks.order_mail_owner;
+  };
+  const errors = (app: TestApp) =>
+    app.logs
+      .messages('error', 'OrderMail')
+      .filter((m) => /ORDER_MAIL_OWNER/.test(m));
+
+  it('boots with the order mail off, one error naming the key and a degraded readiness when no account has the address', async () => {
+    const app = await boot('nobody@example.com');
+    expect(app.orderMail).toBeUndefined();
+    const page = await app.inject({ method: 'GET', url: '/wardrobe/orders' });
+    expect(page.statusCode).toBe(404);
+    const wardrobe = await app.inject({ method: 'GET', url: '/wardrobe' });
+    expect(wardrobe.body).not.toContain('href="/wardrobe/orders"');
+    expect(await check(app)).toEqual({
+      status: 'down',
+      required: false,
+      fix: 'see docs/operations.md#health',
+    });
+    expect(errors(app)).toHaveLength(1);
+    expect(app.logs.text()).not.toContain('nobody@example.com');
+  });
+
+  it('stops at the next poll when the owner account is deleted while running: one error however many polls, nothing read or written', async () => {
+    const app = await boot(OWNER_EMAIL);
+    expect(await check(app)).toEqual({ status: 'up', required: false });
+    await app.db.delete(user).where(eq(user.id, app.owner.id));
+    for (let i = 0; i < 3; i += 1) {
+      expect(await pollOrderMail(app.orderMail!)).toMatchObject({
+        queried: 0,
+        listed: 0,
+      });
+    }
+    // The first poll opened the session to find the owner gone; the later
+    // ones never reach Fastmail.
+    const afterFirst = jmap.calls.length;
+    await pollOrderMail(app.orderMail!);
+    expect(jmap.calls.length).toBe(afterFirst);
+    expect(await app.db.select().from(orderEmail)).toHaveLength(0);
+    expect((await check(app)).status).toBe('down');
+    expect(errors(app)).toHaveLength(1);
   });
 });
 

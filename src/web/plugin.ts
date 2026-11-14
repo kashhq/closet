@@ -7,6 +7,7 @@ import { RefusalSummaries } from './auth/refusal-summaries';
 import { authRoutes } from './auth/routes';
 import { createSignInLimits } from './auth/sign-in';
 import { tokenRoutes } from './auth/token-routes';
+import type { OrderMailOwnerWatch } from './wardrobe/order-mail/owner-watch';
 import type { UntrustedProxyWatch } from './security/untrusted-proxy';
 import { sizesRoutes } from './sizes/routes';
 import { mcpRoutes } from './mcp/routes';
@@ -81,10 +82,11 @@ interface WebConfig {
   /** Web Push identity; set exactly when PWA_ENABLED (no /push routes otherwise). */
   vapid: VapidConfig | undefined;
   /**
-   * ORDER_MAIL_OWNER, normalized, when the order mail is on (#25): the one
-   * account whose review list exists (/wardrobe/orders); a 404 for all otherwise.
+   * ORDER_MAIL_OWNER's account id, resolved at boot, when the order mail is
+   * on (#25, #706): the one account whose review list exists
+   * (/wardrobe/orders); a 404 for all otherwise.
    */
-  orderMailOwner: string | undefined;
+  orderMailOwnerId: number | undefined;
   /**
    * The build's release (src/build-info.ts): /health/ready's `version` and
    * the MCP server's version.
@@ -131,6 +133,11 @@ export interface WebOptions {
    * root hook in createApp): /health/ready's trusted_proxies check.
    */
   proxyWatch: UntrustedProxyWatch;
+  /**
+   * Whether ORDER_MAIL_OWNER's account is missing (boot or later):
+   * /health/ready's order_mail_owner check.
+   */
+  orderMailWatch: OrderMailOwnerWatch;
   /**
    * The process's one outbound fetcher (src/web/security/outbound-fetch.ts),
    * built by createApp(): the only way a route fetches a URL a user
@@ -259,7 +266,7 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // id check answered 400.
   await app.register(orderReviewRoutes, {
     ...options,
-    orderMailOwner: options.config.orderMailOwner,
+    orderMailOwnerId: options.config.orderMailOwnerId,
   });
   // WEATHER_ENABLED=false: no /weather route, so nothing stores a location.
   const { weather } = options;

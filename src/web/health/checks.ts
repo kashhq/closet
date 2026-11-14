@@ -172,6 +172,20 @@ export function checkTrustedProxies(
     : { status: 'down', required: false, fix: TRUSTED_PROXIES_FIX };
 }
 
+const ORDER_MAIL_OWNER_FIX = 'see docs/operations.md#health';
+
+/**
+ * `order_mail_owner` (optional, #706): down once ORDER_MAIL_OWNER named no
+ * account, at boot or after the account was deleted. Only the order mail is
+ * off (no poll, no review list); a refused boot would cost the household the
+ * app for a mail setting. The key goes to the log, never the address.
+ */
+export function checkOrderMailOwner(missing: boolean): HealthCheck {
+  return missing
+    ? { status: 'down', required: false, fix: ORDER_MAIL_OWNER_FIX }
+    : { status: 'up', required: false };
+}
+
 /** How long a storage verdict is reused: a probe writes to disk (and NFS). */
 const STORAGE_PROBE_TTL_MS = 5_000;
 

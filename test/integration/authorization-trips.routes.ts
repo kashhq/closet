@@ -1,5 +1,5 @@
 import { addDays } from '../../src/calendar-date';
-import { type Route, BOTH, tripName } from './authorization-matrix';
+import { type Route, BOTH, outfitName, tripName } from './authorization-matrix';
 
 // The authorization matrix (authorization-matrix.ts): trips.
 export const ROUTES: Route[] = [
@@ -78,6 +78,26 @@ export const ROUTES: Route[] = [
     request: (f, q) => ({
       method: 'GET',
       url: `/trips/${f.tripId}/outfits/new${q}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+  },
+  {
+    // The add page's next page of outfits (#660): the trip's 404 first;
+    // below the shared outfit's id + 1, it starts with it.
+    name: 'GET /trips/:id/outfits/new/more',
+    kind: 'read',
+    ok: 200,
+    secret: outfitName,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/trips/${f.tripId}/outfits/new/more${q ? `${q}&` : '?'}before=${f.outfitId + 1}`,
     }),
     expect: {
       owner: 'ok',

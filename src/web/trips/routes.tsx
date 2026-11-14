@@ -1,5 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Static } from '@sinclair/typebox';
 import { isOccasion, type Occasion } from '../../wardrobe/occasions';
 import { sessionUserId } from '../auth/require-session';
 import { AutosaveSaved } from '../autosave';
@@ -24,7 +25,7 @@ import {
   pickedPlace,
   placeAnswer,
 } from '../weather/place-picker';
-import { AddOutfitPage } from './add-page';
+import { AddOutfitButtons, AddOutfitPage } from './add-page';
 import { tripForecast } from './forecast';
 import {
   DestinationPicker,
@@ -57,10 +58,13 @@ import {
   wearTripOutfit,
 } from './trip-actions';
 import { parseOutfitList } from '../outfits/outfit-list';
+import { OUTFIT_PAGE_SIZE } from '../outfits/page-size';
+import { FIRST_OUTFIT_PAGE, type OutfitPageAsk } from '../outfits/queries';
 import { ItemsSummary, PackedSummary, TripPage } from './trip-page';
 import { dayAnchor, TRIPS_PATH, tripUrl } from './urls';
 import {
   AddOutfitBody,
+  AddOutfitMoreQuery,
   AddOutfitQuery,
   ChecklistBody,
   CopyItemsBody,
@@ -283,41 +287,76 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
 
   // ---- Outfits ----------------------------------------------------------------
 
+  /**
+   * The add page's model for a page of its saved outfits: the trip's, the
+   * day and occasion asked (navigation state: one not the trip's, or not
+   * an occasion, is none) and what is on the trip that day. The page's and
+   * its sentinel's, so both judge alike.
+   */
+  async function addOutfitModel(
+    actor: Actor,
+    tripId: number,
+    query: Static<typeof AddOutfitQuery>,
+    page: OutfitPageAsk,
+  ) {
+    const list = parseOutfitList(query.show);
+    const found = await requireAddOutfitPage(db, actor, tripId, list, page);
+    const { trip } = found;
+    const days = tripDays(trip);
+    const asked = parseIsoDate(query.day);
+    const day = asked && days.includes(asked) ? asked : undefined;
+    const occasion =
+      query.occasion !== undefined && isOccasion(query.occasion)
+        ? query.occasion
+        : undefined;
+    return {
+      trip,
+      days,
+      day,
+      occasion,
+      list,
+      ...found.outfits,
+      onTrip: outfitsOnDay(found.onTrip, day ?? null),
+    };
+  }
+
   app.get(
     `${TRIPS_PATH}/:id/outfits/new`,
     { schema: { params: TripParams, querystring: AddOutfitQuery } },
-    async (request, reply) => {
-      const list = parseOutfitList(request.query.show);
-      const found = await requireAddOutfitPage(
-        db,
-        actorOf(request),
-        request.params.id,
-        list,
-      );
-      const { trip } = found;
-      const days = tripDays(trip);
-      const asked = parseIsoDate(request.query.day);
-      const day = asked && days.includes(asked) ? asked : undefined;
-      const occasion =
-        request.query.occasion !== undefined &&
-        isOccasion(request.query.occasion)
-          ? request.query.occasion
-          : undefined;
-      return renderPage(
+    async (request, reply) =>
+      renderPage(
         reply,
         <AddOutfitPage
           ctx={viewContext(reply)}
-          model={{
-            trip,
-            days,
-            day,
-            occasion,
-            list,
-            outfits: found.outfits,
-            onTrip: outfitsOnDay(found.onTrip, day ?? null),
-          }}
+          model={await addOutfitModel(
+            actorOf(request),
+            request.params.id,
+            request.query,
+            FIRST_OUTFIT_PAGE,
+          )}
         />,
+      ),
+  );
+
+  // The add page's sentinel (hx-trigger="revealed", #660): its saved
+  // outfits below `before`, judged for the same day, and the next
+  // sentinel. Always a fragment; one statement after the session, as the page.
+  app.get(
+    `${TRIPS_PATH}/:id/outfits/new/more`,
+    { schema: { params: TripParams, querystring: AddOutfitMoreQuery } },
+    async (request, reply) => {
+      const actor = actorOf(request);
+      const { before } = request.query;
+      const model = await addOutfitModel(
+        actor,
+        request.params.id,
+        request.query,
+        { before, limit: OUTFIT_PAGE_SIZE },
       );
+      logger.debug(
+        `GET /trips/${model.trip.id}/outfits/new/more: ${model.outfits.length} ${model.list} outfits of user ${actor.userId} below ${before}${model.next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(reply, <AddOutfitButtons model={model} />);
     },
   );
 

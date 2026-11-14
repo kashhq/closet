@@ -12,7 +12,10 @@ import {
 import { selectScalars } from '../../src/db/select-scalars';
 import { addDays } from '../../src/calendar-date';
 import { t as text } from '../../src/web/i18n';
-import { savedOutfitsSql } from '../../src/web/outfits/queries';
+import {
+  FIRST_OUTFIT_PAGE,
+  savedOutfitsSql,
+} from '../../src/web/outfits/queries';
 import { wearIdea } from '../../src/web/today/queries';
 import { decide, markSuggestion } from '../../src/web/wishlist/decisions';
 import {
@@ -534,9 +537,9 @@ describe('Today', () => {
         { id: agents, origin: 'agent' },
       ]);
       const { kept } = await selectScalars(t.db, {
-        kept: savedOutfitsSql(t.owner.id, 'kept'),
+        kept: savedOutfitsSql(t.owner.id, 'kept', FIRST_OUTFIT_PAGE),
       });
-      expect(kept.map((row) => row.id)).toEqual(
+      expect(kept.outfits.map((row) => row.id)).toEqual(
         expect.arrayContaining([mine, agents]),
       );
     });

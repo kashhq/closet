@@ -26,14 +26,17 @@ import { MuseSection } from './muse-cards';
 import type { MuseOutfit } from './proposals';
 import { buyFirstNote, toBuyLine } from './to-buy';
 import { type OutfitList, OutfitListTabs } from './outfit-list';
-import { outfitUrl, savedUrl } from './urls';
+import { outfitUrl, savedTilesUrl, savedUrl } from './urls';
+import { PageSentinel } from '../page-sentinel';
 
 /** Tiles above the fold on a phone (two rows of two): their images load at once. */
 const EAGER_TILES = 4;
 
 export interface SavedModel {
-  /** The owner's outfits of `list`, newest first. */
+  /** A page of the owner's outfits of `list`, newest first (#660: OUTFIT_PAGE_SIZE). */
   outfits: SavedOutfit[];
+  /** The id the next page starts below; null on the last. */
+  next: number | null;
   /** `?show=` (#659): the kept outfits, or the one-offs ("Worn and planned"). */
   list: OutfitList;
   /** Worn counts and next plans, by outfit id (absent: never planned). */
@@ -54,10 +57,17 @@ export interface SavedModel {
   toast: DecisionToast | undefined;
 }
 
+/** What a page of tiles needs: GET /outfits' grid, and its sentinel's GET /outfits/tiles alone. */
+export type SavedTilesModel = Pick<
+  SavedModel,
+  'outfits' | 'next' | 'list' | 'activity' | 'picking'
+>;
+
 /**
  * GET /outfits, the Outfits page's Saved tab (redesign plan, "Outfits"):
- * every outfit as a two-column grid of collage tiles (OutfitCollage `tile`),
- * with its name, how often it was worn and when it is next planned. You
+ * the outfits as a two-column grid of collage tiles (OutfitCollage `tile`),
+ * a page at a time (#660: the sentinel fetches the next, SavedTiles), with
+ * its name, how often it was worn and when it is next planned. You
  * search what you saved, so it is a grid; Ideas, one idea at a time, is a
  * strip. A tile opens the outfit, where Plan picks a day; the per-card
  * calendar dropdown is gone (R5).
@@ -105,7 +115,7 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
   );
 }
 
-/** The Saved grid: none yet, the pick for a day, or every outfit as a tile. */
+/** The Saved grid: none yet, the pick for a day, or the first page of tiles. */
 function SavedGrid({
   model,
   destination,
@@ -125,25 +135,69 @@ function SavedGrid({
   }
   return (
     <ul id="saved-outfits" class={OUTFIT_GRID}>
-      {model.outfits.map((outfit, index) => (
-        <li>
-          <a
-            href={outfitUrl(outfit.id)}
-            class="flex flex-col gap-1.5"
-            data-outfit-id={outfit.id}
-          >
-            <OutfitTile
-              outfit={outfit}
-              eager={index < EAGER_TILES}
-              line={
-                toBuyLine(outfit.garments) ??
-                activityLine(model.activity.get(outfit.id))
-              }
-            />
-          </a>
-        </li>
-      ))}
+      <SavedTiles model={model} firstPage />
     </ul>
+  );
+}
+
+/**
+ * One page of the grid's tiles and, when there are more, the sentinel that
+ * fetches the next (GET /outfits/tiles, which answers with this alone, so
+ * the page lands inside the same list and, while picking, the same form).
+ * Each tile opens its outfit, or while picking for a day is that form's
+ * submit button.
+ */
+export function SavedTiles(props: {
+  model: SavedTilesModel;
+  firstPage: boolean;
+}) {
+  const { model } = props;
+  const { picking } = model;
+  return (
+    <>
+      {model.outfits.map((outfit, index) => {
+        const eager = props.firstPage && index < EAGER_TILES;
+        return picking ? (
+          <PickingTile
+            outfit={outfit}
+            eager={eager}
+            picking={picking}
+            activity={model.activity.get(outfit.id)}
+          />
+        ) : (
+          <li>
+            <a
+              href={outfitUrl(outfit.id)}
+              class="flex flex-col gap-1.5"
+              data-outfit-id={outfit.id}
+            >
+              <OutfitTile
+                outfit={outfit}
+                eager={eager}
+                line={
+                  toBuyLine(outfit.garments) ??
+                  activityLine(model.activity.get(outfit.id))
+                }
+              />
+            </a>
+          </li>
+        );
+      })}
+      {model.next !== null && (
+        <PageSentinel
+          as="li"
+          class="col-span-full flex justify-center py-6"
+          href={savedTilesUrl(
+            picking?.destination ?? { kind: 'none' },
+            model.list,
+            model.next,
+          )}
+          trigger="revealed"
+          marker="saved"
+          label={t('outfits.LOADING_MORE')}
+        />
+      )}
+    </>
   );
 }
 
@@ -175,8 +229,7 @@ function PickingGrid(props: {
   model: SavedModel;
   picking: NonNullable<SavedModel['picking']>;
 }) {
-  const { model, picking } = props;
-  const { destination, choice } = picking;
+  const { destination } = props.picking;
   return (
     <PostForm action="/calendar">
       <input type="hidden" name="date" value={destination.day} />
@@ -190,34 +243,44 @@ function PickingGrid(props: {
         />
       )}
       <ul id="saved-outfits" class={OUTFIT_GRID}>
-        {model.outfits.map((outfit, index) => {
-          // Already on the day, or incomplete (#335): it cannot be picked.
-          const note =
-            plannedNote(choice, outfit.id) ?? buyFirstNote(outfit.garments);
-          return (
-            <li class="relative" data-outfit-id={outfit.id}>
-              <OutfitTile
-                outfit={outfit}
-                eager={index < EAGER_TILES}
-                line={note ?? activityLine(model.activity.get(outfit.id))}
-                dimmed={note !== undefined}
-                name={
-                  <button
-                    type="submit"
-                    name="outfitId"
-                    value={String(outfit.id)}
-                    class="block w-full text-left truncate after:absolute after:inset-0 after:rounded-box focus-visible:after:outline-2 focus-visible:after:outline-primary"
-                    disabled={note !== undefined}
-                  >
-                    {outfitName(outfit)}
-                  </button>
-                }
-              />
-            </li>
-          );
-        })}
+        <SavedTiles model={props.model} firstPage />
       </ul>
     </PostForm>
+  );
+}
+
+/** A tile of the picking grid: its name the submit button, disabled saying why when it cannot be picked. */
+function PickingTile(props: {
+  outfit: SavedOutfit;
+  eager: boolean;
+  picking: NonNullable<SavedModel['picking']>;
+  activity: OutfitActivity | undefined;
+}) {
+  const { outfit } = props;
+  // Already on the day, or incomplete (#335): it cannot be picked.
+  const note =
+    plannedNote(props.picking.choice, outfit.id) ??
+    buyFirstNote(outfit.garments);
+  return (
+    <li class="relative" data-outfit-id={outfit.id}>
+      <OutfitTile
+        outfit={outfit}
+        eager={props.eager}
+        line={note ?? activityLine(props.activity)}
+        dimmed={note !== undefined}
+        name={
+          <button
+            type="submit"
+            name="outfitId"
+            value={String(outfit.id)}
+            class="block w-full text-left truncate after:absolute after:inset-0 after:rounded-box focus-visible:after:outline-2 focus-visible:after:outline-primary"
+            disabled={note !== undefined}
+          >
+            {outfitName(outfit)}
+          </button>
+        }
+      />
+    </li>
   );
 }
 
