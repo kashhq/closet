@@ -120,8 +120,8 @@ describe('capsules', () => {
       expectFullPage(page);
       expect(page.body).toContain('Capsule created');
       expect(page.body).toContain('"created","added","removed"');
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Capsule ${id} created by user ${ownerId}`,
+      expect(t.logs.ops('capsule.created')).toContainEqual(
+        expect.objectContaining({ capsuleId: id, ownerId, surface: 'page' }),
       );
     });
 
@@ -319,12 +319,13 @@ describe('capsules', () => {
       expect(await members(office)).toEqual(
         [ids.tee, ids.jeans, ids.boots].sort((a, b) => a - b),
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Capsule ${office} garments chosen by user ${ownerId} in wardrobe ${ownerId}: 2 added, 1 removed, 3 shown$`,
-          ),
-        ),
+      expect(t.logs.ops('capsule.members.changed')).toContainEqual(
+        expect.objectContaining({
+          capsuleId: office,
+          ownerId,
+          added: 2,
+          removed: 1,
+        }),
       );
       const page = await get(`/capsules/${office}?added=2&removed=1`);
       expect(page.body).toContain('2 added · 1 removed');
@@ -400,8 +401,13 @@ describe('capsules', () => {
       expect(await members(office)).not.toContain(ids.jeans);
       expect(await members(weekend)).toEqual([ids.jeans]);
       expect(await members(later)).toEqual([ids.jeans]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Garment ${ids.jeans} capsules set by user ${ownerId} in wardrobe ${ownerId}: 1 added, 1 removed`,
+      expect(t.logs.ops('garment.capsules.changed')).toContainEqual(
+        expect.objectContaining({
+          garmentId: ids.jeans,
+          ownerId,
+          added: 1,
+          removed: 1,
+        }),
       );
     });
 

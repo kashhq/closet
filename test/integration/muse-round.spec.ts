@@ -211,13 +211,17 @@ describe('a round of Muse’s', () => {
         ttl: 24 * 60 * 60,
       },
     ]);
-    expect(
-      t.logs.records.some((r) =>
-        (r.msg ?? '').includes(
-          `Round ${finished.round!.id} finished by user ${t.owner.id} (MCP, token ${tokenId}): 1 outfits, 2 pieces, 1 devices notified`,
-        ),
-      ),
-    ).toBe(true);
+    expect(t.logs.ops('round.finished')).toContainEqual(
+      expect.objectContaining({
+        roundId: finished.round!.id,
+        userId: t.owner.id,
+        surface: 'mcp',
+        tokenId,
+        outfits: 1,
+        pieces: 2,
+        changed: true,
+      }),
+    );
     await post(`/outfits/${outfit.id}/dismiss`, { reason: 'style' });
   });
 

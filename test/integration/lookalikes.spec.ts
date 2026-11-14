@@ -235,12 +235,8 @@ describe('the duplicate check', () => {
     expect(res.headers.location).toBe(`/wardrobe/${whiteTee}?copyAdded=1`);
     expect(await quantityOf(whiteTee)).toBe(2);
     expect(await t.db.$count(garment)).toBe(before);
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^Garment ${whiteTee} copy added by user ${t.owner.id} in wardrobe ${t.owner.id}: quantity 1 -> 2$`,
-        ),
-      ),
+    expect(t.logs.ops('garment.copies.added')).toContainEqual(
+      expect.objectContaining({ garmentId: whiteTee, from: 1, to: 2 }),
     );
     const page = await get(`/wardrobe/${whiteTee}?copyAdded=1`);
     expect(page.body).toContain('id="copy-added-toast"');

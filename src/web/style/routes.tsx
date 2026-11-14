@@ -15,13 +15,8 @@ import { viewContext } from '../view-context';
 import { homeNameSql } from '../weather/queries';
 import { inTemplateOrder, weekTemplateSql } from '../week-plan/template';
 import type { OutfitRulesModel } from './outfit-rules';
-import {
-  addOutfitRule,
-  deleteOutfitRule,
-  ruleGarmentChoicesSql,
-  saveStyleProfile,
-  styleProfileParts,
-} from './queries';
+import { ruleGarmentChoicesSql, styleProfileParts } from './queries';
+import { addRule, removeRule, saveProfile } from './style-actions';
 import { StyleProfilePage } from './style-page';
 import {
   OUTFIT_RULES_PATH,
@@ -114,12 +109,8 @@ export const styleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     STYLE_PROFILE_PATH,
     { schema: { body: StyleProfileBody } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const fields = readStyleProfileForm(request.body);
-      await saveStyleProfile(db, userId, fields);
-      logger.info(
-        `Style profile saved by user ${userId}: ${fields.styles?.length ?? 0} styles, ${fields.palette?.length ?? 0} colours`,
-      );
+      await saveProfile({ db, logger }, actorOf(request), fields);
       return reply.redirect(styleSavedUrl('profile'), 303);
     },
   );
@@ -147,11 +138,12 @@ export const styleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       };
       // Each side is one option, spelled one way, so equal is the same.
       if (body.a === body.b) return refuse(t('style.RULE_SAME'));
-      const added = await addOutfitRule(db, actor, { kind: body.kind, a, b });
+      const added = await addRule({ db, logger }, actor, {
+        kind: body.kind,
+        a,
+        b,
+      });
       if (added === 'duplicate') return refuse(t('style.RULE_DUPLICATE'));
-      logger.info(
-        `Outfit rule ${added} added by user ${userId}: ${body.kind} ${body.a} with ${body.b}`,
-      );
       return reply.redirect(styleSavedUrl('rule-added'), 303);
     },
   );
@@ -162,8 +154,7 @@ export const styleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      await deleteOutfitRule(db, actor, id);
-      logger.info(`Outfit rule ${id} removed by user ${actor.userId}`);
+      await removeRule({ db, logger }, actor, id);
       return reply.redirect(styleSavedUrl('rule-removed'), 303);
     },
   );

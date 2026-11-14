@@ -77,6 +77,7 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   { db, logger },
   done,
 ) => {
+  const deps = { db, logger };
   app.get(
     '/capsules',
     {
@@ -164,18 +165,20 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await authorizeWardrobe(db, actor, ownerId, 'own', 'capsule');
         throw refusedBody(form.errors, POINTER_OF_CAPSULE_FIELD);
       }
-      const client = clientId ? `, client id ${clientId.slice(0, 8)}` : '';
       const made = clientId
-        ? await createOwnCapsuleOnce(db, actor, ownerId, form.fields, clientId)
-        : await createOwnCapsule(db, actor, ownerId, form.fields);
+        ? await createOwnCapsuleOnce(
+            deps,
+            actor,
+            ownerId,
+            form.fields,
+            clientId,
+          )
+        : await createOwnCapsule(deps, actor, ownerId, form.fields);
       if (made === 'name-taken') {
         throw refusedBody(nameTaken(body).errors, POINTER_OF_CAPSULE_FIELD);
       }
       if (made === 'gone') throw new HttpError(410, t('CAPSULE_DELETED'));
       const created = { created: true, ...made };
-      logger.info(
-        `Capsule ${created.id} ${created.created ? 'created' : 'already created, retry answered'} by user ${created.access.ownerId} (API)${client}`,
-      );
       return reply
         .status(created.created ? 201 : 200)
         .header('Location', apiCapsuleUrl(created.id, created.viewOwner))
@@ -207,16 +210,13 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await requireCapsule(db, actor, address, 'own');
         throw refusedBody(form.errors, POINTER_OF_CAPSULE_FIELD);
       }
-      const saved = await renameCapsule(db, actor, address, form.fields);
+      const saved = await renameCapsule(deps, actor, address, form.fields);
       if (saved === 'name-taken') {
         throw refusedBody(
           nameTaken(request.body).errors,
           POINTER_OF_CAPSULE_FIELD,
         );
       }
-      logger.info(
-        `Capsule ${address.id} updated by user ${saved.access.ownerId} (API)`,
-      );
       return toCapsuleResource({ id: address.id, ...form.fields });
     },
   );
@@ -236,13 +236,7 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-      const { access } = await deleteOwnCapsule(
-        db,
-        actorOf(request),
-        capsuleAddress(request),
-      );
-      logger.info(`Capsule ${id} deleted by user ${access.ownerId} (API)`);
+      await deleteOwnCapsule(deps, actorOf(request), capsuleAddress(request));
       return reply.status(204).send(null);
     },
   );
@@ -263,16 +257,12 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { add = [], remove = [] } = request.body;
-      const { access, added, removed } = await setCapsuleMembers(
-        db,
+      const { added, removed } = await setCapsuleMembers(
+        deps,
         actorOf(request),
         capsuleAddress(request),
         { add, remove },
-      );
-      logger.info(
-        `Capsule ${id} garments changed by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): ${added} added, ${removed} removed`,
       );
       return { added, removed };
     },
@@ -294,16 +284,12 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { add = [], remove = [] } = request.body;
-      const { access, added, removed } = await setGarmentCapsules(
-        db,
+      const { added, removed } = await setGarmentCapsules(
+        deps,
         actorOf(request),
         garmentAddress(request),
         { add, remove },
-      );
-      logger.info(
-        `Garment ${id} capsules changed by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): ${added} added, ${removed} removed`,
       );
       return { added, removed };
     },

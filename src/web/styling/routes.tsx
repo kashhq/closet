@@ -27,9 +27,12 @@ import {
   OutfitGarmentsGone,
   OutfitIncomplete,
 } from '../outfits/gone-garments';
-import { editOutfit, outfitNotFound } from '../outfits/outfit-actions';
-import { createOutfit, OUTFIT_NAME_MAX } from '../outfits/queries';
-import { piecesToBuy } from '../outfits/references';
+import {
+  editOutfit,
+  outfitNotFound,
+  saveOutfit,
+} from '../outfits/outfit-actions';
+import { OUTFIT_NAME_MAX } from '../outfits/queries';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
 import { IsoDateSchema, OccasionSchema, OwnerQuery, RowId } from '../schemas';
@@ -962,7 +965,6 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     actor: Actor,
     body: Static<typeof SaveBody>,
   ) {
-    const { userId } = actor;
     const garmentIds = chosenIds(body.garmentId);
     if (garmentIds.length === 0) {
       throw new HttpError(400, 'Choose at least one garment to save');
@@ -986,7 +988,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           'Include picks saves an outfit, never one for a day or a trip',
         );
       }
-      return saveWithPicks(reply, userId, { garmentIds, name, schedule });
+      return saveWithPicks(reply, actor, { garmentIds, name, schedule });
     }
     const planned: OutfitDestination =
       destination.kind === 'none' && schedule
@@ -1129,20 +1131,11 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     if (garments.length !== input.garmentIds.length) {
       throw await garmentsGoneError(db, userId, input.garmentIds, 'wardrobe');
     }
-    const result = await editOutfit(db, actor, outfitId, {
+    await editOutfit({ db, logger }, actor, outfitId, {
       name: input.name ?? ideaName(garments),
       slots: garments.map((g) => ({ category: g.category, garmentId: g.id })),
       plan,
     });
-    const planned = plan
-      ? `, ${result.schedule} ${plan.day} (${plan.occasion})`
-      : '';
-    const claimed = result.entriesClaimed
-      ? `, ${result.entriesClaimed} planned entry(ies) now the user's`
-      : '';
-    logger.info(
-      `Outfit ${outfitId} changed in Styling by user ${userId}: garments ${ids(garments).join(', ')}${planned}${claimed}`,
-    );
     return reply.redirect(
       safeReturnTo(input.returnTo, `/outfits/${outfitId}`),
       303,
@@ -1163,30 +1156,27 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
    */
   async function saveWithPicks(
     reply: FastifyReply,
-    userId: number,
+    actor: Actor,
     input: {
       garmentIds: number[];
       name: string | undefined;
       schedule: Plan | undefined;
     },
   ) {
+    const { userId } = actor;
     const garments = topToToe(
       await savedGarments(db, userId, input.garmentIds),
     );
     if (garments.length !== input.garmentIds.length) {
       throw await garmentsGoneError(db, userId, input.garmentIds, 'wardrobe');
     }
-    const saved = await createOutfit(db, userId, {
+    const saved = await saveOutfit({ db, logger }, actor, {
       name: input.name ?? ideaName(garments),
       slots: garments.map((g) => ({ category: g.category, garmentId: g.id })),
       plan: input.schedule,
       origin: 'person',
       madeBy: BY_PERSON,
     });
-    const toBuy = piecesToBuy(garments).length;
-    logger.info(
-      `Outfit ${saved.id} ${saved.alreadySaved ? 'already saved' : 'saved'} in Styling with picks by user ${userId}: garments ${ids(garments).join(', ')}, ${toBuy} to buy${input.schedule ? `, ${saved.schedule} ${input.schedule.day}` : ''}`,
-    );
     const flag = alreadySavedParam(saved);
     return reply.redirect(
       input.schedule

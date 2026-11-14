@@ -104,13 +104,14 @@ describe('outfits', () => {
       .from(outfitCalendar)
       .where(eq(outfitCalendar.outfitId, id));
     expect(entries).toEqual([{ day, occasion: 'evening' }]);
-    expect(
-      t.logs
-        .messages('info')
-        .find((line) =>
-          line.startsWith(`Outfit ${id} of the same garments reused`),
-        ),
-    ).toContain('client id 7f6c2a8e');
+    expect(t.logs.ops('outfit.created')).toContainEqual(
+      expect.objectContaining({
+        outfitId: id,
+        surface: 'api',
+        changed: false,
+        clientId: expect.stringMatching(/^7f6c2a8e/),
+      }),
+    );
   });
 
   it('refuses an outfit with no garment (a retried empty create would never dedup)', async () => {

@@ -1,5 +1,4 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
-import { sessionUserId } from '../auth/require-session';
 import type { WebOptions } from '../plugin';
 import { renderFragment } from '../render';
 import { GarmentParams, OwnerQuery } from '../schemas';
@@ -64,14 +63,11 @@ export const lookalikeRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { params: GarmentParams, querystring: OwnerQuery } },
     async (request, reply) => {
       const { id } = request.params;
-      const { access, viewOwner, from, to } = await addGarmentCopies(
-        db,
+      const { viewOwner } = await addGarmentCopies(
+        { db, logger },
         actorOf(request),
         garmentAddress(request),
         1,
-      );
-      logger.info(
-        `Garment ${id} copy added by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: quantity ${from} -> ${to}`,
       );
       return reply.redirect(
         garmentUrl(id, viewOwner, '', { copyAdded: 1 }),

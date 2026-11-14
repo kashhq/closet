@@ -45,6 +45,10 @@ vi.mock('./queries', () => ({
 }));
 vi.mock('./status', () => ({ setGarmentStatus: vi.fn() }));
 vi.mock('./writes', () => ({
+  cloneGarment: vi.fn(),
+  createGarment: vi.fn(),
+  createGarmentOnce: vi.fn(),
+  createGarmentWithPendingPhoto: vi.fn(),
   removeGarment: vi.fn(),
   replacePhoto: vi.fn(),
   rotateGarmentPhoto: vi.fn(),
@@ -91,22 +95,21 @@ const garment = {
 
 /** Each writer, called as a surface would; none may reach its query when refused. */
 const writers: [string, (actor: Actor) => Promise<unknown>][] = [
-  ['updateGarment', (a) => updateGarment(noStatements, a, address, {})],
+  ['updateGarment', (a) => updateGarment(deps, a, address, {})],
   [
     'editGarment',
-    (a) =>
-      editGarment(noStatements, a, address, () => ({ fields: { name: 'x' } })),
+    (a) => editGarment(deps, a, address, () => ({ fields: { name: 'x' } })),
   ],
   [
     'setGarmentCondition',
     (a) =>
-      setGarmentCondition(noStatements, a, address, {
+      setGarmentCondition(deps, a, address, {
         condition: 'good',
         conditionNote: null,
       }),
   ],
-  ['tagGarment', (a) => tagGarment(noStatements, a, address, {})],
-  ['addGarmentCopies', (a) => addGarmentCopies(noStatements, a, address, 1)],
+  ['tagGarment', (a) => tagGarment(deps, a, address, {})],
+  ['addGarmentCopies', (a) => addGarmentCopies(deps, a, address, 1)],
   [
     'replaceGarmentPhoto',
     (a) => replaceGarmentPhoto(deps, a, address, (async function* () {})()),
@@ -123,21 +126,21 @@ const writers: [string, (actor: Actor) => Promise<unknown>][] = [
 const ownerWriters: [string, (actor: Actor) => Promise<unknown>][] = [
   [
     'changeGarmentStatus',
-    (a) => changeGarmentStatus(noStatements, a, address, 'archive'),
+    (a) => changeGarmentStatus(deps, a, address, 'archive'),
   ],
   ['deleteOwnGarment', (a) => deleteOwnGarment(deps, a, address)],
   ['garmentToMend', (a) => garmentToMend(noStatements, a, address)],
   [
     'logRepair',
     (a) =>
-      logRepair(noStatements, a, address, {
+      logRepair(deps, a, address, {
         kind: 'repair',
         day: '2026-11-01',
         note: 'Hem',
         cost: null,
       }),
   ],
-  ['removeRepair', (a) => removeRepair(noStatements, a, address, 5)],
+  ['removeRepair', (a) => removeRepair(deps, a, address, 5)],
   [
     'buyWishlistItem, archiving what it replaces',
     (a) =>
@@ -207,12 +210,7 @@ describe('the garment write path refuses before it reads or writes', () => {
   // MCP names the wardrobe it addresses (#188b-1).
   it('reads an unseen wardrobe as the wardrobe when the caller named it', async () => {
     await expect(
-      addGarmentCopies(
-        noStatements,
-        stranger,
-        { ...address, unseen: 'wardrobe' },
-        1,
-      ),
+      addGarmentCopies(deps, stranger, { ...address, unseen: 'wardrobe' }, 1),
     ).rejects.toMatchObject({ statusCode: 404, message: 'Wardrobe not found' });
   });
 });
@@ -220,7 +218,7 @@ describe('the garment write path refuses before it reads or writes', () => {
 describe('the garment write path for whoever may', () => {
   it("writes a MANAGE grantee's edit into the owner's wardrobe", async () => {
     vi.mocked(updateGarmentFields).mockResolvedValue(true);
-    const { viewOwner } = await updateGarment(noStatements, manager, address, {
+    const { viewOwner } = await updateGarment(deps, manager, address, {
       name: 'Tee',
     });
     expect(viewOwner).toBe(OWNER);
@@ -236,13 +234,13 @@ describe('the garment write path for whoever may', () => {
   it('is not found for a garment the update did not find', async () => {
     vi.mocked(updateGarmentFields).mockResolvedValue(false);
     await expect(
-      updateGarment(noStatements, owner, address, { name: 'Tee' }),
+      updateGarment(deps, owner, address, { name: 'Tee' }),
     ).rejects.toMatchObject({ statusCode: 404, resource: 'garment' });
   });
 
   it('writes nothing for an edit that changes nothing', async () => {
     vi.mocked(findGarment).mockResolvedValue(garment);
-    const edited = await editGarment(noStatements, manager, address, () => ({
+    const edited = await editGarment(deps, manager, address, () => ({
       fields: {},
     }));
     expect(edited.garment).toBe(garment);
@@ -256,7 +254,7 @@ describe('the garment write path for whoever may', () => {
       status: 'archived',
     });
     await expect(
-      changeGarmentStatus(noStatements, owner, address, 'archive'),
+      changeGarmentStatus(deps, owner, address, 'archive'),
     ).rejects.toMatchObject({
       statusCode: 409,
       message: 'Only a garment in the closet can be archived',
@@ -270,7 +268,7 @@ describe('the garment write path for whoever may', () => {
       reason: 'not-in-closet',
     });
     await expect(
-      addGarmentCopies(noStatements, manager, address, 1),
+      addGarmentCopies(deps, manager, address, 1),
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
@@ -287,9 +285,10 @@ describe('the garment write path for whoever may', () => {
   it("is the repair's 404 for an entry not on this garment", async () => {
     vi.mocked(findGarment).mockResolvedValue(garment);
     vi.mocked(deleteRepair).mockResolvedValue(false);
-    await expect(
-      removeRepair(noStatements, owner, address, 5),
-    ).rejects.toMatchObject({ statusCode: 404, message: 'Repair not found' });
+    await expect(removeRepair(deps, owner, address, 5)).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'Repair not found',
+    });
   });
 
   it('opens the mask upload only after the garment is checked', async () => {

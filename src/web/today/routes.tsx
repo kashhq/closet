@@ -7,12 +7,13 @@ import {
 } from '../../wardrobe/occasions';
 import { sessionUserId } from '../auth/require-session';
 import { todayIn } from '../../calendar-date';
-import { garmentsGoneError } from '../outfits/gone-garments';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
 import { OccasionSchema, RowId } from '../schemas';
 import { viewContext } from '../view-context';
-import { MAX_WORN_GARMENTS, wearIdea } from './queries';
+import { actorOf } from '../sharing/access';
+import { MAX_WORN_GARMENTS } from './queries';
+import { wearIdeaOn } from './today-actions';
 import { MAX_TODAY_PAGE, todayFor, todayIdeas } from './today';
 import { IdeasRowView, TodayPage } from './today-page';
 import {
@@ -135,24 +136,16 @@ export const todayRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     WEAR_THIS_PATH,
     { schema: { body: WearBody } },
     async (request, reply) => {
-      const ownerId = sessionUserId(request);
       const now = new Date();
       const { garmentId, occasion } = request.body;
       const today = todayIn(config.timeZone, now);
-      const outcome = await wearIdea(db, ownerId, {
+      const { entryId } = await wearIdeaOn({ db, logger }, actorOf(request), {
         garmentIds: garmentId,
         occasion,
         day: today,
         today,
         at: now,
       });
-      if (outcome === 'not-found') {
-        throw await garmentsGoneError(db, ownerId, garmentId, 'closet');
-      }
-      const { outfit, entryId, worn } = outcome;
-      logger.info(
-        `Idea worn by user ${ownerId} on ${today} (${occasion}): ${outfit.alreadySaved ? 'existing ' : ''}outfit ${outfit.id} of garments ${garmentId.join(', ')}, entry ${entryId} ${worn.changed ? `marked worn (${worn.wears} wears logged)` : 'already worn'}`,
-      );
       return reply.redirect(todayAfterWear(entryId), 303);
     },
   );

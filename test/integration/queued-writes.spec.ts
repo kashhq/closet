@@ -187,8 +187,13 @@ describe('queued writes', () => {
     expect(outcome(await replay(url, wear))).toEqual([204, 'changed']);
     expect(outcome(await replay(url, wear))).toEqual([204, 'unchanged']);
     expect(await wearDays(shirt)).toEqual([day]);
-    expect(t.logs.messages('info', 'Web')).toContain(
-      `Garment ${shirt} worn on ${day} by user ${t.owner.id}`,
+    expect(t.logs.ops('garment.worn')).toContainEqual(
+      expect.objectContaining({
+        garmentId: shirt,
+        day,
+        userId: t.owner.id,
+        changed: true,
+      }),
     );
     expect(t.logs.messages('info', 'Web')).toContain(
       `Queued wear replayed for user ${t.owner.id} (replayed, key 1a2b3c4d)`,

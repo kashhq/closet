@@ -18,16 +18,16 @@ import {
   placeAnswer,
   postedLocation,
 } from './place-input';
+import { rainGearForDays } from './queries';
 import {
-  clearHere,
-  clearHome,
-  nudgeTemperatureOffset,
-  rainGearForDays,
-  resetTemperatureOffset,
-  setHere,
-  setHome,
-  setTemperatureUnit,
-} from './queries';
+  nudgeWeatherOffset,
+  removeWeatherHere,
+  removeWeatherHome,
+  resetWeatherOffset,
+  setWeatherHere,
+  setWeatherHome,
+  setWeatherUnit,
+} from './weather-actions';
 import { userWeather, type WeatherService } from './service';
 import { MAX_SUMMARY_DAYS } from './summary';
 import {
@@ -191,8 +191,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         who: `user ${userId}`,
       });
       const home = pickedPlace(request.body);
-      await setHome(db, userId, home);
-      logger.info(`Weather home set by user ${userId} (API)`);
+      await setWeatherHome({ db, logger }, actorOf(request), home);
       return keptPlace(home);
     },
   );
@@ -209,9 +208,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
-      await clearHome(db, userId);
-      logger.info(`Weather home removed by user ${userId} (API)`);
+      await removeWeatherHome({ db, logger }, actorOf(request));
       return reply.status(204).send(null);
     },
   );
@@ -238,10 +235,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       });
       const location = postedLocation(request.body);
       const at = new Date();
-      await setHere(db, userId, location, at);
-      logger.info(
-        `Weather location (this phone's) set by user ${userId} (API)`,
-      );
+      await setWeatherHere({ db, logger }, actorOf(request), location, at);
       return { ...location, locatedAt: at.toISOString() };
     },
   );
@@ -260,11 +254,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
-      await clearHere(db, userId);
-      logger.info(
-        `Weather location (this phone's) removed by user ${userId} (API)`,
-      );
+      await removeWeatherHere({ db, logger }, actorOf(request));
       return reply.status(204).send(null);
     },
   );
@@ -284,10 +274,8 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { unit } = request.body;
-      await setTemperatureUnit(db, userId, unit);
-      logger.info(`Temperature unit set to ${unit} by user ${userId} (API)`);
+      await setWeatherUnit({ db, logger }, actorOf(request), unit);
       return { unit };
     },
   );
@@ -307,11 +295,10 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
-      const { feeling } = request.body;
-      const offset = await nudgeTemperatureOffset(db, userId, feeling);
-      logger.info(
-        `Temperature feedback from user ${userId} (API): ${feeling}, offset now ${offset}`,
+      const offset = await nudgeWeatherOffset(
+        { db, logger },
+        actorOf(request),
+        request.body.feeling,
       );
       return { offset };
     },
@@ -331,9 +318,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
-      await resetTemperatureOffset(db, userId);
-      logger.info(`Temperature offset reset by user ${userId} (API)`);
+      await resetWeatherOffset({ db, logger }, actorOf(request));
       return reply.status(204).send(null);
     },
   );

@@ -46,6 +46,7 @@ describe('agent access tokens', () => {
   });
 
   it('shows a new token once, with the command that connects Claude Code', async () => {
+    t.logs.clear();
     const res = await t.inject({
       method: 'POST',
       url: '/auth/tokens',
@@ -66,6 +67,14 @@ describe('agent access tokens', () => {
     expect(row.tokenHash).toBe(hashToken(token));
     expect(row.tokenHash).not.toContain(token);
     expect(row.tokenPrefix).toBe(token.slice(0, 11));
+    // The audit trail of a credential issued over the network names where from.
+    expect(t.logs.ops('token.created')).toEqual([
+      expect.objectContaining({
+        tokenId: row.id,
+        surface: 'page',
+        address: expect.any(String),
+      }),
+    ]);
 
     const listed = await page();
     expect(listed.body).toContain('Laptop');
@@ -460,8 +469,8 @@ describe('agent access tokens', () => {
       const first = await minted(id, 'New phone');
       expect(first.evictedId).toBe(ids[7]);
       expect(await revokedAtOf(ids[7])).not.toBeNull();
-      expect(JSON.stringify(t.logs.records)).toContain(
-        `User ${id} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${ids[7]}, the least recently used`,
+      expect(t.logs.ops('token.created')).toContainEqual(
+        expect.objectContaining({ userId: id, evictedId: ids[7] }),
       );
       expect(JSON.stringify(t.logs.records)).not.toContain(first.token);
 
@@ -555,8 +564,13 @@ describe('agent access tokens', () => {
         '/auth/profile?deviceRevoked=1#devices',
       );
       expect(await revokedAtOf(phone.id)).not.toBeNull();
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `User ${id} revoked device token ${phone.id}`,
+      expect(t.logs.ops('token.revoked')).toContainEqual(
+        expect.objectContaining({
+          userId: id,
+          tokenId: phone.id,
+          kind: 'device',
+          changed: true,
+        }),
       );
       const landed = await t.inject({
         method: 'GET',

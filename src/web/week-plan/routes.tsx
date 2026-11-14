@@ -1,15 +1,14 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import { sessionUserId } from '../auth/require-session';
 import type { WebOptions } from '../plugin';
 import { RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
-import { planMyWeekNow, undoWeekPlan } from './plan';
 import {
-  readWeekTemplateForm,
-  saveWeekTemplate,
-  WeekTemplateBody,
-} from './template';
+  planWeekFor,
+  saveWeekTemplateFor,
+  undoWeekPlanFor,
+} from './plan-actions';
+import { readWeekTemplateForm, WeekTemplateBody } from './template';
 import {
   plannedWeekUrl,
   UNDONE_FLAG,
@@ -35,27 +34,12 @@ export const weekPlanRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   done,
 ) => {
   app.post('/calendar/plan-week', async (request, reply) => {
-    const ownerId = sessionUserId(request);
-    const started = performance.now();
-    const { today, forecast, result } = await planMyWeekNow(
-      { db, weather, timeZone: config.timeZone },
-      ownerId,
+    const { result } = await planWeekFor(
+      { db, logger, weather, timeZone: config.timeZone },
+      actorOf(request),
       new Date(),
     );
-    const ms = Math.round(performance.now() - started);
-    if (!result.templateSet) {
-      logger.info(
-        `Week not planned for user ${ownerId}: no week template; sent to set one`,
-      );
-      return reply.redirect(WEEK_SETTINGS_PATH, 303);
-    }
-    const unfilled = `${result.unfilled.length} slot(s) unfilled`;
-    const entries = result.planned.map((p) => p.entryId).join(', ');
-    logger.info(
-      result.weekPlanId === null
-        ? `Week plan for user ${ownerId} from ${today}: nothing to plan, ${unfilled} in ${ms} ms`
-        : `Week planned for user ${ownerId} from ${today} (plan ${result.weekPlanId}): ${result.planned.length} outfit(s) (entries ${entries}), ${unfilled}, forecast for ${forecast.days.size} day(s) in ${ms} ms`,
-    );
+    if (!result.templateSet) return reply.redirect(WEEK_SETTINGS_PATH, 303);
     if (result.weekPlanId === null) {
       return reply.redirect(plannedWeekUrl('none'), 303);
     }
@@ -71,10 +55,7 @@ export const weekPlanRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      const undone = await undoWeekPlan(db, actor, id);
-      logger.info(
-        `Week plan ${id} undone by user ${actor.userId}: ${undone.entries} entr(ies) and ${undone.outfits} outfit(s) removed`,
-      );
+      const undone = await undoWeekPlanFor({ db, logger }, actor, id);
       return reply.redirect(`/calendar?${UNDONE_FLAG}=${undone.entries}`, 303);
     },
   );
@@ -83,12 +64,8 @@ export const weekPlanRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     '/auth/profile/week',
     { schema: { body: WeekTemplateBody } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const slots = readWeekTemplateForm(request.body);
-      await saveWeekTemplate(db, userId, slots);
-      logger.info(
-        `Week template saved by user ${userId}: ${slots.length} slot(s) on ${new Set(slots.map((s) => s.weekday)).size} day(s)`,
-      );
+      await saveWeekTemplateFor({ db, logger }, actorOf(request), slots);
       return reply.redirect(
         `/auth/profile?${WEEK_SAVED_FLAG}=1#${WEEK_SETTINGS_ID}`,
         303,
