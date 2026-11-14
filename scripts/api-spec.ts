@@ -6,10 +6,10 @@ import { pino } from 'pino';
 import { PROJECT_ROOT } from '../src/project-root';
 import { DEVICE_TOKEN_SCHEME } from '../src/web/api/contract';
 import { type ApiOptions, registerApi } from '../src/web/api/plugin';
+import { createSignInLimits } from '../src/web/auth/sign-in';
 import {
   BEARER_REFUSAL_LIMIT,
   LINK_IMPORT_LIMIT,
-  SIGN_IN_LIMIT,
 } from '../src/web/security/rate-limit';
 import { assignSurface } from '../src/web/surface';
 
@@ -70,7 +70,7 @@ export async function generateApiSpec(): Promise<unknown> {
             type: 'http',
             scheme: 'bearer',
             description:
-              'A device token from POST /api/v1/auth/token, valid until revoked.',
+              'A device token from POST /api/v1/auth/token, valid until revoked or unused for 90 days.',
           },
         },
       },
@@ -81,7 +81,7 @@ export async function generateApiSpec(): Promise<unknown> {
   app.addHook('onRoute', assignSurface);
   await registerApi(app, {
     ...unservedOptions(),
-    signInLimit: app.createRateLimit(SIGN_IN_LIMIT),
+    signInLimits: createSignInLimits(app),
     bearerRefusalLimit: app.createRateLimit(BEARER_REFUSAL_LIMIT),
     linkImportLimit: app.createRateLimit(LINK_IMPORT_LIMIT),
     inspirationLinkLimit: app.createRateLimit(LINK_IMPORT_LIMIT),

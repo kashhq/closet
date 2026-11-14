@@ -2,10 +2,21 @@ import { loginUrl } from '../../src/web/auth/return-to';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { RouteOptions } from 'fastify';
 import { connect } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { personalAccessToken, user } from '../../src/db/schema';
 import committedSpec from '../../src/web/api/openapi.json';
-import { MAX_ACTIVE_TOKENS } from '../../src/web/auth/personal-tokens';
+import {
+  DEVICE_IDLE_DAYS,
+  MAX_ACTIVE_TOKENS,
+} from '../../src/web/auth/personal-tokens';
 import {
   deviceToken,
   expectNoCors,
@@ -19,6 +30,7 @@ import {
   recordQueries,
   TEST_PASSWORD,
   type TestApp,
+  unescapeHtml,
   uniqueClient,
   userIdOf,
 } from './harness';
@@ -614,18 +626,51 @@ describe('sign-in limits', () => {
     expect((await page()).statusCode).toBe(429);
   });
 
-  it('caps an account across addresses: the 6th from a new address is a 429, another account unaffected', async () => {
+  // #705: one SIGN_IN_ACCOUNT_LIMIT checker for both doors, so guesses
+  // spread over addresses and doors are 5 a minute per account in all.
+  it('caps an account across addresses and both doors: the 6th is a 429 at either, another account unaffected', async () => {
     const email = 'per-account@example.com';
     await newAccount(email);
-    for (let i = 0; i < 5; i++) {
-      const res = await signInDevice(t, { email, password: 'Wrong12345' });
-      expect(res.statusCode).toBe(401);
-    }
-    const sixth = await signInDevice(t, { email });
-    expectProblem(sixth, 429, 'rate_limited');
+    const page = (typed: string) =>
+      t.inject({
+        method: 'POST',
+        url: '/auth/login',
+        anonymous: true,
+        headers: uniqueClient(),
+        payload: { email: typed, password: 'Wrong12345' },
+      });
+    const statuses = [
+      (await page(email)).statusCode,
+      // The key is the address as the lookup normalises it.
+      (await page('  Per-Account@Example.COM ')).statusCode,
+      (await page(email)).statusCode,
+      (await signInDevice(t, { email, password: 'Wrong12345' })).statusCode,
+      (await signInDevice(t, { email, password: 'Wrong12345' })).statusCode,
+    ];
+    expect(statuses).toEqual([401, 401, 401, 401, 401]);
+
+    // The right password, from an address with room, is refused too.
+    expectProblem(await signInDevice(t, { email }), 429, 'rate_limited');
+    const sixthPage = await t.inject({
+      method: 'POST',
+      url: '/auth/login',
+      anonymous: true,
+      headers: uniqueClient(),
+      payload: { email, password: TEST_PASSWORD },
+    });
+    expect(sixthPage.statusCode).toBe(429);
+    expect(Number(sixthPage.headers['retry-after'])).toBeGreaterThan(0);
+    expect(sixthPage.cookies.find((c) => c.name === 'access_token')).toBe(
+      undefined,
+    );
+    expect(t.logs.messages('warn')).toContainEqual(
+      'Rate limit reached: POST /auth/login for an account',
+    );
+
     const other = 'per-account-other@example.com';
     await newAccount(other);
     await signedIn(other);
+    await t.login(other);
   });
 });
 
@@ -674,6 +719,105 @@ describe('DELETE /api/v1/auth/token (sign a device out)', () => {
     expect(t.logs.messages('info', 'Api')).toEqual([
       `User ${id} signed out device token ${phone.tokenId} (already revoked)`,
     ]);
+  });
+});
+
+// #705: a device token unused for DEVICE_IDLE_DAYS, from its last use or
+// else its creation, is refused as revoked; agent tokens never idle out.
+describe('a device token idle past its expiry', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const IDLE_MS = DEVICE_IDLE_DAYS * DAY_MS;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function stamps(tokenId: number) {
+    const [row] = await t.db
+      .select({
+        createdAt: personalAccessToken.createdAt,
+        lastUsedAt: personalAccessToken.lastUsedAt,
+      })
+      .from(personalAccessToken)
+      .where(eq(personalAccessToken.id, tokenId));
+    return row;
+  }
+
+  const me = (token: string) =>
+    t.api(token, { method: 'GET', url: '/api/v1/me' });
+
+  it('opens until 90 days after its last use, then is the 401 of a revoked token', async () => {
+    const email = 'idle-device@example.com';
+    const id = await newAccount(email);
+    const { token, tokenId } = await signedIn(email);
+    const { createdAt } = await stamps(tokenId);
+    vi.useFakeTimers({ toFake: ['Date'], now: createdAt });
+
+    // Never used: counted from its creation.
+    vi.setSystemTime(createdAt.getTime() + IDLE_MS - 60_000);
+    expect((await me(token)).statusCode).toBe(200);
+    const { lastUsedAt } = await stamps(tokenId);
+    expect(lastUsedAt).toEqual(
+      new Date(createdAt.getTime() + IDLE_MS - 60_000),
+    );
+
+    // Past 90 days from its creation, but not from its last use.
+    vi.setSystemTime(lastUsedAt!.getTime() + IDLE_MS - 60_000);
+    expect((await me(token)).statusCode).toBe(200);
+
+    const used = (await stamps(tokenId)).lastUsedAt!;
+    vi.setSystemTime(used.getTime() + IDLE_MS);
+    t.logs.clear();
+    expectProblem(await me(token), 401, 'unauthorized');
+    expect(t.logs.messages('warn')).toContainEqual(
+      expect.stringMatching(
+        /^API GET \/api\/v1\/me refused: revoked token from /,
+      ),
+    );
+    // A refusal records no use: the token stays idle.
+    expect((await stamps(tokenId)).lastUsedAt).toEqual(used);
+    expect(await tokenState(tokenId)).toBe('active');
+
+    // Agent tokens have no idle expiry.
+    const agent = await mintToken(t, id, 'Claude', 'mcp');
+    if (!agent.created) throw new Error('no agent token');
+    issued.push(agent.token);
+    vi.setSystemTime(Date.now() + 4 * IDLE_MS);
+    expect((await mcpRequest(t, agent.token, 'tools/list')).statusCode).toBe(
+      200,
+    );
+  });
+
+  it('a never-used device is idle 90 days from its creation, and Profile › Devices says so', async () => {
+    const email = 'idle-unused@example.com';
+    const cookie = await t.register(email);
+    const idle = await signedIn(email, 'Old phone');
+    const { createdAt } = await stamps(idle.tokenId);
+    vi.useFakeTimers({ toFake: ['Date'], now: createdAt });
+    vi.setSystemTime(createdAt.getTime() + IDLE_MS);
+    const fresh = await signedIn(email, 'New phone');
+    expect((await me(fresh.token)).statusCode).toBe(200);
+    expectProblem(await me(idle.token), 401, 'unauthorized');
+
+    const profile = await t.inject({
+      method: 'GET',
+      url: '/auth/profile',
+      headers: { cookie },
+    });
+    expect(profile.statusCode).toBe(200);
+    const body = unescapeHtml(profile.body);
+    expect(body).toContain(
+      `an app unused for ${DEVICE_IDLE_DAYS} days is signed out by itself`,
+    );
+    const rowOf = (name: string) =>
+      body.slice(
+        body.indexOf(`>${name}<`),
+        body.indexOf('</li>', body.indexOf(`>${name}<`)),
+      );
+    expect(rowOf('Old phone')).toContain(
+      `signed out: unused for ${DEVICE_IDLE_DAYS} days`,
+    );
+    expect(rowOf('New phone')).toContain('last used');
   });
 });
 

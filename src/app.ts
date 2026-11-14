@@ -162,6 +162,11 @@ export interface AppOptions {
    * never passes it.
    */
   photoUploadMax?: number;
+  /**
+   * SIGN_IN_ACCOUNT_LIMIT's max: the restore specs sign one owner in again
+   * after every restore, more than 5 a minute. Production never passes it.
+   */
+  signInAccountMax?: number;
 }
 
 function buildInfoFor(config: Config): BuildInfo {
@@ -538,6 +543,7 @@ export async function createApp(
     metrics,
     errors,
     photoUploadMax: options.photoUploadMax,
+    signInAccountMax: options.signInAccountMax,
   });
 
   return {

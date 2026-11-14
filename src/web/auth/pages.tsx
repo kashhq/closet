@@ -40,7 +40,11 @@ import {
 } from './form';
 import { SignOutForm } from './logout';
 import { RETURN_TO_PARAM } from './return-to';
-import type { TokenListing } from './personal-tokens';
+import {
+  DEVICE_IDLE_DAYS,
+  idleExpired,
+  type TokenListing,
+} from './personal-tokens';
 import {
   ACCOUNT_SECTION_ID,
   AGENT_ACCESS_SECTION_ID,
@@ -258,11 +262,13 @@ export interface ProfileProps {
   tokens: TokenListing[];
   /**
    * Devices (#189): the `device` tokens in force, the household's timezone
-   * for their days, and the revoke redirect's notice.
+   * for their days, the instant their idle expiry is judged at (#705), and
+   * the revoke redirect's notice.
    */
   devices: {
     tokens: TokenListing[];
     timeZone: string;
+    now: Date;
     notice?: 'revoked' | 'revoke-gone';
   };
   /** Sizes (#24): the measurements and the brand notes. */
@@ -481,21 +487,32 @@ function AgentAccessSection(props: { tokens: TokenListing[] }) {
  * (revoking only narrows access). Shown only while there is one: nothing on
  * the web mints a device token. Never the token or its prefix.
  */
-function DevicesSection(props: { tokens: TokenListing[]; timeZone: string }) {
-  const day = (instant: Date) => todayIn(props.timeZone, instant);
+function DevicesSection(props: {
+  tokens: TokenListing[];
+  timeZone: string;
+  now: Date;
+}) {
+  const deviceUse = (device: TokenListing) => {
+    if (idleExpired(device, props.now)) {
+      return t('devices.IDLE_SIGNED_OUT', { days: DEVICE_IDLE_DAYS });
+    }
+    return device.lastUsedAt
+      ? t('devices.LAST_USED', {
+          day: todayIn(props.timeZone, device.lastUsedAt),
+        })
+      : t('devices.NEVER_USED');
+  };
   return (
     <ProfileSection id={DEVICES_SECTION_ID} heading={t('devices.TITLE')}>
-      <p class="text-sm text-muted">{t('devices.INTRO')}</p>
+      <p class="text-sm text-muted">
+        {t('devices.INTRO', { days: DEVICE_IDLE_DAYS })}
+      </p>
       <ul class="divide-y divide-base-300">
         {props.tokens.map((device) => (
           <li class="py-2 flex items-center justify-between gap-2">
             <div class="flex flex-col min-w-0">
               <span class="truncate">{device.name}</span>
-              <span class="text-xs text-muted">
-                {device.lastUsedAt
-                  ? t('devices.LAST_USED', { day: day(device.lastUsedAt) })
-                  : t('devices.NEVER_USED')}
-              </span>
+              <span class="text-xs text-muted">{deviceUse(device)}</span>
             </div>
             <PostForm
               action={`${DEVICES_PATH}/${device.id}/revoke`}

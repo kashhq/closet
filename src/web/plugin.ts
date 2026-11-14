@@ -5,6 +5,7 @@ import { registerApi } from './api/plugin';
 import { createSessionHook } from './auth/require-session';
 import { RefusalSummaries } from './auth/refusal-summaries';
 import { authRoutes } from './auth/routes';
+import { createSignInLimits } from './auth/sign-in';
 import { tokenRoutes } from './auth/token-routes';
 import type { OrderMailOwnerWatch } from './wardrobe/order-mail/owner-watch';
 import type { UntrustedProxyWatch } from './security/untrusted-proxy';
@@ -16,7 +17,6 @@ import {
   LINK_IMPORT_LIMIT,
   PHOTO_UPLOAD_LIMIT,
   photoUploadHook,
-  SIGN_IN_LIMIT,
 } from './security/rate-limit';
 import type { SessionTokens } from './auth/tokens';
 import { calendarRoutes } from './calendar/routes';
@@ -106,6 +106,8 @@ export interface WebOptions {
   tokens: SessionTokens;
   /** AppOptions.photoUploadMax: PHOTO_UPLOAD_LIMIT's max, for the specs alone. */
   photoUploadMax?: number;
+  /** AppOptions.signInAccountMax: SIGN_IN_ACCOUNT_LIMIT's max, for the specs alone. */
+  signInAccountMax?: number;
   /**
    * The process's one Photos, built by createApp() (its thumb single-flight
    * must be shared): garment writes store through it, /file/** serves
@@ -210,7 +212,8 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
     ),
   );
   // The budgets a page and its API twin share, one checker each: the two
-  // sign-in doors' SIGN_IN_LIMIT (src/web/auth/sign-in.ts), the bearer
+  // sign-in doors' SIGN_IN_LIMIT and SIGN_IN_ACCOUNT_LIMIT
+  // (createSignInLimits, src/web/auth/sign-in.ts), the bearer
   // surfaces' BEARER_REFUSAL_LIMIT (/mcp and /api, bearer-gate.ts), the link
   // imports' LINK_IMPORT_LIMIT (the page's import and photo choice, the
   // API's import), and the inspiration paste's own LINK_IMPORT_LIMIT (the
@@ -218,7 +221,7 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // location writes (WeatherLimits: the page's and the API's).
   const shared = {
     ...options,
-    signInLimit: app.createRateLimit(SIGN_IN_LIMIT),
+    signInLimits: createSignInLimits(app, options.signInAccountMax),
     bearerRefusalLimit: app.createRateLimit(BEARER_REFUSAL_LIMIT),
     refusalSummaries: new RefusalSummaries(
       options.logger.child({ logger: 'Security' }),

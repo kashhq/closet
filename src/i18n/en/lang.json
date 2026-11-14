@@ -425,7 +425,8 @@
   },
   "devices": {
     "TITLE": "Devices",
-    "INTRO": "The apps signed in to your account. Changing your password signs them all out.",
+    "INTRO": "The apps signed in to your account. Changing your password signs them all out, and an app unused for {days} days is signed out by itself.",
+    "IDLE_SIGNED_OUT": "signed out: unused for {days} days",
     "LAST_USED": "last used {day}",
     "NEVER_USED": "never used",
     "REVOKE": "Sign out",
@@ -500,6 +501,7 @@
   "PUSH_TEST_BODY": "This is the test you sent from your profile.",
   "PUSH_TEST_SENT": "Test sent to {count} of your devices.",
   "PUSH_TEST_NO_DEVICES": "No device has notifications on. Enable them on this device first.",
+  "PUSH_TEST_TOO_SOON": "You have sent a few tests just now. Try again in a minute.",
   "PUSH_TEST_FAILED": "The test could not be delivered to {count} of your devices. Try again later.",
   "PUSH_TEST_REMOVED": "Devices that no longer accept notifications were removed: {count}.",
   "CLOSE": "Close",

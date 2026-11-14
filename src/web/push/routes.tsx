@@ -8,6 +8,7 @@ import { t } from '../i18n';
 import type { Logger } from '../../logger';
 import { renderFragment } from '../render';
 import { HttpError } from '../errors';
+import { countAgainst, PUSH_TEST_LIMIT } from '../security/rate-limit';
 import { isReminderChoice, type ReminderKind } from '../../push/reminders';
 import { isPushServiceEndpoint } from './endpoint';
 import {
@@ -225,9 +226,18 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
   );
 
   // An htmx button: always a 200 fragment saying what happened (htmx swaps
-  // no 4xx), sent to the caller's own devices only.
+  // no 4xx), sent to the caller's own devices only. Past PUSH_TEST_LIMIT
+  // the fragment says to try again in a minute and nothing is sent: the
+  // button's own result line, not a refusal toast, since nothing failed.
+  const testLimit = app.createRateLimit(PUSH_TEST_LIMIT);
   app.post('/push/test', async (request, reply) => {
     const userId = sessionUserId(request);
+    if (await countAgainst(testLimit, request)) {
+      logger.warn(
+        `Rate limit reached: POST /push/test for user ${userId}: nothing sent`,
+      );
+      return renderFragment(reply, <TestResult report="rate-limited" />);
+    }
     const report = await sender.sendToUser(
       userId,
       {

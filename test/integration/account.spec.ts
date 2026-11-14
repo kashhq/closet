@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { loginUrl } from '../../src/web/auth/return-to';
 import { eq, type SQL } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
@@ -212,15 +213,21 @@ describe('account', () => {
       const isSecure = (line: string | undefined) =>
         /;\s*Secure(;|$)/i.test(line ?? '');
 
-      /** Login, then sign out: the set, the clear and the cache-clear marker. */
+      /**
+       * Login, then sign out: the set, the clear and the cache-clear marker.
+       * An account of its own each time: SIGN_IN_ACCOUNT_LIMIT counts the
+       * describe's account's sign-ins across the other tests.
+       */
       const signInAndOut = async (
         headers: Record<string, string>,
         remoteAddress?: string,
       ) => {
+        const own = `secure-${randomUUID()}@example.com`;
+        await t.register(own);
         const login = await t.inject({
           method: 'POST',
           url: '/auth/login',
-          payload: { email, password: TEST_PASSWORD },
+          payload: { email: own, password: TEST_PASSWORD },
           headers: { ...uniqueClient(), ...headers },
           anonymous: true,
           remoteAddress,
@@ -278,7 +285,11 @@ describe('account', () => {
       );
     });
 
-    it('a sixth login attempt within a minute is refused with 429', async () => {
+    it('a sixth login attempt within a minute from one address is refused with 429', async () => {
+      // Its own account: the account's own budget (SIGN_IN_ACCOUNT_LIMIT,
+      // api.spec.ts) would refuse this describe's after its other tests.
+      const email = 'login-address-limit@example.com';
+      await t.register(email);
       const client = uniqueClient();
       const statuses: number[] = [];
       for (let i = 0; i < 6; i++) {
@@ -291,8 +302,11 @@ describe('account', () => {
       expect((await postLogin(email, TEST_PASSWORD, client)).statusCode).toBe(
         429,
       );
-      // ...while another address is unaffected.
-      expect((await postLogin(email, TEST_PASSWORD)).statusCode).toBe(302);
+      // ...while another address is unaffected (another account: this
+      // one has spent its own budget too).
+      const other = 'login-other-address@example.com';
+      await t.register(other);
+      expect((await postLogin(other, TEST_PASSWORD)).statusCode).toBe(302);
     });
 
     it('the login form is one a password manager can save', async () => {

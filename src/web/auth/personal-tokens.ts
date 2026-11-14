@@ -34,6 +34,32 @@ import type { SessionUser } from './session';
 const DISPLAY_LENGTH = TOKEN_PREFIX.length + 4;
 /** How stale last_used_at may get before a call writes it again. */
 const LAST_USED_RESOLUTION_MS = 60_000;
+/**
+ * A device token unused this long is refused as revoked (#705): a sold
+ * phone or a copied backup stops working by itself. Measured from
+ * last_used_at, or created_at for one never used; LAST_USED_RESOLUTION_MS
+ * is far below it, so a device in use never looks idle. Agent tokens have
+ * no idle expiry: an agent can run monthly, and each is minted behind the
+ * password with its own scope and listed on Agent Access.
+ */
+export const DEVICE_IDLE_DAYS = 90;
+const DEVICE_IDLE_MS = DEVICE_IDLE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a token has gone unused past its idle expiry at `now`: only a
+ * device token has one. authenticateToken refuses it; Profile › Devices
+ * says it is signed out.
+ */
+export function idleExpired(
+  token: { kind: TokenKind; createdAt: Date; lastUsedAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    token.kind === 'device' &&
+    now.getTime() - (token.lastUsedAt ?? token.createdAt).getTime() >=
+      DEVICE_IDLE_MS
+  );
+}
 export const TOKEN_NAME_MAX = 100;
 /**
  * A household's tokens are a handful; this bounds a runaway script. Counted
@@ -226,6 +252,9 @@ export function createToken(
         name,
         tokenHash: hashToken(token),
         tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+        // The app's clock, not the column's default: idleExpired judges it
+        // against the app's `now`, beside last_used_at, which it stamps.
+        createdAt: new Date(),
         ...scope,
       })
       .returning(listingColumns);
@@ -331,7 +360,8 @@ export interface TokenAuth {
 
 /**
  * Why a presented token opens nothing. `revoked` and `wrong kind` match a
- * real row (a device signed out, an agent token on /api): the bearer gate
+ * real row (a device signed out or idle past DEVICE_IDLE_DAYS, an agent
+ * token on /api): the bearer gate
  * always answers those with the 401 that says sign in again, never its 429
  * (src/web/auth/bearer-gate.ts). `unknown` is everything else, a deleted
  * user's token included.
@@ -345,7 +375,9 @@ export interface TokenRefusal {
  * (the caller answers each with the same 401, and a refused token's use is
  * never recorded). One indexed read, by the hash alone, so a revoked or
  * other-kind row is told from an unknown one; a second statement records
- * the use when the last one is a minute old. `shareOf` (shareToReadAhead)
+ * the use when the last one is a minute old. A device token idle past
+ * DEVICE_IDLE_DAYS (idleExpired) is refused as revoked, judged on the
+ * same row, so expiry costs no statement. `shareOf` (shareToReadAhead)
  * reads the token user's share of that wardrobe in the same read, as the
  * session statement does (#170): `share` then answers it, unless the
  * wardrobe is the user's own.
@@ -363,6 +395,7 @@ export async function authenticateToken(
       tokenId: personalAccessToken.id,
       kind: personalAccessToken.kind,
       revokedAt: personalAccessToken.revokedAt,
+      createdAt: personalAccessToken.createdAt,
       lastUsedAt: personalAccessToken.lastUsedAt,
       readOnly: personalAccessToken.readOnly,
       ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
@@ -376,8 +409,8 @@ export async function authenticateToken(
     .innerJoin(user, eq(user.id, personalAccessToken.userId))
     .where(eq(personalAccessToken.tokenHash, hashToken(token)));
   if (!row) return { refused: 'unknown' };
-  if (row.revokedAt !== null) return { refused: 'revoked' };
-  if (row.kind !== kind) return { refused: 'wrong kind' };
+  const refusal = refusalOf(row, kind, now);
+  if (refusal) return refusal;
   if (usedLongAgo(row.lastUsedAt, now)) {
     await db
       .update(personalAccessToken)
@@ -391,6 +424,28 @@ export async function authenticateToken(
     scope: { readOnly: row.readOnly, ownWardrobeOnly: row.ownWardrobeOnly },
     ...(share && { share }),
   };
+}
+
+/**
+ * Why a token's row opens nothing for `kind`, if it does not. An idle
+ * device token is a revoked one to its caller (and so to the bearer gate's
+ * 401-never-429 rule): it learns to sign in again.
+ */
+function refusalOf(
+  row: {
+    kind: TokenKind;
+    revokedAt: Date | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  },
+  kind: TokenKind,
+  now: Date,
+): TokenRefusal | undefined {
+  if (row.revokedAt !== null || idleExpired(row, now)) {
+    return { refused: 'revoked' };
+  }
+  if (row.kind !== kind) return { refused: 'wrong kind' };
+  return undefined;
 }
 
 /** The share the token's read answered: none asked, or the user's own wardrobe. */

@@ -1,22 +1,18 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { FastifyRequest } from 'fastify';
-import { createHash } from 'node:crypto';
 import { todayIn } from '../../calendar-date';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { IsoDateSchema } from '../schemas';
-import { enforceLimit, SIGN_IN_ACCOUNT_LIMIT } from '../security/rate-limit';
 import {
   createToken,
   FULL_SCOPE,
   revokeToken,
   TOKEN_NAME_MAX,
 } from './personal-tokens';
-import { normalizeEmail } from './queries';
-import { checkSignIn, failedSignInFor, signInGate } from './sign-in';
+import { checkSignIn, failedSignInFor, signInGuards } from './sign-in';
 import { Email, Password } from './validation';
 
 const TokenSignInBody = Type.Object({
@@ -53,49 +49,26 @@ const Me = Type.Object(
 );
 
 /**
- * The per-account key of SIGN_IN_ACCOUNT_LIMIT: a hash of the address as
- * the lookup normalises it, so the counter never holds an email. Runs in
- * preHandler, after the body's schema check.
- */
-function accountKey(request: FastifyRequest): string {
-  const { body } = request;
-  const email =
-    typeof body === 'object' &&
-    body !== null &&
-    'email' in body &&
-    typeof body.email === 'string'
-      ? body.email
-      : '';
-  return `account ${createHash('sha256').update(normalizeEmail(email)).digest('hex')}`;
-}
-
-/**
  * The API's account routes (#190; plan section 3), registered by apiPlugin
  * under /api/v1:
  *  - POST /auth/token: a native client signs in and gets a device token,
- *    public, under the login page's SIGN_IN_LIMIT (one budget for both
- *    doors) and SIGN_IN_ACCOUNT_LIMIT. It sets no cookie.
+ *    public, under the login page's own SIGN_IN_LIMIT and
+ *    SIGN_IN_ACCOUNT_LIMIT budgets (signInGuards: one of each for both
+ *    doors). It sets no cookie.
  *  - DELETE /auth/token: signs this device out, revoking the calling token
  *    and nothing else.
  *  - GET /me: who the token acts as, and the household's day.
  */
 export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
-  { db, config, apiLogger: logger, signInLimit },
+  { db, config, apiLogger: logger, signInLimits },
   done,
 ) => {
-  const accountLimit = app.createRateLimit({
-    ...SIGN_IN_ACCOUNT_LIMIT,
-    keyGenerator: accountKey,
-  });
-
   app.post(
     '/auth/token',
     {
       config: { public: true },
-      onRequest: signInGate(signInLimit, logger),
-      preHandler: (request) =>
-        enforceLimit(accountLimit, request, { logger, who: 'an account' }),
+      ...signInGuards(signInLimits, logger),
       schema: {
         operationId: 'signIn',
         tags: ['auth'],

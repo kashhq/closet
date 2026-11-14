@@ -119,7 +119,9 @@ describe('after a database restore', () => {
   };
 
   beforeAll(async () => {
-    t = await createTestApp();
+    // Every restore ends the owner's session, and each spec signs it in
+    // again: past SIGN_IN_ACCOUNT_LIMIT's 5 a minute for one account.
+    t = await createTestApp({}, { signInAccountMax: Number.MAX_SAFE_INTEGER });
   });
 
   afterAll(() => t?.cleanup());

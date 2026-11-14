@@ -12,7 +12,7 @@ import type { Logger } from '../../logger';
  * unless its route opts in with `config: { rateLimit: SIGN_IN_LIMIT }` (or
  * ACCOUNT_LIMIT, LINK_IMPORT_LIMIT, WEATHER_SEARCH_LIMIT, WEATHER_LOCATION_LIMIT,
  * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
- * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, API_LIMIT, API_PHOTO_LIMIT and PHOTO_UPLOAD_LIMIT through one
+ * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, API_LIMIT, API_PHOTO_LIMIT, PHOTO_UPLOAD_LIMIT and PUSH_TEST_LIMIT through one
  * createRateLimit checker each). Every limited route counts on its own. Counters live in
  * process memory, which is right for the single container this runs as.
  *
@@ -122,9 +122,10 @@ const MINUTE_MS = 60_000;
 /**
  * Signing in with a password: per client address, before the body is read.
  * ONE checker for both doors, the login page and the API's device sign-in
- * (`signInLimit`, built in webPlugin), so an address gets 5 guesses a minute
- * in all, the 6th a 429, whichever door it knocks on. Registration counts
- * the same limit as its own route config.
+ * (`signInLimits.address`, createSignInLimits in src/web/auth/sign-in.ts),
+ * so an address gets 5 guesses a minute in all, the 6th a 429, whichever
+ * door it knocks on. Registration counts the same limit as its own route
+ * config.
  */
 export const SIGN_IN_LIMIT = {
   max: 5,
@@ -133,11 +134,15 @@ export const SIGN_IN_LIMIT = {
 } satisfies RateLimitOptions;
 
 /**
- * The API's device sign-in, per account as well as per address: a sign-in
- * mints a token that lasts until revoked, so guesses spread over many
- * addresses are capped per account too. Keyed by the SHA-256 of the
- * normalized email (src/web/auth/api-routes.ts), never the address itself.
- * A preHandler: the email is in the body.
+ * Signing in, per account as well as per address: guesses spread over many
+ * addresses are capped per account too. ONE checker for both doors
+ * (`signInLimits.account`, #705), keyed by the SHA-256 of the normalized
+ * email (createSignInLimits), never the address itself; a preHandler, since
+ * the email is in the body. Every attempt counts, a right one included, so
+ * a guesser can hold an account's doors shut, but only for the window: the
+ * owner gets in again within a minute of the guessing stopping, and a
+ * guesser holding it needs 5 tries a minute from somewhere, which the
+ * per-address limit and the warn line make visible.
  */
 export const SIGN_IN_ACCOUNT_LIMIT = {
   max: 5,
@@ -281,6 +286,22 @@ export const CLIENT_ERROR_LIMIT = {
   hook: 'preHandler',
   keyGenerator: (request) => `user ${request.auth!.user.id}`,
 } satisfies RateLimitOptions;
+
+/**
+ * The profile's test notification (POST /push/test, src/web/push): per
+ * signed-in user. Each one is a request per device to the push services
+ * under the server's VAPID identity, so a looping client could get that
+ * identity throttled and delay everyone's reminders. Past it the route
+ * answers its own 200 fragment ("try again in a minute") and sends
+ * nothing: an htmx button's result line, not a 429. One createRateLimit
+ * checker, counted in the handler.
+ */
+export const PUSH_TEST_LIMIT = {
+  max: 3,
+  timeWindow: MINUTE_MS,
+  keyGenerator: (request: FastifyRequest) =>
+    `user ${request.auth!.user.id} push test`,
+};
 
 /**
  * /health/ready and its alias /healthz (src/web/health), on ONE

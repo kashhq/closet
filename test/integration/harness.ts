@@ -280,6 +280,8 @@ export interface TestAppOptions {
   heicDecoder?: AppOptions['heicDecoder'];
   /** PHOTO_UPLOAD_LIMIT's max (AppOptions.photoUploadMax). */
   photoUploadMax?: AppOptions['photoUploadMax'];
+  /** SIGN_IN_ACCOUNT_LIMIT's max (AppOptions.signInAccountMax). */
+  signInAccountMax?: AppOptions['signInAccountMax'];
 }
 
 /** A spec never reaches a real third party: each one it turns on needs its stand-in. */
@@ -359,6 +361,7 @@ export async function createTestApp(
         onRoute: options.onRoute,
         heicDecoder: options.heicDecoder,
         photoUploadMax: options.photoUploadMax,
+        signInAccountMax: options.signInAccountMax,
       }));
     await app.ready();
   } catch (error) {
