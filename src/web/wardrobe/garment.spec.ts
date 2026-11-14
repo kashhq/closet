@@ -32,6 +32,7 @@ describe('garment fields', () => {
 
   it('stores categories trimmed and lower case, and labels built-in ones in words', () => {
     expect(normalizeCategory('  Tops ')).toBe('tops');
+    expect(normalizeCategory('OUTERWEAR')).toBe('outerwear');
     expect(categoryLabel('tops')).toBe('Tops');
     expect(categoryLabel('hats')).toBe('hats');
   });

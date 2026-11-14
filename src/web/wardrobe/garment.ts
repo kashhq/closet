@@ -32,9 +32,18 @@ const CATEGORY_LABELS: Record<GarmentCategory, StringKey> = {
 
 const ENUM_ORDER: string[] = Object.values(GarmentCategory);
 
-/** A category as stored: trimmed and lower case, so "Tops" and "tops " are one. */
+/**
+ * A category as stored: trimmed and lower case, so "Tops" and "tops " are one,
+ * and a built-in's label read back to its key. The form shows labels
+ * (`categoryLabel`) and posts what it shows, so every surface that reads a
+ * category (page, API, MCP, filters) maps it here, in the one place.
+ */
 export function normalizeCategory(value: string): string {
-  return value.trim().toLowerCase();
+  const normalized = value.trim().toLowerCase();
+  const builtIn = Object.values(GarmentCategory).find(
+    (key) => t(CATEGORY_LABELS[key]).toLowerCase() === normalized,
+  );
+  return builtIn ?? normalized;
 }
 
 /** The built-in categories' translated names; a custom category is its own label. */
