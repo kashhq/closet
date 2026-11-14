@@ -39,9 +39,15 @@ done < <(grep -oE '`[A-Za-z0-9_./-]+/(AGENTS|CLAUDE)\.md`' AGENTS.md | tr -d '`'
 # The stack as /about and the llms files tell a stranger it (#641): upstream's claims (NestJS,
 # hyperscript, client-side cutouts) went stale in the rebuild, and photos are processed on the
 # server, which is a privacy fact.
-closet_stale_stack=$(grep -n -i -E 'nestjs|hyperscript|client-side' src/i18n/en/lang.json public/*.txt || true)
-if [ -n "$closet_stale_stack" ]; then
-  while IFS= read -r closet_hit; do
-    docs_fail "stale stack claim (NestJS, hyperscript or client-side): $closet_hit"
-  done <<<"$closet_stale_stack"
-fi
+# grep exits 1 for no match and 2 for an unreadable input: only 1 is a pass, so a moved lang.json
+# or an emptied public/ cannot turn the guard into a silent no-op.
+closet_stale_stack=$(grep -n -i -E 'nestjs|hyperscript|client-side' src/i18n/en/lang.json public/*.txt) && closet_stale_status=0 || closet_stale_status=$?
+case "$closet_stale_status" in
+  0)
+    while IFS= read -r closet_hit; do
+      docs_fail "stale stack claim (NestJS, hyperscript or client-side): $closet_hit"
+    done <<<"$closet_stale_stack"
+    ;;
+  1) ;;
+  *) docs_fail "stale-stack check could not read src/i18n/en/lang.json or public/*.txt (grep exit $closet_stale_status)" ;;
+esac
