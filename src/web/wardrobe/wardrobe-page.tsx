@@ -19,6 +19,7 @@ import { PostForm } from '../auth/form';
 import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
@@ -567,22 +568,18 @@ export function GarmentTiles(props: {
         );
       })}
       {page.before !== undefined && (
-        <div
+        <PageSentinel
+          as="div"
           class="col-span-full flex justify-center py-6"
-          hx-get={tilesUrl(viewOwner, search, page.before, {
+          href={tilesUrl(viewOwner, search, page.before, {
             selecting,
             picking,
             selection: props.selection,
           })}
-          hx-trigger="revealed"
-          hx-swap="outerHTML"
-          data-wardrobe-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </div>
+          trigger="revealed"
+          marker="wardrobe"
+          label={t('LOADING_MORE')}
+        />
       )}
     </>
   );

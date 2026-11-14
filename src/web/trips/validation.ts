@@ -1,5 +1,6 @@
 import { type Static, Type } from '@sinclair/typebox';
 import { OutfitListQuery } from '../outfits/outfit-list';
+import { OutfitCursor } from '../outfits/schemas';
 import type { FieldErrors } from '../auth/validation';
 import { daysBetween, parseIsoDate } from '../../calendar-date';
 import { checklistBody } from '../checklist';
@@ -169,6 +170,12 @@ export const AddOutfitQuery = Type.Object({
   day: Type.Optional(Type.String()),
   occasion: Type.Optional(Type.String()),
   ...OutfitListQuery,
+});
+
+/** The add page's next page of saved outfits (#660): its query and the keyset cursor its sentinel names. */
+export const AddOutfitMoreQuery = Type.Object({
+  ...AddOutfitQuery.properties,
+  before: OutfitCursor,
 });
 
 /**

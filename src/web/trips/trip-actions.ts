@@ -12,7 +12,12 @@ import { outfitNotFound } from '../outfits/outfit-actions';
 import type { PickResult } from '../outfits/pick';
 import type { OutfitOrigin } from '../../wardrobe/outfit-origin';
 import type { OutfitList } from '../outfits/outfit-list';
-import { type GarmentOutfit, savedOutfitsSql } from '../outfits/queries';
+import {
+  type GarmentOutfit,
+  type OutfitPage,
+  type OutfitPageAsk,
+  savedOutfitsSql,
+} from '../outfits/queries';
 import { NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
 import { type TripModel, tripModel, tripPageModel } from './model';
@@ -113,22 +118,24 @@ export async function requireTripModel(
 }
 
 /**
- * The add page's read, one statement: the trip, the actor's saved outfits
- * of `list` (#659) and the trip's outfits with their days.
+ * The add page's read, one statement: the trip, a page of the actor's
+ * saved outfits of `list` (#659, #660) and the trip's outfits with their
+ * days. The page's and its sentinel's (GET /trips/:id/outfits/new/more).
  */
 export async function requireAddOutfitPage(
   db: Db,
   actor: Actor,
   id: number,
   list: OutfitList,
+  page: OutfitPageAsk,
 ): Promise<{
   trip: TripRow;
-  outfits: GarmentOutfit[];
+  outfits: OutfitPage<GarmentOutfit>;
   onTrip: TripOutfitDay[];
 }> {
   const found = await selectScalars(db, {
     trip: ownTripSql(id, actor.userId),
-    outfits: savedOutfitsSql(actor.userId, list),
+    outfits: savedOutfitsSql(actor.userId, list, page),
     onTrip: tripOutfitDaysSql(id, actor.userId),
   });
   if (!found.trip) throw tripNotFound();

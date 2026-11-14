@@ -1,6 +1,7 @@
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../auth/form';
 import { t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { collagePieces, OutfitCollage } from './collage';
 import { type OutfitList, OutfitListTabs } from './outfit-list';
 import type { GarmentOutfit } from './queries';
@@ -50,12 +51,43 @@ function SavedOutfitButton(props: {
 }
 
 /**
+ * One page of a picker's SavedOutfitButtons and, when there are more
+ * (`more`: the next page's address, #660), the sentinel that fetches it.
+ * The pickers' next-page routes (GET /calendar/plan/more, GET
+ * /trips/:id/outfits/new/more) answer with this alone, so the page lands
+ * inside the same form.
+ */
+export function SavedOutfitButtons(props: {
+  outfits: GarmentOutfit[];
+  noteOf: (outfit: GarmentOutfit) => string | undefined;
+  more: string | undefined;
+}) {
+  return (
+    <>
+      {props.outfits.map((outfit) => (
+        <SavedOutfitButton outfit={outfit} note={props.noteOf(outfit)} />
+      ))}
+      {props.more !== undefined && (
+        <PageSentinel
+          as="div"
+          class="flex justify-center py-4"
+          href={props.more}
+          trigger="revealed"
+          marker="picker"
+          label={t('outfits.LOADING_MORE')}
+        />
+      )}
+    </>
+  );
+}
+
+/**
  * The pickers' "Saved" section (the calendar's plan page, a trip's add
  * page): the two lists' tabs (#659: `list` is the one shown, `href` the
- * page's address without it), the owner's outfits of that list as
- * SavedOutfitButtons of one native PostForm to `action`, which carries
- * the page's hidden fields (`children`), or the line saying there are
- * none.
+ * page's address without it), the first page of the owner's outfits of
+ * that list as SavedOutfitButtons of one native PostForm to `action`,
+ * which carries the page's hidden fields (`children`), or the line saying
+ * there are none.
  */
 export function SavedOutfitPicker(props: {
   heading: Child;
@@ -64,6 +96,8 @@ export function SavedOutfitPicker(props: {
   href: string;
   outfits: GarmentOutfit[];
   noteOf: (outfit: GarmentOutfit) => string | undefined;
+  /** The next page's address (SavedOutfitButtons' `more`); none on the last. */
+  more: string | undefined;
   children: Child;
 }) {
   return (
@@ -75,9 +109,11 @@ export function SavedOutfitPicker(props: {
       {props.outfits.length > 0 ? (
         <PostForm action={props.action} class="flex flex-col gap-2">
           {props.children}
-          {props.outfits.map((outfit) => (
-            <SavedOutfitButton outfit={outfit} note={props.noteOf(outfit)} />
-          ))}
+          <SavedOutfitButtons
+            outfits={props.outfits}
+            noteOf={props.noteOf}
+            more={props.more}
+          />
         </PostForm>
       ) : (
         <p class="text-sm text-muted">

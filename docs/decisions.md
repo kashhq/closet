@@ -1310,3 +1310,8 @@ Consequence: the owner signs up before setting the token. Two DKIM signatures wi
 Why: the owner changing their email or deleting their account in the app made the next deploy refuse to boot (a ConfigError): a whole-app outage from a user action.
 Decision: no account for ORDER_MAIL_OWNER logs one OrderMail error naming the key and runs with the order mail off; /health/ready reports the optional `order_mail_owner` check down (OrderMailOwnerWatch). A poll that finds the owner deleted sets the same flag, and later polls return before reading anything.
 Consequence: this supersedes the boot refusal in the 706 entry above; the fix is ORDER_MAIL_OWNER set to the account's current email and a redeploy.
+
+## 2026-11-14 — Saved outfits page by id through one reader, with the grid's sentinel (#660)
+Why: the Saved tab, the plan page, a trip's add page, list_outfits and the warm list each read every outfit with its garments (65 KB at 26, growing a tile a day); only the API paged, by its own `limit + 1` read.
+Decision: `outfitPageSql` (`src/web/outfits/queries.ts`) is the one outfit page reader: newest first, keyset `id < before` (unique, so no tiebreaker), `OUTFIT_PAGE_SIZE` (30) a page, `{ outfits, next }` in the page's own statement. The sentinel is the wardrobe grid's, lifted to `src/web/page-sentinel.tsx` and shared by every paged list. No index: `outfit_owner_id_index` and a top-N sort over the owner's rows suffice at household size.
+Consequence: no unpaged outfit list read remains; a new outfit list pages through it. The plan page is 2 statements (3 before). Later pages are not warmed: offline the scroll ends where the cache does, with the offline banner.
