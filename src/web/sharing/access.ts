@@ -106,6 +106,14 @@ export function rememberShareReadAhead(
  * pages and /api/v1, `actorOf(ctx)` (src/web/mcp/tool.ts) for MCP. No
  * domain function sees a FastifyRequest.
  */
+/**
+ * The Actor's door: a request's surface, or `cli` for the seed, the audit
+ * fixture and the maintenance CLIs, so an audit line tells a command-line
+ * credential from one a person made on a page. Never a request Surface: the
+ * request gates (same-origin, bearer) must not grow a `cli` case.
+ */
+export type ActorSurface = Surface | 'cli';
+
 export interface Actor {
   userId: number;
   /**
@@ -113,7 +121,7 @@ export interface Actor {
    * (logOp, src/web/op-log.ts), so the action logs once for every surface.
    * Never an access input: the resolver ignores it.
    */
-  surface: Surface;
+  surface: ActorSurface;
   shareReadAhead?: ShareReadAhead;
   /**
    * An own-wardrobe-only agent token's (#701, its TokenScope): every

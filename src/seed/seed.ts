@@ -1007,7 +1007,7 @@ async function seedOne(
     // --remove take it with the account.
     const created = await createToken(
       command,
-      { userId: account!.id, surface: 'page' },
+      { userId: account!.id, surface: 'cli' },
       {
         kind: 'mcp',
         name: SEED_TOKEN_NAME,
