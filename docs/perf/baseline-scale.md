@@ -101,17 +101,17 @@ Commit `08d9927`, persona `scale`, 2026-11-14T19:48:11.423Z. 20 runs per step af
 
 | Step | Target | Status | p50 ms | p95 ms | db ms | Statements | Rows | KB | Wire KB |
 | --- | --- | --: | --: | --: | --: | --: | --: | --: | --: |
-| Styling | `GET /styling` | 200 | 6.2 | 9.8 | 3.6 | 2 | 2 | 102.3 | 11.6 |
-| Style this (?with=) | `GET /styling` | 200 | 27.8 | 38.0 | 18.8 | 3 | 3 | 339.6 | 26.2 |
-| Edit an outfit (?outfit=) | `GET /styling` | 200 | 11.9 | 22.5 | 5.0 | 2 | 2 | 401.4 | 30.0 |
-| For a planned evening (?for=) | `GET /styling` | 200 | 6.7 | 10.9 | 3.7 | 2 | 2 | 102.5 | 11.5 |
-| Shuffle, one row locked | `GET /styling/shuffle` | 200 | 24.9 | 36.4 | 17.8 | 3 | 3 | 315.3 | 20.5 |
-| Add a row | `GET /styling/row` | 200 | 4.5 | 9.1 | 2.3 | 2 | 2 | 82.1 | 6.4 |
-| Strip paging | `GET /styling/garments` | 200 | 1.8 | 5.3 | 0.8 | 2 | 12 | 8.5 | 1.1 |
-| Old builder link (/outfits/new) | `GET /outfits/new` | 302 | 0.7 | 1.8 | 0.3 | 1 | 1 | 0.0 | 0.0 |
-| Old edit link (/outfits/:id/edit) | `GET /outfits/:id/edit` | 302 | 0.5 | 1.8 | 0.3 | 1 | 1 | 0.0 | 0.0 |
-| Save an outfit | `POST /styling` | 303 | 6.0 | 7.4 | 5.6 | 6 | 4 | 0.0 | 0.0 |
-| Save refused, the page again (an archived garment) | `POST /styling` | 409 | 15.8 | 18.6 | 11.3 | 7 | 6 | 168.0 | 15.7 |
+| Styling | `GET /styling` | 200 | 7.6 | 10.4 | 3.0 | 2 | 2 | 102.3 | 11.5 |
+| Style this (?with=) | `GET /styling` | 200 | 23.6 | 26.3 | 15.1 | 3 | 3 | 140.8 | 14.1 |
+| Edit an outfit (?outfit=) | `GET /styling` | 200 | 9.4 | 12.5 | 4.1 | 2 | 2 | 124.3 | 13.1 |
+| For a planned evening (?for=) | `GET /styling` | 200 | 8.4 | 10.2 | 3.4 | 2 | 2 | 102.5 | 11.5 |
+| Shuffle, one row locked | `GET /styling/shuffle` | 200 | 23.5 | 25.3 | 16.2 | 3 | 3 | 117.8 | 8.6 |
+| Add a row | `GET /styling/row` | 200 | 7.5 | 9.4 | 3.5 | 2 | 2 | 82.1 | 6.4 |
+| Strip paging | `GET /styling/garments` | 200 | 3.6 | 5.2 | 1.6 | 2 | 12 | 8.5 | 1.1 |
+| Old builder link (/outfits/new) | `GET /outfits/new` | 302 | 1.2 | 1.9 | 0.6 | 1 | 1 | 0.0 | 0.0 |
+| Old edit link (/outfits/:id/edit) | `GET /outfits/:id/edit` | 302 | 1.0 | 1.7 | 0.5 | 1 | 1 | 0.0 | 0.0 |
+| Save an outfit | `POST /styling` | 303 | 8.7 | 11.4 | 7.7 | 6 | 4 | 0.0 | 0.0 |
+| Save refused, the page again (an archived garment) | `POST /styling` | 409 | 13.4 | 17.8 | 8.4 | 7 | 6 | 112.1 | 12.3 |
 
 ## #164 Outfits and saved outfits
 
@@ -190,15 +190,15 @@ Commit `08d9927`, persona `scale`, 2026-11-14T19:48:11.423Z. 20 runs per step af
 
 | Step | Target | Status | p50 ms | p95 ms | db ms | Statements | Rows | KB | Wire KB |
 | --- | --- | --: | --: | --: | --: | --: | --: | --: | --: |
-| Ideas | `GET /outfits/ideas` | 200 | 22.6 | 27.5 | 17.9 | 2 | 2 | 52.2 | 8.2 |
-| Ideas for a planned evening | `GET /outfits/ideas` | 200 | 22.2 | 34.3 | 14.0 | 2 | 2 | 58.3 | 8.3 |
-| Ideas with a garment | `GET /outfits/ideas` | 200 | 16.6 | 26.1 | 11.9 | 3 | 3 | 54.5 | 7.8 |
-| More ideas (page 2) | `GET /outfits/ideas/more` | 200 | 14.5 | 25.9 | 10.9 | 2 | 2 | 33.9 | 3.0 |
-| More ideas (page 50, the cap) | `GET /outfits/ideas/more` | 200 | 50.1 | 118.0 | 9.8 | 2 | 2 | 33.6 | 2.9 |
-| Pick an idea | `POST /outfits/ideas/pick` | 303 | 3.6 | 4.7 | 3.3 | 6 | 6 | 0.0 | 0.0 |
-| Never pair these (clash) | `POST /outfits/ideas/avoid` | 303 | 2.0 | 2.4 | 1.6 | 2 | 2 | 0.0 | 0.0 |
-| Pair them again | `POST /outfits/ideas/allow` | 303 | 2.0 | 2.3 | 1.6 | 2 | 2 | 0.0 | 0.0 |
-| Too warm | `POST /outfits/ideas/feedback` | 303 | 1.9 | 2.4 | 1.6 | 2 | 2 | 0.0 | 0.0 |
+| Ideas | `GET /outfits/ideas` | 200 | 19.1 | 20.5 | 12.2 | 2 | 2 | 52.1 | 8.0 |
+| Ideas for a planned evening | `GET /outfits/ideas` | 200 | 19.7 | 21.1 | 12.6 | 2 | 2 | 58.1 | 8.1 |
+| Ideas with a garment | `GET /outfits/ideas` | 200 | 21.2 | 23.4 | 13.5 | 3 | 3 | 54.3 | 7.8 |
+| More ideas (page 2) | `GET /outfits/ideas/more` | 200 | 17.6 | 20.1 | 12.4 | 2 | 2 | 33.9 | 3.0 |
+| More ideas (page 50, the cap) | `GET /outfits/ideas/more` | 200 | 39.2 | 42.3 | 12.9 | 2 | 2 | 33.6 | 2.8 |
+| Pick an idea | `POST /outfits/ideas/pick` | 303 | 4.5 | 7.3 | 3.8 | 6 | 6 | 0.0 | 0.0 |
+| Never pair these (clash) | `POST /outfits/ideas/avoid` | 303 | 1.8 | 2.6 | 1.0 | 2 | 2 | 0.0 | 0.0 |
+| Pair them again | `POST /outfits/ideas/allow` | 303 | 1.7 | 2.2 | 0.9 | 2 | 2 | 0.0 | 0.0 |
+| Too warm | `POST /outfits/ideas/feedback` | 303 | 1.7 | 2.2 | 1.0 | 2 | 2 | 0.0 | 0.0 |
 
 ## #169 Insights and yearly recap
 

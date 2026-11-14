@@ -12,7 +12,9 @@ production build, over one of two seeded personas (#707):
 Both baselines are that run on `main` at `08d9927` (2026-11-14, Apple M4
 10 cores, Node 22.23.3; demo: load average 2.6 rising to 8.3, scale: 10.1
 falling to 2.7, other agents' runs sharing the box: times from them are
-rough, counts and bytes exact). Every page PR shows its before and after
+rough, counts and bytes exact); scale's Styling (#163) and Ideas gallery
+(#168) steps were measured again by #996's `--only` runs and merged in.
+Every page PR shows its before and after
 against the one that fits it; a perf-sensitive one against both
 (`make perf-compare`).
 
@@ -101,7 +103,7 @@ upload's cutout never runs while another step is measured.
 (cd ../pgvault-dev && docker compose up -d --wait)
 npm run audit:pages -- --only '#159' --compare docs/perf/baseline.json
 npm run audit:pages -- --persona scale --only '#164' --compare docs/perf/baseline-scale.json
-make perf-compare             # both personas, whole walk (about 40 minutes, most of it rate limits), on a throwaway Postgres
+make perf-compare             # both personas, whole walk (about 36 minutes, most of it rate-limit waits), on a throwaway Postgres
 ```
 
 A report names its persona, and `--compare` refuses a baseline of the other
