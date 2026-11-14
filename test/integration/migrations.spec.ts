@@ -13,6 +13,8 @@ import {
   outfitCalendar,
   outfitSlot,
   selfie,
+  styleProfile,
+  user,
   weekPlan,
   weekPlanEntry,
 } from '../../src/db/schema';
@@ -21,6 +23,8 @@ import { SYNC_ROOTS } from '../../src/db/sync-tables';
 import { schemaDrift } from '../support/schema-drift';
 import { createGarment } from './garments';
 import { insertPhotoRow } from '../../src/web/files/queries';
+import { addOutfitRule, saveStyleProfile } from '../../src/web/style/queries';
+import { NO_MATCHER } from '../../src/web/style/validation';
 import { asFixture, createTestApp, TestApp, userIdOf } from './harness';
 
 /**
@@ -382,6 +386,83 @@ describe('migrations', () => {
       .map(([key]) => key)
       .sort();
     expect(moved).toEqual(['planner', 'proposal']);
+  });
+
+  // 0069's backfill is a synced write too (0053's reason): the file runs
+  // here with its function and triggers dropped first, on an owner whose
+  // rules came before any profile row, in a transaction holding no mark.
+  it('gives each owner of rules without a profile an empty one (0069) under the owner lock, and stamps rules after it', async () => {
+    const register = async (email: string) => {
+      await t.register(email);
+      return userIdOf(t, email);
+    };
+    const rulesOnly = await register('rules-backfill@example.com');
+    const profiled = await register('rules-profiled@example.com');
+    const rule = {
+      kind: 'never' as const,
+      a: { ...NO_MATCHER, color: 'red' as const },
+      b: { ...NO_MATCHER, color: 'green' as const },
+    };
+    await addOutfitRule(t.db, { userId: rulesOnly }, rule);
+    await saveStyleProfile(t.db, profiled, {
+      styles: ['classic'],
+      budget: null,
+      palette: null,
+      notes: null,
+    });
+    await addOutfitRule(t.db, { userId: profiled }, rule);
+    // As production is before 0069: the rule wrote no profile row.
+    await asFixture(t.db, (tx) =>
+      tx.delete(styleProfile).where(eq(styleProfile.userId, rulesOnly)),
+    );
+    const profileOf = async (userId: number) =>
+      (
+        await t.db
+          .select({
+            revision: styleProfile.revision,
+            styles: styleProfile.styles,
+          })
+          .from(styleProfile)
+          .where(eq(styleProfile.userId, userId))
+      )[0];
+    const revisionOf = async (userId: number) =>
+      (
+        await t.db
+          .select({ revision: user.revision })
+          .from(user)
+          .where(eq(user.id, userId))
+      )[0].revision;
+    const untouched = await profileOf(profiled);
+
+    await t.db.execute(sql`
+      drop trigger closet_sync_touch_insert on outfit_rule;
+      drop trigger closet_sync_touch_update on outfit_rule;
+      drop trigger closet_sync_touch_delete on outfit_rule;
+      drop function closet_sync_touch_or_create();`);
+    const migration = await readFile(
+      join(MIGRATIONS_FOLDER, '0069_outfit-rules-sync.sql'),
+      'utf8',
+    );
+    await t.db.transaction(async (tx) => {
+      for (const statement of migration.split('--> statement-breakpoint')) {
+        await tx.execute(sql.raw(statement));
+      }
+    });
+
+    expect(await profileOf(rulesOnly)).toEqual({
+      revision: await revisionOf(rulesOnly),
+      styles: null,
+    });
+    expect(await profileOf(profiled)).toEqual(untouched);
+    // The triggers are back: the next rule stamps the profile.
+    await addOutfitRule(
+      t.db,
+      { userId: profiled },
+      { ...rule, kind: 'always' },
+    );
+    expect((await profileOf(profiled)).revision).toBe(
+      await revisionOf(profiled),
+    );
   });
 
   // 0065 gives each photo row to the owner of the row showing it, then

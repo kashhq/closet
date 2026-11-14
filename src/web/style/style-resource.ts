@@ -16,7 +16,11 @@ import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { RowId } from '../schemas';
 import { garmentNamesOf, matcherLabel, ruleSentence } from './labels';
-import { type ListedOutfitRule, readOutfitRule } from './queries';
+import {
+  type ListedOutfitRule,
+  readOutfitRule,
+  type SyncedRuleRow,
+} from './queries';
 import {
   NO_MATCHER,
   STYLE_NOTES_MAX,
@@ -126,13 +130,18 @@ export const OutfitRuleAdded = Type.Object(
   { title: 'OutfitRuleAdded' },
 );
 
+/** A stored side's one matcher, as sent. */
+const sideMatcherFields = {
+  garmentId: Type.Optional(Type.Integer()),
+  category: Type.Optional(literals(Object.values(GarmentCategory))),
+  type: Type.Optional(Type.String()),
+  color: Type.Optional(literals(GARMENT_COLORS)),
+  pattern: Type.Optional(literals(PATTERNS)),
+};
+
 const RuleSide = Type.Object(
   {
-    garmentId: Type.Optional(Type.Integer()),
-    category: Type.Optional(literals(Object.values(GarmentCategory))),
-    type: Type.Optional(Type.String()),
-    color: Type.Optional(literals(GARMENT_COLORS)),
-    pattern: Type.Optional(literals(PATTERNS)),
+    ...sideMatcherFields,
     label: Type.String({
       description:
         "The side in the app's words: the garment's name, the type or category, the colour, the pattern",
@@ -171,6 +180,39 @@ export const StyleProfile = Type.Object(
   },
 );
 
+const SyncedRuleSide = Type.Object(sideMatcherFields, {
+  title: 'SyncedOutfitRuleSide',
+  description:
+    "Exactly one matcher, as sent; its words are yours to spell (a garment's name is the garment's)",
+});
+
+const SyncedOutfitRule = Type.Object(
+  {
+    id: Type.Integer(),
+    kind: literals(OUTFIT_RULE_KINDS),
+    a: SyncedRuleSide,
+    b: SyncedRuleSide,
+  },
+  {
+    title: 'SyncedOutfitRule',
+    description:
+      "An outfit rule in the changes feed: the API's without the words (`label`, `sentence`), which name garments whose rename never re-sends the profile",
+  },
+);
+
+/**
+ * The style profile in the changes feed (#716): its fields and its rules,
+ * since a rule's write stamps the profile (SYNC_CHILDREN's outfit_rule).
+ */
+export const SyncedStyleProfile = Type.Object(
+  { ...profileFields, rules: Type.Array(SyncedOutfitRule) },
+  {
+    title: 'SyncedStyleProfile',
+    description:
+      'The style profile as saved (empty sets when never saved) and your outfit rules, oldest first: a rule added or removed re-sends it whole',
+  },
+);
+
 /** A stored profile as the API answers it: empty sets, never null ones. */
 export function toStyleProfileValues(
   profile: StyleProfileFields | null,
@@ -183,26 +225,43 @@ export function toStyleProfileValues(
   });
 }
 
+/** A side's one matcher, as sent. */
+function toSyncedRuleSide(matcher: RuleMatcher): Static<typeof SyncedRuleSide> {
+  switch (matcher.by) {
+    case 'garment':
+      return { garmentId: matcher.garmentId };
+    case 'category':
+      return withoutNulls({ category: matcher.category, type: matcher.type });
+    case 'color':
+      return { color: matcher.color };
+    case 'pattern':
+      return { pattern: matcher.pattern };
+  }
+}
+
 /** A side as the API reads it: its one matcher, as sent, and its words. */
 function toRuleSide(
   matcher: RuleMatcher,
   garmentName: (id: number) => string,
 ): Static<typeof RuleSide> {
-  const label = matcherLabel(matcher, garmentName);
-  switch (matcher.by) {
-    case 'garment':
-      return { garmentId: matcher.garmentId, label };
-    case 'category':
-      return withoutNulls({
-        category: matcher.category,
-        type: matcher.type,
-        label,
-      });
-    case 'color':
-      return { color: matcher.color, label };
-    case 'pattern':
-      return { pattern: matcher.pattern, label };
-  }
+  return {
+    ...toSyncedRuleSide(matcher),
+    label: matcherLabel(matcher, garmentName),
+  };
+}
+
+/** A profile and its rules (styleProfilesByUserIds) as the feed carries them. */
+export function toSyncedStyleProfile(
+  profile: StyleProfileFields,
+  rules: readonly SyncedRuleRow[],
+): Static<typeof SyncedStyleProfile> {
+  return {
+    ...toStyleProfileValues(profile),
+    rules: rules.map(({ id, rule }) => {
+      const { kind, a, b } = readOutfitRule(rule);
+      return { id, kind, a: toSyncedRuleSide(a), b: toSyncedRuleSide(b) };
+    }),
+  };
 }
 
 export function toOutfitRule(

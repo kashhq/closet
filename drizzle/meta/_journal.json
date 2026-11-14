@@ -484,6 +484,13 @@
       "when": 1794670978929,
       "tag": "0068_drop-redundant-owner-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794688883983,
+      "tag": "0069_outfit-rules-sync",
+      "breakpoints": true
     }
   ]
 }

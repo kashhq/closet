@@ -9,7 +9,13 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
-import { lockedOwnerId, ownerLockCte } from '../../db/owner-lock';
+import {
+  lockedOwnerId,
+  OWNER_LOCKED,
+  ownerLockCte,
+  ownerLocked,
+  ownerLockSql,
+} from '../../db/owner-lock';
 import { garment, outfitRule, styleProfile } from '../../db/schema';
 import {
   type OutfitRule,
@@ -42,16 +48,35 @@ export function styleProfileSql(
     from ${styleProfile} where ${eq(styleProfile.userId, userId)})`;
 }
 
+/** A rule as the feed's profile reads it: its id and its row (readOutfitRule). */
+export interface SyncedRuleRow {
+  id: number;
+  rule: OutfitRuleRow;
+}
+
 /**
- * The style profiles of these users (one row per user, keyed by it), in
- * one statement: the changes feed's page (src/web/sync/feed.ts), which
- * read the ids from the owner's own wardrobe in the same snapshot (the
- * style profile is owner-only).
+ * The style profiles of these users (one row per user, keyed by it) with
+ * their outfit rules, oldest first, in one statement: the changes feed's
+ * page (src/web/sync/feed.ts), which read the ids from the owner's own
+ * wardrobe in the same snapshot (the style profile is owner-only). A rule's
+ * write stamps its owner's profile row (SYNC_CHILDREN), so the rules ride
+ * with it.
  */
 export function styleProfilesByUserIds(
   db: Queryable,
   userIds: readonly number[],
-): Promise<(StyleProfileFields & { userId: number })[]> {
+): Promise<
+  (StyleProfileFields & { userId: number; rules: SyncedRuleRow[] })[]
+> {
+  // Correlated by hand: a single-table select writes its columns without
+  // their table (src/db/AGENTS.md, Gotchas).
+  const rules = sql<SyncedRuleRow[]>`(
+    select coalesce(json_agg(json_build_object(
+      'id', ${outfitRule.id}, 'rule', ${ruleRowSql()}
+    ) order by ${outfitRule.id}), '[]')
+    from ${outfitRule}
+    where ${outfitRule}.owner_id = ${styleProfile}.user_id
+  )`;
   return db
     .select({
       userId: styleProfile.userId,
@@ -59,6 +84,7 @@ export function styleProfilesByUserIds(
       budget: styleProfile.budget,
       palette: styleProfile.palette,
       notes: styleProfile.notes,
+      rules,
     })
     .from(styleProfile)
     .where(inArray(styleProfile.userId, [...userIds]));
@@ -238,10 +264,11 @@ export interface NewOutfitRule {
  * category's by construction (readRuleSide), which the table does not
  * check.
  *
- * One statement, as avoidPair: the check locks the sides' garments FOR
- * SHARE, and the insert runs only when it found them all, so a delete of
- * one waits for the rule (then cascades it away) and never leaves it
- * naming a missing garment.
+ * One statement, as avoidPair: the owner lock first (a rule stamps the
+ * style profile, a synced write: SYNC_CHILDREN), then the check locks the
+ * sides' garments FOR SHARE, and the insert runs only when it found them
+ * all, so a delete of one waits for the rule (then cascades it away) and
+ * never leaves it naming a missing garment.
  */
 export async function addOutfitRule(
   db: Queryable,
@@ -259,6 +286,7 @@ export async function addOutfitRule(
         eq(garment.ownerId, ownerId),
         inArray(garment.id, garmentIds),
         ownedGarment(),
+        OWNER_LOCKED,
       ),
     )
     .orderBy(garment.id)
@@ -266,13 +294,14 @@ export async function addOutfitRule(
   const side = (matcher: StoredMatcher) =>
     sql`${matcher.garmentId}::int, ${matcher.category}::text, ${matcher.type}::text, ${matcher.color}::text, ${matcher.pattern}::text`;
   const { rows } = await db.execute<{ owned: number; id: number | null }>(sql`
-    with owned as (${owned}),
+    with ${ownerLockSql(db, ownerId)},
+    owned as (${owned}),
     added as (
       insert into ${outfitRule} (owner_id, kind,
         a_garment_id, a_category, a_type, a_color, a_pattern,
         b_garment_id, b_category, b_type, b_color, b_pattern)
       select ${ownerId}::int, ${rule.kind}::text, ${side(a)}, ${side(b)}
-      where (select count(*) from owned) = ${garmentIds.length}
+      where (select count(*) from owned) = ${garmentIds.length} and ${OWNER_LOCKED}
       on conflict do nothing
       returning id
     )
@@ -287,15 +316,26 @@ export async function addOutfitRule(
   return id ?? 'duplicate';
 }
 
-/** Deletes one of the actor's own rules; anyone else's, or none, is NotFound. */
+/**
+ * Deletes one of the actor's own rules, under the owner lock (it stamps the
+ * style profile); anyone else's, or none, is NotFound.
+ */
 export async function deleteOutfitRule(
   db: Queryable,
   actor: Actor,
   id: number,
 ): Promise<void> {
+  const lock = ownerLockCte(db, actor.userId);
   const deleted = await db
+    .with(lock)
     .delete(outfitRule)
-    .where(and(eq(outfitRule.id, id), eq(outfitRule.ownerId, actor.userId)))
+    .where(
+      and(
+        eq(outfitRule.id, id),
+        eq(outfitRule.ownerId, actor.userId),
+        ownerLocked(db, lock),
+      ),
+    )
     .returning({ id: outfitRule.id });
   if (deleted.length === 0) throw new NotFound('outfitRule');
 }

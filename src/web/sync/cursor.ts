@@ -1,6 +1,10 @@
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import { SYNC_ROOTS, type SyncResource } from '../../db/sync-tables';
+import {
+  SYNC_ROOTS,
+  SYNC_STAMPS,
+  type SyncResource,
+} from '../../db/sync-tables';
 import { literals } from '../api/resource';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
@@ -124,7 +128,11 @@ const Count = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const PositionJson = Type.Tuple([
   Count,
   literals(Object.values(KIND)),
-  literals<SyncResource | ''>(['', ...SYNC_ROOTS.map((root) => root.table)]),
+  literals<SyncResource | ''>([
+    '',
+    ...SYNC_ROOTS.map((root) => root.table),
+    ...SYNC_STAMPS.map((stamp) => stamp.resource),
+  ]),
   Type.Integer({ minimum: 0, maximum: ROW_ID_MAX }),
   Type.Integer({ minimum: 0, maximum: ROW_ID_MAX }),
   Count,
