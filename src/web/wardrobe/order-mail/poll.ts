@@ -31,6 +31,7 @@ import {
   recordOrderEmail,
   recordOrderEmailFailure,
 } from './queries';
+import type { OrderMailOwnerWatch } from './owner-watch';
 import { judgeSender } from './trust';
 
 /**
@@ -43,7 +44,7 @@ import { judgeSender } from './trust';
  * products it names listed for
  * ORDER_MAIL_OWNER's account to review. Run by server.ts's timer through
  * pollOrderMailWhole inside metrics.timeJob('order_mail'), so a failure
- * (JMAP unreachable or refusing, a deleted owner, a failing email) counts
+ * (JMAP unreachable or refusing, a failing email) counts
  * as the job's.
  *
  * Each email gets its own outcome (#693). A decided one is recorded once
@@ -76,6 +77,8 @@ export interface OrderMailDeps {
   senders: readonly string[];
   /** ORDER_MAIL_OWNER's account, resolved once at boot (createApp, #706). */
   ownerId: number;
+  /** Set once that account is deleted: the poll then does nothing (#706). */
+  ownerWatch: OrderMailOwnerWatch;
   /** APP_TIMEZONE: which day an email arrived. */
   timeZone: string;
   logger: Logger;
@@ -94,17 +97,6 @@ export interface PollSummary {
 }
 
 /**
- * The boot's ORDER_MAIL_OWNER account was deleted since: the poll cannot
- * list anything until the next boot names a live account.
- */
-export class OrderMailOwnerError extends Error {
-  constructor() {
-    super("ORDER_MAIL_OWNER's account no longer exists");
-    this.name = 'OrderMailOwnerError';
-  }
-}
-
-/**
  * The scheduled run (server.ts): pollOrderMail, then a PartialFailure while
  * any email is failing, so the job is `failure` on every poll until the
  * email is decided or parked (#693). It is captured only by the run that
@@ -120,17 +112,31 @@ export async function pollOrderMailWhole(
   });
 }
 
+const NOTHING_POLLED: PollSummary = {
+  queried: 0,
+  read: 0,
+  listed: 0,
+  failing: 0,
+  firstFailures: 0,
+  parked: 0,
+};
+
 export async function pollOrderMail(deps: OrderMailDeps): Promise<PollSummary> {
   const { db, logger } = deps;
+  if (deps.ownerWatch.missing) return NOTHING_POLLED;
   const started = performance.now();
   const mailbox = await deps.jmap.open();
   // The owner check and the watermark in one statement, so the JMAP session
   // comes first (#173: the watermark needs its account id). A deleted owner
-  // fails the run before anything is read or written.
+  // ends the run before anything is read or written, and every later one
+  // before the session: one error, the degraded readiness check (#706).
   const { ownerId } = deps;
   const start = await pollStart(db, ownerId, mailbox.accountId);
   const { watermark } = start;
-  if (!start.ownerExists) throw new OrderMailOwnerError();
+  if (!start.ownerExists) {
+    deps.ownerWatch.markMissing('poll');
+    return NOTHING_POLLED;
+  }
   const ids = await mailbox.inboxIds(watermark);
   const failing = new Set(start.failing.map(({ emailId }) => emailId));
   // A failing email at the watermark is the query's first (its `after` is

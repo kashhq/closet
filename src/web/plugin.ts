@@ -6,6 +6,7 @@ import { createSessionHook } from './auth/require-session';
 import { RefusalSummaries } from './auth/refusal-summaries';
 import { authRoutes } from './auth/routes';
 import { tokenRoutes } from './auth/token-routes';
+import type { OrderMailOwnerWatch } from './wardrobe/order-mail/owner-watch';
 import type { UntrustedProxyWatch } from './security/untrusted-proxy';
 import { sizesRoutes } from './sizes/routes';
 import { mcpRoutes } from './mcp/routes';
@@ -130,6 +131,11 @@ export interface WebOptions {
    * root hook in createApp): /health/ready's trusted_proxies check.
    */
   proxyWatch: UntrustedProxyWatch;
+  /**
+   * Whether ORDER_MAIL_OWNER's account is missing (boot or later):
+   * /health/ready's order_mail_owner check.
+   */
+  orderMailWatch: OrderMailOwnerWatch;
   /**
    * The process's one outbound fetcher (src/web/security/outbound-fetch.ts),
    * built by createApp(): the only way a route fetches a URL a user

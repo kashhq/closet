@@ -8,12 +8,7 @@ import Fastify, {
   type RouteOptions,
 } from 'fastify';
 import { type BuildInfo, loadBuildInfo } from './build-info';
-import {
-  type Config,
-  ConfigError,
-  orderMailSenders,
-  trustedProxies,
-} from './config';
+import { type Config, orderMailSenders, trustedProxies } from './config';
 import { settlesWithin } from './cutout/deadline';
 import { countPendingCutouts } from './cutout/queries';
 import { CutoutQueue } from './cutout/queue';
@@ -60,6 +55,7 @@ import { createQueuedWriteHook } from './web/offline-writes';
 import { createViewContextBuilder } from './web/view-context';
 import { createJmapClient } from './web/wardrobe/order-mail/jmap';
 import type { OrderMailDeps } from './web/wardrobe/order-mail/poll';
+import { OrderMailOwnerWatch } from './web/wardrobe/order-mail/owner-watch';
 import { orderMailOwnerId } from './web/wardrobe/order-mail/queries';
 import {
   createOpenMeteoClient,
@@ -244,15 +240,21 @@ export async function createApp(
   const db = createDb(database, dbLogger, {
     onAnswer: () => outage.recovered(),
   });
-  // Both refuse the boot before any onClose hook exists, so a refusal ends
-  // the pool here: ORDER_MAIL_OWNER naming no account (a ConfigError), an
-  // unmounted photo share (StorageIdentityError, main.ts).
-  const orderMailOwner = await resolveOrderMailOwner(config, db).catch(
-    async (error: unknown) => {
-      await db.$client.end();
-      throw error;
-    },
+  // Both can refuse the boot before any onClose hook exists, so a refusal
+  // ends the pool here: the owner lookup failing (an unanswering database),
+  // an unmounted photo share (StorageIdentityError, main.ts). An owner no
+  // account has refuses nothing: it turns the order mail off (OrderMailOwnerWatch).
+  const orderMailWatch = new OrderMailOwnerWatch(
+    logger.child({ logger: 'OrderMail' }),
   );
+  const orderMailOwner = await resolveOrderMailOwner(
+    config,
+    db,
+    orderMailWatch,
+  ).catch(async (error: unknown) => {
+    await db.$client.end();
+    throw error;
+  });
   const photos = await createPhotos(
     photosConfig(config),
     db,
@@ -290,6 +292,7 @@ export async function createApp(
     fetcher,
     options.orderMail,
     orderMailOwner,
+    orderMailWatch,
   );
   // loadConfig requires both keys and an https SITE_URL when PWA_ENABLED; the
   // sender checks the pair's shape here, so a malformed one fails the boot.
@@ -526,6 +529,7 @@ export async function createApp(
     cutouts,
     jobs: roster,
     proxyWatch,
+    orderMailWatch,
     fetcher,
     weather,
     mcpLogger: logger.child({ logger: 'Mcp' }),
@@ -565,10 +569,15 @@ function createOrderMail(
   fetcher: OutboundFetcher,
   stub: AppOptions['orderMail'],
   ownerId: number | undefined,
+  ownerWatch: OrderMailOwnerWatch,
 ): OrderMailDeps | undefined {
   const boot = logger.child({ logger: 'Bootstrap' });
   if (!config.ORDER_MAIL_JMAP_TOKEN || ownerId === undefined) {
-    boot.info('Order mail: off (ORDER_MAIL_JMAP_TOKEN unset)');
+    boot.info(
+      config.ORDER_MAIL_JMAP_TOKEN
+        ? 'Order mail: off (ORDER_MAIL_OWNER names no account)'
+        : 'Order mail: off (ORDER_MAIL_JMAP_TOKEN unset)',
+    );
     return undefined;
   }
   const senders = orderMailSenders(config);
@@ -589,6 +598,7 @@ function createOrderMail(
     fetcher,
     senders,
     ownerId,
+    ownerWatch,
     timeZone: config.APP_TIMEZONE,
     logger: logger.child({ logger: 'OrderMail' }),
   };
@@ -596,25 +606,24 @@ function createOrderMail(
 
 /**
  * ORDER_MAIL_OWNER's account id, once per boot (#706), or undefined with
- * the order mail off. No account with the address refuses the boot naming
- * the key (never the address): the owner signs up before setting the
- * token. Bound by id, an email change or another account taking the
- * address moves nothing until a boot.
+ * the order mail off: no token, or no account with the address. The latter
+ * is one error naming the key (never the address) and a degraded
+ * /health/ready, never a refused boot: the owner changing their email or
+ * deleting their account must not make the next deploy an outage. Bound by
+ * id, an email change or another account taking the address moves nothing
+ * until a boot.
  */
 async function resolveOrderMailOwner(
   config: Config,
   db: Db,
+  watch: OrderMailOwnerWatch,
 ): Promise<number | undefined> {
   if (!config.ORDER_MAIL_JMAP_TOKEN) return undefined;
   const ownerId = await orderMailOwnerId(
     db,
     normalizeEmail(config.ORDER_MAIL_OWNER),
   );
-  if (ownerId === undefined) {
-    throw new ConfigError([
-      'ORDER_MAIL_OWNER: names no closet account (sign up first, then set ORDER_MAIL_JMAP_TOKEN)',
-    ]);
-  }
+  if (ownerId === undefined) watch.markMissing('boot');
   return ownerId;
 }
 

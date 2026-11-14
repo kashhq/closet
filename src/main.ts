@@ -69,8 +69,8 @@ async function main(): Promise<void> {
     });
   } catch (error) {
     // An unmounted photo share (createPhotos' claim), an image older than
-    // the database's schema or a ConfigError found at boot (ORDER_MAIL_OWNER
-    // naming no account) is a refusal naming the fix: no stack to read.
+    // the database's schema or a ConfigError found at boot is a refusal
+    // naming the fix: no stack to read.
     if (error instanceof ConfigError) {
       // Its problems name keys, never values.
       logger.fatal(`Invalid configuration: ${error.problems.join('; ')}`);
