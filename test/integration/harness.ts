@@ -27,7 +27,10 @@ import {
   hashPassword,
 } from '../../src/web/auth/passwords';
 import { insertUser } from '../../src/web/auth/queries';
-import { passwordFingerprint } from '../../src/web/auth/tokens';
+import {
+  passwordFingerprint,
+  type SessionStamp,
+} from '../../src/web/auth/tokens';
 import { type IsoDate, todayIn } from '../../src/calendar-date';
 import type { Photos } from '../../src/web/files/photos';
 import {
@@ -502,25 +505,28 @@ export async function userIdOf(t: TestApp, email: string): Promise<number> {
 }
 
 /**
- * The password fingerprint a session of `userId` opened now carries (its
- * token's `pwf`): what a write that rechecks its session takes, called
- * outside a request (upsertDevice).
+ * The stamp a session of `userId` opened now carries (its token's `pwf` and
+ * `sv`): what a write that rechecks its session takes, called outside a
+ * request (upsertDevice, createInvite).
  */
-export async function sessionFingerprintOf(
+export async function sessionStampOf(
   db: Db,
   userId: number,
-): Promise<string> {
+): Promise<SessionStamp> {
   const [row] = await db
-    .select({ password: user.password })
+    .select({ password: user.password, version: user.sessionVersion })
     .from(user)
     .where(eq(user.id, userId));
   if (!row) throw new Error(`No account ${userId}`);
-  return passwordFingerprint(row.password);
+  return {
+    fingerprint: passwordFingerprint(row.password),
+    version: row.version,
+  };
 }
 
 /**
  * `subscription` stored for `userId` as a request of a session opened now
- * would store it (upsertDevice, with that session's fingerprint), for specs
+ * would store it (upsertDevice, with that session's stamp), for specs
  * that set up a device outside a request. Its device id.
  */
 export async function subscribeAs(
@@ -528,11 +534,11 @@ export async function subscribeAs(
   userId: number,
   subscription: SubscriptionInput,
 ): Promise<number> {
-  const fingerprint = await sessionFingerprintOf(db, userId);
+  const session = await sessionStampOf(db, userId);
   const deviceId = await upsertDevice(
     db,
     userId,
-    fingerprint,
+    session,
     subscription,
     undefined,
   );

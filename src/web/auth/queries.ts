@@ -18,7 +18,7 @@ import { revokeOpenInvitesStatement } from '../sharing/queries';
 import { type StoredPhoto, unkeyedPhoto } from '../files/image-variant';
 import { revokeDevicesStatement } from '../push/queries';
 import { NotFound } from '../refusals';
-import { revokeAllTokensStatement } from './personal-tokens';
+import { revokeTokensStatement } from './personal-tokens';
 import { passwordFingerprintSql } from './tokens';
 
 /**
@@ -41,6 +41,11 @@ export interface AccountRow {
    * read in the same statement as the row, so signing in costs no second.
    */
   sessionEpoch: string | null;
+  /**
+   * The session version a session issued now carries as `sv` (#700): every
+   * mint reads it from its own statement, never from an earlier read.
+   */
+  sessionVersion: number;
 }
 
 const accountColumns = {
@@ -48,6 +53,7 @@ const accountColumns = {
   email: user.email,
   password: user.password,
   sessionEpoch: restoreEpochSql,
+  sessionVersion: user.sessionVersion,
 };
 
 export function normalizeEmail(email: string): string {
@@ -64,13 +70,15 @@ export function normalizeEmail(email: string): string {
  * request addressing another user's wardrobe (`?ownerId=`) reads its share
  * as `share` (null for none), which saves the access check its round trip
  * (shareToReadAhead, src/web/sharing/access.ts). `sessionEpoch` is what a
- * token's `sep` must equal (restoreEpochSql: a restore ends every session).
+ * token's `sep` must equal (restoreEpochSql: a restore ends every session),
+ * `sessionVersion` its `sv` (Sign out everywhere and a new password bump it).
  */
 export interface SessionAccount {
   id: number;
   email: string | null;
   fingerprint: string;
   sessionEpoch: string | null;
+  sessionVersion: number;
   password?: string;
   share?: SharePermission | null;
 }
@@ -80,6 +88,7 @@ const sessionColumns = {
   email: user.email,
   fingerprint: passwordFingerprintSql,
   sessionEpoch: restoreEpochSql,
+  sessionVersion: user.sessionVersion,
 };
 
 export async function findSessionAccount(
@@ -138,13 +147,14 @@ export async function insertUser(
       email: string | null;
       password: string;
       sessionEpoch: string | null;
+      sessionVersion: number;
     }>(sql`
       insert into ${user} (email, password, first_name, last_name)
       select ${email}, ${passwordHash}, ${name.firstName ?? null}, ${name.lastName ?? null}
       where not exists (
         select 1 from ${user} where lower(${user.email}) = lower(${email})
       )
-      returning id, email, password, ${restoreEpochSql} as "sessionEpoch"`);
+      returning id, email, password, ${restoreEpochSql} as "sessionEpoch", session_version as "sessionVersion"`);
     return rows[0];
   } catch (error) {
     if (isUniqueViolation(error, USER_EMAIL_UNIQUE)) return undefined;
@@ -152,14 +162,22 @@ export async function insertUser(
   }
 }
 
-/** What a new password took away, besides every other session. */
-export interface PasswordChange {
-  account: AccountRow;
+/** What ending an account's other sign-ins took away, besides their sessions. */
+export interface Revocations {
   /** Tokens revoked, by kind: the log lines name both. */
   revokedTokens: Record<TokenKind, number>;
   revokedDevices: number;
   /** Invites the user sent that nobody accepted, deleted (#668). */
   revokedInvites: number;
+}
+
+/**
+ * The account as its bump left it (its RETURNING, so a reissued cookie
+ * carries the hash and session version as they are now), and what went
+ * with it.
+ */
+export interface SessionsEnded extends Revocations {
+  account: AccountRow;
 }
 
 /** What the device making the change keeps. */
@@ -174,23 +192,78 @@ export interface PasswordChangeKeeps {
 }
 
 /**
- * The one writer of a password. The new hash ends every session issued
- * before it (the fingerprint), and the same transaction revokes every
- * personal access token of both kinds, every push subscription but what
- * `keep` names (the device making the change, if it has one) and every
- * invite the user sent that nobody accepted: a new password is how an
- * account is taken back, a device signed out by it must stop receiving the
- * account's notifications at once (revokeDevicesStatement), and a link a
- * stolen session minted must not outlive it (revokeOpenInvitesStatement,
- * #668). Accepted shares stay; the confirmation lists them.
+ * What goes with the sessions a bump ended: `password`, a new password (how
+ * an account is taken back), or `sessions`, Sign out everywhere (#700).
  *
- * Two statements in a transaction, in this order, and never one statement
- * again (#189): the update takes the user's row lock, which createToken
- * holds while it mints, and the revocations are read after the lock is
- * granted. One statement shares one snapshot, taken before it waited on the
- * lock, so its revocation CTE could not see a token a mint committed during
- * the wait, and that token outlived the new password
- * (auth-statements.spec, "a token minted while the password waits").
+ * Both revoke every device token (a native client's sign-in) and every push
+ * subscription but `keep.endpoint`'s, the device making the change: a
+ * device signed out must stop receiving the account's notifications at once
+ * (revokeDevicesStatement). Only a new password also revokes the agent
+ * tokens and the unanswered invites. Those are credentials the user minted
+ * behind the password (the step-up rule) and manages on their own pages,
+ * not sign-ins: a stolen cookie cannot have made one, and signing out must
+ * not break the user's agent or void a link just sent. A new password
+ * assumes the password itself was known, so a link a stolen session minted
+ * must not outlive it (#668).
+ *
+ * The second statement of its writer's transaction, after the bump took the
+ * user's row lock, and never folded into the bump (#171 did; #189 undid it):
+ * a statement's snapshot predates its lock wait, so a CTE of the bump could
+ * not see a token a mint committed during the wait, and that token outlived
+ * the bump (auth-statements.spec, "a token minted while the password waits").
+ */
+async function revokeSignIns(
+  tx: Queryable,
+  id: number,
+  keep: PasswordChangeKeeps,
+  scope: 'password' | 'sessions',
+): Promise<Revocations> {
+  const tokens = tx.$with('revoked_tokens').as(
+    revokeTokensStatement(tx, id, {
+      kind: scope === 'password' ? undefined : 'device',
+      keepTokenId: keep.tokenId,
+    }),
+  );
+  const devices = tx
+    .$with('revoked_devices')
+    .as(revokeDevicesStatement(tx, id, keep.endpoint));
+  const invites = tx
+    .$with('revoked_invites')
+    .as(revokeOpenInvitesStatement(tx, id));
+  const ctes =
+    scope === 'password' ? [tokens, devices, invites] : [tokens, devices];
+  // An aggregate over the revoked tokens: one row even when there are none.
+  const [revoked] = await tx
+    .with(...ctes)
+    .select({
+      mcp: sql`count(*) filter (where ${tokens.kind} = 'mcp')`.mapWith(Number),
+      device: sql`count(*) filter (where ${tokens.kind} = 'device')`.mapWith(
+        Number,
+      ),
+      devices: sql`(select count(*) from ${devices})`.mapWith(Number),
+      invites: (scope === 'password'
+        ? sql`(select count(*) from ${invites})`
+        : sql`0`
+      ).mapWith(Number),
+    })
+    .from(tokens);
+  return {
+    revokedTokens: { mcp: revoked.mcp, device: revoked.device },
+    revokedDevices: revoked.devices,
+    revokedInvites: revoked.invites,
+  };
+}
+
+/** A session-version bump, in the update that takes the user's row lock. */
+const bumpedSessionVersion = sql`${user.sessionVersion} + 1`;
+
+/**
+ * The one writer of a password. The new hash ends every session issued
+ * before it twice over: the fingerprint (which `user:set-password` and a
+ * restore's old hashes rely on) and the session version, bumped in the same
+ * update, so "every session before now" has one mechanism (#700); then
+ * revokeSignIns' `password` scope. Accepted shares stay; the confirmation
+ * lists them.
  *
  * An account that no longer exists is NotFound('account') (the route's
  * page; the CLI prints it), never a half-read row.
@@ -200,44 +273,41 @@ export function updatePasswordHash(
   id: number,
   passwordHash: string,
   keep: PasswordChangeKeeps = {},
-): Promise<PasswordChange> {
+): Promise<SessionsEnded> {
   return db.transaction(async (tx) => {
     const [account] = await tx
       .update(user)
-      .set({ password: passwordHash })
+      .set({ password: passwordHash, sessionVersion: bumpedSessionVersion })
       .where(eq(user.id, id))
       .returning(accountColumns);
     // The account is gone (deleted between the caller's read and this).
     if (!account) throw new NotFound('account', { logDetail: `user ${id}` });
-    const tokens = tx
-      .$with('revoked_tokens')
-      .as(revokeAllTokensStatement(tx, id, keep.tokenId));
-    const devices = tx
-      .$with('revoked_devices')
-      .as(revokeDevicesStatement(tx, id, keep.endpoint));
-    const invites = tx
-      .$with('revoked_invites')
-      .as(revokeOpenInvitesStatement(tx, id));
-    // An aggregate over the revoked tokens: one row even when there are none.
-    const [revoked] = await tx
-      .with(tokens, devices, invites)
-      .select({
-        mcp: sql`count(*) filter (where ${tokens.kind} = 'mcp')`.mapWith(
-          Number,
-        ),
-        device: sql`count(*) filter (where ${tokens.kind} = 'device')`.mapWith(
-          Number,
-        ),
-        devices: sql`(select count(*) from ${devices})`.mapWith(Number),
-        invites: sql`(select count(*) from ${invites})`.mapWith(Number),
-      })
-      .from(tokens);
-    return {
-      account,
-      revokedTokens: { mcp: revoked.mcp, device: revoked.device },
-      revokedDevices: revoked.devices,
-      revokedInvites: revoked.invites,
-    };
+    return { account, ...(await revokeSignIns(tx, id, keep, 'password')) };
+  });
+}
+
+/**
+ * Sign out everywhere (#700): bumps the session version every session token
+ * carries as `sv`, so the resolver refuses each one issued before, then
+ * revokeSignIns' `sessions` scope, `keep` being the device making the
+ * change. The caller reissues its own cookie from the returned row (the
+ * bump's RETURNING, never the request's earlier read), so the acting
+ * session continues. The bump serializes with a new password on the row
+ * lock.
+ */
+export function endOtherSessions(
+  db: Db,
+  id: number,
+  keep: PasswordChangeKeeps = {},
+): Promise<SessionsEnded> {
+  return db.transaction(async (tx) => {
+    const [account] = await tx
+      .update(user)
+      .set({ sessionVersion: bumpedSessionVersion })
+      .where(eq(user.id, id))
+      .returning(accountColumns);
+    if (!account) throw new NotFound('account', { logDetail: `user ${id}` });
+    return { account, ...(await revokeSignIns(tx, id, keep, 'sessions')) };
   });
 }
 

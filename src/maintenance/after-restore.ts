@@ -63,7 +63,7 @@ export interface AfterRestoreReport {
  *    history it already has), and every session cookie issued before it no
  *    longer opens a session (its `sep`, #908): the household signs in again.
  * 2. Every personal access token, agent and device, revoked through the
- *    statement a new password uses (revokeAllTokensStatement), and every
+ *    statement a new password uses (revokeTokensStatement), and every
  *    push subscription (#908): a restore brings back what was revoked after
  *    the dump (a lost phone's token), and nothing outside the database
  *    remembers it. Owners re-issue their tokens; each device turns

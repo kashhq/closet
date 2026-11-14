@@ -213,6 +213,10 @@ export const user = pgTable(
     email: varchar('email', { length: 255 }),
     // bcrypt hash.
     password: varchar('password', { length: 255 }).notNull(),
+    // The session version every session token carries as `sv` (tokens.ts):
+    // "Sign out everywhere" and a new password bump it, ending every session
+    // issued before (#700). A counter, never a time: nothing compares clocks.
+    sessionVersion: integer('session_version').default(0).notNull(),
     // When the owner last opened their wishlist: suggestions newer than it
     // are "new from Muse" (src/wardrobe/suggestions.ts). Never rendered into
     // a cached page; null: never opened since suggestions came.

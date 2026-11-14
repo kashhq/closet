@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Queryable } from '../../db/client';
 import { pushReminder, user, userDevice } from '../../db/schema';
-import { passwordFingerprintSql } from '../auth/tokens';
+import { type SessionStamp, sessionStillOpenSql } from '../auth/tokens';
 import type { IsoDate } from '../../calendar-date';
 import type {
   DueReminder,
@@ -38,13 +38,14 @@ export interface DeviceRow {
  * move turns them off (opt-in per device and per person).
  *
  * Undefined, storing nothing, when the session that sent it has ended: the
- * row is selected from the user's own, locked, only while its password
- * fingerprint is still `fingerprint` (the session's, sessionFingerprint).
- * The lock is the one a new password's writer takes (updatePasswordHash),
- * so the two take turns (#512): a subscribe holding it commits first and
- * the password's revocation, read after its own wait, deletes the row; a
- * password holding it commits first and this statement, re-reading the
- * locked row once granted, finds the fingerprint moved and inserts nothing.
+ * row is selected from the user's own, locked, only while it still opens
+ * `session` (the session's stamp, sessionStamp: its password fingerprint
+ * and session version). The lock is the one a new password's writer and
+ * Sign out everywhere take (updatePasswordHash, endOtherSessions), so they
+ * take turns (#512, #700): a subscribe holding it commits first and the
+ * revocation, read after its own wait, deletes the row; a bump holding it
+ * commits first and this statement, re-reading the locked row once
+ * granted, finds the stamp moved and inserts nothing.
  * Without the lock the foreign key's check took only a share lock, and a
  * row committed meanwhile outlived the new password. `no key update`, not
  * `update`: it conflicts with the password's update all the same, without
@@ -57,7 +58,7 @@ export interface DeviceRow {
 export async function upsertDevice(
   db: Queryable,
   userId: number,
-  fingerprint: string,
+  session: SessionStamp,
   subscription: SubscriptionInput,
   userAgent: string | undefined,
 ): Promise<number | undefined> {
@@ -65,7 +66,7 @@ export async function upsertDevice(
     insert into ${userDevice} (user_id, push_endpoint, key_p256dh, key_auth, user_agent)
     select ${user.id}, ${subscription.endpoint}, ${subscription.keys.p256dh}, ${subscription.keys.auth}, ${userAgent ?? null}
     from ${user}
-    where ${user.id} = ${userId} and ${passwordFingerprintSql} = ${fingerprint}
+    where ${user.id} = ${userId} and ${sessionStillOpenSql(session)}
     for no key update
     on conflict (push_endpoint) do update set
       user_id = excluded.user_id,
