@@ -86,6 +86,22 @@ export const BrandSizeInput = CloneType(BrandSizeBody, {
     'A brand note, replaced whole: the brand (one row per brand, whatever the case) and a size or a note, at least one; a size is normalized like a garment’s (XL is X-Large)',
 });
 
+export const NewBrandSize = Type.Composite(
+  [
+    BrandSizeInput,
+    Type.Object({
+      clientId: Type.Optional(
+        Type.String({
+          format: 'uuid',
+          description:
+            'Your id for this create, for retrying it offline: a retry answers the first note of that id (200), the id of one deleted since is a 410',
+        }),
+      ),
+    }),
+  ],
+  { title: 'NewBrandSize', description: BrandSizeInput.description },
+);
+
 /** Where each brand field sits in the body, for a refusal's `errors`. */
 export const POINTER_OF_BRAND_FIELD: Record<BrandSizeField, string> = {
   brand: '/brand',

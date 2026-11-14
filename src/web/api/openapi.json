@@ -25155,13 +25155,13 @@
         "tags": [
           "sizes"
         ],
-        "description": "A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}).",
+        "description": "A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}). With a `clientId`, a retry answers the first note of that id (200, as it was saved) and creates nothing; the id of a note deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "title": "BrandSizeInput",
+                "title": "NewBrandSize",
                 "description": "A brand note, replaced whole: the brand (one row per brand, whatever the case) and a size or a note, at least one; a size is normalized like a garment’s (XL is X-Large)",
                 "type": "object",
                 "required": [
@@ -25179,6 +25179,11 @@
                   "note": {
                     "maxLength": 200,
                     "type": "string"
+                  },
+                  "clientId": {
+                    "format": "uuid",
+                    "description": "Your id for this create, for retrying it offline: a retry answers the first note of that id (200), the id of one deleted since is a 410",
+                    "type": "string"
                   }
                 }
               }
@@ -25187,6 +25192,39 @@
           "description": "A brand note, replaced whole: the brand (one row per brand, whatever the case) and a size or a note, at least one; a size is normalized like a garment’s (XL is X-Large)"
         },
         "responses": {
+          "200": {
+            "description": "Your size in a brand: a size, a note, or both",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "BrandSize",
+                  "description": "Your size in a brand: a size, a note, or both",
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "brand"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "brand": {
+                      "description": "The brand as you spelled it",
+                      "type": "string"
+                    },
+                    "size": {
+                      "description": "The size you wear in it",
+                      "type": "string"
+                    },
+                    "note": {
+                      "description": "How it runs (\"runs small, size up\")",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Your size in a brand: a size, a note, or both",
             "content": {

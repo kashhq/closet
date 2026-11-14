@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
 import { lockedOwnerId, ownerLockCte, ownerLocked } from '../../db/owner-lock';
-import { isUniqueViolation } from '../../db/errors';
+import { isDeletedClientId, isUniqueViolation } from '../../db/errors';
 import { selectScalars } from '../../db/select-scalars';
 import {
   BRAND_SIZE_UNIQUE,
@@ -250,7 +250,8 @@ export function brandSizeLookup(rows: readonly BrandSize[]): BrandSizeLookup {
   return (brand) => (brand ? byKey.get(brandKey(brand)) : undefined);
 }
 
-type BrandTaken = 'brand-taken';
+export const BRAND_TAKEN = 'brand-taken';
+type BrandTaken = typeof BRAND_TAKEN;
 
 /**
  * The one writer of a new brand row: its id, or 'brand-taken' when the
@@ -277,7 +278,53 @@ export async function addBrandSize(
       return row.id;
     });
   } catch (error) {
-    if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return 'brand-taken';
+    if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return BRAND_TAKEN;
+    throw error;
+  }
+}
+
+/**
+ * addBrandSize for a create that carries the client's own id (the API's, a
+ * retried offline create), stored on the row. A row of that id there
+ * already is the answer, `created: false`, whatever this body says (the
+ * client may have edited since; the id names the create, not its content).
+ * The conflict target is the client id alone, so a different client id for
+ * a taken brand is still 'brand-taken', and a concurrent twin waits on the
+ * owner lock, then finds the first one's row. 'gone' for the id of a row
+ * deleted since (the sync triggers' tombstone, isDeletedClientId).
+ */
+export async function addBrandSizeOnce(
+  db: Queryable,
+  userId: number,
+  fields: BrandSizeFields,
+  clientId: string,
+): Promise<{ row: BrandSize; created: boolean } | BrandTaken | 'gone'> {
+  try {
+    return await db.transaction(async (tx) => {
+      const lock = ownerLockCte(tx, userId);
+      const [row] = await tx
+        .with(lock)
+        .insert(brandSize)
+        .values({
+          userId: lockedOwnerId(lock),
+          ...fields,
+          brandKey: brandKey(fields.brand),
+          clientId,
+        })
+        .onConflictDoNothing({ target: [brandSize.userId, brandSize.clientId] })
+        .returning(BRAND_SIZE);
+      if (row) return { row, created: true };
+      const [first] = await tx
+        .select(BRAND_SIZE)
+        .from(brandSize)
+        .where(
+          and(eq(brandSize.userId, userId), eq(brandSize.clientId, clientId)),
+        );
+      return { row: first, created: false };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return BRAND_TAKEN;
+    if (isDeletedClientId(error)) return 'gone';
     throw error;
   }
 }
@@ -309,7 +356,7 @@ export async function updateBrandSize(
       )
       .returning({ id: brandSize.id });
   } catch (error) {
-    if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return 'brand-taken';
+    if (isUniqueViolation(error, BRAND_SIZE_UNIQUE)) return BRAND_TAKEN;
     throw error;
   }
   if (updated.length === 0) throw brandNotFound(actor, id);
