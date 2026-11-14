@@ -223,6 +223,99 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    // A new outfit's body names its garments (#704): the owner's alone. A
+    // set the fixture's outfit is not, which would answer the saved one.
+    name: 'POST /outfits',
+    kind: 'write',
+    ok: 302,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'POST',
+      url: `/outfits${q}`,
+      payload: {
+        name: 'Made from ids',
+        category: ['shirt'],
+        garmentId: [String(f.inspirationTeeId)],
+      },
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 201,
+      request: (f, q) => ({
+        method: 'POST',
+        url: `/api/v1/outfits${q}`,
+        payload: {
+          name: 'Made from ids',
+          slots: [{ category: 'shirt', garmentId: f.inspirationTeeId }],
+        },
+      }),
+    },
+  },
+  {
+    // The Ideas strip's next page for a capsule (#704): the requester's own
+    // capsule; a grantee's `?ownerId=` is not an address here.
+    name: 'GET /outfits/ideas/more?capsule=',
+    kind: 'read',
+    ok: 200,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/outfits/ideas/more${q ? `${q}&` : '?'}capsule=${f.capsuleId}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f, q) => ({
+        method: 'GET',
+        url: `/api/v1/ideas${q ? `${q}&` : '?'}capsuleId=${f.capsuleId}`,
+      }),
+    },
+  },
+  {
+    // "Wear this" (#704): saves, plans and wears an outfit of the garments
+    // named in the body.
+    name: 'POST /today/wear',
+    kind: 'write',
+    ok: 303,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'POST',
+      url: `/today/wear${q}`,
+      payload: { garmentId: [String(f.garmentId)], occasion: 'evening' },
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f, q) => ({
+        method: 'POST',
+        url: `/api/v1/outfit-wears${q}`,
+        payload: {
+          garmentIds: [f.garmentId],
+          day: f.today,
+          occasion: 'evening',
+        },
+      }),
+    },
+  },
+  {
     name: 'GET /outfits/:id',
     kind: 'read',
     ok: 200,
