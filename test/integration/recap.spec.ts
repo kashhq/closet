@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { garmentWear, wardrobeShare } from '../../src/db/schema';
+import { recapPeriod } from '../../src/web/insights/recap-period';
+import {
+  latestRecapYearBefore,
+  readRecap,
+} from '../../src/web/insights/queries';
 import { createWishlistItem } from './garments';
 import {
   createTestApp,
@@ -383,6 +388,51 @@ describe('year in review', () => {
     expect(few).toContain(
       'Only 2 wears were marked in 2023. A recap needs 10.',
     );
+  });
+
+  // #1015: the year lookup counts by hand what the recap calls enough; they
+  // must agree on what a wear is (distinct garment-days of owned garments).
+  it('picks a fallback year only when its recap is enough', async () => {
+    // 2022: nine wears of owned garments plus a wishlist garment's: not enough.
+    await wear(g.tee, [
+      '2022-01-01',
+      '2022-01-02',
+      '2022-01-03',
+      '2022-01-04',
+      '2022-01-05',
+    ]);
+    await wear(g.undated, [
+      '2022-02-01',
+      '2022-02-02',
+      '2022-02-03',
+      '2022-02-04',
+    ]);
+    await wear(g.wish, ['2022-03-01']);
+    expect(
+      (await readRecap(t.db, ownerId, recapPeriod(2022, '2026-09-27'))).enough,
+    ).toBe(false);
+    expect(await latestRecapYearBefore(t.db, ownerId, 2023)).toBeNull();
+
+    // 2021: exactly ten garment-days over two garments: enough.
+    await wear(g.tee, [
+      '2021-01-01',
+      '2021-01-02',
+      '2021-01-03',
+      '2021-01-04',
+      '2021-01-05',
+      '2021-01-06',
+    ]);
+    await wear(g.undated, [
+      '2021-02-01',
+      '2021-02-02',
+      '2021-02-03',
+      '2021-02-04',
+    ]);
+    const year = await latestRecapYearBefore(t.db, ownerId, 2023);
+    expect(year).toBe(2021);
+    expect(
+      (await readRecap(t.db, ownerId, recapPeriod(year!, '2026-09-27'))).enough,
+    ).toBe(true);
   });
 
   it('reads ?year= as navigation state: anything else is the current year', async () => {

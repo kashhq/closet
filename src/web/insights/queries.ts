@@ -207,9 +207,11 @@ export async function readRecap(
  * The latest year before `year` with at least RECAP_MIN_WEARS wears (the
  * recap's unit: distinct garment-days, over every garment owned now or
  * once), or null. One statement, run only when the current year is still
- * the empty state.
+ * the empty state. It counts by hand what `yearRecap` counts as `enough`
+ * (RECAP_MIN_WEARS is the shared threshold), so `readDefaultRecap` checks the
+ * chosen year's own `enough`; recap.spec.ts holds the two rules together.
  */
-async function latestRecapYearBefore(
+export async function latestRecapYearBefore(
   db: Db,
   ownerId: number,
   year: number,
@@ -249,5 +251,6 @@ export async function readDefaultRecap(
   if (recap.enough) return recap;
   const earlier = await latestRecapYearBefore(db, ownerId, current);
   if (earlier === null) return recap;
-  return readRecap(db, ownerId, recapPeriod(earlier, today));
+  const fallback = await readRecap(db, ownerId, recapPeriod(earlier, today));
+  return fallback.enough ? fallback : recap;
 }
