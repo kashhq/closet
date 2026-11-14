@@ -1864,17 +1864,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 3.791749999996682,
-    "p50": 6.173604000003252,
-    "p95": 9.776031249999505,
-    "max": 10.553250000004482
+    "min": 6.140374999995402,
+    "p50": 7.552770499998587,
+    "p95": 10.398127050000769,
+    "max": 12.697166000005382
    },
    "dbMs": {
     "n": 20,
-    "min": 1.6,
-    "p50": 3.6,
-    "p95": 4.7,
-    "max": 4.7
+    "min": 2.5,
+    "p50": 3.05,
+    "p95": 4.205,
+    "max": 4.3
    },
    "statements": {
     "median": 2,
@@ -1892,22 +1892,22 @@
     "max": 104794
    },
    "wireBytes": {
-    "median": 11834,
-    "min": 11834,
-    "max": 11834
+    "median": 11812,
+    "min": 11812,
+    "max": 11812
    },
    "sql": [
     "4b544fe205",
-    "f7596a721f"
+    "29cd9c3b7b"
    ],
    "slowest": [
     {
-     "sql": "f7596a721f",
-     "ms": 2.0037089999968885
+     "sql": "29cd9c3b7b",
+     "ms": 2.3734170000025188
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.20537500000500586
+     "ms": 0.6272499999977299
     }
    ]
   },
@@ -1921,17 +1921,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 16.28608399999939,
-    "p50": 27.846333000001323,
-    "p95": 37.963110099994445,
-    "max": 40.06550000000425
+    "min": 20.884540999999444,
+    "p50": 23.58220799999981,
+    "p95": 26.346764600000828,
+    "max": 28.973792000004323
    },
    "dbMs": {
     "n": 20,
-    "min": 8.5,
-    "p50": 18.8,
-    "p95": 22.910000000000004,
-    "max": 26.9
+    "min": 13.8,
+    "p50": 15.100000000000001,
+    "p95": 18.23,
+    "max": 18.8
    },
    "statements": {
     "median": 3,
@@ -1944,32 +1944,32 @@
     "max": 3
    },
    "bytes": {
-    "median": 347726,
-    "min": 347726,
-    "max": 347726
+    "median": 144168,
+    "min": 144168,
+    "max": 144168
    },
    "wireBytes": {
-    "median": 26788,
-    "min": 26788,
-    "max": 26788
+    "median": 14427,
+    "min": 14427,
+    "max": 14427
    },
    "sql": [
     "4b544fe205",
     "5209b3771e",
-    "f767e47489"
+    "229f85ec28"
    ],
    "slowest": [
     {
      "sql": "5209b3771e",
-     "ms": 11.527166999992914
+     "ms": 10.595625000001746
     },
     {
-     "sql": "f767e47489",
-     "ms": 2.3495830000028946
+     "sql": "229f85ec28",
+     "ms": 2.6007080000053975
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.18333400000119582
+     "ms": 0.5198750000054133
     }
    ]
   },
@@ -1983,17 +1983,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 8.619082999997772,
-    "p50": 11.899249499998405,
-    "p95": 22.48057559999834,
-    "max": 22.482790999994904
+    "min": 8.662250000001222,
+    "p50": 9.427354499999637,
+    "p95": 12.527223249997043,
+    "max": 14.406917000000249
    },
    "dbMs": {
     "n": 20,
-    "min": 2.7,
-    "p50": 5.05,
-    "p95": 7.53,
-    "max": 8.1
+    "min": 3.4,
+    "p50": 4.1,
+    "p95": 5.170000000000001,
+    "max": 6.5
    },
    "statements": {
     "median": 2,
@@ -2006,27 +2006,27 @@
     "max": 2
    },
    "bytes": {
-    "median": 411068,
-    "min": 411068,
-    "max": 411068
+    "median": 127310,
+    "min": 127310,
+    "max": 127310
    },
    "wireBytes": {
-    "median": 30701,
-    "min": 30701,
-    "max": 30701
+    "median": 13373,
+    "min": 13373,
+    "max": 13373
    },
    "sql": [
     "4b544fe205",
-    "b0ba34f4c8"
+    "8c844c33bd"
    ],
    "slowest": [
     {
-     "sql": "b0ba34f4c8",
-     "ms": 3.5322919999889564
+     "sql": "8c844c33bd",
+     "ms": 3.366041999994195
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.31120899999223184
+     "ms": 0.6557919999977457
     }
    ]
   },
@@ -2040,17 +2040,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 3.8325840000034077,
-    "p50": 6.682042000000365,
-    "p95": 10.897628850000912,
-    "max": 11.70362500000192
+    "min": 7.261250000003201,
+    "p50": 8.353895999996894,
+    "p95": 10.198166649998893,
+    "max": 10.36045799999556
    },
    "dbMs": {
     "n": 20,
-    "min": 1.6,
-    "p50": 3.7,
-    "p95": 5.425000000000001,
-    "max": 5.9
+    "min": 2.9,
+    "p50": 3.4,
+    "p95": 4.32,
+    "max": 4.7
    },
    "statements": {
     "median": 2,
@@ -2068,22 +2068,22 @@
     "max": 104918
    },
    "wireBytes": {
-    "median": 11755,
-    "min": 11755,
-    "max": 11755
+    "median": 11762,
+    "min": 11762,
+    "max": 11762
    },
    "sql": [
     "4b544fe205",
-    "f7596a721f"
+    "29cd9c3b7b"
    ],
    "slowest": [
     {
-     "sql": "f7596a721f",
-     "ms": 1.7000420000113081
+     "sql": "29cd9c3b7b",
+     "ms": 2.5383749999964493
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.2639589999889722
+     "ms": 0.711542000004556
     }
    ]
   },
@@ -2097,17 +2097,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 16.877375000003667,
-    "p50": 24.943854499997542,
-    "p95": 36.43109970000078,
-    "max": 36.80191699999705
+    "min": 19.979457999994338,
+    "p50": 23.461583500000415,
+    "p95": 25.322876750003708,
+    "max": 26.06945799999812
    },
    "dbMs": {
     "n": 20,
-    "min": 11.1,
-    "p50": 17.8,
-    "p95": 22.685000000000002,
-    "max": 24.3
+    "min": 13.8,
+    "p50": 16.200000000000003,
+    "p95": 17.72,
+    "max": 18.1
    },
    "statements": {
     "median": 3,
@@ -2120,32 +2120,32 @@
     "max": 3
    },
    "bytes": {
-    "median": 322908,
-    "min": 322908,
-    "max": 322908
+    "median": 120637,
+    "min": 120637,
+    "max": 120637
    },
    "wireBytes": {
-    "median": 20980,
-    "min": 20980,
-    "max": 20980
+    "median": 8846,
+    "min": 8846,
+    "max": 8846
    },
    "sql": [
     "4b544fe205",
     "a9e676e89b",
-    "5fde79bb0d"
+    "2207da82fb"
    ],
    "slowest": [
     {
      "sql": "a9e676e89b",
-     "ms": 11.302000000010594
+     "ms": 11.8717089999991
     },
     {
-     "sql": "5fde79bb0d",
-     "ms": 1.7255000000004657
+     "sql": "2207da82fb",
+     "ms": 2.629084000000148
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.23599999998987187
+     "ms": 0.9658330000020214
     }
    ]
   },
@@ -2159,17 +2159,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 3.1899999999950523,
-    "p50": 4.491082999997161,
-    "p95": 9.05497529999957,
-    "max": 11.350333000002138
+    "min": 6.164833000002545,
+    "p50": 7.497937500000262,
+    "p95": 9.35927470000279,
+    "max": 9.723917000002984
    },
    "dbMs": {
     "n": 20,
-    "min": 1.5,
-    "p50": 2.3,
-    "p95": 4.305,
-    "max": 4.4
+    "min": 2.9,
+    "p50": 3.45,
+    "p95": 4.825,
+    "max": 5.3
    },
    "statements": {
     "median": 2,
@@ -2187,22 +2187,22 @@
     "max": 84022
    },
    "wireBytes": {
-    "median": 6546,
-    "min": 6546,
-    "max": 6546
+    "median": 6555,
+    "min": 6555,
+    "max": 6555
    },
    "sql": [
     "4b544fe205",
-    "f7596a721f"
+    "29cd9c3b7b"
    ],
    "slowest": [
     {
-     "sql": "f7596a721f",
-     "ms": 1.8465419999993173
+     "sql": "29cd9c3b7b",
+     "ms": 2.631249999998545
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.2825840000004973
+     "ms": 0.8123330000016722
     }
    ]
   },
@@ -2216,17 +2216,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 1.174417000001995,
-    "p50": 1.7863749999996799,
-    "p95": 5.33017085000065,
-    "max": 5.409416999995301
+    "min": 2.5649580000026617,
+    "p50": 3.5611250000001746,
+    "p95": 5.197838150001554,
+    "max": 6.622917000000598
    },
    "dbMs": {
     "n": 20,
-    "min": 0.5,
-    "p50": 0.8,
-    "p95": 2.515,
-    "max": 2.8
+    "min": 1.1,
+    "p50": 1.6,
+    "p95": 2.8950000000000014,
+    "max": 4.7
    },
    "statements": {
     "median": 2,
@@ -2244,9 +2244,9 @@
     "max": 8740
    },
    "wireBytes": {
-    "median": 1102,
-    "min": 1102,
-    "max": 1102
+    "median": 1100,
+    "min": 1100,
+    "max": 1100
    },
    "sql": [
     "4b544fe205",
@@ -2255,11 +2255,11 @@
    "slowest": [
     {
      "sql": "3dd09535b1",
-     "ms": 0.35499999999592546
+     "ms": 0.958874999996624
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.24912499998754356
+     "ms": 0.8073749999966822
     }
    ]
   },
@@ -2273,17 +2273,17 @@
    "status": 302,
    "serverMs": {
     "n": 20,
-    "min": 0.4293340000003809,
-    "p50": 0.662312500000553,
-    "p95": 1.8336941000063236,
-    "max": 2.209458999997878
+    "min": 0.8272910000014235,
+    "p50": 1.2222914999983914,
+    "p95": 1.861177100003261,
+    "max": 2.83116699999664
    },
    "dbMs": {
     "n": 20,
-    "min": 0.2,
-    "p50": 0.3,
-    "p95": 1,
-    "max": 1
+    "min": 0.4,
+    "p50": 0.55,
+    "p95": 0.8600000000000009,
+    "max": 2
    },
    "statements": {
     "median": 1,
@@ -2311,7 +2311,7 @@
    "slowest": [
     {
      "sql": "4b544fe205",
-     "ms": 0.2226669999945443
+     "ms": 0.7061669999966398
     }
    ]
   },
@@ -2325,17 +2325,17 @@
    "status": 302,
    "serverMs": {
     "n": 20,
-    "min": 0.3649160000059055,
-    "p50": 0.5226665000009234,
-    "p95": 1.8142538499985683,
-    "max": 2.8909999999959837
+    "min": 0.6913340000028256,
+    "p50": 0.9684165000035136,
+    "p95": 1.6678336500022852,
+    "max": 1.8918750000011642
    },
    "dbMs": {
     "n": 20,
-    "min": 0.2,
-    "p50": 0.3,
-    "p95": 0.9400000000000006,
-    "max": 1.7
+    "min": 0.3,
+    "p50": 0.5,
+    "p95": 0.9150000000000003,
+    "max": 1.2
    },
    "statements": {
     "median": 1,
@@ -2363,7 +2363,7 @@
    "slowest": [
     {
      "sql": "4b544fe205",
-     "ms": 0.20737499999813735
+     "ms": 0.605916000000434
     }
    ]
   },
@@ -3817,17 +3817,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 11.490292000002228,
-    "p50": 22.646812499999214,
-    "p95": 27.477772249997,
-    "max": 29.954540999999153
+    "min": 16.533458999998402,
+    "p50": 19.056375000000116,
+    "p95": 20.52766220000085,
+    "max": 20.77141699999629
    },
    "dbMs": {
     "n": 20,
-    "min": 7.4,
-    "p50": 17.9,
-    "p95": 19.310000000000002,
-    "max": 19.5
+    "min": 11.1,
+    "p50": 12.2,
+    "p95": 13.325000000000001,
+    "max": 13.8
    },
    "statements": {
     "median": 2,
@@ -3840,14 +3840,14 @@
     "max": 2
    },
    "bytes": {
-    "median": 53490,
-    "min": 53490,
-    "max": 53490
+    "median": 53341,
+    "min": 53341,
+    "max": 53341
    },
    "wireBytes": {
-    "median": 8347,
-    "min": 8347,
-    "max": 8347
+    "median": 8181,
+    "min": 8181,
+    "max": 8181
    },
    "sql": [
     "4b544fe205",
@@ -3856,11 +3856,11 @@
    "slowest": [
     {
      "sql": "d7ab11a21c",
-     "ms": 10.995166999986395
+     "ms": 10.633291999998619
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.22012500000710133
+     "ms": 0.6563329999989946
     }
    ]
   },
@@ -3874,17 +3874,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 14.788875000005646,
-    "p50": 22.16160399999717,
-    "p95": 34.3193978999996,
-    "max": 34.9017079999976
+    "min": 17.5956659999938,
+    "p50": 19.7287499999984,
+    "p95": 21.057853850002722,
+    "max": 23.00100000000384
    },
    "dbMs": {
     "n": 20,
-    "min": 7.6,
-    "p50": 14,
-    "p95": 17.455,
-    "max": 18.5
+    "min": 11.1,
+    "p50": 12.649999999999999,
+    "p95": 13.865000000000002,
+    "max": 15.1
    },
    "statements": {
     "median": 2,
@@ -3897,14 +3897,14 @@
     "max": 2
    },
    "bytes": {
-    "median": 59700,
-    "min": 59700,
-    "max": 59700
+    "median": 59541,
+    "min": 59541,
+    "max": 59541
    },
    "wireBytes": {
-    "median": 8480,
-    "min": 8480,
-    "max": 8480
+    "median": 8340,
+    "min": 8340,
+    "max": 8340
    },
    "sql": [
     "4b544fe205",
@@ -3913,11 +3913,11 @@
    "slowest": [
     {
      "sql": "d7ab11a21c",
-     "ms": 7.99687499999709
+     "ms": 10.370374999998603
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.32991600000241306
+     "ms": 1.2209170000060112
     }
    ]
   },
@@ -3931,17 +3931,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 11.549708999998984,
-    "p50": 16.561291999994864,
-    "p95": 26.140913949999597,
-    "max": 26.90799999999581
+    "min": 19.109167000002344,
+    "p50": 21.24420850000024,
+    "p95": 23.41478060000336,
+    "max": 25.454708000004757
    },
    "dbMs": {
     "n": 20,
-    "min": 7.5,
-    "p50": 11.899999999999999,
-    "p95": 18.51,
-    "max": 18.7
+    "min": 11.6,
+    "p50": 13.5,
+    "p95": 15.080000000000002,
+    "max": 16.6
    },
    "statements": {
     "median": 3,
@@ -3954,14 +3954,14 @@
     "max": 3
    },
    "bytes": {
-    "median": 55758,
-    "min": 55758,
-    "max": 55758
+    "median": 55601,
+    "min": 55601,
+    "max": 55601
    },
    "wireBytes": {
-    "median": 7985,
-    "min": 7985,
-    "max": 7985
+    "median": 8038,
+    "min": 8038,
+    "max": 8038
    },
    "sql": [
     "4b544fe205",
@@ -3971,15 +3971,15 @@
    "slowest": [
     {
      "sql": "d7ab11a21c",
-     "ms": 10.059500000003027
+     "ms": 10.922082999997656
     },
     {
      "sql": "831f0451a6",
-     "ms": 0.41462500000488944
+     "ms": 0.8170419999951264
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.3368750000081491
+     "ms": 0.6775829999969574
     }
    ]
   },
@@ -3993,17 +3993,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 10.8403330000001,
-    "p50": 14.46400000000358,
-    "p95": 25.902593750001326,
-    "max": 28.23662499999773
+    "min": 15.86591700000281,
+    "p50": 17.633875000003172,
+    "p95": 20.10477710000123,
+    "max": 20.820166999998037
    },
    "dbMs": {
     "n": 20,
-    "min": 7.2,
-    "p50": 10.850000000000001,
-    "p95": 17.35,
-    "max": 18.3
+    "min": 11,
+    "p50": 12.350000000000001,
+    "p95": 14.07,
+    "max": 15.4
    },
    "statements": {
     "median": 2,
@@ -4016,14 +4016,14 @@
     "max": 2
    },
    "bytes": {
-    "median": 34711,
-    "min": 34711,
-    "max": 34711
+    "median": 34747,
+    "min": 34747,
+    "max": 34747
    },
    "wireBytes": {
-    "median": 3103,
-    "min": 3103,
-    "max": 3103
+    "median": 3063,
+    "min": 3063,
+    "max": 3063
    },
    "sql": [
     "4b544fe205",
@@ -4032,11 +4032,11 @@
    "slowest": [
     {
      "sql": "564e99160f",
-     "ms": 8.983500000002095
+     "ms": 11.529125000000931
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.2977919999975711
+     "ms": 0.6861669999998412
     }
    ]
   },
@@ -4050,17 +4050,17 @@
    "status": 200,
    "serverMs": {
     "n": 20,
-    "min": 42.03716600000189,
-    "p50": 50.085833000001,
-    "p95": 117.96691700000375,
-    "max": 122.32741700000042
+    "min": 36.101874999993015,
+    "p50": 39.19493750000038,
+    "p95": 42.336521500001616,
+    "max": 44.22820900000079
    },
    "dbMs": {
     "n": 20,
-    "min": 7,
-    "p50": 9.75,
-    "p95": 16.460000000000008,
-    "max": 23.3
+    "min": 11.6,
+    "p50": 12.850000000000001,
+    "p95": 14.870000000000001,
+    "max": 16.2
    },
    "statements": {
     "median": 2,
@@ -4073,14 +4073,14 @@
     "max": 2
    },
    "bytes": {
-    "median": 34424,
-    "min": 34424,
-    "max": 34424
+    "median": 34423,
+    "min": 34423,
+    "max": 34423
    },
    "wireBytes": {
-    "median": 2966,
-    "min": 2966,
-    "max": 2966
+    "median": 2883,
+    "min": 2883,
+    "max": 2883
    },
    "sql": [
     "4b544fe205",
@@ -4089,11 +4089,11 @@
    "slowest": [
     {
      "sql": "564e99160f",
-     "ms": 8.35899999999674
+     "ms": 12.230833999994502
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.23404099998879246
+     "ms": 0.520541999998386
     }
    ]
   },
@@ -8505,17 +8505,17 @@
    "status": 303,
    "serverMs": {
     "n": 20,
-    "min": 4.514958999992814,
-    "p50": 5.971041500000865,
-    "p95": 7.370744049990026,
-    "max": 7.438708000001498
+    "min": 7.2245000000039,
+    "p50": 8.656749999998283,
+    "p95": 11.434288149997158,
+    "max": 15.252417000003334
    },
    "dbMs": {
     "n": 20,
-    "min": 4.2,
-    "p50": 5.6,
-    "p95": 7,
-    "max": 7
+    "min": 6.3,
+    "p50": 7.65,
+    "p95": 9.810000000000002,
+    "max": 13.8
    },
    "statements": {
     "median": 6,
@@ -8548,15 +8548,15 @@
    "slowest": [
     {
      "sql": "528b0715bb",
-     "ms": 2.736083999974653
-    },
-    {
-     "sql": "4015b57a14",
-     "ms": 2.0880409999808762
+     "ms": 4.0425410000025295
     },
     {
      "sql": "358b49288e",
-     "ms": 0.3532909999776166
+     "ms": 1.0460000000020955
+    },
+    {
+     "sql": "4015b57a14",
+     "ms": 0.9657909999950789
     }
    ]
   },
@@ -8570,17 +8570,17 @@
    "status": 409,
    "serverMs": {
     "n": 20,
-    "min": 12.961000000010245,
-    "p50": 15.755374499989557,
-    "p95": 18.565212199991223,
-    "max": 21.18254199999501
+    "min": 11.363209000002826,
+    "p50": 13.38012499999968,
+    "p95": 17.77946604999961,
+    "max": 18.15804200000275
    },
    "dbMs": {
     "n": 20,
-    "min": 8.7,
-    "p50": 11.3,
-    "p95": 14.340000000000002,
-    "max": 15.1
+    "min": 6.8,
+    "p50": 8.350000000000001,
+    "p95": 10.51,
+    "max": 10.7
    },
    "statements": {
     "median": 7,
@@ -8593,14 +8593,14 @@
     "max": 6
    },
    "bytes": {
-    "median": 172035,
-    "min": 172035,
-    "max": 172035
+    "median": 114752,
+    "min": 114752,
+    "max": 114752
    },
    "wireBytes": {
-    "median": 16081,
-    "min": 16081,
-    "max": 16081
+    "median": 12566,
+    "min": 12566,
+    "max": 12566
    },
    "sql": [
     "4b544fe205",
@@ -8609,20 +8609,20 @@
     "528b0715bb",
     "4015b57a14",
     "7e3b1646c9",
-    "568101d63d"
+    "8a88b676a2"
    ],
    "slowest": [
     {
-     "sql": "568101d63d",
-     "ms": 7.407582999992883
+     "sql": "8a88b676a2",
+     "ms": 2.525708000001032
     },
     {
      "sql": "528b0715bb",
-     "ms": 3.7571250000037253
+     "ms": 2.445083999999042
     },
     {
-     "sql": "4015b57a14",
-     "ms": 1.8082920000015292
+     "sql": "4b544fe205",
+     "ms": 0.3685829999958514
     }
    ]
   },
@@ -10377,17 +10377,17 @@
    "status": 303,
    "serverMs": {
     "n": 20,
-    "min": 2.8967089999932796,
-    "p50": 3.5748755000240635,
-    "p95": 4.712897299980979,
-    "max": 6.218292000005022
+    "min": 3.204749999997148,
+    "p50": 4.505249999998341,
+    "p95": 7.286262150001131,
+    "max": 8.42966599999636
    },
    "dbMs": {
     "n": 20,
-    "min": 2.6,
-    "p50": 3.3,
-    "p95": 4.16,
-    "max": 5.3
+    "min": 2.7,
+    "p50": 3.75,
+    "p95": 6.050000000000001,
+    "max": 7
    },
    "statements": {
     "median": 6,
@@ -10419,16 +10419,16 @@
    ],
    "slowest": [
     {
-     "sql": "4015b57a14",
-     "ms": 1.226250000006985
+     "sql": "358b49288e",
+     "ms": 0.7728749999951106
     },
     {
      "sql": "19ddb12582",
-     "ms": 0.6086250000516884
+     "ms": 0.7532920000012382
     },
     {
-     "sql": "358b49288e",
-     "ms": 0.5169580000219867
+     "sql": "542e1ccc37",
+     "ms": 0.44233299999905284
     }
    ]
   },
@@ -10442,17 +10442,17 @@
    "status": 303,
    "serverMs": {
     "n": 20,
-    "min": 1.6648750000167638,
-    "p50": 1.987958499987144,
-    "p95": 2.4282354499940992,
-    "max": 2.4754589999793097
+    "min": 1.4846249999973224,
+    "p50": 1.7996040000034554,
+    "p95": 2.6409294999986743,
+    "max": 2.721916999995301
    },
    "dbMs": {
     "n": 20,
-    "min": 1.4,
-    "p50": 1.55,
-    "p95": 2.1,
-    "max": 2.1
+    "min": 0.8,
+    "p50": 1,
+    "p95": 1.5,
+    "max": 1.5
    },
    "statements": {
     "median": 2,
@@ -10481,11 +10481,11 @@
    "slowest": [
     {
      "sql": "fde95606a5",
-     "ms": 1.201833999948576
+     "ms": 0.6684170000007725
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.17637500003911555
+     "ms": 0.34541700000409037
     }
    ]
   },
@@ -10499,17 +10499,17 @@
    "status": 303,
    "serverMs": {
     "n": 20,
-    "min": 1.2209579999907874,
-    "p50": 1.9688329999917187,
-    "p95": 2.2834437499783236,
-    "max": 2.671875
+    "min": 1.3247910000063712,
+    "p50": 1.6998955000017304,
+    "p95": 2.188147600002412,
+    "max": 2.2178750000020955
    },
    "dbMs": {
     "n": 20,
-    "min": 1,
-    "p50": 1.65,
-    "p95": 1.9200000000000002,
-    "max": 2.3
+    "min": 0.7,
+    "p50": 0.95,
+    "p95": 1.3,
+    "max": 1.3
    },
    "statements": {
     "median": 2,
@@ -10537,12 +10537,12 @@
    ],
    "slowest": [
     {
-     "sql": "e2ea115318",
-     "ms": 1.2635840000002645
+     "sql": "4b544fe205",
+     "ms": 0.4582910000026459
     },
     {
-     "sql": "4b544fe205",
-     "ms": 0.17033300001639873
+     "sql": "e2ea115318",
+     "ms": 0.31716700000106357
     }
    ]
   },
@@ -10556,17 +10556,17 @@
    "status": 303,
    "serverMs": {
     "n": 20,
-    "min": 1.3447920000180602,
-    "p50": 1.905333000002429,
-    "p95": 2.3712122000171805,
-    "max": 2.4971670000231825
+    "min": 1.31104200000118,
+    "p50": 1.7190210000007937,
+    "p95": 2.165133349997632,
+    "max": 2.5619169999990845
    },
    "dbMs": {
     "n": 20,
-    "min": 1.1,
-    "p50": 1.6,
-    "p95": 2,
-    "max": 2
+    "min": 0.8,
+    "p50": 1,
+    "p95": 1.2100000000000002,
+    "max": 1.4
    },
    "statements": {
     "median": 2,
@@ -10595,11 +10595,11 @@
    "slowest": [
     {
      "sql": "3fdcaa60d5",
-     "ms": 0.9455409999936819
+     "ms": 0.8634579999998095
     },
     {
      "sql": "4b544fe205",
-     "ms": 0.16808299999684095
+     "ms": 0.4813330000033602
     }
    ]
   },
@@ -15574,12 +15574,8 @@
   "c19c9916ac": "select (\n    select coalesce(array_agg(distinct \"garment\".\"category\") filter (where \"garment\".\"category\" is not null), '{}')\n    from \"garment\"\n    where (\"garment\".\"owner_id\" = $1 and \"garment\".\"status\" <> $2)\n  ) as \"categories\", (\n    select json_build_object(\n      'id', \"brand_size\".\"id\",\n      'brand', \"brand_size\".\"brand\",\n      'size', \"brand_size\".\"size\",\n      'note', \"brand_size\".\"note\"\n    )\n    from \"brand_size\"\n    where (\"brand_size\".\"user_id\" = $3 and \"brand_size\".\"brand_key\" = $4)\n  ) as \"brandSize\", (\n    select coalesce(\n      json_agg(\n        json_build_object(\n          'id', \"garment\".\"id\",\n          'name', \"garment\".\"name\",\n          'category', \"garment\".\"category\",\n          'type', \"garment\".\"type\",\n          'colors', \"garment\".\"colors\",\n          'brand', \"garment\".\"brand\",\n          'quantity', \"garment\".\"quantity\",\n          'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n        )\n        order by \"garment\".\"id\" desc\n      ),\n      '[]'\n    )\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $5 and \"garment\".\"category\" = $6 and \"garment\".\"type\" = $7 and \"garment\".\"colors\" @> $8 and \"garment\".\"colors\" <@ $9 and \"garment\".\"status\" = $10)\n  ) as \"lookalikes\"",
   "843234c222": "select (\n    select coalesce(\n      json_agg(\n        json_build_object(\n          'id', \"garment\".\"id\",\n          'name', \"garment\".\"name\",\n          'category', \"garment\".\"category\",\n          'type', \"garment\".\"type\",\n          'colors', \"garment\".\"colors\",\n          'brand', \"garment\".\"brand\",\n          'quantity', \"garment\".\"quantity\",\n          'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n        )\n        order by \"garment\".\"id\" desc\n      ),\n      '[]'\n    )\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $1 and \"garment\".\"category\" = $2 and \"garment\".\"type\" is null and \"garment\".\"colors\" @> $3 and \"garment\".\"colors\" <@ $4 and \"garment\".\"status\" = $5)\n  ) as \"candidates\"",
   "64cb7a8641": "select \"file\".\"variant_key\", \"selfie\".\"id\", \"inspiration\".\"id\" from \"file\" left join \"selfie\" on \"selfie\".\"photo_id\" = \"file\".\"id\" left join \"inspiration\" on \"inspiration\".\"photo_id\" = \"file\".\"id\" where \"file\".\"file_name\" = $1 limit $2",
-  "f7596a721f": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select ranked.*, coalesce(max(case when exists (select from unnest(array[]::int[], array[]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) then ranked.rank end) over (partition by ranked.role), 0) as deepest\n      from (\n        select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n          \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n          \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $1 then $2 when \"garment\".\"category\" = $3 then $4 when \"garment\".\"category\" = $5 then $6 when \"garment\".\"category\" = $7 then $8 when \"garment\".\"category\" = $9 then $10 when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 else 'none' end as role,\n          (row_number() over (partition by case when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n          (count(*) over (partition by case when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 else 'none' end))::int as count\n        from \"garment\"\n        where (\"garment\".\"owner_id\" = $43 and \"garment\".\"status\" = $44)\n      ) ranked\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= windowed.deepest + $45\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $46\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $47 and \"garment\".\"status\" = $48)\n    ) kinds\n  ) as \"closetKinds\"",
   "5209b3771e": "select (\n    select coalesce(json_agg(json_build_object(\n      'id', \"garment\".\"id\", 'name', \"garment\".\"name\", 'category', \"garment\".\"category\", 'colors', \"garment\".\"colors\", 'pattern', \"garment\".\"pattern\", 'formality', \"garment\".\"formality\", 'warmth', \"garment\".\"warmth\", 'type', \"garment\".\"type\", 'fabricWeight', \"garment\".\"fabric_weight\", 'waterResistant', \"garment\".\"water_resistant\", 'idleDays', (select ($1::date - max(\"garment_wear\".\"day\"))::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\"), 'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n    )), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"id\" in ($2) and \"garment\".\"owner_id\" = $3 and \"garment\".\"status\" = $4)\n  ) as \"lockable\", (\n    select coalesce(json_agg(json_build_object(\n      'id', \"garment\".\"id\", 'name', \"garment\".\"name\", 'category', \"garment\".\"category\", 'colors', \"garment\".\"colors\", 'pattern', \"garment\".\"pattern\", 'formality', \"garment\".\"formality\", 'warmth', \"garment\".\"warmth\", 'type', \"garment\".\"type\", 'fabricWeight', \"garment\".\"fabric_weight\", 'waterResistant', \"garment\".\"water_resistant\", 'idleDays', (select ($5::date - max(\"garment_wear\".\"day\"))::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\"), 'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n    )), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $6 and (\"garment\".\"status\" = $7 and \"garment\".\"away\" is null and (case when (case when \"garment\".\"wash_after_wears\" = 0 then null else coalesce(\"garment\".\"wash_after_wears\", case \"garment\".\"category\" when 'outerwear' then 10 when 'dresses' then 1 when 'tops' then 1 when 'bottoms' then 3 end) end) is null then 0 else least(\"garment\".\"quantity\", (select count(distinct \"garment_wear\".\"day\")::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\" and (\"garment\".\"last_washed_on\" is null or \"garment_wear\".\"day\" > \"garment\".\"last_washed_on\" or (\"garment_wear\".\"day\" = \"garment\".\"last_washed_on\" and \"garment_wear\".\"worn_at\" > \"garment\".\"washed_at\"))) / (case when \"garment\".\"wash_after_wears\" = 0 then null else coalesce(\"garment\".\"wash_after_wears\", case \"garment\".\"category\" when 'outerwear' then 10 when 'dresses' then 1 when 'tops' then 1 when 'bottoms' then 3 end) end)) end)::int < \"garment\".\"quantity\"))\n  ) as \"pool\", (\n    select coalesce(json_agg(json_build_array(\"outfit_slot\".\"outfit_id\", \"garment\".\"id\", \"garment\".\"category\")), '[]')\n    from \"outfit_slot\"\n    inner join \"outfit\" on \"outfit\".\"id\" = \"outfit_slot\".\"outfit_id\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit\".\"owner_id\" = $8 and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $9)))\n  ) as \"saved\", (\n    select coalesce(json_agg(json_build_array(\"generator_avoid\".\"garment_a_id\", \"generator_avoid\".\"garment_b_id\")), '[]')\n    from \"generator_avoid\"\n    where \"generator_avoid\".\"owner_id\" = $10\n  ) as \"avoid\", (\n    select coalesce(json_agg(json_build_array(\n    \"outfit_rule\".\"kind\",\n    json_build_array(\"outfit_rule\".\"a_garment_id\", \"outfit_rule\".\"a_category\", \"outfit_rule\".\"a_type\", \"outfit_rule\".\"a_color\", \"outfit_rule\".\"a_pattern\"),\n    json_build_array(\"outfit_rule\".\"b_garment_id\", \"outfit_rule\".\"b_category\", \"outfit_rule\".\"b_type\", \"outfit_rule\".\"b_color\", \"outfit_rule\".\"b_pattern\")\n  ) order by \"outfit_rule\".\"id\"), '[]')\n    from \"outfit_rule\"\n    where \"outfit_rule\".\"owner_id\" = $11\n  ) as \"rules\", (\n    select json_build_object(\n      'settings', json_build_object(\n        'userId', \"user_weather\".\"user_id\",\n        'homeName', \"user_weather\".\"home_name\",\n        'homeLatitude', \"user_weather\".\"home_latitude\",\n        'homeLongitude', \"user_weather\".\"home_longitude\",\n        'hereLatitude', \"user_weather\".\"here_latitude\",\n        'hereLongitude', \"user_weather\".\"here_longitude\",\n        'hereLocatedAt', \"user_weather\".\"here_located_at\",\n        'temperatureOffset', \"user_weather\".\"temperature_offset\",\n        'temperatureUnit', \"user_weather\".\"temperature_unit\"\n      ),\n      'joinedLatitude', case when \"user_weather\".\"here_located_at\" > $12\n    then \"user_weather\".\"here_latitude\" else \"user_weather\".\"home_latitude\" end,\n      'joinedLongitude', case when \"user_weather\".\"here_located_at\" > $13\n    then \"user_weather\".\"here_longitude\" else \"user_weather\".\"home_longitude\" end,\n      'value', \"weather_forecast\".\"forecast\",\n      'fetchedAt', \"weather_forecast\".\"fetched_at\",\n      'attemptedAt', \"weather_forecast\".\"attempted_at\"\n    ) from \"user_weather\"\n    left join \"weather_forecast\"\n      on \"weather_forecast\".\"latitude\" = case when \"user_weather\".\"here_located_at\" > $14\n    then \"user_weather\".\"here_latitude\" else \"user_weather\".\"home_latitude\" end\n      and \"weather_forecast\".\"longitude\" = case when \"user_weather\".\"here_located_at\" > $15\n    then \"user_weather\".\"here_longitude\" else \"user_weather\".\"home_longitude\" end\n      and \"weather_forecast\".\"time_zone\" = $16 where \"user_weather\".\"user_id\" = $17) as \"weather\"",
-  "f767e47489": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select ranked.*, coalesce(max(case when exists (select from unnest(array[$1, $2, $3, $4, $5]::int[], array[$6, $7, $8, $9, $10]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) then ranked.rank end) over (partition by ranked.role), 0) as deepest\n      from (\n        select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n          \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n          \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 else 'none' end as role,\n          (row_number() over (partition by case when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n          (count(*) over (partition by case when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 when \"garment\".\"category\" = $47 then $48 when \"garment\".\"category\" = $49 then $50 when \"garment\".\"category\" = $51 then $52 else 'none' end))::int as count\n        from \"garment\"\n        where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n      ) ranked\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= windowed.deepest + $55\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $56\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $57 and \"garment\".\"status\" = $58)\n    ) kinds\n  ) as \"closetKinds\"",
-  "b0ba34f4c8": "select (\n    select json_build_object(\n      'id', \"outfit\".\"id\",\n      'name', \"outfit\".\"name\",\n      'garments', (\n        select coalesce(json_agg(json_build_array(\"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\") order by \"outfit_slot\".\"position\"), '[]')\n        from \"outfit_slot\"\n        inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n        left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n        where \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\"\n      )\n    )\n    from \"outfit\"\n    where (\"outfit\".\"id\" = $1 and \"outfit\".\"owner_id\" = $2)\n  ) as \"outfit\", (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select ranked.*, coalesce(max(case when (exists (select from unnest(array[]::int[], array[]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) or ranked.id in (select \"outfit_slot\".\"garment_id\" from \"outfit_slot\" inner join \"outfit\" on \"outfit\".\"id\" = \"outfit_slot\".\"outfit_id\" where (\"outfit\".\"id\" = $3 and \"outfit\".\"owner_id\" = $4))) then ranked.rank end) over (partition by ranked.role), 0) as deepest\n      from (\n        select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n          \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n          \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $5 then $6 when \"garment\".\"category\" = $7 then $8 when \"garment\".\"category\" = $9 then $10 when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 else 'none' end as role,\n          (row_number() over (partition by case when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n          (count(*) over (partition by case when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 else 'none' end))::int as count\n        from \"garment\"\n        where (\"garment\".\"owner_id\" = $47 and \"garment\".\"status\" = $48)\n      ) ranked\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= windowed.deepest + $49\n  ) as \"windows\", ($50::int in (select \"outfit_calendar\".\"outfit_id\" from \"outfit_calendar\" union all select \"trip_outfit\".\"outfit_id\" from \"trip_outfit\")) as \"editingHeld\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $51\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $52 and \"garment\".\"status\" = $53)\n    ) kinds\n  ) as \"closetKinds\"",
   "a9e676e89b": "select (\n    select coalesce(json_agg(json_build_array(\"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\")), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $1 and \"garment\".\"id\" in ($2) and \"garment\".\"status\" = $3)\n  ) as \"held\", (\n    select coalesce(json_agg(json_build_object(\n      'id', \"garment\".\"id\", 'name', \"garment\".\"name\", 'category', \"garment\".\"category\", 'colors', \"garment\".\"colors\", 'pattern', \"garment\".\"pattern\", 'formality', \"garment\".\"formality\", 'warmth', \"garment\".\"warmth\", 'type', \"garment\".\"type\", 'fabricWeight', \"garment\".\"fabric_weight\", 'waterResistant', \"garment\".\"water_resistant\", 'idleDays', (select ($4::date - max(\"garment_wear\".\"day\"))::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\"), 'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n    )), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"id\" in ($5) and \"garment\".\"owner_id\" = $6 and \"garment\".\"status\" = $7)\n  ) as \"lockable\", (\n    select coalesce(json_agg(json_build_object(\n      'id', \"garment\".\"id\", 'name', \"garment\".\"name\", 'category', \"garment\".\"category\", 'colors', \"garment\".\"colors\", 'pattern', \"garment\".\"pattern\", 'formality', \"garment\".\"formality\", 'warmth', \"garment\".\"warmth\", 'type', \"garment\".\"type\", 'fabricWeight', \"garment\".\"fabric_weight\", 'waterResistant', \"garment\".\"water_resistant\", 'idleDays', (select ($8::date - max(\"garment_wear\".\"day\"))::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\"), 'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n    )), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $9 and (\"garment\".\"status\" = $10 and \"garment\".\"away\" is null and (case when (case when \"garment\".\"wash_after_wears\" = 0 then null else coalesce(\"garment\".\"wash_after_wears\", case \"garment\".\"category\" when 'outerwear' then 10 when 'dresses' then 1 when 'tops' then 1 when 'bottoms' then 3 end) end) is null then 0 else least(\"garment\".\"quantity\", (select count(distinct \"garment_wear\".\"day\")::int from \"garment_wear\" where \"garment_wear\".\"garment_id\" = \"garment\".\"id\" and (\"garment\".\"last_washed_on\" is null or \"garment_wear\".\"day\" > \"garment\".\"last_washed_on\" or (\"garment_wear\".\"day\" = \"garment\".\"last_washed_on\" and \"garment_wear\".\"worn_at\" > \"garment\".\"washed_at\"))) / (case when \"garment\".\"wash_after_wears\" = 0 then null else coalesce(\"garment\".\"wash_after_wears\", case \"garment\".\"category\" when 'outerwear' then 10 when 'dresses' then 1 when 'tops' then 1 when 'bottoms' then 3 end) end)) end)::int < \"garment\".\"quantity\"))\n  ) as \"pool\", (\n    select coalesce(json_agg(json_build_array(\"outfit_slot\".\"outfit_id\", \"garment\".\"id\", \"garment\".\"category\")), '[]')\n    from \"outfit_slot\"\n    inner join \"outfit\" on \"outfit\".\"id\" = \"outfit_slot\".\"outfit_id\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit\".\"owner_id\" = $11 and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $12)))\n  ) as \"saved\", (\n    select coalesce(json_agg(json_build_array(\"generator_avoid\".\"garment_a_id\", \"generator_avoid\".\"garment_b_id\")), '[]')\n    from \"generator_avoid\"\n    where \"generator_avoid\".\"owner_id\" = $13\n  ) as \"avoid\", (\n    select coalesce(json_agg(json_build_array(\n    \"outfit_rule\".\"kind\",\n    json_build_array(\"outfit_rule\".\"a_garment_id\", \"outfit_rule\".\"a_category\", \"outfit_rule\".\"a_type\", \"outfit_rule\".\"a_color\", \"outfit_rule\".\"a_pattern\"),\n    json_build_array(\"outfit_rule\".\"b_garment_id\", \"outfit_rule\".\"b_category\", \"outfit_rule\".\"b_type\", \"outfit_rule\".\"b_color\", \"outfit_rule\".\"b_pattern\")\n  ) order by \"outfit_rule\".\"id\"), '[]')\n    from \"outfit_rule\"\n    where \"outfit_rule\".\"owner_id\" = $14\n  ) as \"rules\", (\n    select json_build_object(\n      'settings', json_build_object(\n        'userId', \"user_weather\".\"user_id\",\n        'homeName', \"user_weather\".\"home_name\",\n        'homeLatitude', \"user_weather\".\"home_latitude\",\n        'homeLongitude', \"user_weather\".\"home_longitude\",\n        'hereLatitude', \"user_weather\".\"here_latitude\",\n        'hereLongitude', \"user_weather\".\"here_longitude\",\n        'hereLocatedAt', \"user_weather\".\"here_located_at\",\n        'temperatureOffset', \"user_weather\".\"temperature_offset\",\n        'temperatureUnit', \"user_weather\".\"temperature_unit\"\n      ),\n      'joinedLatitude', case when \"user_weather\".\"here_located_at\" > $15\n    then \"user_weather\".\"here_latitude\" else \"user_weather\".\"home_latitude\" end,\n      'joinedLongitude', case when \"user_weather\".\"here_located_at\" > $16\n    then \"user_weather\".\"here_longitude\" else \"user_weather\".\"home_longitude\" end,\n      'value', \"weather_forecast\".\"forecast\",\n      'fetchedAt', \"weather_forecast\".\"fetched_at\",\n      'attemptedAt', \"weather_forecast\".\"attempted_at\"\n    ) from \"user_weather\"\n    left join \"weather_forecast\"\n      on \"weather_forecast\".\"latitude\" = case when \"user_weather\".\"here_located_at\" > $17\n    then \"user_weather\".\"here_latitude\" else \"user_weather\".\"home_latitude\" end\n      and \"weather_forecast\".\"longitude\" = case when \"user_weather\".\"here_located_at\" > $18\n    then \"user_weather\".\"here_longitude\" else \"user_weather\".\"home_longitude\" end\n      and \"weather_forecast\".\"time_zone\" = $19 where \"user_weather\".\"user_id\" = $20) as \"weather\"",
-  "5fde79bb0d": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select ranked.*, coalesce(max(case when exists (select from unnest(array[$1, $2, $3, $4, $5]::int[], array[$6, $7, $8, $9, $10]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) then ranked.rank end) over (partition by ranked.role), 0) as deepest\n      from (\n        select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n          \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n          \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 else 'none' end as role,\n          (row_number() over (partition by case when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n          (count(*) over (partition by case when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 when \"garment\".\"category\" = $47 then $48 when \"garment\".\"category\" = $49 then $50 when \"garment\".\"category\" = $51 then $52 else 'none' end))::int as count\n        from \"garment\"\n        where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n      ) ranked\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= windowed.deepest + $55\n  ) as \"windows\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $56 and \"garment\".\"status\" = $57)\n    ) kinds\n  ) as \"closetKinds\"",
   "3dd09535b1": "select \"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end from \"garment\" left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\" where ((\"garment\".\"owner_id\" = $1 and \"garment\".\"status\" = $2) and \"garment\".\"category\" in ($3) and \"garment\".\"id\" < $4) order by \"garment\".\"id\" desc limit $5",
   "840ad69ade": "select (\n    select json_build_object(\n      'outfits', coalesce(\n        json_agg(json_build_object(\n    'id', \"outfit\".\"id\",\n    'name', \"outfit\".\"name\",\n    'agent', case when \"outfit\".\"proposed_by_token_id\" is not null then coalesce((\n    select json_build_object('kind', 'token', 'name', stamp_token.name)\n    from \"personal_access_token\" stamp_token\n    inner join \"user\" stamp_author on stamp_author.id = stamp_token.user_id\n    where stamp_token.id = \"outfit\".\"proposed_by_token_id\"\n  ), json_build_object('kind', 'anonymous')) end,\n    'proposed', \"outfit\".\"proposed_at\" is not null,\n    'garments', (\n    select coalesce(\n      json_agg(\n        json_build_object(\n          'id', \"garment\".\"id\",\n          'name', \"garment\".\"name\",\n          'category', \"garment\".\"category\",\n          'status', \"garment\".\"status\",\n          'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n        )\n        order by \"outfit_slot\".\"position\"\n      ),\n      '[]'\n    )\n    from \"outfit_slot\"\n    join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\"\n  )\n  ) order by \"outfit\".\"id\" desc) filter (where page_position <= $1),\n        '[]'\n      ),\n      'next', case when count(*) > $2\n        then min(\"outfit\".\"id\") filter (where page_position <= $3) end\n    )\n    from (\n    select *, row_number() over (order by \"outfit\".\"id\" desc) as page_position\n    from \"outfit\"\n    where (\"outfit\".\"owner_id\" = $4 and (\"outfit\".\"proposed_at\" is null or (\"outfit\".\"reaction\" = 'loved' and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $5)))) and \"outfit\".\"origin\" in ($6, $7))\n    order by \"outfit\".\"id\" desc\n    limit $8\n  ) as \"outfit\"\n  ) as \"page\", (\n    select coalesce(json_agg(activity), '[]') from (\n    select\n      \"outfit_calendar\".\"outfit_id\" as \"outfitId\",\n      (count(*) filter (where (\"outfit_calendar\".\"worn_at\" is not null or \"selfie\".\"id\" is not null)))::int as \"wornCount\",\n      min(\"outfit_calendar\".\"day\") filter (where not (\"outfit_calendar\".\"worn_at\" is not null or \"selfie\".\"id\" is not null) and \"outfit_calendar\".\"day\" >= $9) as \"nextPlanned\"\n    from \"outfit_calendar\"\n    left join \"selfie\" on \"selfie\".\"outfit_calendar_id\" = \"outfit_calendar\".\"id\"\n    where \"outfit_calendar\".\"owner_id\" = $10\n    group by \"outfit_calendar\".\"outfit_id\"\n  ) activity\n  ) as \"activity\", (\n    select coalesce(json_agg(json_build_object(\n      'id', \"outfit\".\"id\",\n      'name', \"outfit\".\"name\",\n      'note', \"outfit\".\"proposal_note\",\n      'reaction', \"outfit\".\"reaction\",\n      'ownerNote', \"outfit\".\"owner_note\",\n      'dismissedReason', \"outfit\".\"dismissed_reason\",\n      'agent', case when \"outfit\".\"proposed_by_token_id\" is not null then coalesce((\n    select json_build_object('kind', 'token', 'name', stamp_token.name)\n    from \"personal_access_token\" stamp_token\n    inner join \"user\" stamp_author on stamp_author.id = stamp_token.user_id\n    where stamp_token.id = \"outfit\".\"proposed_by_token_id\"\n  ), json_build_object('kind', 'anonymous')) end,\n      'pieces', (\n    select coalesce(json_agg(json_build_object(\n      'id', \"garment\".\"id\",\n      'name', \"garment\".\"name\",\n      'category', \"garment\".\"category\",\n      'status', \"garment\".\"status\",\n      'price', \"garment\".\"price\",\n      'setAside', \"garment\".\"dismissed_at\" is not null,\n      'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n    ) order by \"outfit_slot\".\"position\"), '[]')\n    from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\"\n  )\n    ) order by \"outfit\".\"proposed_at\" desc, \"outfit\".\"id\" desc), '[]')\n    from \"outfit\"\n    where (\"outfit\".\"owner_id\" = $11 and (\"outfit\".\"proposed_at\" is not null and not (\"outfit\".\"proposed_at\" is null or (\"outfit\".\"reaction\" = 'loved' and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $12))))))\n  ) as \"muse\", json_build_object(\n    'items', (\n      select coalesce(\n        json_agg(json_build_array(json_build_array(\n  \"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"colors\",\n  \"garment\".\"pattern\", \"garment\".\"formality\", \"garment\".\"warmth\", \"garment\".\"type\",\n  \"garment\".\"fabric_weight\", \"garment\".\"water_resistant\",\n  case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\"\n), \"garment\".\"replaces_garment_id\") order by \"garment\".\"id\"),\n        '[]'\n      )\n      from \"garment\"\n      left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n      where (\"garment\".\"owner_id\" = $13 and \"garment\".\"status\" = $14 and \"garment\".\"id\" in (select \"outfit_slot\".\"garment_id\" from \"outfit_slot\" inner join \"outfit\" on \"outfit\".\"id\" = \"outfit_slot\".\"outfit_id\" where (\"outfit\".\"owner_id\" = $15 and (\"outfit\".\"proposed_at\" is not null and not (\"outfit\".\"proposed_at\" is null or (\"outfit\".\"reaction\" = 'loved' and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $16))))) and \"garment\".\"status\" = $17)))\n    ),\n    'closet', (\n    select coalesce(json_agg(json_build_array(\n  \"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"colors\",\n  \"garment\".\"pattern\", \"garment\".\"formality\", \"garment\".\"warmth\", \"garment\".\"type\",\n  \"garment\".\"fabric_weight\", \"garment\".\"water_resistant\",\n  case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\"\n) order by \"garment\".\"id\"), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $18 and \"garment\".\"status\" = $19)\n  ),\n    'avoid', (\n    select coalesce(json_agg(json_build_array(\"generator_avoid\".\"garment_a_id\", \"generator_avoid\".\"garment_b_id\")), '[]')\n    from \"generator_avoid\"\n    where \"generator_avoid\".\"owner_id\" = $20\n  ),\n    'rules', (\n    select coalesce(json_agg(json_build_array(\n    \"outfit_rule\".\"kind\",\n    json_build_array(\"outfit_rule\".\"a_garment_id\", \"outfit_rule\".\"a_category\", \"outfit_rule\".\"a_type\", \"outfit_rule\".\"a_color\", \"outfit_rule\".\"a_pattern\"),\n    json_build_array(\"outfit_rule\".\"b_garment_id\", \"outfit_rule\".\"b_category\", \"outfit_rule\".\"b_type\", \"outfit_rule\".\"b_color\", \"outfit_rule\".\"b_pattern\")\n  ) order by \"outfit_rule\".\"id\"), '[]')\n    from \"outfit_rule\"\n    where \"outfit_rule\".\"owner_id\" = $21\n  )\n  ) as \"unlocks\"",
   "57625332fb": "select (\n    select json_build_object(\n      'outfits', coalesce(\n        json_agg(json_build_object(\n    'id', \"outfit\".\"id\",\n    'name', \"outfit\".\"name\",\n    'agent', case when \"outfit\".\"proposed_by_token_id\" is not null then coalesce((\n    select json_build_object('kind', 'token', 'name', stamp_token.name)\n    from \"personal_access_token\" stamp_token\n    inner join \"user\" stamp_author on stamp_author.id = stamp_token.user_id\n    where stamp_token.id = \"outfit\".\"proposed_by_token_id\"\n  ), json_build_object('kind', 'anonymous')) end,\n    'proposed', \"outfit\".\"proposed_at\" is not null,\n    'garments', (\n    select coalesce(\n      json_agg(\n        json_build_object(\n          'id', \"garment\".\"id\",\n          'name', \"garment\".\"name\",\n          'category', \"garment\".\"category\",\n          'status', \"garment\".\"status\",\n          'photo', case when not (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then null else json_build_object('fileName', \"file\".\"file_name\", 'version', \"file\".\"version\", 'variantKey', \"file\".\"variant_key\") end\n        )\n        order by \"outfit_slot\".\"position\"\n      ),\n      '[]'\n    )\n    from \"outfit_slot\"\n    join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\"\n  )\n  ) order by \"outfit\".\"id\" desc) filter (where page_position <= $1),\n        '[]'\n      ),\n      'next', case when count(*) > $2\n        then min(\"outfit\".\"id\") filter (where page_position <= $3) end\n    )\n    from (\n    select *, row_number() over (order by \"outfit\".\"id\" desc) as page_position\n    from \"outfit\"\n    where ((\"outfit\".\"owner_id\" = $4 and (\"outfit\".\"proposed_at\" is null or (\"outfit\".\"reaction\" = 'loved' and not exists (select 1 from \"outfit_slot\"\n    inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n    where (\"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" and \"garment\".\"status\" = $5)))) and \"outfit\".\"origin\" in ($6, $7)) and \"outfit\".\"id\" < $8)\n    order by \"outfit\".\"id\" desc\n    limit $9\n  ) as \"outfit\"\n  ) as \"page\", (\n    select coalesce(json_agg(activity), '[]') from (\n    select\n      \"outfit_calendar\".\"outfit_id\" as \"outfitId\",\n      (count(*) filter (where (\"outfit_calendar\".\"worn_at\" is not null or \"selfie\".\"id\" is not null)))::int as \"wornCount\",\n      min(\"outfit_calendar\".\"day\") filter (where not (\"outfit_calendar\".\"worn_at\" is not null or \"selfie\".\"id\" is not null) and \"outfit_calendar\".\"day\" >= $10) as \"nextPlanned\"\n    from \"outfit_calendar\"\n    left join \"selfie\" on \"selfie\".\"outfit_calendar_id\" = \"outfit_calendar\".\"id\"\n    where \"outfit_calendar\".\"owner_id\" = $11\n    group by \"outfit_calendar\".\"outfit_id\"\n  ) activity\n  ) as \"activity\"",
@@ -15678,7 +15674,6 @@
   "cdb05052f4": "update \"file\" set \"version\" = $1, \"cutout_status\" = $2, \"cutout_attempts\" = $3, \"cutout_job_version\" = $4, \"cutout_worker\" = $5, \"cutout_started_at\" = $6, \"variant_key\" = $7 where (\"file\".\"id\" = $8 and (select g.owner_id from \"garment\" g where g.photo_id = \"file\".\"id\") is not distinct from $9) returning ''",
   "528b0715bb": "select \"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"existing\".\"id\", \"existing\".\"name\", \"pending\" from \"garment\" left join (select \"outfit\".\"id\", \"outfit\".\"name\", (\"outfit\".\"proposed_at\" is not null and \"outfit\".\"reaction\" <> 'loved') as \"pending\", \"outfit\".\"reaction\" from \"outfit\" inner join \"outfit_slot\" on \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" where (\"outfit\".\"owner_id\" = $1 and \"outfit_slot\".\"garment_id\" is not null) group by \"outfit\".\"id\" having array_agg(distinct \"outfit_slot\".\"garment_id\" order by \"outfit_slot\".\"garment_id\") = array[$2, $3]::int[] order by \"outfit\".\"id\" limit $4) \"existing\" on true where (\"garment\".\"owner_id\" = $5 and \"garment\".\"id\" in ($6, $7) and \"garment\".\"status\" = $8) order by \"garment\".\"id\" for share of \"garment\"",
   "7e3b1646c9": "select \"id\", \"name\", \"category\", \"status\" from \"garment\" where (\"garment\".\"owner_id\" = $1 and \"garment\".\"id\" in ($2, $3))",
-  "568101d63d": "select (\n    select coalesce(json_agg(json_build_array(\"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\")), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $1 and \"garment\".\"id\" in ($2) and \"garment\".\"status\" = $3)\n  ) as \"held\", (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select ranked.*, coalesce(max(case when exists (select from unnest(array[$4]::int[], array[$5]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) then ranked.rank end) over (partition by ranked.role), 0) as deepest\n      from (\n        select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n          \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n          \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $6 then $7 when \"garment\".\"category\" = $8 then $9 when \"garment\".\"category\" = $10 then $11 when \"garment\".\"category\" = $12 then $13 when \"garment\".\"category\" = $14 then $15 when \"garment\".\"category\" = $16 then $17 when \"garment\".\"category\" = $18 then $19 else 'none' end as role,\n          (row_number() over (partition by case when \"garment\".\"category\" = $20 then $21 when \"garment\".\"category\" = $22 then $23 when \"garment\".\"category\" = $24 then $25 when \"garment\".\"category\" = $26 then $27 when \"garment\".\"category\" = $28 then $29 when \"garment\".\"category\" = $30 then $31 when \"garment\".\"category\" = $32 then $33 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n          (count(*) over (partition by case when \"garment\".\"category\" = $34 then $35 when \"garment\".\"category\" = $36 then $37 when \"garment\".\"category\" = $38 then $39 when \"garment\".\"category\" = $40 then $41 when \"garment\".\"category\" = $42 then $43 when \"garment\".\"category\" = $44 then $45 when \"garment\".\"category\" = $46 then $47 else 'none' end))::int as count\n        from \"garment\"\n        where (\"garment\".\"owner_id\" = $48 and \"garment\".\"status\" = $49)\n      ) ranked\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= windowed.deepest + $50\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $51\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $52 and \"garment\".\"status\" = $53)\n    ) kinds\n  ) as \"closetKinds\"",
   "471817b329": "\n    with existing as ((select \"outfit\".\"id\", \"outfit\".\"name\", (\"outfit\".\"proposed_at\" is not null and \"outfit\".\"reaction\" <> 'loved') as \"pending\", \"outfit\".\"reaction\" from \"outfit\" inner join \"outfit_slot\" on \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\" where (\"outfit\".\"owner_id\" = $1 and \"outfit_slot\".\"garment_id\" is not null) group by \"outfit\".\"id\" having array_agg(distinct \"outfit_slot\".\"garment_id\" order by \"outfit_slot\".\"garment_id\") = array[$2, $3]::int[] order by \"outfit\".\"id\" limit $4)),\n    created as (\n      insert into \"outfit\" (owner_id, name, notes, origin, proposed_by_token_id, proposed_at, proposal_note, reaction)\n      select $5::int, $6::text, $7::text, $8::text, $9::int, null, null, null\n      where not exists (select from existing)\n      returning id, name\n    )\n    select id, name, false as existing, false as pending, null as reaction from created\n    union all\n    select id, name, true as existing, pending, reaction from existing",
   "da58b591b1": "\n    with locked as materialized ((select \"id\" from \"outfit\" where (\"outfit\".\"id\" = $1 and \"outfit\".\"owner_id\" = $2) for update)),\n    edited as (update \"outfit\" set \"name\" = $3, \"origin\" = $4 where \"outfit\".\"id\" in (select id from locked)),\n    claimed as (update \"outfit_calendar\" set \"planned_by\" = $5, \"planned_by_token_id\" = $6 where (\"outfit_calendar\".\"outfit_id\" in (select id from locked) and \"outfit_calendar\".\"planned_by\" = $7) returning \"id\")\n    select\n      (select count(*)::int from locked) as found,\n      (select count(*)::int from claimed) as claimed",
   "d66115a2dc": "\n    with trimmed as (delete from \"outfit_slot\" where (\"outfit_slot\".\"outfit_id\" = $1 and \"outfit_slot\".\"position\" >= $2)),\n    held as materialized ((select \"id\" from \"garment\" where (\"garment\".\"owner_id\" = $3 and \"garment\".\"id\" in ($4, $5) and (\"garment\".\"status\" = $6 or (((\"garment\".\"status\" = $7 and \"garment\".\"dismissed_at\" is null) and not exists (\n    select 1 from \"option_group\"\n    where \"option_group\".\"id\" = \"garment\".\"suggestion_group_id\"\n      and \"option_group\".\"status\" = 'dismissed'\n  )) and not ($8::int in (select \"outfit_calendar\".\"outfit_id\" from \"outfit_calendar\" union all select \"trip_outfit\".\"outfit_id\" from \"trip_outfit\"))) or \"garment\".\"id\" in (select \"outfit_slot\".\"garment_id\" from \"outfit_slot\" where \"outfit_slot\".\"outfit_id\" = $9::int))) order by \"garment\".\"id\" for share))\n    insert into \"outfit_slot\" (outfit_id, position, category, garment_id)\n    select $10::int, slot.position, slot.category, held.id\n    from (values ($11::smallint, $12::text, $13::int), ($14::smallint, $15::text, $16::int)) as slot (position, category, garment_id)\n    left join held on held.id = slot.garment_id\n    on conflict (outfit_id, position) do update set category = excluded.category, garment_id = excluded.garment_id\n    returning position, garment_id as \"garmentId\"",
@@ -15820,7 +15815,12 @@
   "a62c936a06": "select \"email_id\" from \"order_email\" where (\"order_email\".\"account_id\" = $1 and \"order_email\".\"email_id\" in ($2, $3) and \"order_email\".\"status\" <> $4)",
   "4c942fc55c": "\n      with email as (insert into \"order_email\" (\"id\", \"account_id\", \"email_id\", \"received_at\", \"processed_at\", \"outcome\", \"items\", \"status\", \"attempts\", \"mailbox_failures\", \"error_kind\") values (default, $1, $2, $3, default, $4, $5, default, default, default, default) on conflict (\"account_id\",\"email_id\") do update set \"processed_at\" = now(), \"outcome\" = $6, \"items\" = $7, \"status\" = $8, \"mailbox_failures\" = $9, \"error_kind\" = $10 where \"order_email\".\"status\" = $11 returning \"id\"),\n      listed as (\n        insert into \"order_item\"\n          (owner_id, order_email_id, product_url, name, brand, price, currency, ordered_on)\n        select $12::int, email.id, found.product_url, found.name,\n          found.brand, found.price, found.currency, $13::date\n        from email,\n          (values ($14::text, $15::text, $16::text, $17::numeric, $18::varchar), ($19::text, $20::text, $21::text, $22::numeric, $23::varchar))\n            as found(product_url, name, brand, price, currency)\n        on conflict do nothing\n        returning 1\n      )\n      select (select id from email) as \"emailId\",\n        (select count(*)::int from listed) as listed",
   "ae1772b54f": "update \"order_email\" set \"outcome\" = $1, \"items\" = $2 where \"order_email\".\"id\" = $3",
-  "08df4cd6eb": "select \"email_id\" from \"order_email\" where (\"order_email\".\"account_id\" = $1 and \"order_email\".\"email_id\" in ($2) and \"order_email\".\"status\" <> $3)"
+  "08df4cd6eb": "select \"email_id\" from \"order_email\" where (\"order_email\".\"account_id\" = $1 and \"order_email\".\"email_id\" in ($2) and \"order_email\".\"status\" <> $3)",
+  "29cd9c3b7b": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select flagged.*,\n        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks\n      from (\n        select ranked.*, exists (select from unnest(array[]::int[], array[]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) as chosen\n        from (\n          select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n            \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n            \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $1 then $2 when \"garment\".\"category\" = $3 then $4 when \"garment\".\"category\" = $5 then $6 when \"garment\".\"category\" = $7 then $8 when \"garment\".\"category\" = $9 then $10 when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 else 'none' end as role,\n            (row_number() over (partition by case when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n            (count(*) over (partition by case when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 else 'none' end))::int as count\n          from \"garment\"\n          where (\"garment\".\"owner_id\" = $43 and \"garment\".\"status\" = $44)\n        ) ranked\n      ) flagged\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= $45\n      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= $46)\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $47\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $48 and \"garment\".\"status\" = $49)\n    ) kinds\n  ) as \"closetKinds\"",
+  "229f85ec28": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select flagged.*,\n        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks\n      from (\n        select ranked.*, exists (select from unnest(array[$1, $2, $3, $4, $5]::int[], array[$6, $7, $8, $9, $10]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) as chosen\n        from (\n          select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n            \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n            \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 else 'none' end as role,\n            (row_number() over (partition by case when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n            (count(*) over (partition by case when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 when \"garment\".\"category\" = $47 then $48 when \"garment\".\"category\" = $49 then $50 when \"garment\".\"category\" = $51 then $52 else 'none' end))::int as count\n          from \"garment\"\n          where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n        ) ranked\n      ) flagged\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= $55\n      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= $56)\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $57\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $58 and \"garment\".\"status\" = $59)\n    ) kinds\n  ) as \"closetKinds\"",
+  "8c844c33bd": "select (\n    select json_build_object(\n      'id', \"outfit\".\"id\",\n      'name', \"outfit\".\"name\",\n      'garments', (\n        select coalesce(json_agg(json_build_array(\"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\") order by \"outfit_slot\".\"position\"), '[]')\n        from \"outfit_slot\"\n        inner join \"garment\" on \"garment\".\"id\" = \"outfit_slot\".\"garment_id\"\n        left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n        where \"outfit_slot\".\"outfit_id\" = \"outfit\".\"id\"\n      )\n    )\n    from \"outfit\"\n    where (\"outfit\".\"id\" = $1 and \"outfit\".\"owner_id\" = $2)\n  ) as \"outfit\", (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select flagged.*,\n        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks\n      from (\n        select ranked.*, (exists (select from unnest(array[]::int[], array[]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) or ranked.id in (select \"outfit_slot\".\"garment_id\" from \"outfit_slot\" inner join \"outfit\" on \"outfit\".\"id\" = \"outfit_slot\".\"outfit_id\" where (\"outfit\".\"id\" = $3 and \"outfit\".\"owner_id\" = $4))) as chosen\n        from (\n          select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n            \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n            \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $5 then $6 when \"garment\".\"category\" = $7 then $8 when \"garment\".\"category\" = $9 then $10 when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 else 'none' end as role,\n            (row_number() over (partition by case when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n            (count(*) over (partition by case when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 else 'none' end))::int as count\n          from \"garment\"\n          where (\"garment\".\"owner_id\" = $47 and \"garment\".\"status\" = $48)\n        ) ranked\n      ) flagged\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= $49\n      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= $50)\n  ) as \"windows\", ($51::int in (select \"outfit_calendar\".\"outfit_id\" from \"outfit_calendar\" union all select \"trip_outfit\".\"outfit_id\" from \"trip_outfit\")) as \"editingHeld\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $52\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n    ) kinds\n  ) as \"closetKinds\"",
+  "2207da82fb": "select (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select flagged.*,\n        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks\n      from (\n        select ranked.*, exists (select from unnest(array[$1, $2, $3, $4, $5]::int[], array[$6, $7, $8, $9, $10]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) as chosen\n        from (\n          select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n            \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n            \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $11 then $12 when \"garment\".\"category\" = $13 then $14 when \"garment\".\"category\" = $15 then $16 when \"garment\".\"category\" = $17 then $18 when \"garment\".\"category\" = $19 then $20 when \"garment\".\"category\" = $21 then $22 when \"garment\".\"category\" = $23 then $24 else 'none' end as role,\n            (row_number() over (partition by case when \"garment\".\"category\" = $25 then $26 when \"garment\".\"category\" = $27 then $28 when \"garment\".\"category\" = $29 then $30 when \"garment\".\"category\" = $31 then $32 when \"garment\".\"category\" = $33 then $34 when \"garment\".\"category\" = $35 then $36 when \"garment\".\"category\" = $37 then $38 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n            (count(*) over (partition by case when \"garment\".\"category\" = $39 then $40 when \"garment\".\"category\" = $41 then $42 when \"garment\".\"category\" = $43 then $44 when \"garment\".\"category\" = $45 then $46 when \"garment\".\"category\" = $47 then $48 when \"garment\".\"category\" = $49 then $50 when \"garment\".\"category\" = $51 then $52 else 'none' end))::int as count\n          from \"garment\"\n          where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n        ) ranked\n      ) flagged\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= $55\n      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= $56)\n  ) as \"windows\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $57 and \"garment\".\"status\" = $58)\n    ) kinds\n  ) as \"closetKinds\"",
+  "8a88b676a2": "select (\n    select coalesce(json_agg(json_build_array(\"garment\".\"id\", \"garment\".\"name\", \"garment\".\"category\", \"garment\".\"status\", case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\", \"file\".\"variant_key\")), '[]')\n    from \"garment\"\n    left join \"file\" on \"file\".\"id\" = \"garment\".\"photo_id\"\n    where (\"garment\".\"owner_id\" = $1 and \"garment\".\"id\" in ($2) and \"garment\".\"status\" = $3)\n  ) as \"held\", (\n    select coalesce(json_agg(json_build_array(\n      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,\n      windowed.category, windowed.status, case when (\"file\".\"id\" is not null and \"file\".\"original_missing_since\" is null) then \"file\".\"file_name\" end, \"file\".\"version\",\n      \"file\".\"variant_key\"\n    ) order by windowed.rank), '[]')\n    from (\n      select flagged.*,\n        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks\n      from (\n        select ranked.*, exists (select from unnest(array[$4]::int[], array[$5]::text[]) as chosen (id, role) where chosen.id = ranked.id and chosen.role = ranked.role) as chosen\n        from (\n          select \"garment\".\"id\" as id, \"garment\".\"name\" as name,\n            \"garment\".\"category\" as category, \"garment\".\"status\" as status,\n            \"garment\".\"photo_id\" as photo_id, case when \"garment\".\"category\" = $6 then $7 when \"garment\".\"category\" = $8 then $9 when \"garment\".\"category\" = $10 then $11 when \"garment\".\"category\" = $12 then $13 when \"garment\".\"category\" = $14 then $15 when \"garment\".\"category\" = $16 then $17 when \"garment\".\"category\" = $18 then $19 else 'none' end as role,\n            (row_number() over (partition by case when \"garment\".\"category\" = $20 then $21 when \"garment\".\"category\" = $22 then $23 when \"garment\".\"category\" = $24 then $25 when \"garment\".\"category\" = $26 then $27 when \"garment\".\"category\" = $28 then $29 when \"garment\".\"category\" = $30 then $31 when \"garment\".\"category\" = $32 then $33 else 'none' end order by \"garment\".\"id\" desc))::int as rank,\n            (count(*) over (partition by case when \"garment\".\"category\" = $34 then $35 when \"garment\".\"category\" = $36 then $37 when \"garment\".\"category\" = $38 then $39 when \"garment\".\"category\" = $40 then $41 when \"garment\".\"category\" = $42 then $43 when \"garment\".\"category\" = $44 then $45 when \"garment\".\"category\" = $46 then $47 else 'none' end))::int as count\n          from \"garment\"\n          where (\"garment\".\"owner_id\" = $48 and \"garment\".\"status\" = $49)\n        ) ranked\n      ) flagged\n    ) windowed\n    left join \"file\" on \"file\".\"id\" = windowed.photo_id\n    where windowed.rank <= $50\n      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= $51)\n  ) as \"windows\", (\n    select coalesce(\n      json_agg(\n        json_build_object('id', \"capsule\".\"id\", 'name', \"capsule\".\"name\")\n        order by lower(\"capsule\".\"name\") asc, \"capsule\".\"id\" asc\n      ),\n      '[]'\n    )\n    from \"capsule\"\n    where \"capsule\".\"owner_id\" = $52\n  ) as \"capsules\", (\n    select coalesce(json_agg(kinds), '[]')\n    from (\n      select distinct \"garment\".\"category\" as category, \"garment\".\"type\" as type\n      from \"garment\"\n      where (\"garment\".\"owner_id\" = $53 and \"garment\".\"status\" = $54)\n    ) kinds\n  ) as \"closetKinds\""
  },
  "unwalked": [
   "/api/v1/auth/token",

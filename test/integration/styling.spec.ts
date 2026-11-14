@@ -439,6 +439,77 @@ describe('Styling', () => {
         expect(next.body).not.toContain(' inert');
       });
 
+      // #996: a garment deep in its cycle used to ship the role from its
+      // newest down to it; now a page either side, and the newer ones load
+      // backwards from a sentinel before the window.
+      it('windows a deep garment with a page either side, and loads the newer garments on demand', async () => {
+        const scarves: number[] = [];
+        for (let i = 0; i < 22; i++) {
+          scarves.push(
+            await createGarment(t, {
+              name: `Scarf ${i}`,
+              category: 'accessories',
+            }),
+          );
+        }
+        const strip = (html: string) => unescapeHtml(rowOf(html, 'accessory'));
+        const rows = await t.inject({
+          method: 'GET',
+          url: `/styling/row?${rowsQuery([['accessory', scarves[0], false]])}`,
+          headers: HX_FRAGMENT,
+        });
+        expect(rows.statusCode).toBe(200);
+        // scarves[0] is the 22nd newest: ranks 12 to 32 are on its strip.
+        const shown = stripOf(rows.body, 'accessory');
+        expect(shown.slice(0, 11)).toEqual(scarves.slice(0, 11).reverse());
+        expect(shown).toHaveLength(21);
+        expect(shown).not.toContain(scarves[21]);
+        // The newer page's sentinel sits right before the window's first.
+        const newer = `/styling/garments?role=accessory&after=${scarves[10]}`;
+        const row = strip(rows.body);
+        const at = row.indexOf(`hx-get="${newer}"`);
+        expect(at).toBeGreaterThan(-1);
+        expect(/data-snap-value="(\d+)"/.exec(row.slice(at))?.[1]).toBe(
+          String(scarves[10]),
+        );
+
+        const page = async (url: string) => {
+          const res = await t.inject({
+            method: 'GET',
+            url,
+            headers: HX_FRAGMENT,
+          });
+          expect(res.statusCode).toBe(200);
+          expectFragment(res);
+          return unescapeHtml(res.body);
+        };
+        const ids = (html: string) =>
+          [...html.matchAll(/data-snap-value="(\d+)"/g)].map((m) =>
+            Number(m[1]),
+          );
+        // Newest first, the next newer sentinel before them.
+        const first = await page(newer);
+        expect(ids(first)).toEqual(scarves.slice(11, 21).reverse());
+        const next = `/styling/garments?role=accessory&after=${scarves[20]}`;
+        expect(first.indexOf(`hx-get="${next}"`)).toBeGreaterThan(-1);
+        expect(first.indexOf(`hx-get="${next}"`)).toBeLessThan(
+          first.indexOf('data-snap-value'),
+        );
+        const last = await page(next);
+        expect(ids(last)).toEqual([scarves[21]]);
+        expect(last).not.toContain('/styling/garments');
+
+        // One keyset, never both or neither.
+        for (const query of ['', `&before=1&after=${scarves[0]}`]) {
+          const bad = await t.inject({
+            method: 'GET',
+            url: `/styling/garments?role=accessory${query}`,
+            headers: HX_FRAGMENT,
+          });
+          expect(bad.statusCode).toBe(400);
+        }
+      });
+
       it('?capsule= cycles only its garments; not an id is a 400, not the wardrobe’s a 404', async () => {
         const res = await get(`/styling?capsule=${capsuleId}`);
         // Its garments are on the strips, never chosen (#665).

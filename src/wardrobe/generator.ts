@@ -284,8 +284,9 @@ export function generateIdeas<G extends IdeaGarment>(
   });
   const placeOf = placeKeyer(byRole, locked);
   const layers = layersOffered ? (viable.get('layer') ?? []) : [];
-  // Weighed once per request, not per base judged.
+  // Weighed and sorted into kinds once per request, not per base judged.
   const layerWeights = layers.map(rotationWeight);
+  const places = layers.map((_, n) => n);
   return drawPage(request, {
     outfits: outfitsOf(
       drawer(request.seed, templates, byRole, locked),
@@ -294,14 +295,20 @@ export function generateIdeas<G extends IdeaGarment>(
     ),
     bases,
     floor: scoreFloor(templates, viable, locked, lockedRoles, request),
-    layersFor: (base) =>
-      rotationOrder(
-        layers,
-        layerWeights,
-        'generator-layer',
-        request.seed,
-        placeOf(base),
-      ),
+    layers: {
+      offered: layers,
+      ...layerKinds(layers),
+      // The order by place in `offered`: the same sequence as of the
+      // layers themselves (rotationOrder reads only the weights).
+      orderFor: (base) =>
+        rotationOrder(
+          places,
+          layerWeights,
+          'generator-layer',
+          request.seed,
+          placeOf(base),
+        ),
+    },
     rules: hardRules(request, compatible, always, rules.brokenAmong(locked)),
   });
 }
@@ -321,13 +328,13 @@ function drawPage<G extends IdeaGarment>(
     outfits,
     bases,
     floor,
-    layersFor,
+    layers,
     rules,
   }: {
     outfits: Outfits<G>;
     bases: number;
     floor: number;
-    layersFor: LayersFor<G>;
+    layers: Layers<G>;
     rules: HardRules<G>;
   },
 ): IdeaPage<G> {
@@ -347,7 +354,7 @@ function drawPage<G extends IdeaGarment>(
     n += 1
   ) {
     const outfit = outfits.next();
-    const idea = outfit && bestIdea(outfit, layersFor, request, rules);
+    const idea = outfit && bestIdea(outfit, layers, request, rules);
     if (!idea) continue;
     (idea.score === 0 ? fitting : nearMisses).push(idea);
     if (idea.score === floor) atFloor += 1;
@@ -844,8 +851,43 @@ export function colorsGoTogether(
   return accents.size <= MAX_ACCENT_COLORS && loud <= MAX_LOUD_PATTERNS;
 }
 
-/** The layers offered (none without a forecast) in the order a base tries them. */
-type LayersFor<G> = (base: readonly G[]) => Iterable<G>;
+/**
+ * The layers offered (none without a forecast), each one's kind (an index
+ * into `kinds`, one layer of each), and the order a base tries them in, as
+ * places in `offered`.
+ */
+interface Layers<G> extends LayerKinds<G> {
+  offered: readonly G[];
+  orderFor: (base: readonly G[]) => Iterable<number>;
+}
+
+/**
+ * Layers by what of them an option's score reads (judge: assessOutfit's
+ * warmth, water resistance and rain gear, and the formality): over one
+ * base, layers of one kind score alike.
+ */
+interface LayerKinds<G> {
+  kindOf: readonly number[];
+  kinds: readonly G[];
+}
+
+function layerKinds<G extends IdeaGarment>(
+  layers: readonly G[],
+): LayerKinds<G> {
+  const index = new Map<string, number>();
+  const kinds: G[] = [];
+  const kindOf = layers.map((layer) => {
+    const { warmth, waterResistant, rainGear } = layer.weather;
+    const key = `${warmth}/${waterResistant}/${rainGear}/${layer.formality}`;
+    let kind = index.get(key);
+    if (kind === undefined) {
+      kind = kinds.push(layer) - 1;
+      index.set(key, kind);
+    }
+    return kind;
+  });
+  return { kindOf, kinds };
+}
 
 interface Option<G> {
   garments: G[];
@@ -862,37 +904,63 @@ interface Option<G> {
  * other role is drawn (#646: one global preference, the most rested first,
  * put one coat on every card). Deterministic for a base, so a base is one
  * idea however often it is drawn. Undefined when no option passes the
- * hard rules. Two shortcuts that cannot change the answer: a base that
- * breaks a colour, pattern or clash rule on its own is never scored (no
- * layer mends it), and, trying the options in order, the first that scores
- * 0 and passes wins (nothing scores lower). Checking the rules costs about
- * what scoring does, so the rest are scored first and checked best first.
+ * hard rules.
+ *
+ * Shortcuts that cannot change the answer: a base that breaks a colour,
+ * pattern or clash rule on its own is never scored (no layer mends it). A
+ * layer's option is scored once per kind of layer (layerKinds: its score
+ * reads nothing else of it), so a closet of 45 layers costs a handful of
+ * scores, not 45. Then the scores are tried lowest first, the bare base
+ * before the layers at each, and only as much of the rotation order is
+ * drawn as it takes to meet a passing layer of that score (#996: drawing
+ * the whole order for every base was most of a deep page's cost, as at
+ * 500 garments most bases have no layer that fits).
  */
 function bestIdea<G extends IdeaGarment>(
   base: readonly G[],
-  layersFor: LayersFor<G>,
+  layers: Layers<G>,
   request: IdeaRequest<G>,
   rules: HardRules<G>,
 ): Idea<G> | undefined {
   if (!rules.compatible(base)) return undefined;
-  const options: Option<G>[] = [];
-  const bare = { garments: [...base], ...judge(base, request) };
+  const bare: Option<G> = { garments: [...base], ...judge(base, request) };
   if (bare.score === 0 && rules.passes(bare.garments)) {
     return ideaOf(bare, rules.lockBroken);
   }
-  options.push(bare);
-  for (const layer of layersFor(base)) {
-    const garments = [...base, layer];
-    const option = { garments, ...judge(garments, request) };
-    if (option.score === 0 && rules.passes(garments)) {
-      return ideaOf(option, rules.lockBroken);
+  // Each kind of layer judged once over this base.
+  const judged = layers.kinds.map((layer) => judge([...base, layer], request));
+  const layerScores = new Set(judged.map((option) => option.score));
+  const scores = [...new Set([bare.score, ...layerScores])].sort(
+    (a, b) => a - b,
+  );
+  // The rotation order, drawn only as far as a score's search needs, and
+  // kept for the next score's.
+  const order = layers.orderFor(base)[Symbol.iterator]();
+  const drawn: number[] = [];
+  const nth = (n: number): number | undefined => {
+    while (drawn.length <= n) {
+      const next = order.next();
+      if (next.done) return undefined;
+      drawn.push(next.value);
     }
-    options.push(option);
+    return drawn[n];
+  };
+  for (const score of scores) {
+    // A bare base scoring 0 was tried above.
+    if (bare.score === score && score !== 0 && rules.passes(bare.garments)) {
+      return ideaOf(bare, rules.lockBroken);
+    }
+    if (!layerScores.has(score)) continue;
+    for (let n = 0, at = nth(0); at !== undefined; n += 1, at = nth(n)) {
+      const option = judged[layers.kindOf[at]];
+      if (option.score !== score) continue;
+      const garments = [...base, layers.offered[at]];
+      if (rules.passes(garments)) {
+        return ideaOf({ garments, ...option }, rules.lockBroken);
+      }
+    }
   }
-  // Stable: equal scores keep that order.
-  options.sort((a, b) => a.score - b.score);
-  const best = options.find((option) => rules.passes(option.garments));
-  return best && ideaOf(best, rules.lockBroken);
+  return undefined;
 }
 
 function ideaOf<G extends IdeaGarment>(

@@ -15,6 +15,9 @@
  *   history restore, whose snapshot keeps the chosen item marked. Calling it
  *   twice on a strip is harmless, and a strip's next page (new items in a
  *   watched strip) is observed as it lands.
+ * - A page of items swapped in before the chosen item (a strip loading
+ *   backwards, Styling's newer garments, #996) keeps the chosen item where
+ *   it sat, so the observer never chooses what slid into the middle.
  * - A tap on a neighbour centres it (and so chooses it) instead of opening
  *   it; a tap on the chosen item behaves as the item does (a boosted link
  *   opens).
@@ -59,6 +62,9 @@ function watch(strip) {
       },
     );
     watched.set(strip, observer);
+  } else {
+    // Before the observer next looks: the chosen item stays chosen.
+    keepAnchor(strip);
   }
   // A strip's next page arrives as new items: observing one twice is a no-op.
   for (const item of strip.querySelectorAll('[data-snap-item]')) {
@@ -241,6 +247,41 @@ document.addEventListener('keydown', (event) => {
     target.focus({ preventScroll: true });
   }
 });
+
+/**
+ * Where each strip's chosen item sat in its viewport when a swap inside the
+ * strip began (a page of items replacing a sentinel), until watch() puts it
+ * back. A page landing before the chosen item (Styling's newer garments,
+ * #996) would otherwise push it aside, and the observer would choose
+ * whatever slid into the middle. Measured from the item, so a browser's own
+ * scroll anchoring or re-snap in between changes nothing; a page landing
+ * after it moves nothing.
+ */
+const anchors = new WeakMap();
+
+document.addEventListener('htmx:beforeSwap', (event) => {
+  // A failed page swaps nothing (request-failures.js), so nothing to keep.
+  if (!event.detail.shouldSwap) return;
+  const strip = event.detail.target?.closest?.('[data-snap-strip]');
+  const item = strip?.querySelector('[data-selected]');
+  if (item) {
+    anchors.set(strip, { item, left: item.offsetLeft - strip.scrollLeft });
+  }
+});
+
+/** Scrolls `strip` so its anchored item is where it was before the swap. */
+function keepAnchor(strip) {
+  const anchor = anchors.get(strip);
+  if (!anchor) return;
+  anchors.delete(strip);
+  if (!anchor.item.isConnected) return;
+  const left = anchor.item.offsetLeft - anchor.left;
+  if (left === strip.scrollLeft) return;
+  strip.scrollTo({ left, behavior: 'instant' });
+  // The jump ended a step's smooth scroll in flight: go on to its item.
+  const aimed = heading.get(strip);
+  if (aimed?.isConnected) centre(strip, aimed, smooth());
+}
 
 // Strips swapped in after the page loaded, and history restores.
 document.addEventListener('htmx:load', (event) => {

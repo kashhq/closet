@@ -393,5 +393,38 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     );
   });
 
+  await test.step('a strip opened deep in its cycle loads the newer garments as it scrolls back (#996)', async () => {
+    // Twelve socks: the oldest's window is the ten newer than it, so the
+    // newest is behind the strip's leading sentinel.
+    const socks: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/styling?with=${socks[0]}`);
+    const accessories = row(page, 'accessory');
+    const strip = accessories.locator('.styling-strip');
+    const sock = (i: number) =>
+      strip.locator(`[data-snap-value="${socks[i]}"]`);
+    await expect(chosen(accessories)).toHaveValue(String(socks[0]));
+    await expect(sock(11)).toHaveCount(0);
+    await accessories.locator('label.swap').click();
+    // A fast swipe back to the window's first: the sentinel before it
+    // comes into view and the newest sock lands before the choice, which
+    // stays chosen and centred (snap-strip.js's anchor).
+    await sock(10).evaluate((el) =>
+      el.scrollIntoView({ inline: 'center', block: 'nearest' }),
+    );
+    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    await expect(sock(11)).toHaveCount(1);
+    await expect(accessories.locator('[data-strip-more]')).toHaveCount(0);
+    await settled(strip);
+    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    // And the loaded sock is a step away like any other.
+    await sock(10).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(chosen(accessories)).toHaveValue(String(socks[11]));
+  });
+
   expect(errors, errors.join('\n')).toEqual([]);
 });

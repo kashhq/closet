@@ -56,9 +56,10 @@ import {
 import {
   type Chosen,
   type RoledGarment,
-  roleGarmentsBefore,
+  roleGarmentsPage,
   type SavedOutfit,
   savedGarments,
+  type StripKeyset,
 } from './queries';
 import {
   fitReads,
@@ -157,15 +158,21 @@ const RowsQuery = Type.Object({
   add: Type.Optional(RoleSchema),
 });
 
-const GarmentsQuery = Type.Object({
-  role: RoleSchema,
-  before: RowId,
-  capsule: Type.Optional(RowId),
-  // Carried by the sentinel's link like the capsule, and unused: picks are
-  // on a strip's first window alone.
-  picks: Type.Optional(Type.String()),
-  ...OwnerQuery.properties,
-});
+// A strip page is older garments (`before`) or newer ones (`after`, #996),
+// never both: the oneOf makes either alone the only valid query.
+const GarmentsQuery = Type.Object(
+  {
+    role: RoleSchema,
+    before: Type.Optional(RowId),
+    after: Type.Optional(RowId),
+    capsule: Type.Optional(RowId),
+    // Carried by the sentinel's link like the capsule, and unused: picks are
+    // on a strip's first window alone.
+    picks: Type.Optional(Type.String()),
+    ...OwnerQuery.properties,
+  },
+  { oneOf: [{ required: ['before'] }, { required: ['after'] }] },
+);
 
 const SaveBody = Type.Object({
   ...RowFields,
@@ -889,16 +896,20 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     STYLING_GARMENTS_PATH,
     { schema: { querystring: GarmentsQuery } },
     async (request, reply) => {
-      const { role, before, capsule, picks } = request.query;
+      const { role, before, after, capsule, picks } = request.query;
       const { access, viewOwner } = await authorize(request, 'view');
-      const page = await roleGarmentsBefore(db, access.ownerId, role, {
+      // GarmentsQuery's oneOf: exactly one of the two is here.
+      const keyset: StripKeyset =
+        after === undefined ? { before: before! } : { after };
+      const page = await roleGarmentsPage(db, access.ownerId, role, {
         capsuleId: capsule,
-        before,
+        keyset,
       });
       return renderFragment(
         reply,
         <StripPage
           role={role}
+          keyset={keyset}
           garments={page.garments}
           more={page.more}
           context={{
