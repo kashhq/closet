@@ -4,10 +4,8 @@ import { DEFAULT_OCCASION } from '../../../wardrobe/occasions';
 import { planOutfit } from '../../calendar/entry-actions';
 import { replaceEntryOutfit } from '../../calendar/replace';
 import { newOutfitSlots } from '../../outfits/gone-garments';
-import { requireOutfit } from '../../outfits/outfit-actions';
+import { requireOutfit, saveOutfit } from '../../outfits/outfit-actions';
 import {
-  type CreateResult,
-  createOutfit,
   listOutfitsPage,
   OUTFIT_GARMENTS_MAX,
   OUTFIT_NAME_MAX,
@@ -70,22 +68,6 @@ function outfitForAgent(outfit: ToolOutfit) {
       .map(({ id, name }) => ({ id, name })),
     agent: record.agent?.name ?? null,
   });
-}
-
-/** create_outfit's log line: the outfit made, or the one its garments already were. */
-function createdMessage(
-  userId: number,
-  saved: CreateResult,
-  plan: { day: string; occasion: string } | undefined,
-): string {
-  const what = saved.alreadySaved
-    ? `Outfit ${saved.id} of the same garments reused`
-    : `Outfit ${saved.id} created (${saved.slots} slots)`;
-  const planned = plan
-    ? `, ${saved.schedule} ${plan.day} (${plan.occasion})`
-    : '';
-  const adopted = saved.adopted ? '; taken over from the week planner' : '';
-  return `${what} by user ${userId} (MCP)${planned}${adopted}`;
 }
 
 /**
@@ -169,15 +151,18 @@ export const outfitTools = [
       const plan = scheduleDate
         ? { day: scheduleDate, occasion: occasion ?? DEFAULT_OCCASION }
         : undefined;
-      const saved = await createOutfit(ctx.db, ctx.userId, {
-        name: name || null,
-        notes: notes?.trim() ? notes : null,
-        slots,
-        plan,
-        origin: 'agent',
-        madeBy: originOf(ctx),
-      });
-      ctx.webLogger.info(createdMessage(ctx.userId, saved, plan));
+      const saved = await saveOutfit(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
+        {
+          name: name || null,
+          notes: notes?.trim() ? notes : null,
+          slots,
+          plan,
+          origin: 'agent',
+          madeBy: originOf(ctx),
+        },
+      );
       return {
         id: saved.id,
         name: saved.name,

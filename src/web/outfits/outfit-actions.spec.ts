@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import { allowPair } from '../gallery/queries';
 import { NotFound } from '../refusals';
@@ -72,6 +73,7 @@ const OWNER = 1;
 const OTHER = 2;
 const OUTFIT = 30;
 const db = {} as Db;
+const deps = { db, logger: captureLogs().logger };
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: OTHER,
   surface: 'page',
@@ -106,14 +108,14 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'editOutfit',
     (actor) => {
       vi.mocked(updateOutfit).mockResolvedValue('not-found');
-      return editOutfit(db, actor, OUTFIT, input);
+      return editOutfit(deps, actor, OUTFIT, input);
     },
   ],
   [
     'removeOutfit',
     (actor) => {
       vi.mocked(deleteOutfit).mockResolvedValue(undefined);
-      return removeOutfit(db, actor, OUTFIT);
+      return removeOutfit(deps, actor, OUTFIT);
     },
   ],
   [
@@ -123,7 +125,7 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
         ok: false,
         reason: 'not-found',
       });
-      return reactToProposal(db, actor, OUTFIT, { event: 'love' });
+      return reactToProposal(deps, actor, OUTFIT, { event: 'love' });
     },
   ],
 ];
@@ -160,7 +162,7 @@ describe("another user's outfit is not found, whatever they share", () => {
 describe('the outfit path for its owner', () => {
   it("refuses deleting one of Muse's proposals not loved (409)", async () => {
     vi.mocked(deleteOutfit).mockResolvedValue('a-proposal');
-    await expect(removeOutfit(db, owner, OUTFIT)).rejects.toMatchObject({
+    await expect(removeOutfit(deps, owner, OUTFIT)).rejects.toMatchObject({
       statusCode: 409,
       logDetail: `outfit ${OUTFIT} is a proposal not loved`,
     });
@@ -169,7 +171,7 @@ describe('the outfit path for its owner', () => {
   it('refuses a reaction the outfit no longer takes (409)', async () => {
     vi.mocked(reactToOutfit).mockResolvedValue({ ok: false, reason: 'owners' });
     await expect(
-      reactToProposal(db, owner, OUTFIT, { event: 'reconsider' }),
+      reactToProposal(deps, owner, OUTFIT, { event: 'reconsider' }),
     ).rejects.toMatchObject({
       statusCode: 409,
       logDetail: `reaction reconsider on outfit ${OUTFIT}: owners`,
@@ -180,7 +182,7 @@ describe('the outfit path for its owner', () => {
       reaction: 'declined',
     });
     await expect(
-      reactToProposal(db, owner, OUTFIT, { event: 'love' }),
+      reactToProposal(deps, owner, OUTFIT, { event: 'love' }),
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 

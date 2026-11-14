@@ -387,12 +387,14 @@ describe('occasions', () => {
         { outfitId: evening, occasion: 'evening' },
         { outfitId: cached, occasion: 'all-day' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Outfit ${evening} created by user \\d+: 0 row\\(s\\), scheduled on ${day} \\(evening\\)$`,
-          ),
-        ),
+      expect(t.logs.ops('outfit.created')).toContainEqual(
+        expect.objectContaining({
+          outfitId: evening,
+          changed: true,
+          slots: 0,
+          day,
+          schedule: 'scheduled',
+        }),
       );
     });
 

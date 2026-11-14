@@ -991,8 +991,13 @@ describe('Styling', () => {
         });
         expect(await outfitCount()).toBe(before);
         expect(await slotsOf(outfitId)).toHaveLength(4);
-        expect(t.logs.messages('info')).toContainEqual(
-          `Outfit ${outfitId} changed in Styling by user ${ownerId}: garments ${archivedCoat}, ${tops[1]}, ${bottoms[1]}, ${shoes[0]}`,
+        expect(t.logs.ops('outfit.updated')).toContainEqual(
+          expect.objectContaining({
+            outfitId,
+            userId: ownerId,
+            surface: 'page',
+            slots: 4,
+          }),
         );
       });
 
