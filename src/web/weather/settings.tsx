@@ -8,13 +8,11 @@ import {
   TEMPERATURE_UNITS,
 } from '../../weather/temperature';
 import {
-  LocationFields,
   PLACE_QUERY_MAX,
   PLACE_QUERY_MIN,
   type PlaceAnswer,
-  PlaceResults,
-  postedPick,
-} from './place-picker';
+} from './place-input';
+import { LocationFields, PlaceResults, postedPick } from './place-picker';
 import {
   activeLocation,
   HERE_FRESH_HOURS,

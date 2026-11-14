@@ -1,4 +1,4 @@
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import {
   CameraIcon,

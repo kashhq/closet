@@ -8,6 +8,7 @@ import base, {
   sonarjsRules,
   sonarjsTestRules,
 } from './devkit/lint/eslint.base.mjs';
+import webImports from './scripts/lint/web-imports.mjs';
 
 // esquery regexes (no `/` inside) for the theme rule in no-restricted-syntax.
 const PALETTE_CLASS =
@@ -58,6 +59,7 @@ export default tseslint.config(
     // changed-lint failed to parse one whenever it changed.
     ignores: [
       'eslint.config.mjs',
+      'scripts/lint/web-imports.mjs',
       './test/support/legacy-migrations/**/*',
       './test/fixtures/cutout-children/*.mjs',
     ],
@@ -206,6 +208,29 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  // The web layer's import direction (#718, docs/web-layer.md, Code no feature owns): no
+  // intra-web layers, but a feature never draws another feature's page or routes module, and the
+  // API and agent surfaces never import a view. Resolved on disk by scripts/lint/web-imports.mjs
+  // (direct imports only). Specs build fixtures and are exempt.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
+    plugins: { closet: webImports },
+    rules: { 'closet/no-foreign-page-import': 'error' },
+  },
+  {
+    files: [
+      'src/web/**/api-routes.ts',
+      'src/web/**/*-resource.ts',
+      'src/web/**/*-api-input.ts',
+      'src/web/api/**/*.ts',
+      'src/web/sync/**/*.ts',
+      'src/web/mcp/**/*.ts',
+    ],
+    ignores: ['**/*.spec.ts'],
+    plugins: { closet: webImports },
+    rules: { 'closet/no-view-import': 'error' },
   },
   // devkit's sonarjs rule maps (devkit/lint/README.md "sonarjs"). The plugin must be registered
   // in the same files scope as its rules, so it is registered here for every linted file.

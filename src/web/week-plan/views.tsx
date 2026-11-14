@@ -6,7 +6,7 @@ import {
 } from '../../wardrobe/week';
 import type { Slot } from '../../wardrobe/week-planner';
 import type { IsoDate } from '../../calendar-date';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { DAY_NAMES, dayLabel, occasionLabel } from '../date-labels';
 import { dayAnchor, dayUrl } from '../calendar/urls';
 import { t } from '../i18n';

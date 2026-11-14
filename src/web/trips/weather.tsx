@@ -5,14 +5,11 @@ import {
   displayTemperature,
   type TemperatureUnit,
 } from '../../weather/temperature';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { dayLabel, shortDayLabel } from '../date-labels';
 import { t } from '../i18n';
-import {
-  type PlaceAnswer,
-  PlaceResults,
-  postedPick,
-} from '../weather/place-picker';
+import { type PlaceAnswer } from '../weather/place-input';
+import { PlaceResults, postedPick } from '../weather/place-picker';
 import {
   ConditionIcon,
   fetchedLabel,

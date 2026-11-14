@@ -12,6 +12,7 @@ import {
   EMPTY_SEARCH,
   GarmentGrid,
   GarmentTiles,
+  // eslint-disable-next-line closet/no-foreign-page-import -- a capsule shows the wardrobe grid; GarmentGrid and GarmentTiles move to a shared view piece (#718)
 } from '../wardrobe/wardrobe-page';
 import { garmentCount } from './list-page';
 import type { CapsuleDetail } from './queries';

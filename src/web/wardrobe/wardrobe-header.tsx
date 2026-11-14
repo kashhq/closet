@@ -1,5 +1,5 @@
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
 import { AppBar } from '../layout/app-bar';

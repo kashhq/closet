@@ -1,5 +1,5 @@
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { type DayChoice, plannedNote } from '../calendar/day-choice';
 import { shortDayLabel } from '../date-labels';
 import { t } from '../i18n';
@@ -25,7 +25,8 @@ import {
 import { MuseSection } from './muse-cards';
 import type { MuseOutfit } from './proposals';
 import { buyFirstNote, toBuyLine } from './to-buy';
-import { type OutfitList, OutfitListTabs } from './outfit-list';
+import type { OutfitList } from './outfit-list';
+import { OutfitListTabs } from './outfit-list-tabs';
 import { outfitUrl, savedTilesUrl, savedUrl } from './urls';
 import { PageSentinel } from '../page-sentinel';
 

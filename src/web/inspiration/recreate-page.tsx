@@ -3,7 +3,7 @@ import type {
   PieceMatch,
   Recreation,
 } from '../../wardrobe/recreate';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { inspirationPhotoUrl } from '../files/image-url';
 import type { RecreatePoolGarment } from '../gallery/queries';
 import { t } from '../i18n';

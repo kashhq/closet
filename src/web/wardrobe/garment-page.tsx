@@ -1,7 +1,7 @@
 import type { Child } from 'hono/jsx';
 import { showsCutout } from '../../cutout/state';
 import { garmentMarks } from '../../wardrobe/marks';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { GarmentCapsules } from '../capsules/garment-capsules';
 import type { GarmentCapsule } from '../capsules/queries';
 import { DayTime } from '../day-time';

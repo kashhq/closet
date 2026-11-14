@@ -24,7 +24,7 @@ import {
   type PickedPlace,
   pickedPlace,
   placeAnswer,
-} from '../weather/place-picker';
+} from '../weather/place-input';
 import { AddOutfitButtons, AddOutfitPage } from './add-page';
 import { tripForecast } from './forecast';
 import {
