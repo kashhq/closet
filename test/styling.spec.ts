@@ -401,29 +401,123 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
       socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/styling?with=${socks[0]}`);
     const accessories = row(page, 'accessory');
     const strip = accessories.locator('.styling-strip');
     const sock = (i: number) =>
       strip.locator(`[data-snap-value="${socks[i]}"]`);
-    await expect(chosen(accessories)).toHaveValue(String(socks[0]));
-    await expect(sock(11)).toHaveCount(0);
-    await accessories.locator('label.swap').click();
-    // A fast swipe back to the window's first: the sentinel before it
-    // comes into view and the newest sock lands before the choice, which
-    // stays chosen and centred (snap-strip.js's anchor).
-    await sock(10).evaluate((el) =>
-      el.scrollIntoView({ inline: 'center', block: 'nearest' }),
-    );
-    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    const newer = /\/styling\/garments\?.*\bafter=/;
+    /** Opens on the oldest sock ("Style this", locked), unlocked to scroll, then swipes fast back to the window's first: the sentinel before it comes into view. */
+    const swipeBackFromOldest = async () => {
+      await page.goto(`/styling?with=${socks[0]}`);
+      await expect(chosen(accessories)).toHaveValue(String(socks[0]));
+      await expect(sock(11)).toHaveCount(0);
+      await accessories.locator('label.swap').click();
+      // No re-snap: Chromium's puts a pushed snap target back after layout
+      // and would hide a late anchor; WebKit's does not. Only snap-strip.js
+      // keeps the chosen sock in place here.
+      await strip.evaluate((el) => {
+        el.style.scrollSnapType = 'none';
+      });
+      await sock(10).evaluate((el) =>
+        el.scrollIntoView({ inline: 'center', block: 'nearest' }),
+      );
+      await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    };
+
+    // The newer page is held until the strip has stopped on its choice, so
+    // it lands on a still strip, as it does after a swipe's response. On
+    // the context: the service worker's fetch is what reaches the network.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let requested!: () => void;
+    const asked = new Promise<void>((resolve) => (requested = resolve));
+    await page.context().route(newer, async (route) => {
+      requested();
+      await held;
+      await route.continue();
+    });
+    await swipeBackFromOldest();
+    await asked;
+    // One step on, so the page pushes the choice far enough that sock 10,
+    // which the observer watches, would slide into the middle.
+    await settled(strip);
+    await sock(10).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
+    await settled(strip);
+    // Every choose from here, and what sits on the centre line once the
+    // page has landed and the strip is rescanned: a fresh observer's first
+    // look comes after the strip's own has seen the same layout.
+    await strip.evaluate((el) => {
+      const chooses: string[] = [];
+      el.addEventListener('snap-strip:choose', (event) => {
+        const { item } = (event as CustomEvent<{ item: HTMLElement }>).detail;
+        chooses.push(item.dataset.snapValue!);
+      });
+      (el as HTMLElement & { landed?: Promise<string[]> }).landed = new Promise(
+        (resolve) => {
+          el.addEventListener(
+            'snap-strip:watch',
+            () => {
+              const look = new IntersectionObserver(
+                (entries) => {
+                  look.disconnect();
+                  const middle = entries.find((entry) => entry.isIntersecting)
+                    ?.target as HTMLElement | undefined;
+                  resolve([...chooses, `centred ${middle?.dataset.snapValue}`]);
+                },
+                { root: el, rootMargin: '0px -50% 0px -50%', threshold: 0 },
+              );
+              for (const item of el.querySelectorAll('[data-snap-item]')) {
+                look.observe(item);
+              }
+            },
+            { once: true },
+          );
+        },
+      );
+    });
+    release();
+    // The newest sock lands before the choice, which no choose touched and
+    // which stays centred (snap-strip.js's anchor, put back at the swap).
+    expect(
+      await strip.evaluate(
+        (el) => (el as HTMLElement & { landed?: Promise<string[]> }).landed,
+      ),
+    ).toEqual([`centred ${socks[9]}`]);
     await expect(sock(11)).toHaveCount(1);
     await expect(accessories.locator('[data-strip-more]')).toHaveCount(0);
-    await settled(strip);
-    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
     // And the loaded sock is a step away like any other.
-    await sock(10).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    await settled(strip);
     await page.keyboard.press('ArrowLeft');
     await expect(chosen(accessories)).toHaveValue(String(socks[11]));
+    await page.context().unroute(newer);
+
+    // An empty answer (the newer garments gone meanwhile) only removes the
+    // sentinel. The chosen sock stays put, and no anchor outlives the
+    // request: a rescan moves nothing and the next swipe still chooses.
+    await page
+      .context()
+      .route(newer, (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
+      );
+    await swipeBackFromOldest();
+    await expect(accessories.locator('[data-strip-more]')).toHaveCount(0);
+    await expect(sock(11)).toHaveCount(0);
+    expect(
+      await strip.evaluate((el) => {
+        const before = el.scrollLeft;
+        el.dispatchEvent(new CustomEvent('htmx:load', { bubbles: true }));
+        return el.scrollLeft - before;
+      }),
+    ).toBe(0);
+    await sock(10).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
+    await page.context().unroute(newer);
   });
 
   expect(errors, errors.join('\n')).toEqual([]);

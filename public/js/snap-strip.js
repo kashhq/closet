@@ -17,7 +17,9 @@
  *   watched strip) is observed as it lands.
  * - A page of items swapped in before the chosen item (a strip loading
  *   backwards, Styling's newer garments, #996) keeps the chosen item where
- *   it sat, so the observer never chooses what slid into the middle.
+ *   it sat, so the observer never chooses what slid into the middle; one
+ *   that arrives mid-scroll waits for the scroll to end, so a fling runs
+ *   its course.
  * - A tap on a neighbour centres it (and so chooses it) instead of opening
  *   it; a tap on the chosen item behaves as the item does (a boosted link
  *   opens).
@@ -62,9 +64,6 @@ function watch(strip) {
       },
     );
     watched.set(strip, observer);
-  } else {
-    // Before the observer next looks: the chosen item stays chosen.
-    keepAnchor(strip);
   }
   // A strip's next page arrives as new items: observing one twice is a no-op.
   for (const item of strip.querySelectorAll('[data-snap-item]')) {
@@ -75,6 +74,10 @@ function watch(strip) {
 }
 
 function chooseFrom(strip, entries) {
+  // Between a page landing before the chosen item and the strip being put
+  // back (one task, unless htmx is ever given a swap delay): what crossed
+  // the middle was pushed there, not swiped.
+  if (anchors.has(strip)) return;
   const crossing = entries.find((entry) => entry.isIntersecting);
   if (!crossing) return;
   const proceed = strip.dispatchEvent(
@@ -202,18 +205,6 @@ export function syncSteps(strip) {
   }
 }
 
-// Whatever ended the scroll (arrival or a swipe taking over), the strip's own
-// state is the truth again.
-document.addEventListener(
-  'scrollend',
-  (event) => {
-    const strip = event.target;
-    if (!(strip instanceof Element) || !heading.delete(strip)) return;
-    syncSteps(strip);
-  },
-  { capture: true },
-);
-
 document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-snap-step]');
   if (!button) return;
@@ -249,39 +240,138 @@ document.addEventListener('keydown', (event) => {
 });
 
 /**
- * Where each strip's chosen item sat in its viewport when a swap inside the
- * strip began (a page of items replacing a sentinel), until watch() puts it
- * back. A page landing before the chosen item (Styling's newer garments,
- * #996) would otherwise push it aside, and the observer would choose
- * whatever slid into the middle. Measured from the item, so a browser's own
- * scroll anchoring or re-snap in between changes nothing; a page landing
- * after it moves nothing.
+ * A page landing before the chosen item (Styling's newer garments, #996)
+ * would push it aside, and the observer would choose whatever slid into
+ * the middle. So the swap is bracketed: `htmx:beforeSwap` records where the
+ * chosen item sits in the strip's viewport (measured from the item, so a
+ * browser's own scroll anchoring or re-snap changes nothing) and the same
+ * task's `htmx:afterSwap` puts it back, before the browser lays out and the
+ * observer looks; `htmx:afterRequest` (also the same task, and the only
+ * event an empty page fires) clears it whatever the answer was, so no
+ * anchor outlives its request. Not at `htmx:load`: htmx fires that after
+ * its settle delay, a frame or two later. A page after the chosen item
+ * moves nothing and is not anchored.
+ *
+ * Putting the strip back is an instant scroll, which would cut a finger's
+ * fling (or a step's smooth scroll) short, so a page that arrives while the
+ * strip is scrolling is held and swapped in once it stops.
  */
 const anchors = new WeakMap();
 
+/** Per strip, the page held until it stops scrolling: its sentinel and the server's HTML. */
+const held = new WeakMap();
+
+/** Strips between a `scroll` and the end of that scroll. */
+const scrolling = new WeakSet();
+
+/**
+ * Without `scrollend` (older WebKit), a scroll has ended once no scroll
+ * event has come for this long: a fling's momentum and a smooth scroll
+ * both send one a frame.
+ */
+const SCROLL_QUIET_MS = 150;
+const quiet = new WeakMap();
+const HAS_SCROLLEND = 'onscrollend' in window;
+
+document.addEventListener(
+  'scroll',
+  (event) => {
+    const strip = event.target;
+    if (!(strip instanceof Element) || !strip.matches('[data-snap-strip]'))
+      return;
+    scrolling.add(strip);
+    if (HAS_SCROLLEND) return;
+    clearTimeout(quiet.get(strip));
+    quiet.set(
+      strip,
+      setTimeout(() => stopped(strip), SCROLL_QUIET_MS),
+    );
+  },
+  { capture: true, passive: true },
+);
+
+document.addEventListener(
+  'scrollend',
+  (event) => {
+    const strip = event.target;
+    if (strip instanceof Element && strip.matches('[data-snap-strip]')) {
+      stopped(strip);
+    }
+  },
+  { capture: true },
+);
+
+/** Whatever ended the scroll (arrival, a swipe taking over, a finger letting go), the strip's own state is the truth again. */
+function stopped(strip) {
+  scrolling.delete(strip);
+  if (heading.delete(strip)) syncSteps(strip);
+  const page = held.get(strip);
+  if (!page) return;
+  held.delete(strip);
+  if (!page.sentinel.isConnected) return;
+  console.debug('[snap-strip] a held page lands: the strip has stopped');
+  // The choice may have moved while the page waited.
+  const item = chosenAfter(strip, page.sentinel);
+  if (item) anchor(strip, page.sentinel, item);
+  // Synchronous like the request's own swap (no swap or settle delay), so
+  // the strip is put back before the browser lays it out.
+  window.htmx.swap(page.sentinel, page.html, { swapStyle: 'outerHTML' });
+  keepAnchor(strip, page.sentinel);
+}
+
+/** The strip's chosen item when `sentinel`'s page lands before it, else null. */
+function chosenAfter(strip, sentinel) {
+  const item = strip.querySelector('[data-selected]');
+  const after =
+    item &&
+    !sentinel.contains(item) &&
+    sentinel.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING;
+  return after ? item : null;
+}
+
+function anchor(strip, sentinel, item) {
+  anchors.set(strip, {
+    sentinel,
+    item,
+    left: item.offsetLeft - strip.scrollLeft,
+  });
+}
+
+/** Scrolls `strip` so the item anchored for `sentinel`'s page is where it was before the swap, and forgets the anchor. */
+function keepAnchor(strip, sentinel) {
+  const kept = anchors.get(strip);
+  if (!kept || kept.sentinel !== sentinel) return;
+  anchors.delete(strip);
+  if (!kept.item.isConnected) return;
+  const left = kept.item.offsetLeft - kept.left;
+  if (left !== strip.scrollLeft) strip.scrollTo({ left, behavior: 'instant' });
+}
+
 document.addEventListener('htmx:beforeSwap', (event) => {
+  const { detail } = event;
   // A failed page swaps nothing (request-failures.js), so nothing to keep.
-  if (!event.detail.shouldSwap) return;
-  const strip = event.detail.target?.closest?.('[data-snap-strip]');
-  const item = strip?.querySelector('[data-selected]');
-  if (item) {
-    anchors.set(strip, { item, left: item.offsetLeft - strip.scrollLeft });
+  if (!detail.shouldSwap || detail.isError) return;
+  const sentinel = detail.target;
+  const strip = sentinel?.closest?.('[data-snap-strip]');
+  const item = strip && chosenAfter(strip, sentinel);
+  if (!item) return;
+  if (scrolling.has(strip) || heading.has(strip)) {
+    detail.shouldSwap = false;
+    held.set(strip, { sentinel, html: detail.serverResponse });
+    console.debug('[snap-strip] a page waits for the strip to stop');
+    return;
   }
+  anchor(strip, sentinel, item);
 });
 
-/** Scrolls `strip` so its anchored item is where it was before the swap. */
-function keepAnchor(strip) {
-  const anchor = anchors.get(strip);
-  if (!anchor) return;
-  anchors.delete(strip);
-  if (!anchor.item.isConnected) return;
-  const left = anchor.item.offsetLeft - anchor.left;
-  if (left === strip.scrollLeft) return;
-  strip.scrollTo({ left, behavior: 'instant' });
-  // The jump ended a step's smooth scroll in flight: go on to its item.
-  const aimed = heading.get(strip);
-  if (aimed?.isConnected) centre(strip, aimed, smooth());
+// `detail.target` is the request's swap target (the sentinel) in both;
+// `detail.elt` is not: htmx rewrites it for each element it fires on.
+function putBack(event) {
+  const strip = event.target.closest?.('[data-snap-strip]');
+  if (strip) keepAnchor(strip, event.detail.target);
 }
+document.addEventListener('htmx:afterSwap', putBack);
+document.addEventListener('htmx:afterRequest', putBack);
 
 // Strips swapped in after the page loaded, and history restores.
 document.addEventListener('htmx:load', (event) => {
