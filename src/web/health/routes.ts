@@ -12,6 +12,7 @@ import {
   checkCutoutQueue,
   checkDatabase,
   checkJobs,
+  checkOrderMailOwner,
   checkTrustedProxies,
   createStorageCheck,
   readiness,
@@ -34,7 +35,7 @@ import {
  */
 export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   app,
-  { config, db, logger, jobs, cutouts, photos, proxyWatch },
+  { config, db, logger, jobs, cutouts, photos, proxyWatch, orderMailWatch },
   done,
 ) => {
   const log = logger.child({ logger: 'Health' });
@@ -70,6 +71,7 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
       cron_jobs: checkJobs(jobs.stuck()),
       cutout_queue: checkCutoutQueue(cutouts.state),
       trusted_proxies: checkTrustedProxies(proxyWatch.peer),
+      order_mail_owner: checkOrderMailOwner(orderMailWatch.missing),
     });
     return reply
       .status(body.status === 'up' ? 200 : 503)

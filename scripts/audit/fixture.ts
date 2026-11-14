@@ -414,6 +414,19 @@ export async function createFixture(options: {
 
   let closet: AppModule.ClosetApp;
   try {
+    // The personas first, on a boot without the order mail: ORDER_MAIL_OWNER
+    // must name an account before the boot that resolves it (#706), as in
+    // production, where the owner signs up before setting the token.
+    const seeding = await build.app.createApp(
+      { ...config, ORDER_MAIL_JMAP_TOKEN: '' },
+      logger,
+      { weather: weatherStub.options, outboundFetch: shop.outboundFetch },
+    );
+    try {
+      await seedPersonas(build, seeding, logger, config.APP_TIMEZONE);
+    } finally {
+      await seeding.app.close();
+    }
     closet = await build.app.createApp(config, logger, {
       weather: weatherStub.options,
       outboundFetch: shop.outboundFetch,
@@ -548,7 +561,6 @@ export async function createFixture(options: {
   };
 
   try {
-    await seedPersonas(build, closet, logger, config.APP_TIMEZONE);
     const theoId = await userId(THEO_EMAIL);
     const review = await seedOrderReview(
       build,

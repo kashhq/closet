@@ -13,6 +13,7 @@ import { type AppOptions, createApp } from '../../src/app';
 import { type Config, loadConfig } from '../../src/config';
 import type { CutoutQueue } from '../../src/cutout/queue';
 import {
+  createDb,
   type Db,
   dbConfig,
   type DbConfig,
@@ -21,7 +22,10 @@ import {
 import { ownersLockCte } from '../../src/db/owner-lock';
 import { user } from '../../src/db/schema';
 import { createLoggerTo, type Logger } from '../../src/logger';
-import { hashPassword } from '../../src/web/auth/passwords';
+import {
+  configurePasswordHashing,
+  hashPassword,
+} from '../../src/web/auth/passwords';
 import { insertUser } from '../../src/web/auth/queries';
 import {
   passwordFingerprint,
@@ -292,6 +296,21 @@ function missingStandIn(
   return undefined;
 }
 
+/** An account written straight to the database, before any app exists. */
+async function insertBeforeBoot(
+  config: Config,
+  logger: Logger,
+  email: string,
+): Promise<void> {
+  configurePasswordHashing(config.PASSWORD_HASH_ROUNDS);
+  const db = createDb(dbConfig(config), logger, { max: 1 });
+  try {
+    await insertUser(db, email, await hashPassword(TEST_PASSWORD));
+  } finally {
+    await db.$client.end();
+  }
+}
+
 export async function createTestApp(
   overrides: Partial<Env> = {},
   options: TestAppOptions = {},
@@ -325,8 +344,13 @@ export async function createTestApp(
   let metrics: Metrics;
   let errors: ErrorTracker;
   let orderMail: OrderMailDeps | undefined;
+  // ORDER_MAIL_OWNER must name an account before the boot that resolves it
+  // (#706), as production's owner signs up before setting the token: with
+  // the order mail on, the owner is inserted first and signs in after.
+  const ownerBeforeBoot = Boolean(config.ORDER_MAIL_JMAP_TOKEN);
   try {
     await options.beforeBoot?.(database.env);
+    if (ownerBeforeBoot) await insertBeforeBoot(config, logger, OWNER_EMAIL);
     ({ app, db, photos, cutouts, push, weather, metrics, errors, orderMail } =
       await createApp(config, logger, {
         outboundFetch: options.outboundFetch,
@@ -405,7 +429,9 @@ export async function createTestApp(
   };
 
   try {
-    const cookie = await register(OWNER_EMAIL);
+    const cookie = ownerBeforeBoot
+      ? await login(OWNER_EMAIL)
+      : await register(OWNER_EMAIL);
     const [row] = await db
       .select({ id: user.id })
       .from(user)

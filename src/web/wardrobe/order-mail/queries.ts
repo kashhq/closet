@@ -24,10 +24,29 @@ import {
  * Every read of an item names its owner, so another user's id is a 404.
  */
 
+/**
+ * ORDER_MAIL_OWNER's account id, read once at boot (createApp, #706): the
+ * routes, the menu and the poll compare ids from then on, so an email
+ * change or another account taking the address moves nothing. `ownerEmail`
+ * must already be normalized, as findUserByEmail's is; only the id is
+ * read, never the password hash that lookup carries.
+ */
+export async function orderMailOwnerId(
+  db: Db,
+  ownerEmail: string,
+): Promise<number | undefined> {
+  const [row] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(sql`lower(${user.email}) = ${ownerEmail}`)
+    .limit(1);
+  return row?.id;
+}
+
 /** What a poll starts from (pollStart). */
 export interface PollStart {
-  /** ORDER_MAIL_OWNER's account; undefined when no account has the address. */
-  ownerId: number | undefined;
+  /** The boot's owner account still exists (it may be deleted since). */
+  ownerExists: boolean;
   /**
    * The next query's `after` (inclusive): the oldest failing email's
    * arrival, so it is read again, else the newest settled one's (#693).
@@ -38,20 +57,18 @@ export interface PollStart {
 }
 
 /**
- * The owner's account, the account's watermark and its failing emails, in
- * one statement (#173: a poll was a statement for each). `ownerEmail` must
- * already be normalized (lower case), as findUserByEmail's is; only the id
- * is read, never the password hash that lookup carries.
+ * Whether the owner's account still exists, the account's watermark and
+ * its failing emails, in one statement (#173: a poll was a statement for
+ * each).
  */
 export async function pollStart(
   db: Db,
-  ownerEmail: string,
+  ownerId: number,
   accountId: string,
 ): Promise<PollStart> {
-  const { ownerId, newest, failing } = await selectScalars(db, {
-    ownerId: sql<number | null>`(
-      select ${user.id} from ${user}
-      where lower(${user.email}) = ${ownerEmail} limit 1
+  const { ownerExists, newest, failing } = await selectScalars(db, {
+    ownerExists: sql<boolean>`exists(
+      select 1 from ${user} where ${user.id} = ${ownerId}
     )`,
     // As JSON: an ISO string, which Date reads (the raw row's timestamptz
     // text is not ISO).
@@ -73,7 +90,7 @@ export async function pollStart(
     )`,
   });
   return {
-    ownerId: ownerId ?? undefined,
+    ownerExists,
     watermark: newest === null ? undefined : new Date(newest),
     failing: failing.map(({ emailId, receivedAt }) => ({
       emailId,

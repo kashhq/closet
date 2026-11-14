@@ -69,8 +69,8 @@ export interface ViewContextConfig {
   weatherEnabled: boolean;
   metricsEnabled: boolean;
   errorTrackingEnabled: boolean;
-  /** ORDER_MAIL_OWNER, normalized, when the order mail is on. */
-  orderMailOwner: string | undefined;
+  /** ORDER_MAIL_OWNER's account id, when the order mail is on (#706). */
+  orderMailOwnerId: number | undefined;
   /** BuildInfo.release and BuildInfo.assetVersion. */
   release: string;
   assetVersion: string;
@@ -103,8 +103,8 @@ export function createViewContextBuilder(config: ViewContextConfig) {
       metricsEnabled: config.metricsEnabled,
       errorTrackingEnabled: config.errorTrackingEnabled,
       orderReview:
-        config.orderMailOwner !== undefined &&
-        auth?.user.email?.toLowerCase() === config.orderMailOwner,
+        config.orderMailOwnerId !== undefined &&
+        auth?.user.id === config.orderMailOwnerId,
       release: config.release,
       appVersion: config.assetVersion,
       timeZone: config.timeZone,
