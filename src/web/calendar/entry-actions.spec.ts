@@ -275,4 +275,13 @@ describe('the entry path for its owner', () => {
       }),
     ]);
   });
+
+  it('asking first deletes nothing and writes no op line', async () => {
+    vi.mocked(deleteEntry).mockResolvedValue('needs-confirmation');
+    await expect(
+      removeEntry(deps, owner, ENTRY, { asksFirst: true }),
+    ).resolves.toBe('needs-confirmation');
+    expect(deleteVariants).not.toHaveBeenCalled();
+    expect(logs.ops('calendar.entry.deleted')).toEqual([]);
+  });
 });

@@ -192,13 +192,16 @@ export function replayNote(request: FastifyRequest): string {
   return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 }
 
+/** Queued writes createQueuedWriteHook let through, for createQueuedReplayLog. */
+const acceptedReplays = new WeakSet<FastifyRequest>();
+
 /**
  * The account check, a root preHandler (createApp): after the web
  * plugin's session gate, which is preValidation, so a replay without a
  * session is the gate's 401 as before, and after validation, so a
  * malformed one is its 400. Only on a route marked `queueable` that a
- * replay reached; nothing is read. A replay it lets through is logged here,
- * once for every queueable route.
+ * replay reached; nothing is read. A replay it lets through is marked, and
+ * createQueuedReplayLog notes it once the handler has answered.
  */
 export function createQueuedWriteHook(logger: Logger) {
   return function checkQueuedAccount(
@@ -211,11 +214,7 @@ export function createQueuedWriteHook(logger: Logger) {
     if (kind === undefined || account === undefined) return done();
     const userId = sessionUserId(request);
     if (account === String(userId)) {
-      // The one note that this write is a replay: the action's own line
-      // (logOp) knows nothing of requests, and request_id joins the two.
-      logger.info(
-        `Queued ${kind} replayed for user ${userId}${replayNote(request)}`,
-      );
+      acceptedReplays.add(request);
       return done();
     }
     const named =
@@ -226,5 +225,27 @@ export function createQueuedWriteHook(logger: Logger) {
       `Queued ${kind} for ${named} refused: signed in as user ${userId}${replayNote(request)}`,
     );
     done(replayRefused(reply, 'account'));
+  };
+}
+
+/**
+ * The one note that a queued write was replayed (root onResponse): written
+ * only once the handler answered below 400, so a replay the handler then
+ * refused (a day ahead's 409, a 404) is not logged as replayed. The
+ * action's own line (logOp) knows nothing of requests; request_id joins the
+ * two, and no handler adds `replayNote` to its success line.
+ */
+export function createQueuedReplayLog(logger: Logger) {
+  return function noteQueuedReplay(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    done: HookHandlerDoneFunction,
+  ): void {
+    if (acceptedReplays.has(request) && reply.statusCode < 400) {
+      logger.info(
+        `Queued ${request.routeOptions.config.queueable} replayed for user ${sessionUserId(request)}${replayNote(request)}`,
+      );
+    }
+    done();
   };
 }

@@ -181,7 +181,7 @@ export async function addTrip(
     changed: once.created,
     startsOn: fields.startsOn,
     endsOn: fields.endsOn,
-    located: place !== null,
+    located: once.created ? place !== null : undefined,
     autoEntriesRemoved: away,
     clientId: clientId?.slice(0, 8),
   });

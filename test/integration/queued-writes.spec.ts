@@ -188,7 +188,10 @@ describe('queued writes', () => {
     expect(outcome(await replay(url, wear))).toEqual([204, 'unchanged']);
     expect(await wearDays(shirt)).toEqual([day]);
     expect(t.logs.messages('info', 'Web')).toContain(
-      `Garment ${shirt} worn on ${day} by user ${t.owner.id} (replayed, key 1a2b3c4d)`,
+      `Garment ${shirt} worn on ${day} by user ${t.owner.id}`,
+    );
+    expect(t.logs.messages('info', 'Web')).toContain(
+      `Queued wear replayed for user ${t.owner.id} (replayed, key 1a2b3c4d)`,
     );
     // Last write wins: the undo queued after it unwears that day.
     expect(outcome(await replay(url, { worn: '0', day }))).toEqual([
@@ -271,6 +274,7 @@ describe('queued writes', () => {
 
   it('refuses a day outside the window, 409 with its reason, nothing written', async () => {
     const url = `/wardrobe/${shirt}/wear`;
+    t.logs.clear();
     expect(outcome(await replay(url, { worn: '1', day: daysAgo(8) }))).toEqual([
       409,
       'too-old',
@@ -280,6 +284,10 @@ describe('queued writes', () => {
     ).toEqual([409, 'future']);
     expect(await wearDays(shirt)).toEqual([]);
     expect(await lastWashed(shirt)).toBeNull();
+    // Refused, so never logged as replayed.
+    expect(
+      t.logs.messages('info', 'Web').filter((m) => m.includes('replayed')),
+    ).toEqual([]);
   });
 
   it('never moves a wash back: a late replay of an older one is unchanged', async () => {

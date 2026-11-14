@@ -176,11 +176,7 @@ export async function removeEntry(
   if (outcome === 'not-found') throw calendarEntryNotFound();
   if (outcome === 'needs-confirmation') {
     // Worn, an agent's or taking a one-off outfit: the sheet asks first.
-    logOp(logger, actor, 'calendar.entry.deleted', {
-      entryId: id,
-      changed: false,
-      asksFirst: true,
-    });
+    // A refusal writes no op line (docs/conventions.md#logging).
     return outcome;
   }
   // Only after commit: an unlink cannot be rolled back.

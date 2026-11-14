@@ -51,7 +51,10 @@ import {
 import { UntrustedProxyWatch } from './web/security/untrusted-proxy';
 import { assignSurface, surfaceOf } from './web/surface';
 import { isWarmRequest } from './warm-request';
-import { createQueuedWriteHook } from './web/offline-writes';
+import {
+  createQueuedReplayLog,
+  createQueuedWriteHook,
+} from './web/offline-writes';
 import { createViewContextBuilder } from './web/view-context';
 import { createJmapClient } from './web/wardrobe/order-mail/jmap';
 import type { OrderMailDeps } from './web/wardrobe/order-mail/poll';
@@ -441,6 +444,10 @@ export async function createApp(
   app.addHook(
     'preHandler',
     createQueuedWriteHook(logger.child({ logger: 'Web' })),
+  );
+  app.addHook(
+    'onResponse',
+    createQueuedReplayLog(logger.child({ logger: 'Web' })),
   );
 
   // Security headers on all responses

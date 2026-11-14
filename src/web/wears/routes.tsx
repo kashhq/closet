@@ -163,7 +163,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         throw error;
       });
       logger.info(
-        `Garment ${id} ${worn ? 'worn' : 'wear undone'} on ${day} by user ${ownerId}${changed ? '' : ', already so'}${replayNote(request)}`,
+        `Garment ${id} ${worn ? 'worn' : 'wear undone'} on ${day} by user ${ownerId}${changed ? '' : ', already so'}`,
       );
       return answer(
         request,
@@ -202,7 +202,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         { day, at },
       );
       logger.info(
-        `Garment ${id} washed on ${day} ${instantNote(at)} by user ${ownerId}${changed ? '' : ', already washed then or later'}${replayNote(request)}`,
+        `Garment ${id} washed on ${day} ${instantNote(at)} by user ${ownerId}${changed ? '' : ', already washed then or later'}`,
       );
       return answer(
         request,

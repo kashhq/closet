@@ -12,7 +12,7 @@ import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
 import { RowId } from '../schemas';
 import { safeReturnTo } from '../security/return-to';
-import { actorOf } from '../sharing/access';
+import { actorOf, type Actor } from '../sharing/access';
 import { viewContext } from '../view-context';
 import { nudgeTemperatureOffset } from '../weather/queries';
 import { aimIdeas } from './aim';
@@ -120,10 +120,11 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
 ) => {
   /** The page's and the sentinel's shared reading of the query, and the ideas for it. */
   async function galleryFor(
-    ownerId: number,
+    actor: Actor,
     query: Static<typeof GalleryQuery>,
     options: { capsuleMenu: boolean },
   ) {
+    const ownerId = actor.userId;
     const now = new Date();
     const today: IsoDate = todayIn(config.timeZone, now);
     const [{ capsule, styled }, { destination, planning, trip, weatherAt }] =
@@ -133,7 +134,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           withId: query.with,
           today,
         }),
-        aimIdeas(db, ownerId, parseDestination(query), today),
+        aimIdeas(db, actor, parseDestination(query), today),
       ]);
     const state: SeededState = {
       destination,
@@ -178,7 +179,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { querystring: GalleryQuery } },
     async (request, reply) => {
       // The capsule menu rides in the ideas' own statement (#168).
-      const gallery = await galleryFor(sessionUserId(request), request.query, {
+      const gallery = await galleryFor(actorOf(request), request.query, {
         capsuleMenu: true,
       });
       return renderPage(
@@ -205,7 +206,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     `${IDEAS_PATH}/more`,
     { schema: { querystring: GalleryQuery } },
     async (request, reply) => {
-      const gallery = await galleryFor(sessionUserId(request), request.query, {
+      const gallery = await galleryFor(actorOf(request), request.query, {
         capsuleMenu: false,
       });
       return renderFragment(reply, <IdeaCards model={gallery.cards} />);
