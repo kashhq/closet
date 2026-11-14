@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { addDays, type IsoDate } from '../../src/calendar-date';
+import { brandSize, capsule, garment, trip } from '../../src/db/schema';
 import { deviceToken, expectProblem } from './api';
 import { createTestApp, type TestApp } from './harness';
 
@@ -15,6 +17,8 @@ import { createTestApp, type TestApp } from './harness';
 
 interface Create {
   name: string;
+  /** Where the client id is stored: a 410 must leave no row of it. */
+  rowsOf: (clientId: string) => Promise<unknown[]>;
   path: string;
   /** The body for the nth distinct create under `clientId`. */
   body: (n: number, clientId: string, today: IsoDate) => object;
@@ -25,23 +29,43 @@ interface Create {
 const CREATES: Create[] = [
   {
     name: 'garments',
+    rowsOf: (clientId) =>
+      t.db
+        .select({ id: garment.id })
+        .from(garment)
+        .where(eq(garment.clientId, clientId)),
     path: '/garments',
     body: (n, clientId) => ({ name: `Once ${n}`, category: 'tops', clientId }),
   },
   {
     name: 'brand sizes',
+    rowsOf: (clientId) =>
+      t.db
+        .select({ id: brandSize.id })
+        .from(brandSize)
+        .where(eq(brandSize.clientId, clientId)),
     path: '/sizes/brands',
     body: (n, clientId) => ({ brand: `Brand ${n}`, size: 'M', clientId }),
     sameNameRefused: 'body/brand',
   },
   {
     name: 'capsules',
+    rowsOf: (clientId) =>
+      t.db
+        .select({ id: capsule.id })
+        .from(capsule)
+        .where(eq(capsule.clientId, clientId)),
     path: '/capsules',
     body: (n, clientId) => ({ name: `Capsule ${n}`, clientId }),
     sameNameRefused: 'body/name',
   },
   {
     name: 'trips',
+    rowsOf: (clientId) =>
+      t.db
+        .select({ id: trip.id })
+        .from(trip)
+        .where(eq(trip.clientId, clientId)),
     path: '/trips',
     body: (n, clientId, today) => ({
       name: `Trip ${n}`,
@@ -106,6 +130,7 @@ describe.each(CREATES)('a retried create of $name', (create) => {
       410,
       'gone',
     );
+    expect(await create.rowsOf(clientId)).toEqual([]);
   });
 
   it.skipIf(!create.sameNameRefused)(
