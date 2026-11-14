@@ -38,6 +38,7 @@ import {
   PlaceList,
   toPlaceResource,
   toWeatherResource,
+  weatherOnly,
   UnitInput,
   WeatherResource,
 } from './weather-resource';
@@ -106,7 +107,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'getWeather',
         tags: ['weather'],
         summary: 'Your weather settings and forecast',
-        description: `The header line's weather and the calendar's day chips: where you are (the home, or the phone while fresh), your unit and offset, and each forecast day asked for with what it asks of an outfit. Seven days unless both ends are sent: from today without dates, from \`from\` with it alone, up to \`to\` with it alone. At most ${MAX_SUMMARY_DAYS} days, else a 400; days the forecast does not reach are left out. Fetches the forecast only when none is kept for the place (else serves it, refreshing it behind once stale).`,
+        description: weatherOnly(
+          `The header line's weather and the calendar's day chips: where you are (the home, or the phone while fresh), your unit and offset, and each forecast day asked for with what it asks of an outfit. Seven days unless both ends are sent: from today without dates, from \`from\` with it alone, up to \`to\` with it alone. At most ${MAX_SUMMARY_DAYS} days, else a 400; days the forecast does not reach are left out. Fetches the forecast only when none is kept for the place (else serves it, refreshing it behind once stale).`,
+        ),
         querystring: WeatherQuery,
         response: apiResponses({ 200: WeatherResource }),
       },
@@ -145,8 +148,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'searchPlaces',
         tags: ['weather'],
         summary: 'Finds places by name',
-        description:
+        description: weatherOnly(
           "The profile's and a trip's city search (Open-Meteo's geocoding, through the server): pick one for PUT /weather/home or PUT /trips/{id}/destination. 20 a minute per user; a 503 when the search did not answer, worth a retry.",
+        ),
         querystring: CloneType(PlaceQuery, {
           description: 'The name typed, 2 to 100 characters',
         }),
@@ -173,8 +177,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'setWeatherHome',
         tags: ['weather'],
         summary: 'Sets your home city',
-        description:
+        description: weatherOnly(
           "The profile's pick from the place search: the forecast is for it whenever the phone's location is not fresh. Set-state. 10 a minute per user (each new place is a forecast to fetch).",
+        ),
         body: PlaceInput,
         response: apiResponses({ 200: KeptPlace }),
       },
@@ -199,6 +204,7 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'clearWeatherHome',
         tags: ['weather'],
         summary: 'Forgets your home city',
+        description: weatherOnly(),
         response: apiResponses(cleared),
       },
     },
@@ -217,8 +223,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'setWeatherHere',
         tags: ['weather'],
         summary: "Sets the phone's location",
-        description:
+        description: weatherOnly(
           '"Use my location": the forecast is for it, standing in for home while fresh; send it again to keep it fresh. Round it on the phone too: a precise position need never leave it. 10 a minute per user.',
+        ),
         body: LocationInput,
         response: apiResponses({ 200: HerePlace }),
       },
@@ -246,7 +253,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'clearWeatherHere',
         tags: ['weather'],
         summary: "Forgets the phone's location",
-        description: 'Stop: the forecast is for the home again, if one is set.',
+        description: weatherOnly(
+          'Stop: the forecast is for the home again, if one is set.',
+        ),
         response: apiResponses(cleared),
       },
     },
@@ -267,8 +276,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'setTemperatureUnit',
         tags: ['weather'],
         summary: 'Sets how you read temperatures',
-        description:
+        description: weatherOnly(
           'Display only: every temperature here stays °C. Set-state.',
+        ),
         body: UnitInput,
         response: apiResponses({ 200: UnitInput }),
       },
@@ -289,8 +299,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'sendTemperatureFeedback',
         tags: ['weather'],
         summary: 'Says an outfit felt too warm or too cold',
-        description:
+        description: weatherOnly(
           'An Ideas card\'s and the profile\'s "Too warm" / "Too cold": your temperature offset moves a step, and the next ideas are matched to it. Not idempotent: each call is a step.',
+        ),
         body: TemperatureFeedback,
         response: apiResponses({ 200: TemperatureOffset }),
       },
@@ -313,8 +324,9 @@ export const weatherApiRoutes: FastifyPluginCallbackTypebox<
         operationId: 'resetTemperatureOffset',
         tags: ['weather'],
         summary: 'Resets your temperature offset to 0',
-        description:
+        description: weatherOnly(
           "The profile's Reset: the feedback's steps are forgotten, and ideas are matched to the forecast as it reads.",
+        ),
         response: apiResponses(cleared),
       },
     },

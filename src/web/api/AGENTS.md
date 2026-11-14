@@ -16,7 +16,7 @@
     - At the device cap the least recently used device is evicted, never an agent token (per kind, #189). The sign-in line names the evicted row.
   - A device token unused for `DEVICE_IDLE_DAYS` (90; `last_used_at`, else `created_at`, both stamped from the app's clock) is refused as revoked by `authenticateToken` on the row it already reads (#705): the 401, never the gate's 429. Agent tokens never idle out.
   - `DELETE /api/v1/auth/token` revokes the calling token only, 204. It is 204 too when something revoked the token since the request authenticated, logged `(already revoked)`.
-  - `GET /api/v1/me` returns `{ id, email, timeZone, today }`: `today` is `todayIn(APP_TIMEZONE)`, the day a wear or wash defaults to. It reads only the token's row.
+  - `GET /api/v1/me` returns `{ id, email, timeZone, today, features: { weather, push }, version }`: `today` is `todayIn(APP_TIMEZONE)`, the day a wear or wash defaults to; `version` is `config.release`, the one `/health/ready` reports; `features` is what the server registered. It reads only the token's row. **A new optional feature** (routes registered only under a switch) adds a boolean to `Me.features` (`auth/api-routes.ts`) from the value `apiPlugin` registers on, and states the condition in each operation's description, as `weatherOnly` does (`weather/weather-resource.ts`); a client reads the flag, never a 404 (#715).
   - No v1 route changes or hands out a credential behind a token (step-up, Auth). A future one takes `currentPassword` under `ACCOUNT_LIMIT`, and `updatePasswordHash`'s `keep.tokenId` keeps the calling device.
   - Once a token-authenticated route can mint, `createToken` needs an `excludeId`, so a device never evicts itself (decisions 2026-11-13, #189).
 - **Limits**:

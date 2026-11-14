@@ -27,6 +27,7 @@ import {
 import {
   APP_ORIGIN,
   createTestApp,
+  PWA_ENV,
   recordQueries,
   TEST_PASSWORD,
   type TestApp,
@@ -35,6 +36,7 @@ import {
   userIdOf,
 } from './harness';
 import { interleave } from './interleave';
+import { startWeatherStub, type WeatherStub } from '../support/weather-stub';
 import { mcpRequest, mintToken } from './mcp';
 
 /**
@@ -822,18 +824,21 @@ describe('a device token idle past its expiry', () => {
 });
 
 describe('GET /api/v1/me', () => {
-  it('names the account, the household zone and its day, and nothing else', async () => {
+  it('names the account, the household zone and its day, the features this server has and its build, and nothing else', async () => {
     const email = 'me@example.com';
     const id = await newAccount(email);
     const { token } = await signedIn(email);
     const res = await t.api(token, { method: 'GET', url: '/api/v1/me' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/^application\/json/);
+    const ready = await t.inject({ method: 'GET', url: '/health/ready' });
     expect(res.json()).toEqual({
       id,
       email,
       timeZone: t.timeZone,
       today: t.today(),
+      features: { weather: false, push: false },
+      version: ready.json<{ version: string }>().version,
     });
   });
 
@@ -870,5 +875,37 @@ describe('GET /api/v1/openapi.json', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/^application\/json/);
     expect(res.json()).toEqual(committedSpec);
+  });
+});
+
+describe('GET /api/v1/me with the optional features on', () => {
+  let stub: WeatherStub;
+  let featured: TestApp;
+
+  beforeAll(async () => {
+    stub = await startWeatherStub();
+    featured = await createTestApp(
+      { ...PWA_ENV, WEATHER_ENABLED: 'true', APP_VERSION: '0123abc' },
+      { weather: stub.options },
+    );
+  });
+
+  afterAll(async () => {
+    await featured?.cleanup();
+    await stub?.close();
+  });
+
+  it('says weather and push exist, and the build /health/ready reports', async () => {
+    const { token } = await deviceToken(featured);
+    const res = await featured.api(token, { method: 'GET', url: '/api/v1/me' });
+    const ready = await featured.inject({
+      method: 'GET',
+      url: '/health/ready',
+    });
+    expect(res.json()).toMatchObject({
+      features: { weather: true, push: true },
+      version: '0123abc',
+    });
+    expect(ready.json()).toMatchObject({ version: '0123abc' });
   });
 });
