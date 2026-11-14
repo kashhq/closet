@@ -38,9 +38,10 @@ const FILE = '0b7f0c1e-0000-4000-8000-000000000001.webp';
 const db = {} as Db;
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: OTHER,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const others: [string, Actor][] = [
   ['a stranger', sharedAs(null)],
   ['a VIEW grantee', sharedAs('VIEW')],

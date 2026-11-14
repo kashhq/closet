@@ -47,8 +47,13 @@ export async function aimIdeas(
     };
   }
   // Trips are private, so the requester alone is the Actor: a share read
-  // ahead would never widen what requireTrip reaches.
-  const trip = await requireTrip(db, { userId: ownerId }, parsed.tripId);
+  // ahead would never widen what requireTrip reaches. Only pages aim ideas
+  // (the gallery's and Styling's), and a read logs nothing.
+  const trip = await requireTrip(
+    db,
+    { userId: ownerId, surface: 'page' },
+    parsed.tripId,
+  );
   const day = ideasDayOf(trip, parsed.day, today);
   return {
     destination:

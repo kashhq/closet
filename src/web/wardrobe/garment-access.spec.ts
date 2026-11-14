@@ -30,10 +30,12 @@ const GARMENT = 10;
 const noStatements = {} as Db;
 const viewer: Actor = {
   userId: 2,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission: 'VIEW' },
 };
 const stranger: Actor = {
   userId: 3,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission: null },
 };
 const garment = { id: GARMENT, photo: null } as GarmentDetail;
@@ -63,7 +65,7 @@ describe('requireGarment', () => {
       select: vi.fn(() => ({ from: () => ({ where }) })),
     } as unknown as Db;
     await expect(
-      requireGarment(db, { userId: 3 }, address, 'view'),
+      requireGarment(db, { userId: 3, surface: 'page' }, address, 'view'),
     ).rejects.toMatchObject({ resource: 'garment' });
     expect(where).toHaveBeenCalledOnce();
   });

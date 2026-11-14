@@ -172,10 +172,11 @@ async function planOnTrip(
 ): Promise<{ outfitId: number; created: boolean; added: boolean }> {
   const { tripId, day, occasion } = input;
   const actor = actorOf(ctx);
+  const deps = { db: ctx.db, logger: ctx.webLogger };
   if (input.garmentIds === undefined) {
     const outfitId = input.outfitId!;
     const added = await planTripOutfit(
-      ctx.db,
+      deps,
       actor,
       {
         tripId,
@@ -187,7 +188,7 @@ async function planOnTrip(
     );
     return { outfitId, created: false, added: added === 'added' };
   }
-  const picked = await pickIdeaForTrip(ctx.db, actor, {
+  const picked = await pickIdeaForTrip(deps, actor, {
     tripId,
     garmentIds: input.garmentIds,
     name: input.name,
@@ -297,9 +298,6 @@ export const tripTools = [
         day: date,
         occasion,
       });
-      ctx.webLogger.info(
-        `Outfit ${planned.outfitId} ${planned.added ? 'added to' : 'already on'} trip ${tripId} by user ${ctx.userId} (MCP; ${date ?? 'any day'}${occasion ? `, ${occasion}` : ''})`,
-      );
       return {
         tripId,
         outfitId: planned.outfitId,

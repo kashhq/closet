@@ -429,9 +429,9 @@ describe('outfit saves', () => {
         .where(eq(outfitCalendar.outfitId, planned.id));
       await setGarmentStatus(t.db, top, t.owner.id, { event: 'archive' });
       const target = { entryId: entry.id, day, occasion: 'work' as const };
-      const actor = { userId: t.owner.id };
+      const actor = { userId: t.owner.id, surface: 'page' as const };
       const refusal: unknown = await replaceEntryOutfit(
-        t.db,
+        { db: t.db, logger: t.logger },
         actor,
         target,
         {
@@ -451,7 +451,7 @@ describe('outfit saves', () => {
       // A garment not theirs stays the unnamed 404.
       await expect(
         replaceEntryOutfit(
-          t.db,
+          { db: t.db, logger: t.logger },
           actor,
           target,
           {

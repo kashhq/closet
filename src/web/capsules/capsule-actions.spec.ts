@@ -40,12 +40,13 @@ const GARMENT = 10;
 const noStatements = {} as Db;
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: 2,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
 const stranger = sharedAs(null);
 const viewer = sharedAs('VIEW');
 const manager = sharedAs('MANAGE');
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const address = { id: CAPSULE, ownerId: OWNER };
 const fields = { name: 'Office', notes: null };
 const members = { add: [GARMENT], remove: [] };

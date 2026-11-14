@@ -197,7 +197,8 @@ export function replayNote(request: FastifyRequest): string {
  * plugin's session gate, which is preValidation, so a replay without a
  * session is the gate's 401 as before, and after validation, so a
  * malformed one is its 400. Only on a route marked `queueable` that a
- * replay reached; nothing is read.
+ * replay reached; nothing is read. A replay it lets through is logged here,
+ * once for every queueable route.
  */
 export function createQueuedWriteHook(logger: Logger) {
   return function checkQueuedAccount(
@@ -209,7 +210,14 @@ export function createQueuedWriteHook(logger: Logger) {
     const account = request.headers[QUEUED_HEADER];
     if (kind === undefined || account === undefined) return done();
     const userId = sessionUserId(request);
-    if (account === String(userId)) return done();
+    if (account === String(userId)) {
+      // The one note that this write is a replay: the action's own line
+      // (logOp) knows nothing of requests, and request_id joins the two.
+      logger.info(
+        `Queued ${kind} replayed for user ${userId}${replayNote(request)}`,
+      );
+      return done();
+    }
     const named =
       typeof account === 'string' && /^\d{1,10}$/.test(account)
         ? `account ${account}`

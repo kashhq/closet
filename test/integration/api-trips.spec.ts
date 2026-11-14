@@ -100,11 +100,12 @@ describe('trips', () => {
       .from(trip)
       .where(eq(trip.id, id));
     expect(row).toEqual({ name: 'Lisbon', destination: 'Lisbon' });
-    expect(
-      t.logs
-        .messages('info')
-        .find((line) => line.startsWith(`Trip ${id} created`)),
-    ).toContain('client id 3b0f9d0e');
+    expect(t.logs.ops('trip.created').at(-1)).toMatchObject({
+      tripId: id,
+      surface: 'api',
+      changed: true,
+      clientId: '3b0f9d0e',
+    });
 
     const before = await t.db.$count(trip);
     const backward = await api('POST', '/trips', {

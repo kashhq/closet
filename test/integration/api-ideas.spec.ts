@@ -151,7 +151,7 @@ describe('ideas', () => {
     };
     const ruleId = await addOutfitRule(
       t.db,
-      { userId: t.owner.id },
+      { userId: t.owner.id, surface: 'page' },
       {
         kind: 'never',
         a: { ...none, garmentId: top },

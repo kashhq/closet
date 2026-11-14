@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import { wearOutfitOn } from '../calendar/queries';
 import { garmentsGoneError } from '../outfits/gone-garments';
@@ -86,11 +87,14 @@ const OWNER = 1;
 const OTHER = 2;
 const TRIP = 50;
 const db = {} as Db;
+const { logger, logs } = captureLogs();
+const deps = { db, logger };
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: OTHER,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const others: [string, Actor][] = [
   ['a stranger', sharedAs(null)],
   ['a VIEW grantee', sharedAs('VIEW')],
@@ -137,21 +141,21 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'editTrip',
     (actor) => {
       vi.mocked(updateTrip).mockResolvedValue('not-found');
-      return editTrip(db, actor, TRIP, fields, TODAY);
+      return editTrip(deps, actor, TRIP, fields, TODAY);
     },
   ],
   [
     'removeTrip',
     (actor) => {
       vi.mocked(deleteTrip).mockResolvedValue(false);
-      return removeTrip(db, actor, TRIP);
+      return removeTrip(deps, actor, TRIP);
     },
   ],
   [
     'locateTrip',
     (actor) => {
       vi.mocked(setTripDestination).mockResolvedValue(false);
-      return locateTrip(db, actor, TRIP, place);
+      return locateTrip(deps, actor, TRIP, place);
     },
   ],
   [
@@ -159,7 +163,7 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     (actor) => {
       vi.mocked(addTripOutfit).mockResolvedValue('no-trip');
       return planTripOutfit(
-        db,
+        deps,
         actor,
         { tripId: TRIP, outfitId: 30 },
         BY_PERSON,
@@ -170,7 +174,7 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'pickIdeaForTrip',
     (actor) => {
       vi.mocked(pickForTrip).mockResolvedValue('no-trip');
-      return pickIdeaForTrip(db, actor, {
+      return pickIdeaForTrip(deps, actor, {
         tripId: TRIP,
         garmentIds: [10],
         origin: 'idea',
@@ -182,7 +186,7 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'takeOffTrip',
     (actor) => {
       vi.mocked(removeTripOutfit).mockResolvedValue('not-found');
-      return takeOffTrip(db, actor, { tripId: TRIP, tripOutfitId: 7 });
+      return takeOffTrip(deps, actor, { tripId: TRIP, tripOutfitId: 7 });
     },
   ],
   [
@@ -190,7 +194,7 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     (actor) => {
       vi.mocked(findTripOutfit).mockResolvedValue(undefined);
       return wearTripOutfit(
-        db,
+        deps,
         actor,
         { tripId: TRIP, tripOutfitId: 7 },
         { at: new Date(), today: TODAY },
@@ -201,21 +205,21 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'packTrip',
     (actor) => {
       vi.mocked(setPacked).mockResolvedValue('not-found');
-      return packTrip(db, actor, ticks);
+      return packTrip(deps, actor, ticks);
     },
   ],
   [
     'packTripItems',
     (actor) => {
       vi.mocked(setItemsPacked).mockResolvedValue('not-found');
-      return packTripItems(db, actor, ticks);
+      return packTripItems(deps, actor, ticks);
     },
   ],
   [
     'tickTripGarment',
     (actor) => {
       vi.mocked(setPacked).mockResolvedValue('not-found');
-      return tickTripGarment(db, actor, {
+      return tickTripGarment(deps, actor, {
         tripId: TRIP,
         garmentId: 1,
         packed: true,
@@ -226,34 +230,39 @@ const paths: [string, (actor: Actor) => Promise<unknown>][] = [
     'tickTripItem',
     (actor) => {
       vi.mocked(setItemsPacked).mockResolvedValue('not-found');
-      return tickTripItem(db, actor, { tripId: TRIP, itemId: 3, packed: true });
+      return tickTripItem(deps, actor, {
+        tripId: TRIP,
+        itemId: 3,
+        packed: true,
+      });
     },
   ],
   [
     'addTripItem',
     (actor) => {
       vi.mocked(addTripItems).mockResolvedValue('not-found');
-      return addTripItem(db, actor, TRIP, 'Charger');
+      return addTripItem(deps, actor, TRIP, 'Charger');
     },
   ],
   [
     'removeTripExtra',
     (actor) => {
       vi.mocked(removeTripItem).mockResolvedValue(false);
-      return removeTripExtra(db, actor, { tripId: TRIP, itemId: 3 });
+      return removeTripExtra(deps, actor, { tripId: TRIP, itemId: 3 });
     },
   ],
   [
     'copyTripExtras',
     (actor) => {
       vi.mocked(copyTripItems).mockResolvedValue('not-found');
-      return copyTripExtras(db, actor, { fromTripId: 51, toTripId: TRIP });
+      return copyTripExtras(deps, actor, { fromTripId: 51, toTripId: TRIP });
     },
   ],
 ];
 
 beforeEach(() => {
   vi.resetAllMocks();
+  logs.clear();
 });
 
 describe("another user's trip is not found, whatever they share", () => {
@@ -265,6 +274,8 @@ describe("another user's trip is not found, whatever they share", () => {
         statusCode: 404,
         message: 'Trip not found',
       });
+      // A refusal is the error handler's line, never an operation's.
+      expect(logs.records).toEqual([]);
     });
   }
 
@@ -330,7 +341,7 @@ describe('the trip path for its owner', () => {
     vi.mocked(addTripOutfit).mockResolvedValue(outside);
     await expect(
       planTripOutfit(
-        db,
+        deps,
         owner,
         {
           tripId: TRIP,
@@ -342,7 +353,7 @@ describe('the trip path for its owner', () => {
     ).rejects.toMatchObject(refusal);
     vi.mocked(pickForTrip).mockResolvedValue(outside);
     await expect(
-      pickIdeaForTrip(db, owner, {
+      pickIdeaForTrip(deps, owner, {
         tripId: TRIP,
         garmentIds: [10],
         day: '2026-11-20',
@@ -355,13 +366,13 @@ describe('the trip path for its owner', () => {
   it('refuses an outfit not theirs as the outfit, and names garments it cannot hold', async () => {
     vi.mocked(addTripOutfit).mockResolvedValue('no-outfit');
     await expect(
-      planTripOutfit(db, owner, { tripId: TRIP, outfitId: 30 }, BY_PERSON),
+      planTripOutfit(deps, owner, { tripId: TRIP, outfitId: 30 }, BY_PERSON),
     ).rejects.toEqual(new NotFound('outfit'));
     const gone = new NotFound('garment');
     vi.mocked(pickForTrip).mockResolvedValue('not-found');
     vi.mocked(garmentsGoneError).mockResolvedValue(gone);
     await expect(
-      pickIdeaForTrip(db, owner, {
+      pickIdeaForTrip(deps, owner, {
         tripId: TRIP,
         garmentIds: [10, 11],
         origin: 'idea',
@@ -379,7 +390,7 @@ describe('the trip path for its owner', () => {
   it('refuses "Wore it" (409) unless the outfit is for today of a trip that is on', async () => {
     const wear = (today: string) =>
       wearTripOutfit(
-        db,
+        deps,
         owner,
         { tripId: TRIP, tripOutfitId: 7 },
         { at: new Date(), today },
@@ -400,5 +411,45 @@ describe('the trip path for its owner', () => {
       message: 'The trip is not on today',
     });
     expect(wearOutfitOn).not.toHaveBeenCalled();
+    expect(logs.records).toEqual([]);
+  });
+
+  // #712: the action logs, once, whichever surface called it; ids are fields.
+  it('logs "Wore it" as one trip.outfit.worn line naming its surface', async () => {
+    vi.mocked(findTripOutfit).mockResolvedValue({
+      outfitId: 30,
+      day: null,
+      occasion: 'evening',
+      trip: { startsOn: TODAY, endsOn: '2026-11-15' },
+    });
+    vi.mocked(wearOutfitOn).mockResolvedValue({
+      entryId: 90,
+      scheduled: 'scheduled',
+      worn: { worn: true, changed: true, wears: 3, day: TODAY },
+    });
+    await wearTripOutfit(
+      deps,
+      { userId: OWNER, surface: 'api' },
+      { tripId: TRIP, tripOutfitId: 7 },
+      { at: new Date(), today: TODAY },
+    );
+    expect(logs.records).toEqual([
+      expect.objectContaining({
+        level: 'info',
+        msg: 'trip.outfit.worn',
+        op: 'trip.outfit.worn',
+        userId: OWNER,
+        surface: 'api',
+        tripId: TRIP,
+        tripOutfitId: 7,
+        outfitId: 30,
+        day: TODAY,
+        occasion: 'evening',
+        entryId: 90,
+        entryPlanned: true,
+        changed: true,
+        wears: 3,
+      }),
+    ]);
   });
 });

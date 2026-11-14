@@ -118,8 +118,15 @@ describe('occasions', () => {
         { outfitId: dinner, occasion: 'evening' },
         { outfitId: brunch, occasion: 'all-day' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${dinner} scheduled on ${day} (evening) by user ${t.owner.id}`,
+      expect(t.logs.ops('calendar.entry.planned')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          surface: 'page',
+          outfitId: dinner,
+          day,
+          occasion: 'evening',
+          changed: true,
+        }),
       );
     });
 
@@ -136,9 +143,14 @@ describe('occasions', () => {
       expect(await entriesOn(day)).toEqual([
         { outfitId: outfit, occasion: 'work' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${outfit} already scheduled on ${day} for user ${t.owner.id}; evening not added`,
-      );
+      // The occasion it kept, not the one asked.
+      expect(t.logs.ops('calendar.entry.planned').at(-1)).toMatchObject({
+        outfitId: outfit,
+        day,
+        occasion: 'work',
+        changed: false,
+        adopted: false,
+      });
     });
 
     it('refuses an occasion the app does not have with a 400, writing nothing', async () => {

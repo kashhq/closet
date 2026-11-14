@@ -74,9 +74,10 @@ const OUTFIT = 30;
 const db = {} as Db;
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: OTHER,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const others: [string, Actor][] = [
   ['a stranger', sharedAs(null)],
   ['a VIEW grantee', sharedAs('VIEW')],

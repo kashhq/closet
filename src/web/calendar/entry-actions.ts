@@ -1,16 +1,18 @@
 import type { Db } from '../../db/client';
-import type { Logger } from '../../logger';
 import type { IsoDate } from '../../calendar-date';
 import type { TapInstant } from '../../offline-writes';
 import type { Occasion } from '../../wardrobe/occasions';
 import { unkeyedPhoto } from '../files/image-variant';
 import type { Photos } from '../files/photos';
+import { type ActionDeps, logOp } from '../op-log';
 import { outfitNotFound } from '../outfits/outfit-actions';
 import { NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
 import { type EntryWornOutcome, setEntryWorn } from '../wears/queries';
 import type { Chooser } from './planned-by';
 import type { CalendarEntry } from './calendar-view';
+import type { RemovedEntry } from './restore';
+import { BY_PERSON } from '../write-origin';
 import {
   deleteEntry,
   type DeletedEntry,
@@ -27,7 +29,9 @@ import {
  * reached, whatever wardrobe shares they hold, so another's entry is the
  * 404 of an unknown id, never a 403. The owner-scoped queries underneath
  * (queries.ts, setEntryWorn) trust their `ownerId`: only this path and
- * replaceEntryOutfit (replace.ts) reach them from a surface.
+ * replaceEntryOutfit (replace.ts) reach them from a surface. Each write
+ * logs its own outcome, once, as one `calendar.entry.*` line (logOp,
+ * #712): its callers log nothing.
  */
 
 /** Another's entry or no entry: one refusal for both (ids reveal nothing). */
@@ -35,13 +39,8 @@ export function calendarEntryNotFound(): NotFound {
   return new NotFound('calendarEntry');
 }
 
-/**
- * Plans the actor's outfit on a day (POST /calendar, schedule_outfit, POST
- * /api/v1/calendar-entries): scheduleOutfit's answer, the entry and the
- * occasion it is on that day included; an outfit not theirs is
- * NotFound('outfit').
- */
-export async function planOutfit(
+/** scheduleOutfit refused as every surface refuses it, unlogged: planOutfit's and restoreEntry's. */
+async function schedule(
   db: Db,
   actor: Actor,
   entry: { outfitId: number; day: IsoDate; occasion: Occasion },
@@ -57,12 +56,68 @@ export async function planOutfit(
 }
 
 /**
+ * Plans the actor's outfit on a day (POST /calendar, schedule_outfit, POST
+ * /api/v1/calendar-entries): scheduleOutfit's answer, the entry and the
+ * occasion it is on that day included; an outfit not theirs is
+ * NotFound('outfit'). Already there: `changed` false, the occasion the
+ * entry kept, and `adopted` when it was the week planner's. The API's
+ * `clientId` is not stored (an outfit is on a day once anyway), only
+ * logged, so a client's retry can be found.
+ */
+export async function planOutfit(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  entry: { outfitId: number; day: IsoDate; occasion: Occasion },
+  madeBy: Chooser,
+  { clientId }: { clientId?: string } = {},
+): Promise<ScheduledEntry> {
+  const scheduled = await schedule(db, actor, entry, madeBy);
+  logOp(logger, actor, 'calendar.entry.planned', {
+    entryId: scheduled.entryId,
+    outfitId: entry.outfitId,
+    day: entry.day,
+    occasion: scheduled.occasion,
+    changed: scheduled.outcome === 'scheduled',
+    adopted: scheduled.outcome === 'already-scheduled' && scheduled.adopted,
+    clientId: clientId?.slice(0, 8),
+  });
+  return scheduled;
+}
+
+/**
+ * Undo of a delete (POST /calendar/restore): the entry the server held
+ * planned again as it was, the planner's `auto` or the person's.
+ */
+export async function restoreEntry(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  removed: RemovedEntry,
+): Promise<ScheduledEntry> {
+  const { outfitId, day, occasion, plannedBy } = removed;
+  const scheduled = await schedule(
+    db,
+    actor,
+    { outfitId, day, occasion },
+    plannedBy === 'auto' ? 'planner' : BY_PERSON,
+  );
+  logOp(logger, actor, 'calendar.entry.restored', {
+    entryId: scheduled.entryId,
+    outfitId,
+    day,
+    occasion: scheduled.occasion,
+    plannedBy,
+  });
+  return scheduled;
+}
+
+/**
  * Marks the actor's entry worn or not (`worn` undefined toggles), its
  * wears with it (setEntryWorn); 'future' for a day still to come, which
- * each surface answers its own way (the pill's 409, mark_worn's 400).
+ * each surface refuses its own way (the pill's 409, mark_worn's 400), so
+ * it logs nothing here.
  */
 export async function markEntryWorn(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: {
     entryId: number;
@@ -74,6 +129,14 @@ export async function markEntryWorn(
 ): Promise<Exclude<EntryWornOutcome, 'not-found'>> {
   const outcome = await setEntryWorn(db, { ...input, ownerId: actor.userId });
   if (outcome === 'not-found') throw calendarEntryNotFound();
+  if (outcome === 'future') return outcome;
+  logOp(logger, actor, 'calendar.entry.worn', {
+    entryId: input.entryId,
+    day: outcome.day,
+    worn: outcome.worn,
+    changed: outcome.changed,
+    wears: outcome.wears,
+  });
   return outcome;
 }
 
@@ -104,7 +167,7 @@ export async function requireEntry(
  * and Undo could not restore it.
  */
 export async function removeEntry(
-  { db, photos, logger }: { db: Db; photos: Photos; logger: Logger },
+  { db, photos, logger }: ActionDeps & { photos: Photos },
   actor: Actor,
   id: number,
   { asksFirst = false }: { asksFirst?: boolean } = {},
@@ -112,25 +175,23 @@ export async function removeEntry(
   const outcome = await deleteEntry(db, id, actor.userId, { asksFirst });
   if (outcome === 'not-found') throw calendarEntryNotFound();
   if (outcome === 'needs-confirmation') {
-    logger.info(
-      `Calendar entry ${id} not deleted for user ${actor.userId}: asks first (worn, an agent's or a one-off)`,
-    );
+    // Worn, an agent's or taking a one-off outfit: the sheet asks first.
+    logOp(logger, actor, 'calendar.entry.deleted', {
+      entryId: id,
+      changed: false,
+      asksFirst: true,
+    });
     return outcome;
   }
   // Only after commit: an unlink cannot be rolled back.
   for (const fileName of outcome.selfies) {
     await photos.deleteVariants(unkeyedPhoto(fileName));
   }
-  const selfie =
-    outcome.selfies.length > 0
-      ? ` with its selfie ${outcome.selfies.join(', ')}`
-      : '';
-  const planner =
-    outcome.oneOffRemoved === null
-      ? ''
-      : `, one-off outfit ${outcome.oneOffRemoved} removed`;
-  logger.info(
-    `Calendar entry ${id} deleted by user ${actor.userId}${selfie}${planner}`,
-  );
+  logOp(logger, actor, 'calendar.entry.deleted', {
+    entryId: id,
+    changed: true,
+    selfies: outcome.selfies,
+    oneOffOutfitRemoved: outcome.oneOffRemoved,
+  });
   return outcome;
 }

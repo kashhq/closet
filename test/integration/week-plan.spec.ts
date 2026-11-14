@@ -770,9 +770,16 @@ describe('the weekly auto-plan', () => {
         occasion: 'all-day',
       });
       expect(again.statusCode).toBe(302);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${thursday.outfitId} already scheduled on ${WEEK[3]} for user ${t.owner.id}; all-day not added; the week planner's entry is the user's now`,
-      );
+      expect(t.logs.ops('calendar.entry.planned')).toEqual([
+        expect.objectContaining({
+          userId: t.owner.id,
+          entryId: thursday.id,
+          outfitId: thursday.outfitId,
+          day: WEEK[3],
+          changed: false,
+          adopted: true,
+        }),
+      ]);
       const theirs = (await weekEntries()).find((e) => e.id === thursday.id)!;
       expect(theirs).toMatchObject({
         plannedBy: 'user',
@@ -1023,11 +1030,18 @@ describe('the weekly auto-plan', () => {
       expect(left.get(adopted.outfitId)).toBe('person');
       expect(left.get(packed.outfitId)).toBe('planner');
       expect(left.get(twice.outfitId)).toBe('planner');
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${plain.id} deleted by user ${t.owner.id}, one-off outfit ${plain.outfitId} removed`,
+      const deleted = t.logs.ops('calendar.entry.deleted');
+      expect(deleted).toContainEqual(
+        expect.objectContaining({
+          entryId: plain.id,
+          oneOffOutfitRemoved: plain.outfitId,
+        }),
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${twice.id} deleted by user ${t.owner.id}`,
+      expect(deleted).toContainEqual(
+        expect.objectContaining({
+          entryId: twice.id,
+          oneOffOutfitRemoved: null,
+        }),
       );
     });
 
@@ -1469,12 +1483,8 @@ describe('the weekly auto-plan', () => {
       expect(await t.db.$count(outfit, eq(outfit.id, thursday.outfitId))).toBe(
         0,
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Trip ${tripId} created .*, 2 planned entr\\(ies\\) removed from its days$`,
-          ),
-        ),
+      expect(t.logs.ops('trip.created')).toContainEqual(
+        expect.objectContaining({ tripId, autoEntriesRemoved: 2 }),
       );
       // Moved to end on Saturday: Saturday's goes too, Friday's stays.
       const moved = await post(`/trips/${tripId}`, {
