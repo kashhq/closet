@@ -21,7 +21,10 @@ import {
   type GarmentRequest,
 } from './garment-access';
 import {
+  addGarment,
+  addGarmentWithPendingPhoto,
   changeGarmentStatus,
+  cloneGarmentFor,
   setGarmentPublicShare,
   deleteOwnGarment,
   setGarmentCondition,
@@ -44,12 +47,7 @@ import {
   renderGarmentForm,
 } from './render-form';
 import { garmentUrl, wardrobeUrl, WISHLIST_PATH, readIdList } from './urls';
-import {
-  cloneGarment,
-  createGarment,
-  createGarmentWithPendingPhoto,
-  type WardrobeDeps,
-} from './writes';
+import type { WardrobeDeps } from './writes';
 import {
   ConditionBody,
   GarmentPageQuery,
@@ -221,37 +219,32 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       }
       // Its page's toast: saved, or for "Bought a different one" the need met.
       const savedFlag = boughtFor ? { decided: 'boughtFor' } : { created: 1 };
-      const created = (id: number) =>
-        logger.info(
-          `Garment ${id} created (${status}) by user ${userId} in wardrobe ${access.ownerId}${
-            form.fields.replacesGarmentId
-              ? `, asked to replace garment ${form.fields.replacesGarmentId}`
-              : ''
-          }${
-            destination.orderItem
-              ? `, from order item ${destination.orderItem}`
-              : ''
-          }${boughtFor ? `, bought for Muse need ${boughtFor.id}` : ''}`,
-        );
+      const actor = actorOf(request);
+      const note = {
+        destination: status,
+        replacesGarmentId: form.fields.replacesGarmentId ?? undefined,
+        boughtForNeedId: boughtFor?.id,
+        orderItem: destination.orderItem,
+      };
       if (!linkPhoto) {
-        const id = await createGarment(
+        const id = await addGarment(
           deps,
+          actor,
           access.ownerId,
           form.fields,
-          status,
+          note,
           BY_PERSON,
           withGarment,
         );
-        created(id);
         return reply.redirect(garmentUrl(id, viewOwner, '', savedFlag), 302);
       }
-      const claimed = await createGarmentWithPendingPhoto(
+      const claimed = await addGarmentWithPendingPhoto(
         deps,
+        actor,
         access.ownerId,
-        userId,
         form.fields,
         linkPhoto,
-        status,
+        note,
         BY_PERSON,
         withGarment,
       );
@@ -267,7 +260,6 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         });
       }
       const { id, draft } = claimed;
-      created(id);
       return draft
         ? reply.redirect(
             afterDraft(logger, viewOwner, linkPhoto, draft, saved, id),
@@ -378,13 +370,10 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { id } = request.params;
       const fields = readCondition(request.body);
       const { viewOwner } = await setGarmentCondition(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         fields,
-      );
-      logger.info(
-        `Garment ${id} condition ${fields.condition}${fields.conditionNote ? ' (with a note)' : ''} set by user ${sessionUserId(request)}`,
       );
       if (!request.headers['hx-request']) {
         return reply.redirect(garmentUrl(id, viewOwner), 303);
@@ -462,12 +451,11 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         });
       }
       await updateGarment(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         form.fields,
       );
-      logger.info(`Garment ${id} updated by user ${sessionUserId(request)}`);
       return reply.redirect(garmentUrl(id, viewOwner), 302);
     },
   );
@@ -534,8 +522,12 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           lookalikesDismissed: readIdList(request.body.lookalikesDismissed),
         });
       }
-      const id = await cloneGarment(deps, source, userId, form.fields);
-      logger.info(`Garment ${id} cloned from ${source.id} by user ${userId}`);
+      const id = await cloneGarmentFor(
+        deps,
+        actorOf(request),
+        source,
+        form.fields,
+      );
       return reply.redirect(garmentUrl(id, undefined), 302);
     },
   );
@@ -546,14 +538,11 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     reply: FastifyReply,
     event: 'archive' | 'restore',
   ): Promise<FastifyReply> {
-    const { access, viewOwner, from, to } = await changeGarmentStatus(
-      db,
+    const { viewOwner } = await changeGarmentStatus(
+      deps,
       actorOf(request),
       garmentAddress(request),
       event,
-    );
-    logger.info(
-      `Garment ${request.params.id} ${event}d (${from} -> ${to}) by user ${access.ownerId}`,
     );
     return navigateTo(reply, wardrobeUrl(viewOwner));
   }
@@ -582,13 +571,10 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ): Promise<FastifyReply> {
     const actor = actorOf(request);
     const { viewOwner } = await setGarmentPublicShare(
-      db,
+      deps,
       actor,
       garmentAddress(request),
       shared,
-    );
-    logger.info(
-      `Garment ${request.params.id} ${shared ? 'shared publicly' : 'no longer shared publicly'} by user ${actor.userId}`,
     );
     return navigateTo(reply, garmentUrl(request.params.id, viewOwner));
   }
@@ -611,14 +597,10 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     GARMENT_PATH,
     { schema: { params: GarmentParams, querystring: OwnerQuery } },
     async (request, reply) => {
-      const { id } = request.params;
-      const { access, status } = await deleteOwnGarment(
+      const { status } = await deleteOwnGarment(
         deps,
         actorOf(request),
         garmentAddress(request),
-      );
-      logger.info(
-        `Garment ${id} (${status}) deleted by user ${access.ownerId}`,
       );
       // A wishlist item's delete is "not buying it": back to the wishlist.
       return navigateTo(

@@ -30,7 +30,11 @@ import { API_PREFIX } from '../surface';
 import { destinationValues, postedDestination } from './destination';
 import { garmentAddress, garmentGuard, searchGarments } from './garment-access';
 import {
+  addGarment,
   addGarmentCopies,
+  addGarmentOnce,
+  bulkSetGarments,
+  cloneGarmentFor,
   deleteOwnGarment,
   editGarment,
   garmentToMend,
@@ -105,14 +109,8 @@ import { KEYWORD_RANKS } from './keyword-search';
 import { REFUSALS } from './link-import/import';
 import { linkIn } from './link-import/link-text';
 import { saveGarmentFromLink } from './link-import/save';
-import { bulkSetProperty } from './queries';
 import { readRepairForm, RepairParams } from './repairs';
-import {
-  cloneGarment,
-  createGarment,
-  createGarmentOnce,
-  type WardrobeDeps,
-} from './writes';
+import type { WardrobeDeps } from './writes';
 import { BY_PERSON } from '../write-origin';
 
 const flag = (description: string) =>
@@ -326,34 +324,35 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const settle = boughtForNeedId
         ? async (tx: Queryable) => (await posted(tx)).withGarment
         : undefined;
+      const actor = actorOf(request);
+      const note = {
+        destination,
+        replacesGarmentId,
+        boughtForNeedId,
+      };
       let created = true;
       let id: number;
       if (clientId) {
-        ({ id, created } = await createGarmentOnce(
+        ({ id, created } = await addGarmentOnce(
           deps,
+          actor,
           access.ownerId,
           form.fields,
-          destination,
+          note,
           clientId,
           settle,
         ));
       } else {
-        id = await createGarment(
+        id = await addGarment(
           deps,
+          actor,
           access.ownerId,
           form.fields,
-          destination,
+          note,
           BY_PERSON,
           (await posted(db)).withGarment,
         );
       }
-      logger.info(
-        `Garment ${id} ${created ? `created (${destination})` : 'already created, retry answered'} by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API)${
-          boughtForNeedId && created
-            ? `, bought for Muse need ${boughtForNeedId}`
-            : ''
-        }${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
-      );
       return reply
         .status(created ? 201 : 200)
         .header('Location', apiGarmentUrl(id, viewOwner))
@@ -382,7 +381,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       // The merge needs the stored garment, as update_garment's does: the
       // one statement more than the form's save, which posts every field.
       const { edit } = await editGarment(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         (stored) => {
@@ -392,12 +391,6 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           if (!read.ok) throw refusedGarmentBody(read.errors);
           return read;
         },
-      );
-      const changed = Object.keys(edit.fields);
-      logger.info(
-        `Garment ${request.params.id} updated by user ${actorOf(request).userId} (API): ${
-          changed.length > 0 ? changed.join(', ') : 'nothing changed'
-        }`,
       );
       return { ignored: ignoredPaths(edit.ignored) };
     },
@@ -418,14 +411,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { access, status } = await deleteOwnGarment(
-        deps,
-        actorOf(request),
-        garmentAddress(request),
-      );
-      logger.info(
-        `Garment ${request.params.id} (${status}) deleted by user ${access.ownerId} (API)`,
-      );
+      await deleteOwnGarment(deps, actorOf(request), garmentAddress(request));
       return reply.status(204).send(null);
     },
   );
@@ -446,14 +432,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { access, from, to } = await putGarmentStatus(
-        db,
+      const { to } = await putGarmentStatus(
+        deps,
         actorOf(request),
         garmentAddress(request),
         request.body.status,
-      );
-      logger.info(
-        `Garment ${request.params.id} put in ${to} (${from} -> ${to}) by user ${access.ownerId} (API)`,
       );
       return { status: to };
     },
@@ -481,13 +464,10 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         conditionNote: conditionNote ?? undefined,
       });
       await setGarmentCondition(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         fields,
-      );
-      logger.info(
-        `Garment ${request.params.id} condition ${fields.condition}${fields.conditionNote ? ' (with a note)' : ''} set by user ${actorOf(request).userId} (API)`,
       );
       return withoutNulls(fields);
     },
@@ -514,7 +494,6 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         viewOwner,
         garment: source,
       } = await authorize.garment(request, 'view');
-      const userId = actorOf(request).userId;
       const values = storedFormValues(source, { owner: access.isOwner });
       const form = readNewGarment(
         {
@@ -527,9 +506,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         formAudience({ kind: 'clone' }, viewOwner),
       );
       if (!form.ok) throw refusedGarmentBody(form.errors);
-      const id = await cloneGarment(deps, source, userId, form.fields);
-      logger.info(
-        `Garment ${id} cloned from ${source.id} by user ${userId} (API)`,
+      const id = await cloneGarmentFor(
+        deps,
+        actorOf(request),
+        source,
+        form.fields,
       );
       return reply
         .status(201)
@@ -553,14 +534,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { access, from, to } = await addGarmentCopies(
-        db,
+      const { to } = await addGarmentCopies(
+        deps,
         actorOf(request),
         garmentAddress(request),
         request.body?.copies ?? 1,
-      );
-      logger.info(
-        `Garment ${request.params.id} copies added by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): quantity ${from} -> ${to}`,
       );
       return { quantity: to };
     },
@@ -583,16 +561,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     },
     async (request) => {
       const { changed } = await tagGarment(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         tagBodyOf(request.body),
       );
-      if (changed.length > 0) {
-        logger.info(
-          `Garment ${request.params.id} tagged by user ${actorOf(request).userId} (API): ${changed.join(', ')}`,
-        );
-      }
       return { changed };
     },
   );
@@ -614,14 +587,13 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request) => {
       const { access } = await authorize(request, 'manage');
       const { ids, change } = bulkChangeOf(request.body);
-      const result =
-        ids.length > 0
-          ? await bulkSetProperty(db, access.ownerId, ids, change)
-          : { updated: 0, skipped: 0 };
-      logger.info(
-        `Bulk ${change.property} by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): ${result.updated} set, ${result.skipped} skipped, ${ids.length} named`,
+      return bulkSetGarments(
+        deps,
+        actorOf(request),
+        access.ownerId,
+        ids,
+        change,
       );
-      return result;
     },
   );
 
@@ -644,14 +616,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request) => {
       // One file: the photo sheet's second part (pages from before
       // server-side removal sent the browser's cutout) is no client's here.
-      const { access, cutoutStatus } = await replaceGarmentPhoto(
+      const { cutoutStatus } = await replaceGarmentPhoto(
         deps,
         actorOf(request),
         garmentAddress(request),
         request.files({ limits: { files: 1 } }),
-      );
-      logger.info(
-        `Garment ${request.params.id} photo uploaded by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API)`,
       );
       return { cutoutStatus };
     },
@@ -706,9 +675,6 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         garmentAddress(request),
         () => request.file(),
       );
-      logger.info(
-        `Garment ${request.params.id} cutout replaced by user ${actorOf(request).userId}, photo version ${edited.version} (API)`,
-      );
       return toGarmentPhoto(edited);
     },
   );
@@ -728,21 +694,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { outcome } = await retryGarmentCutout(
         deps,
         actorOf(request),
         garmentAddress(request),
       );
-      if (outcome.ok) {
-        logger.info(
-          `Garment ${id} cutout requeued by user ${actorOf(request).userId} (API)`,
-        );
-      } else {
-        logger.info(
-          `Garment ${id} cutout retry ignored (${outcome.reason}) (API)`,
-        );
-      }
       return { requeued: outcome.ok };
     },
   );
@@ -773,10 +729,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         todayIn(config.timeZone, new Date()),
       );
       if (!form.ok) throw refusedRepairBody(form.errors);
-      const repairId = await logRepair(db, actor, address, form.entry);
-      logger.info(
-        `Repair ${repairId} (${form.entry.kind}, ${form.entry.day}${form.entry.cost === null ? '' : `, cost ${form.entry.cost}`}) logged on garment ${address.id} by user ${actor.userId} (API)`,
-      );
+      const repairId = await logRepair(deps, actor, address, form.entry);
       return reply.status(201).send({ id: repairId });
     },
   );
@@ -796,15 +749,11 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { id, repairId } = request.params;
       await removeRepair(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
-        repairId,
-      );
-      logger.info(
-        `Repair ${repairId} removed from garment ${id} by user ${actorOf(request).userId} (API)`,
+        request.params.repairId,
       );
       return reply.status(204).send(null);
     },

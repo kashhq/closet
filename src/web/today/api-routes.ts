@@ -7,11 +7,11 @@ import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { literals } from '../api/resource';
 import { dayOutsideWindow } from '../offline-writes';
-import { garmentsGoneError } from '../outfits/gone-garments';
 import { IsoDateSchema, RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
 import { rainGearForDays } from '../weather/queries';
-import { MAX_WORN_GARMENTS, wearIdea } from './queries';
+import { MAX_WORN_GARMENTS } from './queries';
+import { wearIdeaOn } from './today-actions';
 import { todayFor } from './today';
 import { TodayResource, toTodayResource } from './today-resource';
 
@@ -114,25 +114,15 @@ export const todayApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const ownerId = actorOf(request).userId;
       const { garmentIds, occasion, day } = request.body;
       const now = new Date();
       const today = todayIn(config.timeZone, now);
       const refusal = dayOutsideWindow(day, today);
       if (refusal) throw refusal;
-      const outcome = await wearIdea(db, ownerId, {
-        garmentIds,
-        occasion,
-        day,
-        today,
-        at: now,
-      });
-      if (outcome === 'not-found') {
-        throw await garmentsGoneError(db, ownerId, garmentIds, 'closet');
-      }
-      const { outfit, entryId, worn } = outcome;
-      logger.info(
-        `Idea worn by user ${ownerId} on ${day} (${occasion}) (API): ${outfit.alreadySaved ? 'existing ' : ''}outfit ${outfit.id} of garments ${garmentIds.join(', ')}, entry ${entryId} ${worn.changed ? `marked worn (${worn.wears} wears logged)` : 'already worn'}`,
+      const { outfit, entryId, worn } = await wearIdeaOn(
+        { db, logger },
+        actorOf(request),
+        { garmentIds, occasion, day, today, at: now },
       );
       return {
         outfitId: outfit.id,

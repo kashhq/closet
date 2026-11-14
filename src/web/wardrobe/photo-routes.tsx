@@ -160,18 +160,11 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { params: GarmentParams, querystring: OwnerQuery } },
     async (request, reply) => {
       const { id } = request.params;
-      const { viewOwner, outcome } = await retryGarmentCutout(
+      const { viewOwner } = await retryGarmentCutout(
         deps,
         actorOf(request),
         garmentAddress(request),
       );
-      if (outcome.ok) {
-        logger.info(
-          `Garment ${id} cutout requeued by user ${sessionUserId(request)}`,
-        );
-      } else {
-        logger.info(`Garment ${id} cutout retry ignored (${outcome.reason})`);
-      }
       return reply.redirect(garmentUrl(id, viewOwner), 303);
     },
   );
@@ -246,15 +239,11 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       schema: { params: GarmentParams, querystring: OwnerQuery },
     },
     async (request, reply) => {
-      const { id } = request.params;
       const edited = await saveEditedGarmentCutout(
         deps,
         actorOf(request),
         garmentAddress(request),
         () => request.file(),
-      );
-      logger.info(
-        `Garment ${id} cutout replaced, photo version ${edited.version}`,
       );
       return reply.send({
         version: edited.version,

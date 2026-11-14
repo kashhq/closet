@@ -466,12 +466,14 @@ describe('Today', () => {
           eq(garmentWear.outfitCalendarId, entry.id),
         ),
       ).toBe(idea.length);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Idea worn by user ${t.owner.id} on ${t.today()} \\(all-day\\): outfit ${outfitId} .*marked worn`,
-          ),
-        ),
+      expect(t.logs.ops('idea.worn')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          day: t.today(),
+          occasion: 'all-day',
+          outfitId,
+          changed: true,
+        }),
       );
 
       const html = unescapeHtml((await get('/')).body);
