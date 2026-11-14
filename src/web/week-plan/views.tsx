@@ -98,6 +98,7 @@ export function PlannedWeekBanner({
                   <OutfitCollage
                     garments={collagePieces(entry.garments, { warn: false })}
                     size="thumb"
+                    decorative
                   />
                 </div>
                 <span>

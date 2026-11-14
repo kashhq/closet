@@ -143,7 +143,7 @@ function CellCollage({
   const hidden = hiddenBlocking(entries, drawn);
   return (
     <span class="relative w-full">
-      <OutfitCollage garments={drawn} size="cell" />
+      <OutfitCollage garments={drawn} size="cell" decorative />
       {hidden && (
         <span class="absolute bottom-0 right-0" aria-hidden="true">
           <GarmentMark marks={[hidden]} dot />

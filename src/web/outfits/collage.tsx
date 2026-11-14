@@ -177,6 +177,11 @@ export function OutfitCollage(props: {
    * button.
    */
   viewerSet?: string;
+  /**
+   * The link around the collage already names the outfit (its aria-label or
+   * the name beside it), so the photos' alt text would only repeat it.
+   */
+  decorative?: boolean;
 }) {
   const { garments, eager = false } = props;
   const size = props.size ?? 'card';
@@ -194,6 +199,7 @@ export function OutfitCollage(props: {
       class={height}
       eager={eager}
       viewerSet={props.viewerSet}
+      decorative={props.decorative ?? false}
       labelled={size === 'card'}
       words={size !== 'thumb' && size !== 'cell'}
     />
@@ -254,6 +260,7 @@ function CollageRow(props: {
           class="h-10"
           eager={props.eager}
           viewerSet={undefined}
+          decorative={false}
           labelled={false}
           words={false}
         />
@@ -273,6 +280,7 @@ function CollagePiece(props: {
   class: string;
   eager: boolean;
   viewerSet: string | undefined;
+  decorative: boolean;
   labelled: boolean;
   words: boolean;
 }) {
@@ -309,6 +317,7 @@ function CollageFace(props: {
   class: string;
   eager: boolean;
   viewerSet: string | undefined;
+  decorative: boolean;
   labelled: boolean;
 }) {
   const { garment } = props;
@@ -323,7 +332,7 @@ function CollageFace(props: {
   return garment.photo ? (
     <img
       src={imageUrl(garment.photo, 'thumb')}
-      alt={garment.name ?? ''}
+      alt={props.decorative ? '' : (garment.name ?? '')}
       {...viewer}
       data-collage-piece={garment.category}
       class={`${props.class} w-auto min-w-0 max-w-full aspect-square object-contain`}
