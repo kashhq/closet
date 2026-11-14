@@ -213,12 +213,13 @@ describe('wears and washes', () => {
       expect(hasText((await garmentPage(other)).body, 'Not worn yet')).toBe(
         true,
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Calendar entry ${entry} marked worn by user \\d+ \\(2 wears logged\\)$`,
-          ),
-        ),
+      expect(t.logs.ops('calendar.entry.worn')).toContainEqual(
+        expect.objectContaining({
+          entryId: entry,
+          worn: true,
+          changed: true,
+          wears: 2,
+        }),
       );
     });
 

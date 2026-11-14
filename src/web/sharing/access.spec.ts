@@ -24,6 +24,16 @@ describe('actorOf', () => {
       rememberShareReadAhead(request, { ownerId: 9, permission: 'VIEW' });
       return actorOf(request);
     });
+    // The device token's user, on the API's surface: assignSurface stamps
+    // /api/v1 routes in the app; surfaceOf answers the same from the path.
+    app.get('/api/v1/me', (request): Actor => {
+      request.accessToken = {
+        user: { id: 8, email: 'b@example.com' },
+        tokenId: 3,
+        scope: FULL_SCOPE,
+      };
+      return actorOf(request);
+    });
     app.get('/public', (request): Actor => actorOf(request));
     await app.ready();
   });
@@ -34,7 +44,7 @@ describe('actorOf', () => {
 
   it('is the session user, without a read ahead on their own wardrobe', async () => {
     const res = await app.inject({ url: '/own' });
-    expect(res.json()).toEqual({ userId: 7 });
+    expect(res.json()).toEqual({ userId: 7, surface: 'page' });
   });
 
   // The read ahead is what keeps a grantee's request at today's statements.
@@ -42,8 +52,15 @@ describe('actorOf', () => {
     const res = await app.inject({ url: '/shared' });
     expect(res.json()).toEqual({
       userId: 7,
+      surface: 'page',
       shareReadAhead: { ownerId: 9, permission: 'VIEW' },
     });
+  });
+
+  // The surface is what an action's log line names (#712, logOp).
+  it("is the device token's user on the API, on the api surface", async () => {
+    const res = await app.inject({ url: '/api/v1/me' });
+    expect(res.json()).toEqual({ userId: 8, surface: 'api' });
   });
 
   it('refuses a request without a session, as sessionUserId does', async () => {
@@ -57,6 +74,7 @@ describe('actorOf', () => {
   it("is the token's user for an MCP tool, never with a read ahead", () => {
     expect(toolActorOf({ userId: 7, scope: FULL_SCOPE })).toEqual({
       userId: 7,
+      surface: 'mcp',
     });
   });
 
@@ -66,12 +84,12 @@ describe('actorOf', () => {
         userId: 7,
         scope: { readOnly: true, ownWardrobeOnly: true },
       }),
-    ).toEqual({ userId: 7, ownWardrobeOnly: true });
+    ).toEqual({ userId: 7, surface: 'mcp', ownWardrobeOnly: true });
     expect(
       toolActorOf({
         userId: 7,
         scope: { readOnly: true, ownWardrobeOnly: false },
       }),
-    ).toEqual({ userId: 7 });
+    ).toEqual({ userId: 7, surface: 'mcp' });
   });
 });

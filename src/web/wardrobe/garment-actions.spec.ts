@@ -73,12 +73,13 @@ const deps = {
 } as unknown as WardrobeDeps;
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: 2,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
 const stranger = sharedAs(null);
 const viewer = sharedAs('VIEW');
 const manager = sharedAs('MANAGE');
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const address = { id: GARMENT, ownerId: OWNER };
 const garment = {
   id: GARMENT,

@@ -2007,7 +2007,7 @@ describe('API statements per route', () => {
       pairs += 1;
       const ruleId = await addOutfitRule(
         t.db,
-        { userId },
+        { userId, surface: 'page' },
         {
           kind: 'always',
           a: { ...NO_MATCHER, color: a },

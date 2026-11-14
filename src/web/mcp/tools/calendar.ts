@@ -189,7 +189,8 @@ export const calendarTools = [
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
       if (entryId !== undefined) {
-        const outcome = await markEntryWorn(ctx.db, actorOf(ctx), {
+        const deps = { db: ctx.db, logger: ctx.webLogger };
+        const outcome = await markEntryWorn(deps, actorOf(ctx), {
           entryId,
           worn: true,
           at: now,
@@ -198,9 +199,6 @@ export const calendarTools = [
         if (outcome === 'future') {
           throw new HttpError(400, 'A day still to come cannot be worn yet');
         }
-        ctx.webLogger.info(
-          `Calendar entry ${entryId} marked worn by user ${ctx.userId} (MCP): ${outcome.wears} wears`,
-        );
         return { entryId, worn: true, garmentsRecorded: outcome.wears };
       }
       // Wears are the owner's own: a shared wardrobe's garment is refused

@@ -1,14 +1,8 @@
 import type { FastifyReply } from 'fastify';
 import type { OutfitOrigin } from '../../wardrobe/outfit-origin';
 import type { IsoDate } from '../../calendar-date';
-import type { Db } from '../../db/client';
-import type { Logger } from '../../logger';
 import type { Occasion } from '../../wardrobe/occasions';
-import {
-  type EntryTarget,
-  replaceEntryOutfit,
-  replaceMessage,
-} from '../calendar/replace';
+import { type EntryTarget, replaceEntryOutfit } from '../calendar/replace';
 import { HttpError } from '../errors';
 import { garmentsGoneError } from '../outfits/gone-garments';
 import {
@@ -21,6 +15,7 @@ import type { TripOutfitAdded } from '../trips/queries';
 import { pickIdeaForTrip } from '../trips/trip-actions';
 import { tripUrl } from '../trips/urls';
 import { pickIdea, type PickResult } from '../outfits/pick';
+import type { ActionDeps } from '../op-log';
 import type { Actor } from '../sharing/access';
 import { alreadySavedParam } from './urls';
 import { BY_PERSON, type WriteOrigin } from '../write-origin';
@@ -50,11 +45,6 @@ import { BY_PERSON, type WriteOrigin } from '../write-origin';
 /** The most garments a card holds: a template, a layer and a locked piece or two. */
 export const MAX_PICKED = 8;
 
-export interface PickDeps {
-  db: Db;
-  logger: Logger;
-}
-
 /** Who picked, for the log line: a gallery card, or Styling's Save. */
 export type PickSource = 'idea' | 'styling';
 
@@ -80,7 +70,7 @@ function pickOrigin(
 }
 
 export function pickTo(
-  deps: PickDeps,
+  deps: ActionDeps,
   reply: FastifyReply,
   actor: Actor,
   destination: OutfitDestination,
@@ -121,7 +111,7 @@ export function postedDestination(body: {
 }
 
 async function pickInPlace(
-  { db, logger }: PickDeps,
+  deps: ActionDeps,
   reply: FastifyReply,
   actor: Actor,
   target: EntryTarget,
@@ -129,7 +119,7 @@ async function pickInPlace(
   options: { source: PickSource; name?: string },
 ): Promise<FastifyReply> {
   const replaced = await replaceEntryOutfit(
-    db,
+    deps,
     actor,
     target,
     {
@@ -139,7 +129,6 @@ async function pickInPlace(
     },
     BY_PERSON,
   );
-  logger.info(replaceMessage(actor.userId, target, replaced));
   const flag = alreadySavedParam(replaced);
   return reply.redirect(
     `/calendar?week=${target.day}${flag && `&${flag}`}`,
@@ -172,13 +161,13 @@ export type Picked =
 
 /**
  * The garments become an outfit (or are found one already) where the
- * destination says, refused whole and logged: pickIdea for a day or none,
- * pickIdeaForTrip for a trip. pickTo's (the gallery's pick, Styling's
+ * destination says, refused whole and logged: pickIdea for a day or none
+ * (logged here), pickIdeaForTrip for a trip (which logs itself). pickTo's (the gallery's pick, Styling's
  * Save) and the API's POST /outfit-picks (#193c), so the surfaces never
  * differ in what a pick does; `via` marks the API's log lines.
  */
 export async function pickGarments(
-  { db, logger }: PickDeps,
+  deps: ActionDeps,
   actor: Actor,
   destination: PickDestination,
   garmentIds: readonly number[],
@@ -190,6 +179,7 @@ export async function pickGarments(
     madeBy: WriteOrigin;
   },
 ): Promise<Picked> {
+  const { db, logger } = deps;
   const via = options.via ?? '';
   const { madeBy } = options;
   const origin = pickOrigin(
@@ -200,7 +190,7 @@ export async function pickGarments(
   const who = `${PICKED[options.source]} by user ${actor.userId}`;
   if (destination.kind === 'trip') {
     const { tripId, day, occasion } = destination;
-    const { outfit, added } = await pickIdeaForTrip(db, actor, {
+    const { outfit, added } = await pickIdeaForTrip(deps, actor, {
       tripId,
       day,
       occasion,
@@ -209,9 +199,6 @@ export async function pickGarments(
       origin,
       madeBy,
     });
-    logger.info(
-      `${who} for trip ${tripId}${via}: ${outfit.alreadySaved ? 'existing ' : ''}outfit ${outfit.id} of garments ${garmentIds.join(', ')}, ${added === 'added' ? 'added' : 'already on the trip'} (${day ?? 'any day'}${occasion ? `, ${occasion}` : ''})`,
-    );
     return { kind: 'trip', outfit, tripId, added };
   }
   const plan =
@@ -233,7 +220,7 @@ export async function pickGarments(
 }
 
 async function pickAndRedirect(
-  deps: PickDeps,
+  deps: ActionDeps,
   reply: FastifyReply,
   actor: Actor,
   destination: PickDestination,

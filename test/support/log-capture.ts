@@ -51,6 +51,15 @@ export class LogCapture {
   }
 
   /**
+   * The lines one operation wrote (logOp, src/web/op-log.ts: `op` and its
+   * fields), oldest first: what a spec asserts of an action's log, by its
+   * fields, never its message.
+   */
+  ops(op: string): LogRecord[] {
+    return this.records.filter((record) => record.op === op);
+  }
+
+  /**
    * messages(), each followed by its error's message (`msg: err.message`):
    * a line names the failure through `{ err }`, never in its text.
    */

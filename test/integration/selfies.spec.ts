@@ -376,9 +376,12 @@ describe('outfit selfies', () => {
     expect(await fileRow(fileName)).toBeUndefined();
     const files = await storedFiles();
     for (const name of variantsOf(fileName)) expect(files).not.toContain(name);
-    expect(t.logs.messages('info', 'Web')).toContain(
-      `Calendar entry ${entryId} deleted by user ${t.owner.id} with its selfie ${fileName}`,
-    );
+    expect(t.logs.ops('calendar.entry.deleted').at(-1)).toMatchObject({
+      userId: t.owner.id,
+      entryId,
+      changed: true,
+      selfies: [fileName],
+    });
   });
 
   it('deleting the outfit keeps its selfie as a look on its day, which can still be removed', async () => {

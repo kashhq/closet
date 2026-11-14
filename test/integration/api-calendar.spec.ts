@@ -102,11 +102,12 @@ describe('calendar entries', () => {
       outcome: 'scheduled',
       occasion: 'evening',
     });
-    expect(
-      t.logs
-        .messages('info')
-        .find((line) => line.includes(`entry ${id}, client id 3b0d6c1e`)),
-    ).toBeDefined();
+    expect(t.logs.ops('calendar.entry.planned').at(-1)).toMatchObject({
+      entryId: id,
+      surface: 'api',
+      changed: true,
+      clientId: '3b0d6c1e',
+    });
 
     const again = await api('POST', '/calendar-entries', { outfitId, day });
     expect(again.statusCode).toBe(200);

@@ -6,6 +6,7 @@ import { type SharePermission, user, wardrobeShare } from '../../db/schema';
 import { sessionUserId } from '../auth/require-session';
 import { Forbidden, NotFound, type Resource } from '../refusals';
 import { ROW_ID_MAX } from '../schemas';
+import { type Surface, surfaceOf } from '../surface';
 
 /**
  * What the actor may do with the wardrobe a call addresses. `ownerId` is
@@ -107,6 +108,12 @@ export function rememberShareReadAhead(
  */
 export interface Actor {
   userId: number;
+  /**
+   * The door the call came through (#712): what an action's log line names
+   * (logOp, src/web/op-log.ts), so the action logs once for every surface.
+   * Never an access input: the resolver ignores it.
+   */
+  surface: Surface;
   shareReadAhead?: ShareReadAhead;
   /**
    * An own-wardrobe-only agent token's (#701, its TokenScope): every
@@ -119,13 +126,17 @@ export interface Actor {
 
 /**
  * The request's actor: the device token's user on /api/v1 (only its hook
- * sets `accessToken` there), else the session's. Throws on a public route,
- * as sessionUserId does.
+ * sets `accessToken` there), else the session's, on the request's surface
+ * (surfaceOf: `api` or `page`; MCP builds its own, actorOf(ctx)). Throws on
+ * a public route, as sessionUserId does.
  */
 export function actorOf(request: FastifyRequest): Actor {
   const userId = request.accessToken?.user.id ?? sessionUserId(request);
+  const surface = surfaceOf(request);
   const shareReadAhead = sharesReadAhead.get(request);
-  return shareReadAhead ? { userId, shareReadAhead } : { userId };
+  return shareReadAhead
+    ? { userId, surface, shareReadAhead }
+    : { userId, surface };
 }
 
 /** The actor's share of `ownerId`'s wardrobe: the one read ahead when it is this wardrobe's, else a statement. */

@@ -548,13 +548,13 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
    * shared one, nowhere (browseIdea reads none of the owner's days).
    */
   async function aimOf(
-    userId: number,
+    actor: Actor,
     shared: boolean,
     query: { for?: string; occasion?: string; replace?: string },
     today: IsoDate,
   ): Promise<IdeasAim> {
     const none: OutfitDestination = { kind: 'none' };
-    return aimIdeas(db, userId, shared ? none : parseDestination(query), today);
+    return aimIdeas(db, actor, shared ? none : parseDestination(query), today);
   }
 
   /**
@@ -565,13 +565,14 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
    * refused before the trip or the outfit, as it always was.
    */
   async function plainOpening(
+    actor: Actor,
     scope: Scope,
     query: Static<typeof PageQuery>,
     today: IsoDate,
     outfitId: number | undefined,
   ): Promise<Opening> {
     const [aimed, read] = await Promise.allSettled([
-      aimOf(scope.userId, scope.shared, query, today),
+      aimOf(actor, scope.shared, query, today),
       stripsReads(db, scope, {
         checkCapsule: true,
         outfitId,
@@ -602,13 +603,14 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
    * statement (ideaReads); then the windows reach the idea (stripsReads).
    */
   async function styledOpening(
+    actor: Actor,
     scope: Scope,
     query: Static<typeof PageQuery>,
     today: IsoDate,
     outfitId: number | undefined,
     withId: number,
   ): Promise<Opening> {
-    const aim = await aimOf(scope.userId, scope.shared, query, today);
+    const aim = await aimOf(actor, scope.shared, query, today);
     const seed = dailySeed(today);
     const read = await ideaReads({ db, weather }, scope, {
       checkCapsule: true,
@@ -656,8 +658,15 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         : query.outfit;
       const { wardrobe, aim, opened, styled, reads } =
         query.with === undefined
-          ? await plainOpening(scope, query, today, outfitId)
-          : await styledOpening(scope, query, today, outfitId, query.with);
+          ? await plainOpening(actorOf(request), scope, query, today, outfitId)
+          : await styledOpening(
+              actorOf(request),
+              scope,
+              query,
+              today,
+              outfitId,
+              query.with,
+            );
       const model = pageModel({
         wardrobe,
         aim,
@@ -759,7 +768,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const today = todayIn(config.timeZone, new Date());
       const scope = await scopeOf(request);
       const posted = postedStates(query);
-      const aim = await aimOf(userId, scope.shared, query, today);
+      const aim = await aimOf(actorOf(request), scope.shared, query, today);
       const seed = parseSeed(query.seed) ?? dailySeed(today);
       const read = await ideaReads({ db, weather }, scope, {
         checkCapsule: true,
@@ -866,7 +875,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         }
         const now = new Date();
         const today = todayIn(config.timeZone, now);
-        const aim = await aimOf(userId, false, query, today);
+        const aim = await aimOf(actorOf(request), false, query, today);
         const read = await fitReads({ db, weather }, scope, {
           heldIds,
           aim,
@@ -1034,7 +1043,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       editingOutfitId: body.outfit,
     };
     const [aimed, read] = await Promise.allSettled([
-      aimIdeas(db, userId, postedDestination(body), today),
+      aimIdeas(db, actorOf(request), postedDestination(body), today),
       stripsReads(db, scope, {
         checkCapsule: true,
         outfitId: body.outfit,

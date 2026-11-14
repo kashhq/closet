@@ -285,7 +285,7 @@ describe('POST /outfit-rules', () => {
       (tx) =>
         addOutfitRule(
           tx,
-          { userId: ownerId },
+          { userId: ownerId, surface: 'page' },
           {
             kind: 'never',
             a: { ...NO_MATCHER, color: 'blue' },

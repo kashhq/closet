@@ -7,7 +7,7 @@ import { AutosaveSaved } from '../autosave';
 import { addDays, parseIsoDate, todayIn } from '../../calendar-date';
 import { unchecked } from '../checklist';
 import type { WebOptions } from '../plugin';
-import { answerReplay, isReplay, replayNote } from '../offline-writes';
+import { answerReplay, isReplay } from '../offline-writes';
 import { navigateTo, renderFragment, renderPage } from '../render';
 import {
   enforceLimit,
@@ -39,8 +39,9 @@ import {
 import { TripsPage } from './list-page';
 import { tripModel } from './model';
 import type { PackedChange } from './packed';
-import { createTripAt, listTrips, outfitsOnDay, tripDays } from './queries';
+import { listTrips, outfitsOnDay, tripDays } from './queries';
 import {
+  addTrip,
   addTripItem,
   type ChecklistTicks,
   copyTripExtras,
@@ -111,6 +112,8 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
   WebOptions & WeatherLimits
 > = (app, { db, config, logger, weather, weatherLimits }, done) => {
   const today = () => todayIn(config.timeZone, new Date());
+  // What every trip write takes; each logs its own outcome (trip-actions.ts).
+  const deps = { db, logger };
 
   function renderForm(
     reply: FastifyReply,
@@ -180,7 +183,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     TRIPS_PATH,
     { schema: { body: NewTripBody } },
     async (request, reply) => {
-      const ownerId = sessionUserId(request);
+      const actor = actorOf(request);
       const place = formPlace(request.body);
       const form = readTripForm(request.body);
       if (!form.ok) return refuseForm(reply, form, { picker: picker(place) });
@@ -188,20 +191,14 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
       if (place) {
         await enforceLimit(weatherLimits.destination, request, {
           logger,
-          who: `user ${ownerId}`,
+          who: `user ${actor.userId}`,
         });
       }
-      const { id, away } = await createTripAt(
-        db,
-        ownerId,
-        form.fields,
+      const { id } = await addTrip(deps, actor, {
+        fields: form.fields,
         place,
-        today(),
-      );
-      // Whether it was located, never the place: where someone travels is theirs.
-      logger.info(
-        `Trip ${id} created by user ${ownerId}: ${form.fields.startsOn} to ${form.fields.endsOn}${place ? ', destination located' : ''}${away > 0 ? `, ${away} planned entr(ies) removed from its days` : ''}`,
-      );
+        today: today(),
+      });
       return reply.redirect(tripUrl(id, '?created=1'), 303);
     },
   );
@@ -264,10 +261,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
         await requireTrip(db, actor, id);
         return refuseForm(reply, form, { tripId: id });
       }
-      const saved = await editTrip(db, actor, id, form.fields, today());
-      logger.info(
-        `Trip ${id} updated by user ${actor.userId}: ${form.fields.startsOn} to ${form.fields.endsOn}${saved.undated > 0 ? `, ${saved.undated} outfit(s) moved to any day` : ''}${saved.locationCleared ? ', destination location cleared' : ''}${saved.away > 0 ? `, ${saved.away} planned entr(ies) removed from its days` : ''}`,
-      );
+      await editTrip(deps, actor, id, form.fields, today());
       return backToTrip(reply, id);
     },
   );
@@ -277,10 +271,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id`,
     { schema: { params: TripParams } },
     async (request, reply) => {
-      const actor = actorOf(request);
-      const { id } = request.params;
-      await removeTrip(db, actor, id);
-      logger.info(`Trip ${id} deleted by user ${actor.userId}`);
+      await removeTrip(deps, actorOf(request), request.params.id);
       return navigateTo(reply, TRIPS_PATH);
     },
   );
@@ -369,14 +360,11 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
       const { outfitId } = request.body;
       const day = request.body.day || undefined;
       const occasion: Occasion | undefined = request.body.occasion || undefined;
-      const outcome = await planTripOutfit(
-        db,
+      await planTripOutfit(
+        deps,
         actor,
         { tripId: id, outfitId, day, occasion },
         BY_PERSON,
-      );
-      logger.info(
-        `Outfit ${outfitId} ${outcome === 'added' ? 'added to' : 'already on'} trip ${id} by user ${actor.userId} (${day ?? 'any day'}${occasion ? `, ${occasion}` : ''})`,
       );
       return backToTrip(reply, id, dayAnchor(day ?? null));
     },
@@ -386,15 +374,8 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id/outfits/:tripOutfitId/delete`,
     { schema: { params: TripOutfitParams } },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id, tripOutfitId } = request.params;
-      const outcome = await takeOffTrip(db, actor, {
-        tripId: id,
-        tripOutfitId,
-      });
-      logger.info(
-        `Outfit ${outcome.outfitId} taken off trip ${id} by user ${actor.userId} (trip outfit ${tripOutfitId}; ${outcome.unpacked} packed mark(s) removed with its garments)`,
-      );
+      await takeOffTrip(deps, actorOf(request), { tripId: id, tripOutfitId });
       return backToTrip(reply, id);
     },
   );
@@ -405,19 +386,13 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id/outfits/:tripOutfitId/wear`,
     { schema: { params: TripOutfitParams } },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id, tripOutfitId } = request.params;
       const at = new Date();
-      const day = todayIn(config.timeZone, at);
       const wore = await wearTripOutfit(
-        db,
-        actor,
+        deps,
+        actorOf(request),
         { tripId: id, tripOutfitId },
-        { at, today: day },
-      );
-      const { entryId, scheduled, worn } = wore.worn;
-      logger.info(
-        `Trip ${id} outfit ${wore.outfitId} worn by user ${actor.userId} on ${day} (${wore.occasion}): entry ${entryId} ${scheduled === 'scheduled' ? 'planned' : 'already planned'}, ${worn.changed ? `marked worn (${worn.wears} wears logged)` : 'already worn'}`,
+        { at, today: todayIn(config.timeZone, at) },
       );
       return backToTrip(reply, id, dayAnchor(wore.day));
     },
@@ -427,13 +402,12 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
 
   /**
    * A checklist's autosave (the packing list, the extras): the posted ticks
-   * through the list's writer, logged, then a replay's 204 (#178: both are
-   * queueable, `changed` when a tick moved) or the list's own answer.
+   * through the list's writer (which logs them), then a replay's 204 (#178:
+   * both are queueable, `changed` when a tick moved) or the list's own answer.
    */
   function checklistRoute<Change extends PackedChange>(route: {
     path: string;
     kind: 'packed' | 'item';
-    list: string;
     write: (actor: Actor, ticks: ChecklistTicks) => Promise<Change>;
     answer: (
       request: FastifyRequest,
@@ -456,9 +430,6 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
           packed,
           unpacked: unchecked(shown, packed),
         });
-        logger.info(
-          `Trip ${id} ${route.list} set by user ${actor.userId}: ${change.packed} packed, ${change.unpacked} unpacked${replayNote(request)}`,
-        );
         if (isReplay(request)) {
           return answerReplay(reply, change.packed + change.unpacked > 0);
         }
@@ -472,8 +443,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
   checklistRoute({
     path: `${TRIPS_PATH}/:id/packed`,
     kind: 'packed',
-    list: 'packing',
-    write: (actor, ticks) => packTrip(db, actor, ticks),
+    write: (actor, ticks) => packTrip(deps, actor, ticks),
     answer: async (request, reply, { id, actor }) => {
       if (!request.headers['hx-request']) return backToTrip(reply, id);
       // Deleted since the write (another tab): the status line alone.
@@ -494,12 +464,8 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id/items`,
     { schema: { params: TripParams, body: ItemBody } },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id } = request.params;
-      const added = await addTripItem(db, actor, id, request.body.label);
-      logger.info(
-        `Trip ${id} extra ${added > 0 ? 'added' : 'already there'} by user ${actor.userId}`,
-      );
+      await addTripItem(deps, actorOf(request), id, request.body.label);
       return backToTrip(reply, id, 'extras');
     },
   );
@@ -508,8 +474,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
   checklistRoute({
     path: `${TRIPS_PATH}/:id/items/packed`,
     kind: 'item',
-    list: 'extras',
-    write: (actor, ticks) => packTripItems(db, actor, ticks),
+    write: (actor, ticks) => packTripItems(deps, actor, ticks),
     answer: (request, reply, { id, change }) => {
       if (!request.headers['hx-request']) {
         return backToTrip(reply, id, 'extras');
@@ -528,10 +493,8 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id/items/:itemId/delete`,
     { schema: { params: TripItemParams } },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id, itemId } = request.params;
-      await removeTripExtra(db, actor, { tripId: id, itemId });
-      logger.info(`Trip ${id} extra ${itemId} removed by user ${actor.userId}`);
+      await removeTripExtra(deps, actorOf(request), { tripId: id, itemId });
       return backToTrip(reply, id, 'extras');
     },
   );
@@ -540,16 +503,11 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
     `${TRIPS_PATH}/:id/items/copy`,
     { schema: { params: TripParams, body: CopyItemsBody } },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { id } = request.params;
-      const { from } = request.body;
-      const copied = await copyTripExtras(db, actor, {
-        fromTripId: from,
+      const copied = await copyTripExtras(deps, actorOf(request), {
+        fromTripId: request.body.from,
         toTripId: id,
       });
-      logger.info(
-        `Trip ${id}: ${copied} extra(s) copied from trip ${from} by user ${actor.userId}`,
-      );
       return reply.redirect(tripUrl(id, `?copied=${copied}#extras`), 303);
     },
   );
@@ -670,9 +628,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
           who: `user ${actor.userId}`,
         });
         const { id } = request.params;
-        await locateTrip(db, actor, id, pickedPlace(request.body));
-        // The user, never the place: where someone travels is theirs.
-        logger.info(`Trip ${id} destination located by user ${actor.userId}`);
+        await locateTrip(deps, actor, id, pickedPlace(request.body));
         return backToTrip(reply, id);
       },
     );
