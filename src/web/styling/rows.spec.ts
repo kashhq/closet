@@ -18,9 +18,26 @@ function garment(id: number, status: RowGarment['status'] = 'closet') {
   return { id, name: `G${id}`, category: 'tops', status, photo: null };
 }
 
-/** A role's window: `ids` newest first, of `count` in the cycle. */
+/** A role's window: `ids` newest first, the cycle's first, of `count`. */
 function window(role: GarmentRole, ids: number[], count = ids.length) {
-  return { role, count, garments: ids.map((id) => garment(id)) };
+  return ranked(
+    role,
+    ids.map((id, i) => [id, i + 1]),
+    count,
+  );
+}
+
+/** A role's window as roleWindowsSql reads one: `[id, rank]` pairs, possibly in separate runs. */
+function ranked(
+  role: GarmentRole,
+  garments: [id: number, rank: number][],
+  count: number,
+): RoleWindow {
+  return {
+    role,
+    count,
+    garments: garments.map(([id, rank]) => ({ ...garment(id), rank })),
+  };
 }
 
 const row = (
@@ -184,6 +201,38 @@ describe('stylingRows', () => {
 
     const [whole] = stylingRows([row('top', 5)], [window('top', [5, 4])], []);
     expect(whole.moreBefore).toBeUndefined();
+  });
+
+  it('windows each row around its own garment, with a page either way (#996)', () => {
+    // A cycle of 40 (ids 140 down to 101, rank = 141 - id): the head, and
+    // the runs the SQL reads around rank 20 and rank 38.
+    const ids = (from: number, to: number): [number, number][] =>
+      Array.from({ length: to - from + 1 }, (_, i) => [
+        141 - from - i,
+        from + i,
+      ]);
+    const accessories = ranked(
+      'accessory',
+      [...ids(1, 10), ...ids(10, 30).slice(1), ...ids(31, 40)],
+      40,
+    );
+    const [fresh, deep, end] = stylingRows(
+      [row('accessory', null), row('accessory', 121), row('accessory', 103)],
+      [accessories],
+      [],
+    );
+    expect(fresh.garments.map((g) => g.id)).toEqual(
+      ids(1, 10).map(([id]) => id),
+    );
+    expect([fresh.moreAfter, fresh.moreBefore]).toEqual([undefined, 131]);
+    expect(deep.garments.map((g) => g.id)).toEqual(
+      ids(10, 30).map(([id]) => id),
+    );
+    expect([deep.moreAfter, deep.moreBefore]).toEqual([131, 111]);
+    expect(end.garments.map((g) => g.id)).toEqual(
+      ids(28, 40).map(([id]) => id),
+    );
+    expect([end.moreAfter, end.moreBefore]).toEqual([113, undefined]);
   });
 
   it('leads with a chosen garment outside the cycle (archived)', () => {

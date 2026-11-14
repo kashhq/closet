@@ -254,6 +254,48 @@ describe('the generator, pinned (#168)', () => {
   });
 });
 
+// A closet at the 0.1 target (#707's scale persona has 500 garments): deep
+// pages that still fit, the gallery strip's page 50 (#996).
+const LARGE = closet('large', {
+  layer: 45,
+  'one-piece': 25,
+  top: 150,
+  bottom: 70,
+  footwear: 40,
+});
+
+describe('a large closet’s deep pages, pinned (#996)', () => {
+  const { avoid, saved } = history(LARGE);
+  const gallery = {
+    pool: LARGE,
+    avoid,
+    saved,
+    formality: OCCASION_HINTS['all-day'].formality,
+    limit: 6,
+  };
+  // Page 50 of six, the cap, mild and cold: what the strip's last sentinel shows.
+  const page50 = (needs: WeatherNeeds | null) =>
+    generateIdeas({ ...gallery, seed: 7, needs, offset: 294 });
+
+  it('page 50 in the mild and in the cold', () => {
+    expect(digest(page50(MILD))).toEqual(PINNED.largeMild50);
+    expect(digest(page50(COLD))).toEqual(PINNED.largeCold50);
+  });
+
+  it('pages to 50 of a sweep of seeds and weather', () => {
+    const lines = [1, 7, 2_147_483_647].flatMap((seed) =>
+      [null, MILD, COLD].flatMap((needs) =>
+        [1, 2, 10, 25, 49, 50].flatMap((page) =>
+          digest(
+            generateIdeas({ ...gallery, seed, needs, offset: (page - 1) * 6 }),
+          ),
+        ),
+      ),
+    );
+    expect(hashOf(lines)).toBe(PINNED.largePages);
+  });
+});
+
 describe('the layer, drawn like the other roles (#646)', () => {
   // About 9 to 13 °C through the day: a tee alone is too cold, and each of
   // these five layers fits over every top. The one unworn since winter is
@@ -389,4 +431,23 @@ const PINNED = {
   ],
   goesWith: 'e357f8b6c0a30e51',
   sweep: '0084486b1fc94bca',
+  largeMild50: [
+    '369+644+672 1 too-warm 369+644+672',
+    '328+612+714 1 legs-too-warm 328+612',
+    '521+544+673 1 feet-too-warm 521+544+673',
+    '503+586+694 1 legs-too-warm 503+586+694',
+    '416+539+699 1 legs-too-warm 416+539+699',
+    '416+567+724 1 feet-too-warm 416+567+724',
+    'more true',
+  ],
+  largeCold50: [
+    '106+263+621+743 0 - 263+621+743+106',
+    '187+228+706 0 - 228+706+187',
+    '119+277+539+692 0 - 277+539+692+119',
+    '135+444+586+691 0 - 444+586+691+135',
+    '135+492+597+697 0 - 492+597+697+135',
+    '187+381+633+673 0 - 381+633+673+187',
+    'more true',
+  ],
+  largePages: 'ea74665db4bd3f40',
 };

@@ -8,6 +8,7 @@ import { categoryLabel } from '../wardrobe/garment';
 import { roleLabel } from '../wardrobe/labels';
 import { SnapStrip, snapItem, type SnapSize } from '../strip/snap-strip';
 import { garmentUrl } from '../wardrobe/urls';
+import type { StripKeyset } from './queries';
 import type { RowGarment, StylingRow } from './rows';
 import { STYLING_GARMENTS_PATH, type StylingState, stylingUrl } from './urls';
 
@@ -109,18 +110,27 @@ export function StylingRowView(props: {
           locked={row.locked}
         />
         {row.garments.map((garment) => (
-          <GarmentItem
-            garment={garment}
-            role={row.role}
-            selected={garment.id === row.garmentId}
-            locked={row.locked}
-            viewOwner={context.viewOwner}
-          />
+          <>
+            {garment.id === row.moreAfter && (
+              <StripSentinel
+                role={row.role}
+                keyset={{ after: garment.id }}
+                context={context}
+              />
+            )}
+            <GarmentItem
+              garment={garment}
+              role={row.role}
+              selected={garment.id === row.garmentId}
+              locked={row.locked}
+              viewOwner={context.viewOwner}
+            />
+          </>
         ))}
         {row.moreBefore !== undefined && (
           <StripSentinel
             role={row.role}
-            before={row.moreBefore}
+            keyset={{ before: row.moreBefore }}
             context={context}
           />
         )}
@@ -273,19 +283,23 @@ export function GarmentLook(props: {
 }
 
 /**
- * The end of the strip's window: fetches the next page of the role's cycle
- * when it scrolls into view and is replaced by it (and its own sentinel).
- * `intersect`, not `revealed`: that one watches the window's scroll, never
- * a horizontal strip's (AGENTS.md, Gotchas).
+ * An end of the strip's window: fetches the next page of the role's cycle
+ * when it scrolls into view and is replaced by it (and its own sentinel):
+ * older garments at the strip's end (`before`), newer ones at the start of
+ * a window deep in the cycle (`after`, #996), which snap-strip.js keeps
+ * from moving the chosen item as they land. `intersect`, not `revealed`:
+ * that one watches the window's scroll, never a horizontal strip's
+ * (AGENTS.md, Gotchas).
  */
 function StripSentinel(props: {
   role: GarmentRole;
-  before: number;
+  keyset: StripKeyset;
   context: RowContext;
 }) {
+  const { keyset } = props;
   const url = stylingUrl(props.context.state, STYLING_GARMENTS_PATH, [
     `role=${props.role}`,
-    `before=${props.before}`,
+    'before' in keyset ? `before=${keyset.before}` : `after=${keyset.after}`,
   ]);
   return (
     <PageSentinel
@@ -301,19 +315,30 @@ function StripSentinel(props: {
 }
 
 /**
- * GET /styling/garments: the next page of a strip, and its sentinel when
- * more follow. Never chosen and never inert: the request does not carry the
- * row's lock, so styling.js makes them inert as they land in a locked row.
+ * GET /styling/garments: a page of a strip, and its sentinel when more
+ * follow that way: after the page for older garments, before it for newer
+ * ones. Never chosen and never inert: the request does not carry the row's
+ * lock, so styling.js makes them inert as they land in a locked row.
  */
 export function StripPage(props: {
   role: GarmentRole;
+  keyset: StripKeyset;
   garments: RowGarment[];
   more: boolean;
   context: RowContext;
 }) {
+  const first = props.garments.at(0);
   const last = props.garments.at(-1);
+  const older = 'before' in props.keyset;
   return (
     <>
+      {props.more && !older && first && (
+        <StripSentinel
+          role={props.role}
+          keyset={{ after: first.id }}
+          context={props.context}
+        />
+      )}
       {props.garments.map((garment) => (
         <GarmentItem
           garment={garment}
@@ -323,10 +348,10 @@ export function StripPage(props: {
           viewOwner={props.context.viewOwner}
         />
       ))}
-      {props.more && last && (
+      {props.more && older && last && (
         <StripSentinel
           role={props.role}
-          before={last.id}
+          keyset={{ before: last.id }}
           context={props.context}
         />
       )}

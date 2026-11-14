@@ -29,11 +29,26 @@ describe('the scale persona', () => {
     expect(new Set(sets).size).toBe(sets.length);
   });
 
-  it('puts every outfit together from garments the persona owns', () => {
+  it('puts every outfit together from distinct garments the persona owns', () => {
     const owned = new Set(scale.garments.map((g) => g.id));
     for (const outfit of scale.outfits) {
       for (const id of outfit.garmentIds) expect(owned).toContain(id);
+      expect(new Set(outfit.garmentIds).size).toBe(outfit.garmentIds.length);
     }
+  });
+
+  it('stops with a reason when the bible has too few combinations', () => {
+    // One plain garment: its 500 copies make about 500 one-garment outfits.
+    const plain = demo.garments.find(
+      (g) => !g.archivedOn && !g.away && g.fields.conditionNote === null,
+    )!;
+    const named = demo.outfits.find((o) => o.name !== null)!;
+    const tiny = {
+      ...demo,
+      garments: [plain],
+      outfits: [{ ...named, garmentIds: [plain.id] }],
+    };
+    expect(() => scalePersona(tiny)).toThrow(/distinct ones/);
   });
 
   it('lives three years, the same on every run', () => {
