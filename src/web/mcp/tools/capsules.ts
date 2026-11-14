@@ -117,13 +117,10 @@ export const capsuleTools = [
     idempotent: true,
     async run({ id, ownerId, add, remove }, ctx) {
       const { added, removed } = await setCapsuleMembers(
-        ctx.db,
+        { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         { id, ownerId, unseen: 'wardrobe' },
         { add, remove },
-      );
-      ctx.webLogger.info(
-        `Capsule ${id} membership changed by user ${ctx.userId} (MCP): ${added} added, ${removed} removed`,
       );
       return { added, removed };
     },

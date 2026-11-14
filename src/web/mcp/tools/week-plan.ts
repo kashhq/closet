@@ -1,6 +1,6 @@
 import * as z from 'zod';
-import { planMyWeekNow } from '../../week-plan/plan';
-import { defineTool } from '../tool';
+import { planWeekFor } from '../../week-plan/plan-actions';
+import { actorOf, defineTool } from '../tool';
 
 /**
  * The weekly auto-plan (#16) as a tool: the calendar's "Plan my week",
@@ -19,17 +19,15 @@ export const weekPlanTools = [
     // Filled slots are skipped: a retry plans nothing more.
     idempotent: true,
     async run(_args, ctx) {
-      const { today, forecast, result } = await planMyWeekNow(
-        ctx,
-        ctx.userId,
+      const { today, forecast, result } = await planWeekFor(
+        {
+          db: ctx.db,
+          logger: ctx.webLogger,
+          weather: ctx.weather,
+          timeZone: ctx.timeZone,
+        },
+        actorOf(ctx),
         new Date(),
-      );
-      const planNote =
-        result.weekPlanId === null ? '' : ` (plan ${result.weekPlanId})`;
-      ctx.webLogger.info(
-        result.templateSet
-          ? `Week planned for user ${ctx.userId} (MCP) from ${today}: ${result.planned.length} outfit(s)${planNote}, ${result.unfilled.length} slot(s) unfilled`
-          : `Week not planned for user ${ctx.userId} (MCP): no week template`,
       );
       return {
         from: today,

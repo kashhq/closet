@@ -26,15 +26,9 @@ import {
   garmentGuard,
   taggedGarmentIn,
 } from './garment-access';
-import { tagGarment } from './garment-actions';
+import { bulkSetGarments, tagGarment } from './garment-actions';
 import { markWashed } from '../wears/queries';
-import {
-  bulkSetProperty,
-  type GridFilters,
-  gridIds,
-  gridPage,
-  nextToTag,
-} from './queries';
+import { type GridFilters, gridIds, gridPage, nextToTag } from './queries';
 import { type GridContextPart, gridContext } from './grid-context';
 import {
   type GarmentScope,
@@ -404,12 +398,12 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const selection = await selected(access, request);
       const { ids } = selection;
       const change = readBulkChange(request.body);
-      const result =
-        change && ids.length > 0
-          ? await bulkSetProperty(db, access.ownerId, ids, change)
-          : { updated: 0, skipped: 0 };
-      logger.info(
-        `Bulk ${request.body.property} by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${result.updated} set, ${result.skipped} skipped, ${ids.length} selected${allNote(selection)}`,
+      const result = await bulkSetGarments(
+        { db, logger },
+        actorOf(request),
+        access.ownerId,
+        ids,
+        change,
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
@@ -501,13 +495,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const selection = await selected(access, request);
       const { capsuleId } = request.body;
       const { added } = await setCapsuleMembers(
-        db,
+        { db, logger },
         actorOf(request),
         { id: capsuleId, ownerId: request.query.ownerId },
         { add: selection.ids, remove: [] },
-      );
-      logger.info(
-        `Bulk capsule ${capsuleId} by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${added} added, ${selection.ids.length} selected${allNote(selection)}`,
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
@@ -557,17 +548,12 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { next, ...tags } = request.body;
       // Only what differs from the stored garment: the card posts its
       // checked chips every time, Next included.
-      const { access, viewOwner, changed } = await tagGarment(
-        db,
+      const { access, viewOwner } = await tagGarment(
+        { db, logger },
         actorOf(request),
         garmentAddress(request),
         tags,
       );
-      if (changed.length > 0) {
-        logger.info(
-          `Garment ${id} tagged by user ${sessionUserId(request)}: ${changed.join(', ')}`,
-        );
-      }
       if (next) {
         logger.info(
           `Tagging: user ${sessionUserId(request)} moved on from garment ${id}`,

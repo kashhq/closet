@@ -352,12 +352,8 @@ describe('wears and washes', () => {
       const after = unescapeHtml((await garmentPage(tee)).body);
       expect(hasText(after, 'Worn 2 times')).toBe(true);
       expect(after).toContain(lastWornOn(daysAgo(4)));
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Outfit ${outfit} deleted by user \\d+ \\(2 wears kept as day-level wears\\)$`,
-          ),
-        ),
+      expect(t.logs.ops('outfit.deleted')).toContainEqual(
+        expect.objectContaining({ outfitId: outfit, wearsKept: 2 }),
       );
     });
 

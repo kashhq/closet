@@ -25,19 +25,17 @@ import {
   reactToProposal,
   removeOutfit,
   requireOutfitPage,
+  saveOutfit,
   setOutfitPublicShare,
 } from './outfit-actions';
 import { savedContext } from './page-context';
 import {
-  createOutfit,
-  type CreateResult,
   FIRST_OUTFIT_PAGE,
   OUTFIT_NAME_MAX,
   OUTFIT_NOTES_MAX,
   OUTFIT_SLOTS_MAX,
   type OutfitInput,
   outfitText,
-  type SaveResult,
 } from './queries';
 import {
   DECLINE_NOTE_MAX,
@@ -238,34 +236,6 @@ function afterSave(
   return `/outfits/${id}${flag && `?${flag}`}`;
 }
 
-function describeSave(result: SaveResult, plan: OutfitInput['plan']): string {
-  const parts = [`${result.slots} row(s)`];
-  if (plan && result.schedule === 'scheduled') {
-    parts.push(`scheduled on ${plan.day} (${plan.occasion})`);
-  }
-  if (plan && result.schedule === 'already-scheduled') {
-    parts.push(`already scheduled on ${plan.day}`);
-  }
-  if (result.entriesClaimed) {
-    parts.push(`${result.entriesClaimed} planned entry(ies) now the user's`);
-  }
-  return parts.join(', ');
-}
-
-/** The outfit form's create log line: a new outfit, or the one its garments already were. */
-function createMessage(
-  ownerId: number,
-  result: CreateResult,
-  plan: OutfitInput['plan'],
-): string {
-  const saved = describeSave(result, plan);
-  if (!result.alreadySaved) {
-    return `Outfit ${result.id} created by user ${ownerId}: ${saved}`;
-  }
-  const takenOver = result.adopted ? '; taken over from the week planner' : '';
-  return `Outfit form by user ${ownerId}: its garments are already outfit ${result.id}, nothing created (${saved})${takenOver}`;
-}
-
 /**
  * /outfits: the list, the detail page, the writes, and the builder's old
  * addresses, now redirects into Styling (src/web/styling). Outfits are the signed-in user's own:
@@ -432,14 +402,12 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     '/outfits',
     { schema: { body: OutfitBody } },
     async (request, reply) => {
-      const ownerId = sessionUserId(request);
       const input = outfitInput(request.body);
-      const result = await createOutfit(db, ownerId, {
+      const result = await saveOutfit({ db, logger }, actorOf(request), {
         ...input,
         origin: 'person',
         madeBy: BY_PERSON,
       });
-      logger.info(createMessage(ownerId, result, input.plan));
       return reply.redirect(afterSave(request.body, result.id, result), 302);
     },
   );
@@ -451,10 +419,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const actor = actorOf(request);
       const { id } = request.params;
       const input = outfitInput(request.body);
-      const result = await editOutfit(db, actor, id, input);
-      logger.info(
-        `Outfit ${id} updated by user ${actor.userId}: ${describeSave(result, input.plan)}`,
-      );
+      await editOutfit({ db, logger }, actor, id, input);
       return reply.redirect(afterSave(request.body, id), 302);
     },
   );
@@ -471,10 +436,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ): Promise<FastifyReply> {
     const actor = actorOf(request);
     const { id } = request.params;
-    await setOutfitPublicShare(db, actor, id, shared);
-    logger.info(
-      `Outfit ${id} ${shared ? 'shared publicly' : 'no longer shared publicly'} by user ${actor.userId}`,
-    );
+    await setOutfitPublicShare({ db, logger }, actor, id, shared);
     return navigateTo(reply, outfitUrl(id));
   }
 
@@ -497,10 +459,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      const deleted = await removeOutfit(db, actor, id);
-      logger.info(
-        `Outfit ${id} deleted by user ${actor.userId} (${deleted.wearsKept} wears kept as day-level wears)`,
-      );
+      await removeOutfit({ db, logger }, actor, id);
       return navigateTo(reply, '/outfits');
     },
   );
@@ -519,10 +478,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ) {
     const { id } = request.params;
     const actor = actorOf(request);
-    const outcome = await reactToProposal(db, actor, id, change);
-    logger.info(
-      `Outfit ${id} ${outcome.from} -> ${outcome.to} by user ${actor.userId}${change.event === 'decline' ? ` (${change.reason})` : ''}`,
-    );
+    const outcome = await reactToProposal({ db, logger }, actor, id, change);
     // Save once complete: the same move, said as what it did.
     const said = toast === 'love' && outcome.complete ? 'save' : toast;
     return reply.redirect(

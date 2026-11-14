@@ -143,7 +143,7 @@ ${coverageTable(READ_COVERAGE)}`,
         cutouts.enabled,
       );
       if (page.revokedWardrobes.length > 0) {
-        logger.info(
+        logger.debug(
           `Changes for user ${actor.userId}: wardrobes ${page.revokedWardrobes.join(', ')} no longer shared, dropped from the cursor`,
         );
       }

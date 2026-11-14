@@ -1400,6 +1400,11 @@ Why: a media query ignores `html { font-size }`, so the dock could not tell 200%
 Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
 Consequence: the 22rem threshold is five labels at text-xs; a new dock tab means rechecking it.
 
+## 2026-11-14 — The op-log conversion finished: every feature's writes log in their actions (#712)
+Why: #1011 converted trips and calendar and left 21 files on the guard's `known` list.
+Decision: auth tokens, capsules, clash pairs, looks, outfits (create, update, share, delete, reaction, Muse's proposal), Muse's needs, picks and rounds, wishlist decisions and purchases, sizes, style, wears and washes, the week plan, Today's Wear this, garments (create, clone, edit, condition, tags, share, status, delete, copies, bulk, cutouts, repairs) and the weather settings each log one `logOp` line from an action file beside them; the page routes, API routes and MCP tools log no success. The `known` list is empty.
+Consequence: a read that logged (the changes feed's dropped wardrobes, get_suggestion_feedback) is a debug line; a rule held already (`outfit.rule.added`) and an API retry log `changed: false`, but a tagging card left alone logs nothing. The creation sentences of link import and a photo's bytes-and-rows lines (`writes.ts`, `link-import/save.ts`) stay, outside the guard's globs.
+
 ## 2026-11-14 — Wardrobe chrome is one chip row; Styling rows share one tile size from lg (#732)
 Why: six rows of chrome (weather line, a banner per prompt) put the first garment ~300 px down at 390 px; the accessory strips used a smaller tile and different spacers than the garment strips at lg.
 Decision: the closet drops the weather line (it has no job there) and shows "N photos to add", "N to tag", "N to wash" as chips in one row (`Prompts`); `small` strips are `w-40` with `roomy`'s spacers from lg. A shared wardrobe was already titled with its owner's name.

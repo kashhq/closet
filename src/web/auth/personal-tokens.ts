@@ -2,14 +2,18 @@ import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { TOKEN_PREFIX, type TokenKind } from '../../credential-names';
 import type { Db, Queryable } from '../../db/client';
-import type { Logger } from '../../logger';
 import { markSecretChecked } from '../../metrics/request-timing';
 import {
   personalAccessToken,
   type SharePermission,
   user,
 } from '../../db/schema';
-import { type ShareReadAhead, sharePermissionSql } from '../sharing/access';
+import { type ActionDeps, logOp } from '../op-log';
+import {
+  type Actor,
+  type ShareReadAhead,
+  sharePermissionSql,
+} from '../sharing/access';
 import type { SessionUser } from './session';
 
 /**
@@ -180,7 +184,6 @@ export type CreateTokenResult =
   | { created: false; reason: 'password-changed' };
 
 export interface NewToken {
-  userId: number;
   kind: TokenKind;
   /** Already trimmed and bounded (TOKEN_NAME_MAX). */
   name: string;
@@ -192,6 +195,12 @@ export interface NewToken {
    * the lock: a password changed after the check refuses the mint.
    */
   verifiedPassword: string;
+  /**
+   * The address the mint came from (`request.ip`, which TRUSTED_PROXIES
+   * governs), the audit trail of a credential issued over the network; left
+   * out by the seed CLI.
+   */
+  address?: string;
 }
 
 /**
@@ -214,58 +223,71 @@ export interface NewToken {
  * evicts that kind's least recently used (a native sign-in has no page to
  * ask on), in the same transaction.
  */
-export function createToken(
-  { db, logger }: { db: Db; logger: Logger },
-  { userId, kind, name, scope, verifiedPassword }: NewToken,
+export async function createToken(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  { kind, name, scope, verifiedPassword, address }: NewToken,
 ): Promise<CreateTokenResult> {
-  return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ password: user.password })
-      .from(user)
-      .where(eq(user.id, userId))
-      .for('update');
-    if (account?.password !== verifiedPassword) {
-      return { created: false, reason: 'password-changed' } as const;
-    }
-    let tokens = await listTokens(tx, userId, kind);
-    let evictedId: number | undefined;
-    if (tokens.length >= MAX_ACTIVE_TOKENS) {
-      if (kind === 'mcp') {
-        return { created: false, reason: 'too-many', tokens } as const;
+  const { userId } = actor;
+  const result = await db.transaction(
+    async (tx): Promise<CreateTokenResult> => {
+      const [account] = await tx
+        .select({ password: user.password })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (account?.password !== verifiedPassword) {
+        return { created: false, reason: 'password-changed' };
       }
-      evictedId = leastRecentlyUsed(tokens).id;
-      await tx
-        .update(personalAccessToken)
-        .set({ revokedAt: new Date() })
-        .where(eq(personalAccessToken.id, evictedId));
-      tokens = tokens.filter((token) => token.id !== evictedId);
-      logger.info(
-        `User ${userId} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${evictedId}, the least recently used`,
-      );
-    }
-    const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-    const [row] = await tx
-      .insert(personalAccessToken)
-      .values({
-        userId,
-        kind,
-        name,
-        tokenHash: hashToken(token),
-        tokenPrefix: token.slice(0, DISPLAY_LENGTH),
-        // The app's clock, not the column's default: idleExpired judges it
-        // against the app's `now`, beside last_used_at, which it stamps.
-        createdAt: new Date(),
-        ...scope,
-      })
-      .returning(listingColumns);
-    return {
-      created: true,
-      id: row.id,
-      token,
-      tokens: [row, ...tokens],
-      evictedId,
-    } as const;
-  });
+      let tokens = await listTokens(tx, userId, kind);
+      let evictedId: number | undefined;
+      if (tokens.length >= MAX_ACTIVE_TOKENS) {
+        if (kind === 'mcp') {
+          return { created: false, reason: 'too-many', tokens };
+        }
+        evictedId = leastRecentlyUsed(tokens).id;
+        await tx
+          .update(personalAccessToken)
+          .set({ revokedAt: new Date() })
+          .where(eq(personalAccessToken.id, evictedId));
+        tokens = tokens.filter((token) => token.id !== evictedId);
+      }
+      const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
+      const [row] = await tx
+        .insert(personalAccessToken)
+        .values({
+          userId,
+          kind,
+          name,
+          tokenHash: hashToken(token),
+          tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+          // The app's clock, not the column's default: idleExpired judges it
+          // against the app's `now`, beside last_used_at, which it stamps.
+          createdAt: new Date(),
+          ...scope,
+        })
+        .returning(listingColumns);
+      return {
+        created: true,
+        id: row.id,
+        token,
+        tokens: [row, ...tokens],
+        evictedId,
+      };
+    },
+  );
+  // After the commit: a rollback must leave no line for a token never minted.
+  if (result.created) {
+    logOp(logger, actor, 'token.created', {
+      tokenId: result.id,
+      kind,
+      readOnly: scope.readOnly,
+      ownWardrobeOnly: scope.ownWardrobeOnly,
+      evictedId: result.evictedId,
+      address,
+    });
+  }
+  return result;
 }
 
 /**
@@ -275,11 +297,12 @@ export function createToken(
  * is, and a stale tab's second tap is no error page.
  */
 export async function revokeToken(
-  db: Db,
-  userId: number,
+  { db, logger }: ActionDeps,
+  actor: Actor,
   kind: TokenKind,
   id: number,
 ): Promise<boolean> {
+  const { userId } = actor;
   const revoked = await db
     .update(personalAccessToken)
     .set({ revokedAt: new Date() })
@@ -291,6 +314,11 @@ export async function revokeToken(
       ),
     )
     .returning({ id: personalAccessToken.id });
+  logOp(logger, actor, 'token.revoked', {
+    tokenId: id,
+    kind,
+    changed: revoked.length > 0,
+  });
   return revoked.length > 0;
 }
 

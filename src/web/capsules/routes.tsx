@@ -63,6 +63,7 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   done,
 ) => {
   const { db, logger } = options;
+  const deps = { db, logger };
 
   const authorize = wardrobeGuard(db, 'capsule');
 
@@ -148,7 +149,7 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const form = readCapsuleForm(request.body);
       if (!form.ok) return refuseForm(reply, form);
       const created = await createOwnCapsule(
-        db,
+        deps,
         actorOf(request),
         request.query.ownerId,
         form.fields,
@@ -156,9 +157,6 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       if (created === 'name-taken') {
         return refuseForm(reply, nameTaken(request.body));
       }
-      logger.info(
-        `Capsule ${created.id} created by user ${created.access.ownerId}`,
-      );
       return reply.redirect(
         capsuleUrl(created.id, undefined, '', { created: 1 }),
         303,
@@ -240,11 +238,10 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       await requireCapsule(db, actor, address, 'own');
       const form = readCapsuleForm(request.body);
       if (!form.ok) return refuseForm(reply, form, id);
-      const saved = await renameCapsule(db, actor, address, form.fields);
+      const saved = await renameCapsule(deps, actor, address, form.fields);
       if (saved === 'name-taken') {
         return refuseForm(reply, nameTaken(request.body), id);
       }
-      logger.info(`Capsule ${id} updated by user ${saved.access.ownerId}`);
       return reply.redirect(capsuleUrl(id, undefined), 303);
     },
   );
@@ -254,13 +251,7 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     CAPSULE_ROUTE,
     { schema: { params: CapsuleParams, querystring: OwnerQuery } },
     async (request, reply) => {
-      const { id } = request.params;
-      const { access } = await deleteOwnCapsule(
-        db,
-        actorOf(request),
-        capsuleAddress(request),
-      );
-      logger.info(`Capsule ${id} deleted by user ${access.ownerId}`);
+      await deleteOwnCapsule(deps, actorOf(request), capsuleAddress(request));
       return navigateTo(reply, '/capsules');
     },
   );
@@ -283,14 +274,11 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const { id } = request.params;
       const { ids, shown } = request.body ?? {};
-      const { access, viewOwner, added, removed } = await setCapsuleMembers(
-        db,
+      const { viewOwner, added, removed } = await setCapsuleMembers(
+        deps,
         actorOf(request),
         capsuleAddress(request),
         { add: ids ?? [], remove: unchecked(shown, ids) },
-      );
-      logger.info(
-        `Capsule ${id} garments chosen by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${added} added, ${removed} removed, ${shown?.length ?? 0} shown`,
       );
       // The toast's counts, as query parameters.
       return reply.redirect(
@@ -316,17 +304,12 @@ export const capsuleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
       const { capsuleIds, shown } = request.body ?? {};
-      const result = await setGarmentCapsules(
-        db,
+      await setGarmentCapsules(
+        deps,
         actorOf(request),
         garmentAddress(request),
         { add: capsuleIds ?? [], remove: unchecked(shown, capsuleIds) },
-      );
-      const { access } = result;
-      logger.info(
-        `Garment ${id} capsules set by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${result.added} added, ${result.removed} removed`,
       );
       return renderFragment(reply, <AutosaveSaved />);
     },

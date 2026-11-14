@@ -11,11 +11,11 @@ import {
 } from '../../weather/queries';
 import { userWeatherFrom } from '../../weather/service';
 import { markEntryWorn } from '../../calendar/entry-actions';
-import { laundryList, markWashed, setWoreToday } from '../../wears/queries';
+import { laundryList } from '../../wears/queries';
+import { washGarments, wearGarment } from '../../wears/wear-actions';
 import { actorOf, defineTool, wardrobeFor } from '../tool';
 import { isoDate, ownerIdInput, rowId } from './common';
 import { type DayWeatherOf, reachesForecast, weatherOfDays } from './weather';
-import { garmentNotFound } from '../../wardrobe/garment-access';
 import { type Projection, project } from '../../api/resource';
 import type { CalendarEntry } from '../../calendar/calendar-view';
 import {
@@ -203,21 +203,12 @@ export const calendarTools = [
       }
       // Wears are the owner's own: a shared wardrobe's garment is refused
       // as the garment page's Wore today refuses it.
-      await wardrobeFor(ctx, ownerId, 'own');
-      const saved = await setWoreToday(ctx.db, {
-        garmentId: garmentId!,
-        ownerId: ctx.userId,
-        day: today,
-        worn: true,
+      await wearGarment(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
+        { id: garmentId!, ownerId, unseen: 'wardrobe' },
         // Now is on today: today is its date.
-        wornAt: now,
-      });
-      if (saved === 'not-found') throw garmentNotFound();
-      if (saved === 'wishlist') {
-        throw new HttpError(409, 'On the wishlist: not bought yet');
-      }
-      ctx.webLogger.info(
-        `Garment ${garmentId} worn on ${today} by user ${ctx.userId} (MCP)`,
+        { day: today, worn: true, wornAt: now },
       );
       return { garmentId, day: today };
     },
@@ -238,15 +229,11 @@ export const calendarTools = [
       await wardrobeFor(ctx, ownerId, 'own');
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
-      const washed = await markWashed(
-        ctx.db,
-        ctx.userId,
+      const washed = await washGarments(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
         garmentIds,
-        today,
-        now,
-      );
-      ctx.webLogger.info(
-        `Laundry by user ${ctx.userId} on ${today} (MCP): ${washed.length} washed of ${garmentIds.length} asked`,
+        { day: today, at: now },
       );
       return { washed: washed.map((row) => row.id), day: today };
     },

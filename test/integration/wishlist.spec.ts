@@ -292,8 +292,13 @@ describe('the wishlist', () => {
       const id = await createWishlistItem(t, { name: 'Linen shirt' });
       const saved = await get(`/wardrobe/${id}`);
       expect(saved.body).toContain('Linen shirt');
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `Garment ${id} created (wishlist) by user ${ownerId} in wardrobe ${ownerId}`,
+      expect(t.logs.ops('garment.created')).toContainEqual(
+        expect.objectContaining({
+          garmentId: id,
+          userId: ownerId,
+          ownerId,
+          destination: 'wishlist',
+        }),
       );
     });
 
@@ -508,8 +513,13 @@ describe('the wishlist', () => {
       expect(bought.statusCode).toBe(303);
       expect(await statusOf(charcoal)).toBe('closet');
       expect(await statusOf(merino)).toBe('archived');
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `Garment ${charcoal} bought (wishlist -> closet) by user ${ownerId} in wardrobe ${ownerId}; garment ${merino} it replaces archived`,
+      expect(t.logs.ops('garment.bought')).toContainEqual(
+        expect.objectContaining({
+          garmentId: charcoal,
+          userId: ownerId,
+          ownerId,
+          archivedReplaced: merino,
+        }),
       );
       // Now a closet read, and the old one is not.
       const grid = await get('/wardrobe');

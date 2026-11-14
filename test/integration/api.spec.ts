@@ -436,12 +436,14 @@ describe('POST /api/v1/auth/token (sign in a device)', () => {
       .from(personalAccessToken)
       .where(eq(personalAccessToken.id, body.tokenId));
     expect(row).toEqual({ userId: id, kind: 'device', name: 'Kitchen iPad' });
-    expect(t.logs.messages('info', 'Api')).toEqual([
-      expect.stringMatching(
-        new RegExp(
-          `^User ${id} signed in a device: token ${body.tokenId} from `,
-        ),
-      ),
+    expect(t.logs.ops('token.created')).toEqual([
+      expect.objectContaining({
+        userId: id,
+        surface: 'api',
+        tokenId: body.tokenId,
+        kind: 'device',
+        address: expect.any(String),
+      }),
     ]);
   });
 
@@ -579,12 +581,8 @@ describe('POST /api/v1/auth/token (sign in a device)', () => {
     for (const device of devices.slice(1)) {
       expect(await tokenState(device)).toBe('active');
     }
-    expect(t.logs.messages('info', 'Api')).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^User ${id} signed in a device: token ${tokenId} from .*, evicting token ${devices[0]}$`,
-        ),
-      ),
+    expect(t.logs.ops('token.created')).toContainEqual(
+      expect.objectContaining({ tokenId, evictedId: devices[0] }),
     );
     expect(
       await t.db.$count(
@@ -718,8 +716,13 @@ describe('DELETE /api/v1/auth/token (sign a device out)', () => {
       () => t.api(phone.token, { method: 'DELETE', url: SIGN_IN_URL }),
     );
     expect(res.statusCode).toBe(204);
-    expect(t.logs.messages('info', 'Api')).toEqual([
-      `User ${id} signed out device token ${phone.tokenId} (already revoked)`,
+    expect(t.logs.ops('token.revoked')).toEqual([
+      expect.objectContaining({
+        userId: id,
+        tokenId: phone.tokenId,
+        kind: 'device',
+        changed: false,
+      }),
     ]);
   });
 });

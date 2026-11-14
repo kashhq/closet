@@ -305,10 +305,13 @@ describe('property filters, select mode and bulk edit', () => {
         property: 'pattern',
         pattern: 'solid',
       });
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          /^Bulk pattern by user \d+ in wardrobe \d+: 1 set, 0 skipped, 1 selected$/,
-        ),
+      expect(t.logs.ops('garments.property.set')).toContainEqual(
+        expect.objectContaining({
+          property: 'pattern',
+          updated: 1,
+          skipped: 0,
+          asked: 1,
+        }),
       );
     });
 

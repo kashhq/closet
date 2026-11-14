@@ -134,8 +134,15 @@ describe('MCP: saved looks', () => {
       [0, 'top'],
       [2, 'bag'],
     ]);
-    expect(t.logs.messages('info')).toContainEqual(
-      `Inspiration ${look} pieces set by user ${ownerId} (MCP): 1 kept, 1 removed, 1 added`,
+    expect(t.logs.ops('inspiration.pieces.set')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: look,
+        userId: ownerId,
+        surface: 'mcp',
+        kept: 1,
+        removed: 1,
+        added: 1,
+      }),
     );
 
     const wrongType = await callTool(t, token, 'set_inspiration_pieces', {

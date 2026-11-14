@@ -3,15 +3,19 @@ import type { IsoDate } from '../../calendar-date';
 import type { LookReaction } from '../../wardrobe/look-reaction';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
+import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
 import { setPublicShare } from '../share/queries';
 import type { Actor } from '../sharing/access';
 import { newOutfitSlots } from './gone-garments';
 import { type OutfitContext, outfitContext } from './page-context';
 import {
+  type CreateResult,
+  createOutfit,
   deleteOutfit,
   findOutfit,
   type OutfitEdit,
+  type OutfitInput,
   type OutfitProposalInput,
   proposeOutfit,
   type SaveResult,
@@ -67,15 +71,48 @@ export async function requireOutfit(
   return found;
 }
 
+/**
+ * A new outfit of the actor's garments (the outfit form, Styling's Save
+ * with picks, POST /outfits, create_outfit), once per garment set: the
+ * outfit its garments already were is the answer, `changed: false` on the
+ * line (createOutfit; the API's `clientId` rides along). A pick's save (pickIdea) is its own line.
+ */
+export async function saveOutfit(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  input: OutfitInput,
+  clientId?: string,
+): Promise<CreateResult> {
+  const saved = await createOutfit(db, actor.userId, input);
+  logOp(logger, actor, 'outfit.created', {
+    outfitId: saved.id,
+    changed: !saved.alreadySaved,
+    slots: saved.slots,
+    day: input.plan?.day,
+    schedule: saved.schedule,
+    adopted: saved.adopted,
+    clientId,
+  });
+  return saved;
+}
+
 /** An edit of the actor's outfit (the outfit form, Styling's Save in place, the API's PATCH): updateOutfit. */
 export async function editOutfit(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
   input: OutfitEdit,
 ): Promise<SaveResult> {
   const saved = await updateOutfit(db, id, actor.userId, input);
   if (saved === 'not-found') throw outfitNotFound();
+  logOp(logger, actor, 'outfit.updated', {
+    outfitId: id,
+    slots: input.slots ? saved.slots : undefined,
+    name: input.name !== undefined,
+    notes: input.notes !== undefined,
+    schedule: saved.schedule,
+    entriesClaimed: saved.entriesClaimed ?? 0,
+  });
   return saved;
 }
 
@@ -85,13 +122,14 @@ export async function editOutfit(
  * link's id after the write.
  */
 export async function setOutfitPublicShare(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
   shared: boolean,
 ): Promise<{ shareableId: string | null }> {
   const written = await setPublicShare(db, 'outfit', id, actor.userId, shared);
   if (!written) throw outfitNotFound();
+  logOp(logger, actor, 'outfit.share.set', { outfitId: id, shared });
   return written;
 }
 
@@ -101,7 +139,7 @@ export async function setOutfitPublicShare(
  * sets it aside, and its reaction is feedback a delete would lose (#335).
  */
 export async function removeOutfit(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
 ): Promise<{ wearsKept: number }> {
@@ -112,6 +150,10 @@ export async function removeOutfit(
       logDetail: `outfit ${id} is a proposal not loved`,
     });
   }
+  logOp(logger, actor, 'outfit.deleted', {
+    outfitId: id,
+    wearsKept: deleted.wearsKept,
+  });
   return deleted;
 }
 
@@ -124,13 +166,22 @@ export type Reacted = Extract<ReactOutcome, { ok: true }>;
  * double tap), a 409.
  */
 export async function reactToProposal(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
   change: OutfitReaction,
 ): Promise<Reacted> {
   const outcome = await reactToOutfit(db, actor.userId, id, change);
-  if (outcome.ok) return outcome;
+  if (outcome.ok) {
+    logOp(logger, actor, 'outfit.reacted', {
+      outfitId: id,
+      event: change.event,
+      from: outcome.from,
+      to: outcome.to,
+      reason: change.event === 'decline' ? change.reason : undefined,
+    });
+    return outcome;
+  }
   const logDetail = `reaction ${change.event} on outfit ${id}: ${outcome.reason}`;
   if (outcome.reason === 'not-found') {
     throw new NotFound('outfit', { logDetail });
@@ -157,7 +208,7 @@ export type Proposed =
  * declined, are a 409 saying which; a proposal already made is the answer.
  */
 export async function proposeOutfitTo(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { garmentIds: readonly number[]; name: string | null },
   proposal: OutfitProposalInput,
@@ -174,7 +225,15 @@ export async function proposeOutfitTo(
     { name: input.name, slots },
     proposal,
   );
-  if (proposed.ok) return proposed;
+  if (proposed.ok) {
+    logOp(logger, actor, 'outfit.proposed', {
+      outfitId: proposed.id,
+      changed: !('alreadyProposed' in proposed),
+      slots: 'slots' in proposed ? proposed.slots : undefined,
+      tokenId: proposal.tokenId,
+    });
+    return proposed;
+  }
   if (proposed.reason === 'owners') {
     throw new HttpError(
       409,

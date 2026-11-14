@@ -747,12 +747,12 @@ describe('inspiration', () => {
     expect(tagged).not.toContain(hintFor('layer/blazer'));
     expect(tagged).toContain(hintFor('top/t-shirt'));
     expect(tagged).toContain(`href="/inspiration/${id}/recreate"`);
-    expect(t.logs.messages('info')).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^Inspiration ${id} piece 0 \\(layer/blazer\\) added by user \\d+$`,
-        ),
-      ),
+    expect(t.logs.ops('inspiration.piece.added')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        position: 0,
+        kind: 'layer/blazer',
+      }),
     );
 
     // The piece's autosave: answered with the status line.
@@ -921,8 +921,13 @@ describe('inspiration', () => {
       .where(eq(outfitSlot.outfitId, outfitId));
     expect(slots).toEqual([{ garmentId: blackJacket }]);
     expect(await matchedOf(id)).toEqual([blackJacket, null, null]);
-    expect(t.logs.messages('info')).toContainEqual(
-      `Inspiration ${id} saved as outfit ${outfitId} by user ${await userIdOf(t, 'look-saver@example.com')} with 1 garment(s)`,
+    expect(t.logs.ops('inspiration.outfit.saved')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        outfitId,
+        garments: 1,
+        changed: true,
+      }),
     );
 
     // The page centres the choice made, not the closest.
@@ -1205,8 +1210,14 @@ describe('inspiration', () => {
         and(eq(garment.ownerId, userId), eq(garment.status, 'wishlist')),
       ),
     ).toBe(1);
-    expect(t.logs.messages('info')).toContainEqual(
-      `Inspiration ${id} piece 2 already on the wishlist of user ${userId} as garment ${item.id}, nothing created`,
+    expect(t.logs.ops('inspiration.piece.found')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        position: 2,
+        userId,
+        garmentId: item.id,
+        changed: false,
+      }),
     );
     // An unknown piece is a 404, writing nothing.
     const unknown = await t.inject({

@@ -69,10 +69,7 @@ export const repairRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           400,
         );
       }
-      const repairId = await logRepair(db, actor, address, form.entry);
-      logger.info(
-        `Repair ${repairId} (${form.entry.kind}, ${form.entry.day}${form.entry.cost === null ? '' : `, cost ${form.entry.cost}`}) logged on garment ${id} by user ${userId}`,
-      );
+      await logRepair({ db, logger }, actor, address, form.entry);
       return reply.redirect(
         `${garmentUrl(id, undefined)}?repairSaved=1#${REPAIRS_ANCHOR}`,
         303,
@@ -87,13 +84,10 @@ export const repairRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const { id, repairId } = request.params;
       await removeRepair(
-        db,
+        { db, logger },
         actorOf(request),
         garmentAddress(request),
         repairId,
-      );
-      logger.info(
-        `Repair ${repairId} removed from garment ${id} by user ${sessionUserId(request)}`,
       );
       return reply.redirect(editorUrl(id), 303);
     },

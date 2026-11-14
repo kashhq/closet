@@ -450,7 +450,7 @@ export const garmentTools = [
     async run({ id, ownerId, ...changes }, ctx) {
       const { price } = changes;
       const { access, garment, edit } = await editGarment(
-        ctx.db,
+        { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         { id, ownerId, unseen: 'wardrobe' },
         (stored) => {
@@ -468,13 +468,6 @@ export const garmentTools = [
         },
       );
       const { fields, ignored } = edit;
-      ctx.webLogger.info(
-        `Garment ${id} updated by user ${ctx.userId} (MCP): ${Object.keys(
-          changes,
-        )
-          .filter((name) => changes[name as keyof typeof changes] !== undefined)
-          .join(', ')}`,
-      );
       // Every written value is stored as given, so the answer is the
       // garment read before with them, not a second read (#372).
       const saved: GarmentDetail = { ...garment, ...fields };
@@ -503,14 +496,11 @@ export const garmentTools = [
     writes: true,
     idempotent: false,
     async run(args, ctx) {
-      const { access, from, to } = await addGarmentCopies(
-        ctx.db,
+      const { access } = await addGarmentCopies(
+        { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         { id: args.id, ownerId: args.ownerId, unseen: 'wardrobe' },
         args.copies,
-      );
-      ctx.webLogger.info(
-        `Garment ${args.id} copies added by user ${ctx.userId} in wardrobe ${access.ownerId} (MCP): quantity ${from} -> ${to}`,
       );
       const saved = await garmentIn(ctx.db, access, args.id);
       return {

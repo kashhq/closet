@@ -5,19 +5,19 @@ import { AWAY_REASONS } from '../../wardrobe/availability';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { literals, Nullable, withoutNulls } from '../api/resource';
-import {
-  dayOutsideWindow,
-  instantNote,
-  postedInstant,
-} from '../offline-writes';
+import { dayOutsideWindow, postedInstant } from '../offline-writes';
 import { REPLAY_WINDOW_DAYS } from '../../offline-writes';
 import { IsoDateSchema, RowId, TapInstantSchema } from '../schemas';
 import { actorOf } from '../sharing/access';
 import { garmentAddress } from '../wardrobe/garment-access';
 import { GarmentQuery } from '../wardrobe/garment-api-input';
 import { CARE_NOTE_MAX } from '../wardrobe/garment-input';
-import { markWashed } from './queries';
-import { putGarmentAway, washGarment, wearGarment } from './wear-actions';
+import {
+  putGarmentAway,
+  washGarment,
+  washGarments,
+  wearGarment,
+} from './wear-actions';
 
 /** The days a wear or wash may be for: what a phone offline for a week still sends. */
 const WriteDay = CloneType(IsoDateSchema, {
@@ -130,6 +130,7 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   { db, config, logger },
   done,
 ) => {
+  const deps = { db, logger };
   /** The day sent, or the 409 a day outside the window is. */
   function judgedDay(day: IsoDate): IsoDate {
     const refusal = dayOutsideWindow(day, todayIn(config.timeZone, new Date()));
@@ -155,15 +156,15 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const day = judgedDay(request.params.day);
-      const { ownerId, changed } = await wearGarment(
-        db,
+      const { changed } = await wearGarment(
+        deps,
         actorOf(request),
         garmentAddress(request),
         {
           day,
           worn: true,
+          clientId: request.body?.clientId,
           wornAt: postedInstant(
             request,
             request.body?.at,
@@ -171,10 +172,6 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
             config.timeZone,
           ),
         },
-      );
-      const clientId = request.body?.clientId;
-      logger.info(
-        `Garment ${id} worn on ${day} by user ${ownerId}${changed ? '' : ', already so'} (API)${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
       );
       return { day, worn: true, changed };
     },
@@ -195,16 +192,12 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const day = judgedDay(request.params.day);
-      const { ownerId, changed } = await wearGarment(
-        db,
+      const { changed } = await wearGarment(
+        deps,
         actorOf(request),
         garmentAddress(request),
         { day, worn: false, wornAt: null },
-      );
-      logger.info(
-        `Garment ${id} wear undone on ${day} by user ${ownerId}${changed ? '' : ', already so'} (API)`,
       );
       return { day, worn: false, changed };
     },
@@ -226,17 +219,13 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const day = judgedDay(request.body.day);
       const at = postedInstant(request, request.body.at, day, config.timeZone);
-      const { ownerId, changed } = await washGarment(
-        db,
+      const { changed } = await washGarment(
+        deps,
         actorOf(request),
         garmentAddress(request),
         { day, at },
-      );
-      logger.info(
-        `Garment ${id} washed on ${day} ${instantNote(at)} by user ${ownerId}${changed ? '' : ', already washed then or later'} (API)`,
       );
       return { day, changed };
     },
@@ -256,19 +245,12 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { garmentIds } = request.body;
       const day = judgedDay(request.body.day);
-      const washed = await markWashed(
-        db,
-        userId,
-        garmentIds,
+      const washed = await washGarments(deps, actorOf(request), garmentIds, {
         day,
-        postedInstant(request, request.body.at, day, config.timeZone),
-      );
-      logger.info(
-        `Laundry by user ${userId} on ${day} (API): ${washed.length} washed of ${garmentIds.length} named`,
-      );
+        at: postedInstant(request, request.body.at, day, config.timeZone),
+      });
       return { washed: washed.map((row) => row.id) };
     },
   );
@@ -289,18 +271,14 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { away, note } = request.body;
       const stored =
         away === null ? null : { reason: away, note: note?.trim() || null };
-      const { ownerId } = await putGarmentAway(
-        db,
+      await putGarmentAway(
+        deps,
         actorOf(request),
         garmentAddress(request),
         stored,
-      );
-      logger.info(
-        `Garment ${id} ${stored ? `away (${stored.reason})` : 'back in the closet'} for user ${ownerId} (API)`,
       );
       return withoutNulls({
         away: stored?.reason ?? null,
