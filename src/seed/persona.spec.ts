@@ -275,6 +275,7 @@ describe('persona bibles', () => {
     expect(sparse.garments.filter((g) => !g.photo)).toHaveLength(4);
     expect(sparse.sharesWith).toEqual([
       { persona: 'demo', permission: 'MANAGE' },
+      { persona: 'scale', permission: 'MANAGE' },
     ]);
     expect(sparse.outfits).toEqual([
       expect.objectContaining({

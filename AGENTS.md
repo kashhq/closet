@@ -209,7 +209,7 @@ npm test                      # Vitest unit projects; test:watch, test:debug
 (cd ../pgvault-dev && docker compose up -d --wait)
 npm run test:int              # Vitest integration: the real app in-process, a scratch database per spec file
 npm run test:e2e              # build, then Playwright (ten scenarios): test/AGENTS.md
-npm run audit:pages           # every page/action as the demo persona vs docs/perf/
+npm run audit:pages           # every page/action as the demo persona (--persona scale: 500 garments) vs docs/perf/
 npm run lighthouse            # lhci autorun
 npm run test:all              # every Vitest project; test:cov adds v8 coverage
 npm run typecheck             # app, tests, scripts, then the service worker
@@ -223,6 +223,7 @@ docker build --build-arg APP_VERSION=dev -t closet .
 make install                  # git hooks (.githooks/), once per checkout or worktree
 make ci-deps ci-quick         # npm ci; guards (docs-check among them), secrets, lint, types
 make ci-unit | ci-db | ci-e2e # each reports OVERBUDGET / FLOOR warnings (Workflow)
+make perf-compare             # the page audit over the demo and scale personas vs docs/perf/ baselines (docs/perf/README.md)
 make ci-metrics               # the metrics report (never fails); make metrics-tighten keeps a cleanup round's gains
 make review PR=<n>            # one local review round (when Codex is out of budget)
 make merge PR=<n>             # squash-merge once the review rounds allow it

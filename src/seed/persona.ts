@@ -81,7 +81,7 @@ import {
   plain,
   readTables,
 } from './bible';
-import { REFERENCE_ANCHOR } from './simulate';
+import { HISTORY_DAYS, REFERENCE_ANCHOR } from './simulate';
 import { BANDS, type Band } from './weather';
 
 /**
@@ -96,8 +96,16 @@ import { BANDS, type Band } from './weather';
 export const PERSONA_KEYS = ['demo', 'fresh', 'sparse'] as const;
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
 
-export function isPersonaKey(value: string): value is PersonaKey {
-  return (PERSONA_KEYS as readonly string[]).includes(value);
+/**
+ * The scale persona (scale.ts) has no bible: it is generated from demo's, so
+ * it is a seed key but not a PERSONA_KEY, and `--persona all` leaves it out.
+ */
+export type SeedKey = PersonaKey | 'scale';
+
+export function isSeedKey(value: string): value is SeedKey {
+  return (
+    value === 'scale' || (PERSONA_KEYS as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -241,12 +249,12 @@ export interface SeedSizes {
 }
 
 export interface Persona {
-  key: PersonaKey;
+  key: SeedKey;
   account: { email: string; firstName: string; lastName: string };
   /** Their weather settings (#14); null without a `Weather home` row. */
   weather: PersonaWeather | null;
   /** Personas this one shares its wardrobe with, once both exist. */
-  sharesWith: { persona: PersonaKey; permission: SharePermission }[];
+  sharesWith: { persona: SeedKey; permission: SharePermission }[];
   /** What the persona owns (the closet and the archive). */
   garments: SeedGarment[];
   /** What the persona is thinking of buying. */
@@ -268,6 +276,8 @@ export interface Persona {
   avoid: [string, string][];
   /** Sunday first; null without a history. */
   week: SeedDay[] | null;
+  /** Days of worn history before the anchor. */
+  historyDays: number;
   events: SeedEvent[];
   trips: SeedTrip[];
 }
@@ -351,6 +361,7 @@ export function parsePersona(key: PersonaKey, markdown: string): Persona {
     }),
     avoid: readClashes(source, find('Garment', 'Never with'), ids, outfits),
     week: seedWeek,
+    historyDays: HISTORY_DAYS,
     weekTemplate: seedWeek ? readWeekTemplate(source, seedWeek) : null,
     events: find('From', 'To', 'Wears').flatMap((table) =>
       table.rows.map((row) => readEvent(source, row, names)),
@@ -714,7 +725,7 @@ function required(
 
 function readShare(source: string, share: string): Persona['sharesWith'][0] {
   const match = /^(\w+) \((VIEW|MANAGE)\)$/.exec(share);
-  if (!match || !isPersonaKey(match[1])) {
+  if (!match || !isSeedKey(match[1])) {
     throw new BibleError(source, `"Shares with" names no persona: ${share}`);
   }
   return {

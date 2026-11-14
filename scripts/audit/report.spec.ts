@@ -37,6 +37,7 @@ function step(overrides: Partial<StepResult> & { name: string }): StepResult {
 function report(steps: StepResult[], extraSql: string[] = []): AuditReport {
   return {
     version: REPORT_VERSION,
+    persona: 'demo',
     createdAt: '2026-09-28T12:00:00.000Z',
     commit: 'abc1234',
     machine: {

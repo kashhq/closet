@@ -731,6 +731,16 @@ const pages: Step[] = [
     request: () => get('/outfits'),
     expect: 200,
   }),
+  // outfitActivitySql per page: the first page above, a deep one here.
+  http({
+    ...OUTFITS,
+    name: 'Saved, a deep page (tiles)',
+    kind: 'fragment',
+    route: 'GET /outfits/tiles',
+    request: (f) =>
+      get(`/outfits/tiles?before=${f.ids.savedPageBefore}`, { htmx: true }),
+    expect: 200,
+  }),
   http({
     ...OUTFITS,
     name: 'Saved, picking for a day',
