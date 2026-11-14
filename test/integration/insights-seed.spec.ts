@@ -100,6 +100,17 @@ describe('insights over the seed personas', () => {
     expect(html).toContain('data-pair=');
   });
 
+  // #733: `price` is per piece, so the six-pair socks pack is its pair price
+  // (the bible once listed the pack's $105, which counted six times over).
+  it('prices Theo’s socks per piece, so six cost what the pack did', async () => {
+    const demoId = await userIdOf(t, 'demo@closet.invalid');
+    const [socks] = await t.db
+      .select({ price: garment.price, quantity: garment.quantity })
+      .from(garment)
+      .where(and(eq(garment.ownerId, demoId), eq(garment.name, 'Black socks')));
+    expect(Number(socks.price) * socks.quantity).toBeCloseTo(105);
+  });
+
   // #151: Theo's Repairs table (demo.md: O03 25, B07 20, B01 15, F07 12,
   // T13 without a cost) counts in what his closet cost, on top of his
   // prices × copies. A new costed repair in the bible moves this pin.

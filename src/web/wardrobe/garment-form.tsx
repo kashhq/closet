@@ -432,7 +432,9 @@ function MoreDetails(props: {
         />
         <TextField
           name="price"
-          label={t('PRICE')}
+          label={
+            Number(values.care.quantity) > 1 ? t('PRICE_PER_PIECE') : t('PRICE')
+          }
           value={values.price}
           maxlength={PRICE_INPUT_MAX}
           placeholder={t('PRICE_PLACEHOLDER')}
