@@ -97,6 +97,8 @@ describe('the Wardrobe header and tabs', () => {
       expect(tabsOf(html), path).toMatch(
         /href="\/wardrobe"[\s\S]*href="\/capsules"[\s\S]*href="\/laundry"[\s\S]*href="\/wardrobe\/wishlist"/,
       );
+      // The tab row is a labelled <nav> (a landmark), not loose links (#730).
+      expect(tabsOf(html), path).toContain('aria-label="Wardrobe sections"');
       expect(html, path).toContain('id="title-menu"');
       expect(menuOf(html), path).toBeDefined();
       expect(sheetOf(html), path).toBeDefined();

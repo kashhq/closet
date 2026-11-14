@@ -68,7 +68,7 @@ export function OccasionRow(props: {
           aria-label={outfitLabel(name, entry.pieces)}
         >
           <span class="w-16 shrink-0 lg:w-full">
-            <OutfitCollage garments={entry.pieces} size="cell" />
+            <OutfitCollage garments={entry.pieces} size="cell" decorative />
           </span>
           {entry.outfit.kept && (
             <span class="text-sm font-medium line-clamp-2">{name}</span>

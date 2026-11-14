@@ -1378,6 +1378,28 @@ Why: each door formatted the same outcome by hand (`Trip 5 outfit 9 worn by user
 Decision: `Actor` carries `surface` (`actorOf(request)` from `surfaceOf`, `actorOf(ctx)` `mcp`); a write action takes `{ db, logger }` (`ActionDeps`) and ends with `logOp` (`src/web/op-log.ts`): `{ op, userId, surface, ...ids }`, the op its message, named `<entity>[.<part>].<past participle>`, a no-op the same op with `changed: false`. Trips and calendar converted; a replay is the queued-write hook's own line. A `logger` on the Actor was rejected: it is identity, spec'd with `toEqual`, and built where no logger is.
 Consequence: `guards.conf [op-logs]` bans `logger.info` in `api-routes.ts` and `mcp/tools`, 21 files and 81 calls in its shrink-only `known` lines, converted by the recipe in docs/conventions.md#logging. Specs read `t.logs.ops(op)`.
 
+## 2026-11-14 — The recap opens on a year worth recapping; price is per piece (#733)
+
+**Why:** on January 1 the Year in review opened on the new year's empty state; and the demo's socks row held the 6-pack's price ($105) in a field that insights multiplies by quantity, overstating Theo's closet by $525.
+**Decision:** `GET /wardrobe/recap` without `?year=` reads this year, and only if it has fewer than `RECAP_MIN_WEARS` one more statement for the latest earlier year that has enough (`readDefaultRecap`); an explicit `?year=` and the API keep their year. `price` stays per piece (insights' `totalCost` was right); the bible row is $17.50, and the garment form labels the field "Price per piece" when quantity > 1 (server-rendered from the saved quantity).
+**Consequence:** the scale persona, derived from the demo bible, has a closet value $525 lower per demo-derived copy; its committed baselines were not regenerated here.
+
+## 2026-11-14 — The worker forgets expiration rows with a cache; a 204 or 200 is ours only with our header (#731)
+Why: `caches.delete` left every URL an account loaded in Workbox's `workbox-expiration` IndexedDB after a sign-out; a quota purge took `/offline.html` until the next drop; on the plain-HTTP twin a captive portal's 204 deleted queued wears as saved and its 200 showed the app online.
+Decision: every whole-cache delete is the worker's `deleteCacheAndMetadata` (`CacheExpiration.delete()`, not the plugin's method, which forgets only caches it touched since the worker started: a cold drop would forget nothing). The first page stored into a cache with no owner re-warms a missing offline page (`ensureOfflinePage`), simpler than a separate cache, which would need its own owner check and activation refresh. A replay's 204 is saved only with `X-Closet-Outcome` (else retried as unreachable); the heartbeat is online only with `/health/live`'s `X-Closet-Live: up` (`public/js/live-answer.js`).
+Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `imageStore`) still leave their row: Workbox has no public per-URL forget; the rows age out under maxEntries. A rollback to a server without the live header shows the app offline until its worker activates; queued writes wait, none is lost.
+
+## 2026-11-14 — A session cache's drop deletes rows, the cache, then rows again (#1019)
+
+**Why:** the cache and its `workbox-expiration` rows are two non-atomic deletes, so a store between them leaves a row with no entry, whichever the order (review of #1017). A gate holding stores off during a drop was tried and withdrawn: it refused the page that had just claimed the cache and could wait forever on a token.
+**Decision:** `deleteCacheAndMetadata` deletes the rows, the cache, then the rows again; the second pass sweeps a row written in the window. Which stores may happen at all stays with the generation and owner checks (`pageStore`'s claim, `imageStore`).
+**Consequence:** a store after the last step leaves an entry and its row together in a fresh cache, never a lone row; no store/drop locking exists to maintain.
+
+## 2026-11-14 — Large text is read from a container query in rem (#730)
+Why: a media query ignores `html { font-size }`, so the dock could not tell 200% text from 100%.
+Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
+Consequence: the 22rem threshold is five labels at text-xs; a new dock tab means rechecking it.
+
 ## 2026-11-14 — The op-log conversion finished: every feature's writes log in their actions (#712)
 Why: #1011 converted trips and calendar and left 21 files on the guard's `known` list.
 Decision: auth tokens, capsules, clash pairs, looks, outfits (create, update, share, delete, reaction, Muse's proposal), Muse's needs, picks and rounds, wishlist decisions and purchases, sizes, style, wears and washes, the week plan, Today's Wear this, garments (create, clone, edit, condition, tags, share, status, delete, copies, bulk, cutouts, repairs) and the weather settings each log one `logOp` line from an action file beside them; the page routes, API routes and MCP tools log no success. The `known` list is empty.

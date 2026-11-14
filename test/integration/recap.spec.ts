@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { garmentWear, wardrobeShare } from '../../src/db/schema';
+import { recapPeriod } from '../../src/web/insights/recap-period';
+import {
+  latestRecapYearBefore,
+  readRecap,
+} from '../../src/web/insights/queries';
 import { createWishlistItem } from './garments';
 import {
   createTestApp,
@@ -221,6 +226,53 @@ describe('year in review', () => {
     expect(html).toContain('Jan 1 – Sep 27, 2026');
   });
 
+  // #733: opening the recap on January 1 must not greet one with the new
+  // year's empty state when last year was a recap. The clock moves only
+  // here and is put back, so the other cases keep their September.
+  describe('opened without ?year= around New Year', () => {
+    const NEW_YEARS_DAY = '2027-01-01T17:00:00Z'; // noon in New York
+    const NEW_YEARS_EVE_LATE = '2027-01-01T04:30:00Z'; // 23:30 on December 31 in New York
+
+    afterAll(() => {
+      vi.setSystemTime(new Date(NOW));
+    });
+
+    it('opens on the latest year with enough wears while this year has too few', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page();
+      expect(html).toContain('data-year="2026"');
+      expect(html).toContain('data-to="2026-12-31"');
+      expect(html).not.toContain('id="recap-empty"');
+    });
+
+    it('reads one more statement pair only then', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const january = await recordQueries(() => page());
+      expect(january.statements).toBe(6);
+    });
+
+    it('keeps an explicit ?year= of this year its empty state', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page('?year=2027');
+      expect(html).toContain('data-year="2027"');
+      expect(html).toContain('id="recap-empty"');
+    });
+
+    it('stays on the year just ending until midnight in the household’s zone', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_EVE_LATE));
+      const { html } = await page();
+      expect(html).toContain('data-year="2026"');
+      expect(html).toContain('Your 2026 so far');
+    });
+
+    it('opens on this year’s empty state when no year has enough', async () => {
+      vi.setSystemTime(new Date(NEW_YEARS_DAY));
+      const { html } = await page('', strangerCookie);
+      expect(html).toContain('data-year="2027"');
+      expect(html).toContain('id="recap-empty"');
+    });
+  });
+
   it('counts the year’s wears and pieces: January 1 in, the wishlist and other users out', async () => {
     const summary = section((await page()).html, 'recap-summary');
     expect(summary).toMatch(/data-stat="wears"[^]*?>18</);
@@ -336,6 +388,51 @@ describe('year in review', () => {
     expect(few).toContain(
       'Only 2 wears were marked in 2023. A recap needs 10.',
     );
+  });
+
+  // #1015: the year lookup counts by hand what the recap calls enough; they
+  // must agree on what a wear is (distinct garment-days of owned garments).
+  it('picks a fallback year only when its recap is enough', async () => {
+    // 2022: nine wears of owned garments plus a wishlist garment's: not enough.
+    await wear(g.tee, [
+      '2022-01-01',
+      '2022-01-02',
+      '2022-01-03',
+      '2022-01-04',
+      '2022-01-05',
+    ]);
+    await wear(g.undated, [
+      '2022-02-01',
+      '2022-02-02',
+      '2022-02-03',
+      '2022-02-04',
+    ]);
+    await wear(g.wish, ['2022-03-01']);
+    expect(
+      (await readRecap(t.db, ownerId, recapPeriod(2022, '2026-09-27'))).enough,
+    ).toBe(false);
+    expect(await latestRecapYearBefore(t.db, ownerId, 2023)).toBeNull();
+
+    // 2021: exactly ten garment-days over two garments: enough.
+    await wear(g.tee, [
+      '2021-01-01',
+      '2021-01-02',
+      '2021-01-03',
+      '2021-01-04',
+      '2021-01-05',
+      '2021-01-06',
+    ]);
+    await wear(g.undated, [
+      '2021-02-01',
+      '2021-02-02',
+      '2021-02-03',
+      '2021-02-04',
+    ]);
+    const year = await latestRecapYearBefore(t.db, ownerId, 2023);
+    expect(year).toBe(2021);
+    expect(
+      (await readRecap(t.db, ownerId, recapPeriod(year!, '2026-09-27'))).enough,
+    ).toBe(true);
   });
 
   it('reads ?year= as navigation state: anything else is the current year', async () => {

@@ -9,6 +9,7 @@ import {
   dayRefusal,
   instantOnDay,
   isReplayRequest,
+  OUTCOME_HEADER,
   type QueueableKind,
   REPLAY_HEADER,
   type ReplayRefusal,
@@ -51,7 +52,6 @@ declare module 'fastify' {
  */
 const QUEUED_HEADER = REPLAY_HEADER.toLowerCase();
 const IDEMPOTENCY_HEADER = 'idempotency-key';
-const OUTCOME_HEADER = 'X-Closet-Outcome';
 
 function refusalMessage(refusal: ReplayRefusal): string {
   switch (refusal) {

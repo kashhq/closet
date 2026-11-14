@@ -279,7 +279,9 @@
    4rem with pt-20 (the bar and a 1rem gutter), or pt-16 when their first
    row sits flush under it (the Wardrobe tabs). */
 /* The app bar's height, once: the bar's own and what a bar sticky between it
-   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). */
+   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). It is
+   in rem, so it grows with the text size like the pages' pt-20 and the
+   two-line title clamp it holds (#1028): at 100% text nothing differs. */
 :root {
   --app-bar-h: 4rem;
 }
@@ -293,6 +295,53 @@
 }
 .dock {
   z-index: 900;
+}
+
+/* Keyboard focus and scripted scrolling stop short of the fixed bars: a
+   focused control is scrolled into view clear of the app bar and, where the
+   dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
+   the rail, and on a page without one), and of an action bar fixed above it
+   (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, which grows with the
+   text like the rest in rem; the sticky bar in Styling's flow needs none). */
+html {
+  scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
+}
+:root:has(.dock) {
+  scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
+}
+:root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
+  scroll-padding-bottom: calc(var(--spacing-dock) + 3.5rem + 0.5rem);
+}
+
+/* Below the rail, the dock's labels give way when the text is too large for
+   five of them to sit side by side: the container's width in rem shrinks as
+   the root font grows, so this reads the text size, not the screen. The
+   links keep their icon and their words as the accessible name (sr-only). */
+@media (max-width: 1023.98px) {
+  .dock {
+    container-type: inline-size;
+    container-name: dock;
+  }
+  @container dock (width < 22rem) {
+    .dock-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
+/* Sheets and menus appear without sliding or fading for someone who asked
+   the system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal-box,
+  .modal-backdrop {
+    transition: none;
+  }
 }
 
 /* At lg the dock is a slim left rail: the same markup (layout/dock.tsx),

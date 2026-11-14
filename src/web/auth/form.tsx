@@ -112,7 +112,7 @@ export function InlineErrors<Field extends string>(props: {
 /** The one message a refused submission shows above the form. */
 export function ErrorAlert({ message }: { message: string }) {
   return (
-    <div role="alert" class="alert alert-error mb-4 w-xs">
+    <div role="alert" class="alert alert-error mb-4 w-full max-w-xs">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="h-6 w-6 shrink-0 stroke-current"
@@ -154,7 +154,7 @@ export function Fieldset(props: FieldsetProps) {
       class={
         props.bare
           ? 'fieldset'
-          : 'fieldset bg-base-200 border-base-300 rounded-box w-xs border p-4'
+          : 'fieldset bg-base-200 border-base-300 rounded-box w-full max-w-xs border p-4'
       }
       hx-post={props.validateUrl}
       hx-trigger={props.validateUrl ? 'change' : undefined}

@@ -5,7 +5,7 @@ import { PrecacheController, PrecacheRoute } from 'workbox-precaching';
 import { warmStrategyCache } from 'workbox-recipes';
 import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
-import { ExpirationPlugin } from 'workbox-expiration';
+import { CacheExpiration, ExpirationPlugin } from 'workbox-expiration';
 import {
   CacheFirst,
   NetworkFirst,
@@ -206,6 +206,52 @@ const IMAGES_CACHE = 'images-v2';
  */
 const SESSION_CACHES = [PAGES_CACHE, IMAGES_CACHE, SHARE_STASH_CACHE];
 
+// Pages a user visits beyond a warmed wardrobe: shared wardrobes, filtered
+// grids, other weeks, wishlist items, the other tabs' pages.
+const VISITED_PAGES = 100;
+// Cutouts and photos a user opens beyond a warm's thumbs.
+const VISITED_IMAGES = 200;
+
+/**
+ * The caps of the two caches an ExpirationPlugin fills: sized for a warm at
+ * its caps (WARM_PAGE_CAP, WARM_IMAGE_CAP, #286) and what is visited
+ * besides, so a warm never evicts what the user opened.
+ */
+const PAGE_ENTRIES = WARM_PAGE_CAP + VISITED_PAGES;
+const IMAGE_ENTRIES = WARM_IMAGE_CAP + VISITED_IMAGES;
+const MAX_ENTRIES: Readonly<Record<string, number>> = {
+  [PAGES_CACHE]: PAGE_ENTRIES,
+  [IMAGES_CACHE]: IMAGE_ENTRIES,
+};
+
+/**
+ * Deletes a cache and Workbox's expiration rows for it: every URL an
+ * ExpirationPlugin saw stored there is a row in the `workbox-expiration`
+ * IndexedDB, which `caches.delete` alone leaves behind (the previous
+ * account's URLs, search queries included, still counted toward maxEntries,
+ * #731). Every whole-cache delete in this worker goes through here.
+ * Not ExpirationPlugin.deleteCacheAndMetadata: it forgets only the caches
+ * its plugin touched since this worker started, so a cold worker's drop
+ * would forget nothing. CacheExpiration asks for a limit (asserted in
+ * development builds); delete() reads none, so a retired cache's is nominal.
+ * Rows, the cache, then the rows again: the two deletes cannot be atomic, so
+ * a store landing between them leaves a row with no entry, which the second
+ * pass sweeps (the first pass alone would miss it; the cache alone would
+ * leave the first pass's rows). A store landing after the last step writes
+ * an entry and its row into a fresh cache, consistent with each other; whether
+ * that store may happen at all is the generation and owner checks' business
+ * (pageStore's claim, imageStore), not this delete's.
+ */
+async function deleteCacheAndMetadata(name: string): Promise<boolean> {
+  const expiration = new CacheExpiration(name, {
+    maxEntries: MAX_ENTRIES[name] ?? 1,
+  });
+  await expiration.delete();
+  const deleted = await self.caches.delete(name);
+  await expiration.delete();
+  return deleted;
+}
+
 // One precache per static build (#656, src/static-build.ts, src/web/shell/updates.md), named
 // by the content id of its manifest: the id src/build-info.ts makes every page's `?v=`, so a page
 // names the precache holding exactly its bytes. The manifest is the build's whole versioned set
@@ -402,24 +448,55 @@ async function emptySessionCaches(
   event: ExtendableEvent,
   reason: string,
 ): Promise<void> {
-  await Promise.all(SESSION_CACHES.map((name) => self.caches.delete(name)));
+  await Promise.all(SESSION_CACHES.map(deleteCacheAndMetadata));
   console.info(
     `[sw] ${reason}: ${SESSION_CACHES.join(', ')} dropped (generation ${generation})`,
   );
   event.waitUntil(rewarmOfflinePage(event));
 }
 
-async function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
-  try {
-    await Promise.all(
-      offlinePage.handleAll({
-        event,
-        request: new Request(FALLBACK_HTML_URL),
-      }),
-    );
-  } catch (error) {
-    console.warn('[sw] could not re-warm the offline page', error);
-  }
+// The offline page's warm in flight, and the generation it is for: a drop
+// starts its own (its account's chrome), and a claim finding the page
+// missing meanwhile joins it rather than fetching it twice.
+let offlineWarm: { generation: number; done: Promise<void> } | undefined;
+
+function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
+  if (offlineWarm?.generation === generation) return offlineWarm.done;
+  const done = (async () => {
+    try {
+      await Promise.all(
+        offlinePage.handleAll({
+          event,
+          request: new Request(FALLBACK_HTML_URL),
+        }),
+      );
+    } catch (error) {
+      console.warn('[sw] could not re-warm the offline page', error);
+    }
+  })();
+  const warm = { generation, done };
+  offlineWarm = warm;
+  void done.finally(() => {
+    if (offlineWarm === warm) offlineWarm = undefined;
+  });
+  return done;
+}
+
+/**
+ * Warms the offline page again when the pages cache lacks it. A quota error
+ * makes the ExpirationPlugins purge their caches whole (purgeOnQuotaError),
+ * the offline page, the owner and the other records of pages-v2 with them,
+ * and only the install and a drop warmed it: until the next sign-in or
+ * update an uncached navigation offline was the browser's error page
+ * (#731). The next page stored online claims the cache with no owner on
+ * record, which calls this.
+ */
+async function ensureOfflinePage(event: ExtendableEvent): Promise<void> {
+  if (offlineWarm?.generation === generation) return offlineWarm.done;
+  const cache = await self.caches.open(PAGES_CACHE);
+  if (await cache.match(FALLBACK_HTML_URL)) return;
+  console.info('[sw] the offline page is missing: warming it again');
+  await rewarmOfflinePage(event);
 }
 
 /**
@@ -446,6 +523,12 @@ function claimPageCache(
     if (isStale(since, path)) return false;
     const owner = await readRecord(OWNER_KEY);
     if (owner === account) return true;
+    // No owner on record: a fresh install, a drop, or a quota purge, which
+    // took the offline page too. Not awaited under the lock: its own store
+    // claims the cache through here.
+    if (owner === undefined && path !== FALLBACK_HTML_URL) {
+      event.waitUntil(ensureOfflinePage(event));
+    }
     // A new owner, whether the cache held another account's pages or none
     // (a sign-in drops it first): every other account's queued writes go
     // unsent (queuedWritesGoneAtClaim). Not awaited under the lock: the
@@ -620,19 +703,11 @@ const pageRules: WorkboxPlugin[] = [
   servedCopies,
 ];
 
-// Pages a user visits beyond a warmed wardrobe: shared wardrobes, filtered
-// grids, other weeks, wishlist items, the other tabs' pages.
-const VISITED_PAGES = 100;
-
 // Shared by both page strategies, which share the cache: the rules and one
-// expiration, sized for a warm at its caps (WARM_PAGE_CAP, #286) and the
-// pages visited besides, so a warm never evicts what the user opened.
+// expiration (PAGE_ENTRIES).
 const pagePlugins: WorkboxPlugin[] = [
   ...pageRules,
-  new ExpirationPlugin({
-    maxEntries: WARM_PAGE_CAP + VISITED_PAGES,
-    purgeOnQuotaError: true,
-  }),
+  new ExpirationPlugin({ maxEntries: PAGE_ENTRIES, purgeOnQuotaError: true }),
 ];
 
 /**
@@ -672,8 +747,9 @@ const pages = new ServerFirstPages({
 
 // The offline page is stored by the page rules alone, never the expiration:
 // ExpirationPlugin only expires what it saw stored, so the fallback, written
-// at install and before any warm, is never the oldest entry it evicts. Only
-// the install and a drop's re-warm write it.
+// at install and before any warm, is never the oldest entry it evicts. The
+// install, a drop's re-warm and a claim that finds it missing (a quota
+// purge, ensureOfflinePage) write it.
 const offlinePage = new NetworkFirst({
   cacheName: PAGES_CACHE,
   plugins: pageRules,
@@ -932,9 +1008,6 @@ const imageStore: WorkboxPlugin = {
   },
 };
 
-// Cutouts and photos a user opens beyond a warm's thumbs.
-const VISITED_IMAGES = 200;
-
 const CUTOUT_PREFIX = '/file/nobg/';
 const THUMB_PREFIX = '/file/thumb/';
 
@@ -972,7 +1045,7 @@ const images = new CacheFirst({
     imageStore,
     cutoutStandIn,
     new ExpirationPlugin({
-      maxEntries: WARM_IMAGE_CAP + VISITED_IMAGES,
+      maxEntries: IMAGE_ENTRIES,
       purgeOnQuotaError: true,
     }),
   ],
@@ -1012,8 +1085,9 @@ self.addEventListener('activate', (event) => {
       // awaited here, where it would hold the activation, and every
       // navigation waiting on it, for the whole refetch.
       await writeRecord(ACTIVATED_AT_KEY, String(Date.now()));
+      // With their expiration rows: images-v1's are earlier accounts' URLs.
       const deleted = await Promise.all(
-        RETIRED_CACHES.map((name) => self.caches.delete(name)),
+        RETIRED_CACHES.map(deleteCacheAndMetadata),
       );
       const count = deleted.filter(Boolean).length;
       if (count > 0) console.info(`[sw] dropped ${count} retired cache(s)`);

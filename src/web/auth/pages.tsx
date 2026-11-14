@@ -152,7 +152,9 @@ export function LoginPage(props: {
 /** The sign-in forms' card: the frame their `bare` Fieldset leaves to it. */
 function SignedOutFrame(props: { children: Child }) {
   return (
-    <div class="card card-border bg-base-200 w-xs p-4">{props.children}</div>
+    <div class="card card-border bg-base-200 w-full max-w-xs p-4">
+      {props.children}
+    </div>
   );
 }
 

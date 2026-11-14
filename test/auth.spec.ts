@@ -45,6 +45,15 @@ test('register through the form, sign out from Profile, sign back in', async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  // At 200% text the form still fits the phone (#730).
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   if (desktop) await page.setViewportSize(desktop);
 
   const email = `register-form-${Date.now()}@example.com`;

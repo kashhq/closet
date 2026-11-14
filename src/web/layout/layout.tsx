@@ -59,6 +59,7 @@ function importMap(version: string) {
       push: `/js/push.js${v}`,
       freshness: `/js/freshness.js${v}`,
       'age-label': `/js/age-label.js${v}`,
+      'live-answer': `/js/live-answer.js${v}`,
       'single-flight': `/js/single-flight.js${v}`,
       'select-count': `/js/select-count.js${v}`,
       'recap-export': `/js/recap-export.js${v}`,
@@ -205,6 +206,8 @@ export function Layout({
         {/* The app bar's back arrow goes back like a native app's. After
             submit-once, whose cancelled submits it must see as cancelled. */}
         <script type="module" src={`/js/back.js${v}`}></script>
+        {/* Escape closes an open app bar menu (a <details> has no key). */}
+        <script type="module" src={`/js/menu-escape.js${v}`}></script>
         {/* The shared photo viewer (src/web/files/photo-viewer.tsx): one
             document listener opens any [data-photo-open]. */}
         <script type="module" src={`/js/photo-viewer.js${v}`}></script>

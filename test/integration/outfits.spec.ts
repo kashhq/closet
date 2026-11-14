@@ -461,10 +461,17 @@ describe('outfits', () => {
         // The entry is an OutfitCollage (R6): every garment of the outfit,
         // laid out by role (top, pants, shoes) whatever order it was saved in
         // (shoes, pants, top); the saved order is the outfit page's list.
-        const alts = imgTags(res.body).map(
-          (tag) => /alt="([^"]*)"/.exec(tag)?.[1],
-        );
-        expect(alts).toEqual(['Order top', 'Order pants', 'Order shoes']);
+        // The entry's link names the outfit, so its photos are decorative
+        // (alt="", #730); the order is read from each piece's category.
+        const tags = imgTags(res.body);
+        expect(tags.map((tag) => /alt="([^"]*)"/.exec(tag)?.[1])).toEqual([
+          '',
+          '',
+          '',
+        ]);
+        expect(
+          tags.map((tag) => /data-collage-piece="([^"]*)"/.exec(tag)?.[1]),
+        ).toEqual(['tops', 'bottoms', 'footwear']);
       });
 
       it('lists outfits newest first, in one statement with their activity', async () => {

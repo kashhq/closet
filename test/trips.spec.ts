@@ -201,6 +201,52 @@ test.describe('Trips', () => {
     await page.goto('/auth/profile');
     await expectNoZoomingFields(page);
     await expectTouchTargets(page);
+    // The app bar's menus close on Escape, focus back on the summary (#730).
+    await page.goto(`/outfits/${outfit}`);
+    const menu = page.locator('#outfit-menu');
+    await menu.locator('summary').click();
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(menu.locator('summary')).toBeFocused();
+
+    // Focus never lands under the fixed dock (#730): the page's last control,
+    // focused from the keyboard, is scrolled clear of it.
+    await page.goto(new URL(tripUrl).pathname);
+    await page.locator('main').locator('a, button, input').last().focus();
+    const clearance = await page.evaluate(() => {
+      const focused = document.activeElement?.getBoundingClientRect();
+      const dock = document.querySelector('.dock')?.getBoundingClientRect();
+      return focused && dock ? dock.top - focused.bottom : null;
+    });
+    expect(clearance).toBeGreaterThanOrEqual(0);
+
+    // 200% text (#730): nothing wider than the phone, the dock's labels
+    // give way to their icons (still named).
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    await expectPhoneWidth(page);
+    // A long title wraps to its two clamped lines inside the bar, and the
+    // page's first content still starts below it (#1028).
+    const bar = await page.evaluate(() => {
+      const header = document.querySelector('.app-bar');
+      const h1 = header?.querySelector('h1');
+      if (!header || !h1) return null;
+      window.scrollTo(0, 0);
+      h1.textContent = 'A very long title '.repeat(8);
+      const first = document.querySelector('main')?.firstElementChild;
+      return {
+        barBottom: header.getBoundingClientRect().bottom,
+        titleBottom: h1.getBoundingClientRect().bottom,
+        contentTop: first?.getBoundingClientRect().top ?? null,
+      };
+    });
+    expect(bar?.titleBottom).toBeLessThanOrEqual(bar?.barBottom ?? 0);
+    expect(bar?.contentTop).toBeGreaterThanOrEqual(bar?.barBottom ?? Infinity);
+    await expect(page.locator('.dock-label').first()).toHaveCSS('width', '1px');
+    await expect(page.getByRole('link', { name: 'Wardrobe' })).toBeVisible();
+
     // The error page (#644): inside the phone's width, its actions tappable.
     const missing = await page.goto('/wardrobe/999999');
     expect(missing?.status()).toBe(404);

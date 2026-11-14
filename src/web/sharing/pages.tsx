@@ -272,7 +272,7 @@ export function EditInvitePage(props: {
       title={t('CREATE_EDIT_LINK')}
       back={SHARING_PATH}
     >
-      <p class="text-sm text-muted w-xs">{t('EDIT_LINK_DESC')}</p>
+      <p class="text-sm text-muted w-full max-w-xs">{t('EDIT_LINK_DESC')}</p>
       <PostForm action={CREATE_INVITE_PATH}>
         <Fieldset legend={t('CREATE_EDIT_LINK')}>
           <input type="hidden" name="permission" value="MANAGE" />

@@ -2351,8 +2351,16 @@ describe('API statements per route', () => {
       {
         name: 'GET /insights/recap (GET /wardrobe/recap)',
         ok: [200, 200],
-        page: () => ({ method: 'GET', url: '/wardrobe/recap' }),
-        api: () => ({ method: 'GET', url: '/api/v1/insights/recap' }),
+        // The page without ?year= may read a second year (#733), so both
+        // twins name this one.
+        page: () => ({
+          method: 'GET',
+          url: `/wardrobe/recap?year=${t.today().slice(0, 4)}`,
+        }),
+        api: () => ({
+          method: 'GET',
+          url: `/api/v1/insights/recap?year=${t.today().slice(0, 4)}`,
+        }),
       },
       {
         name: 'GET /sizes (GET /auth/profile/sizes)',
