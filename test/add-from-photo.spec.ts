@@ -159,6 +159,23 @@ async function checkSelectMode(page: Page) {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+  // Focus scrolls clear of the action bar above the dock too (#1026): the
+  // scroll padding reserves at least the bar's height beyond the dock's.
+  const reserved = await page.evaluate(() => {
+    const bar = document.querySelector(
+      '[data-select-count] .fixed.bottom-dock',
+    );
+    if (!bar) return null;
+    return {
+      padding: parseFloat(
+        getComputedStyle(document.documentElement).scrollPaddingBottom,
+      ),
+      needed: window.innerHeight - bar.getBoundingClientRect().top,
+    };
+  });
+  expect(reserved?.padding).toBeGreaterThanOrEqual(
+    reserved?.needed ?? Infinity,
+  );
 }
 
 /**
