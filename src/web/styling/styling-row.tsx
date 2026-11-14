@@ -308,8 +308,8 @@ function StripSentinel(props: {
       href={url}
       trigger="intersect once"
       marker="strip"
-      label={t('LOADING_MORE')}
       size="sm"
+      inListbox
     />
   );
 }

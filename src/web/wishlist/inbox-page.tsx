@@ -310,7 +310,6 @@ export function GroupCards(props: {
           href={wardrobeUrl(viewOwner, { page: page + 1 }, INBOX_MORE_PATH)}
           trigger="intersect once"
           marker="inbox"
-          label={t('LOADING_MORE')}
         />
       )}
     </>

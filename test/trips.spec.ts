@@ -93,7 +93,7 @@ test.describe('Trips', () => {
 
     // The Calendar's Trips tab, then the form.
     await page.goto('/calendar');
-    await page.getByRole('tab', { name: 'Trips' }).click();
+    await page.getByRole('link', { name: 'Trips' }).click();
     await expect(page).toHaveURL(/\/trips$/);
     await page.getByRole('link', { name: 'New trip' }).first().click();
     await expectNoZoomingFields(page);

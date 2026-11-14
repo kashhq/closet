@@ -175,9 +175,15 @@ describe('calendar', () => {
       expect(
         [...html.matchAll(/href="#day-(\d{4}-\d{2}-\d{2})"/g)].map((m) => m[1]),
       ).toEqual(WEEK);
+      // The tabs are links in a labelled nav, never a tab widget (#726).
+      expect(html).toMatch(
+        /<nav class="tabs tabs-border[^"]*" aria-label="Calendar views"/,
+      );
+      expect(html).not.toContain('role="tab');
+      expect(html).not.toContain('aria-selected');
       // The tabs: Week (this page), Month and Trips.
       expect(html).toMatch(
-        /<a role="tab" href="\/calendar" class="tab tab-active"/,
+        /<a href="\/calendar" class="tab tab-active" aria-current="page"/,
       );
       expect(html).toContain('href="/calendar/month"');
       expect(html).toContain('href="/trips"');
@@ -488,7 +494,7 @@ describe('calendar', () => {
       const html = await monthPage('?month=2030-10');
       expect(html).toMatch(/<h2[^>]*>\s*October 2030\s*</);
       expect(html).toMatch(
-        /<a role="tab" href="\/calendar\/month" class="tab tab-active"/,
+        /<a href="\/calendar\/month" class="tab tab-active" aria-current="page"/,
       );
       const days = [...html.matchAll(/data-month-day="([\d-]+)"/g)].map(
         (m) => m[1],

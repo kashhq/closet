@@ -139,8 +139,10 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
     .getByRole('link', { name: 'Laundry' })
     .click();
   await expect(
-    page.getByRole('tab', { name: 'Laundry', selected: true }),
-  ).toBeVisible();
+    page
+      .getByRole('navigation', { name: 'Wardrobe sections' })
+      .getByRole('link', { name: 'Laundry' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(
     page.getByRole('checkbox', { name: 'White tees' }),
   ).toBeChecked();
