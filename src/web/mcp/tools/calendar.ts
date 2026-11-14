@@ -19,6 +19,7 @@ import { garmentNotFound } from '../../wardrobe/garment-access';
 import { type Projection, project } from '../../api/resource';
 import type { CalendarEntry } from '../../calendar/calendar-view';
 import {
+  CalendarEntryResource,
   calendarEntryRecord,
   type CalendarEntryRecord,
 } from '../../calendar/entry-resource';
@@ -53,11 +54,16 @@ function entryForAgent(
   weather: ReturnType<DayWeatherOf> | undefined,
 ) {
   const record = calendarEntryRecord(entry);
-  return project(record, CALENDAR_ENTRY_FOR_MCP, {
-    agent: record.agent?.name,
-    outfit: project(record.outfit, CALENDAR_ENTRY_OUTFIT_FOR_MCP, {
-      garments: record.outfit.garments.map(outfitGarmentForAgent),
-    }),
+  return project(record, CalendarEntryResource, CALENDAR_ENTRY_FOR_MCP, {
+    agent: record.agent?.name ?? null,
+    outfit: project(
+      record.outfit,
+      CalendarEntryResource.properties.outfit,
+      CALENDAR_ENTRY_OUTFIT_FOR_MCP,
+      {
+        garments: record.outfit.garments.map(outfitGarmentForAgent),
+      },
+    ),
     selfie: record.selfieId !== null,
     weather,
   });

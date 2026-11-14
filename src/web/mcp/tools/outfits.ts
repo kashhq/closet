@@ -16,6 +16,8 @@ import {
 } from '../../outfits/queries';
 import { OUTFIT_PAGE_SIZE } from '../../outfits/page-size';
 import {
+  OutfitGarmentResource,
+  OutfitListItem,
   outfitListRecord,
   type OutfitGarmentRecord,
   type OutfitListRecord,
@@ -56,17 +58,17 @@ export const OUTFIT_FOR_MCP = {
 } as const satisfies Projection<OutfitListRecord>;
 
 export function outfitGarmentForAgent(garment: OutfitGarmentRecord) {
-  return project(garment, OUTFIT_GARMENT_FOR_MCP, {});
+  return project(garment, OutfitGarmentResource, OUTFIT_GARMENT_FOR_MCP, {});
 }
 
 function outfitForAgent(outfit: ToolOutfit) {
   const record = outfitListRecord(outfit);
-  return project(record, OUTFIT_FOR_MCP, {
+  return project(record, OutfitListItem, OUTFIT_FOR_MCP, {
     garments: record.garments.map(outfitGarmentForAgent),
     toBuy: record.garments
       .filter((garment) => record.toBuy.includes(garment.id))
       .map(({ id, name }) => ({ id, name })),
-    agent: record.agent?.name,
+    agent: record.agent?.name ?? null,
   });
 }
 

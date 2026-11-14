@@ -24,7 +24,7 @@ import {
   WARMTHS,
 } from '../../wardrobe/properties';
 import { GARMENT_STATUSES } from '../../wardrobe/status';
-import { literals, withoutNullsDeep } from '../api/resource';
+import { asResource, literals } from '../api/resource';
 import { shownPhoto } from './cutout-shown';
 import { imageUrl } from '../files/image-url';
 import { IsoDateSchema } from '../schemas';
@@ -50,7 +50,7 @@ import {
  * garmentContext, the garment page's own reads). camelCase, null fields left
  * out, money a decimal string, a day `YYYY-MM-DD`. Each resource is a
  * record with its nulls kept (`garmentRecord`, `garmentListRecord`), which
- * the API sends through withoutNullsDeep and MCP's garment tools project
+ * the API sends through asResource and MCP's garment tools project
  * (nulls kept: an agent reads "null"; src/web/mcp/tools/garments.ts).
  */
 
@@ -162,7 +162,10 @@ export function toGarmentListItem(
   summary: GarmentSummary,
   cutoutsEnabled: boolean,
 ): GarmentListItem {
-  return withoutNullsDeep(garmentListRecord(summary, cutoutsEnabled));
+  return asResource(
+    GarmentListItem,
+    garmentListRecord(summary, cutoutsEnabled),
+  );
 }
 
 const Properties = Type.Object(
@@ -381,7 +384,7 @@ export function toGarmentResource(
   context: GarmentContext,
   cutoutsEnabled: boolean,
 ): Garment {
-  return withoutNullsDeep(garmentRecord(garment, context, cutoutsEnabled));
+  return asResource(Garment, garmentRecord(garment, context, cutoutsEnabled));
 }
 
 /**
@@ -393,7 +396,7 @@ export function toSyncedGarment(
   garment: SyncedGarmentRow,
   cutoutsEnabled: boolean,
 ): Static<typeof SyncedGarment> {
-  return withoutNullsDeep({
+  return asResource(SyncedGarment, {
     ...recordOf(
       garment,
       garment.repairs ?? undefined,

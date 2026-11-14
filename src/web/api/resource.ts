@@ -1,4 +1,10 @@
-import { type TSchema, Type } from '@sinclair/typebox';
+import {
+  KindGuard,
+  type Static,
+  type TSchema,
+  type TObject,
+  Type,
+} from '@sinclair/typebox';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { ROW_ID_MAX } from '../schemas';
@@ -157,42 +163,132 @@ export function withoutNulls<T extends object>(value: T): WithoutNulls<T> {
   ) as WithoutNulls<T>;
 }
 
-/** A record with its null fields left out at every level, arrays' items included. */
-export type WithoutNullsDeep<T> = T extends readonly (infer Item)[]
-  ? WithoutNullsDeep<Item>[]
-  : T extends object
-    ? WithoutNulls<{ [K in keyof T]: WithoutNullsDeep<T[K]> }>
-    : T;
+type OptionalKeys<T> = {
+  [K in keyof T]-?: object extends Pick<T, K> ? K : never;
+}[keyof T];
 
 /**
- * A mapper's record as the API sends it: every null left out, however
- * deep. For a mapper whose record keeps its nulls because another surface
- * projects from it (MCP's tools: an agent reads "null"), so the API's rule
- * is applied once, here, and never forgotten at one nested level.
+ * A resource as a mapper builds it before `asResource` shapes it: every
+ * optional field, at every level, may also be null (MCP's tools project
+ * the same record, and an agent reads "null").
  */
-export function withoutNullsDeep<T>(value: T): WithoutNullsDeep<T> {
+export type NullsKept<T> = T extends readonly (infer Item)[]
+  ? readonly NullsKept<Item>[]
+  : T extends object
+    ? {
+        [K in keyof T]: K extends OptionalKeys<T>
+          ? NullsKept<Exclude<T[K], undefined>> | null | undefined
+          : NullsKept<T[K]>;
+      }
+    : T;
+
+/** Whether `schema` declares an explicit null (a `Nullable` field). */
+function admitsNull(schema: TSchema): boolean {
+  return (
+    KindGuard.IsNull(schema) ||
+    (KindGuard.IsUnion(schema) && schema.anyOf.some(admitsNull))
+  );
+}
+
+function isPlainObject(value: object): value is Record<string, unknown> {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** The object or array schema `value` is, a union's branch picked by its literal fields (a packing warning's `kind`). */
+function containerOf(schema: TSchema, value: object, path: string): TSchema {
+  if (!KindGuard.IsUnion(schema)) return schema;
+  const wanted = Array.isArray(value) ? KindGuard.IsArray : KindGuard.IsObject;
+  const branch = schema.anyOf.find(
+    (candidate) =>
+      wanted(candidate) &&
+      (!KindGuard.IsObject(candidate) ||
+        Object.entries(candidate.properties).every(
+          ([key, field]) =>
+            !KindGuard.IsLiteral(field) ||
+            (value as Record<string, unknown>)[key] === field.const,
+        )),
+  );
+  if (branch === undefined) {
+    throw new TypeError(`${path}: no branch of its schema holds the value`);
+  }
+  return branch;
+}
+
+/**
+ * `value` as `schema` holds it, at every level: only the schema's fields
+ * (in the value's order), an undefined one left out, and a null one left
+ * out under `drop` unless the schema declares the null. The one rule both
+ * surfaces answer a resource record by (`asResource`, `project`), so an
+ * internal column a record carries (a row as stored) never reaches either.
+ * A value that is not JSON's (a Date, a Buffer) is a mapper's bug: the
+ * mapper serializes it (`toISOString()`).
+ */
+function shapeAs(
+  schema: TSchema,
+  value: unknown,
+  nulls: 'drop' | 'keep',
+  path: string,
+): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+  const container = containerOf(schema, value, path);
   if (Array.isArray(value)) {
-    return value.map(withoutNullsDeep) as WithoutNullsDeep<T>;
+    if (!KindGuard.IsArray(container)) {
+      throw new TypeError(`${path}: an array where its schema has none`);
+    }
+    return value.map((item: unknown, index) =>
+      shapeAs(container.items, item, nulls, `${path}[${index}]`),
+    );
   }
-  if (typeof value !== 'object' || value === null) {
-    return value as WithoutNullsDeep<T>;
+  if (!isPlainObject(value) || !KindGuard.IsObject(container)) {
+    throw new TypeError(`${path}: not a plain object its schema describes`);
   }
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, field]) => field !== null)
-      .map(([key, field]) => [key, withoutNullsDeep(field)]),
-  ) as WithoutNullsDeep<T>;
+  return shapeFields(container, value, nulls, path);
+}
+
+/** shapeAs's object level: its schema's fields, in the value's order. */
+function shapeFields(
+  schema: TObject,
+  value: Record<string, unknown>,
+  nulls: 'drop' | 'keep',
+  path: string,
+): Record<string, unknown> {
+  const shaped: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value)) {
+    const fieldSchema = schema.properties[key];
+    const dropped =
+      fieldSchema === undefined ||
+      field === undefined ||
+      (field === null && nulls === 'drop' && !admitsNull(fieldSchema));
+    if (!dropped) {
+      shaped[key] = shapeAs(fieldSchema, field, nulls, `${path}.${key}`);
+    }
+  }
+  return shaped;
+}
+
+/**
+ * A mapper's record as the API sends it: shaped by its resource schema,
+ * every null the schema does not declare left out, however deep. Needed,
+ * not cosmetic: Fastify serializes a null through a `string` schema as
+ * `""`. The record keeps its nulls because MCP's tools project it too.
+ */
+export function asResource<S extends TSchema>(
+  schema: S,
+  record: NullsKept<Static<S>>,
+): Static<S> {
+  return shapeAs(schema, record, 'drop', schema.title ?? 'resource');
 }
 
 /**
  * How another surface (MCP's tools) answers a resource mapper's record,
- * field by field: `keep` (as mapped, the whole value), `omit` (not that
- * surface's: a URL an agent cannot fetch) or `own` (the surface's own
- * shape of it, handed to `project`: a nested level's own projection, the
- * agent's bare name). Every field must be listed, so a field the record
- * gains is a type error at each projection until someone decides it, and
- * `projections.spec.ts` (src/web/mcp) holds every projection to its
- * resource schema's fields.
+ * field by field: `keep` (as mapped, shaped by the field's schema, nulls
+ * kept), `omit` (not that surface's: a URL an agent cannot fetch) or `own`
+ * (the surface's own shape of it, handed to `project`: a nested level's
+ * own projection, the agent's bare name). Every field must be listed, so a
+ * field the record gains is a type error at each projection until someone
+ * decides it, and `projections.spec.ts` (src/web/mcp) holds every
+ * projection to its resource schema's fields.
  */
 export type Projection<T> = {
   readonly [K in keyof T]-?: 'keep' | 'omit' | 'own';
@@ -203,9 +299,12 @@ type FieldsAs<P, As> = {
 }[keyof P];
 
 /**
- * `record` as `projection` says, in its order: the kept fields, then each
- * `own` field from `own`, which must hold every one of them and may add
- * what the surface answers beside the resource (get_trip's `today`).
+ * `record` as `projection` says, in its order: the kept fields, each
+ * shaped by its field of `schema` (the API's resource: a nested level
+ * answers only what the API does, never a stored row's other columns),
+ * then each `own` field from `own`, which must hold every one of them and
+ * may add what the surface answers beside the resource (get_trip's
+ * `today`).
  */
 export function project<
   T extends object,
@@ -213,14 +312,23 @@ export function project<
   Own extends { [K in FieldsAs<P, 'own'>]: unknown },
 >(
   record: T,
+  schema: TObject,
   projection: P,
   own: Own,
 ): Pick<T, Extract<FieldsAs<P, 'keep'>, keyof T>> & Own {
   const answer: Record<string, unknown> = {};
   const fields = record as Record<string, unknown>;
   const owned = own as Record<string, unknown>;
+  const title = schema.title ?? 'resource';
   for (const [field, as] of Object.entries(projection)) {
-    if (as === 'keep') answer[field] = fields[field];
+    if (as === 'keep') {
+      answer[field] = shapeAs(
+        schema.properties[field],
+        fields[field],
+        'keep',
+        `${title}.${field}`,
+      );
+    }
     if (as === 'own') answer[field] = owned[field];
   }
   for (const [field, value] of Object.entries(owned)) {

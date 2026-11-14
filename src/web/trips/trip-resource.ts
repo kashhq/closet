@@ -3,7 +3,7 @@ import { AWAY_REASONS } from '../../wardrobe/availability';
 import { OCCASIONS } from '../../wardrobe/occasions';
 import { tripPhase, type TripPhase } from '../../wardrobe/packing';
 import { GARMENT_ROLES } from '../../wardrobe/properties';
-import { literals, withoutNulls, withoutNullsDeep } from '../api/resource';
+import { asResource, literals, withoutNulls } from '../api/resource';
 import { imageUrl } from '../files/image-url';
 import { OUTFIT_NAME_MAX } from '../outfits/queries';
 import {
@@ -39,7 +39,7 @@ import { AgentResource, toAgentResource } from '../write-origin';
  * is derived (src/wardrobe/packing.ts), so it is read, never written: a
  * client ticks its garments and extras one at a time. A list's trip and
  * one in full are records with their nulls kept (`tripListRecord`,
- * `tripRecord`), which the API sends through withoutNullsDeep and MCP's
+ * `tripRecord`), which the API sends through asResource and MCP's
  * trip tools project (src/web/mcp/tools/trips.ts).
  */
 
@@ -295,7 +295,7 @@ export function tripListRecord(trip: TripSummary, today: string) {
 export type TripListRecord = ReturnType<typeof tripListRecord>;
 
 export function toTripListItem(trip: TripSummary, today: string): TripListItem {
-  return withoutNullsDeep(tripListRecord(trip, today));
+  return asResource(TripListItem, tripListRecord(trip, today));
 }
 
 function tripOutfitRecord(
@@ -352,7 +352,7 @@ export function tripRecord(model: TripModel) {
 export type TripRecord = ReturnType<typeof tripRecord>;
 
 export function toTripResource(model: TripModel): Trip {
-  return withoutNullsDeep(tripRecord(model));
+  return asResource(Trip, tripRecord(model));
 }
 
 /** POST /trips and PUT /trips/{id}: the trip form's fields, judged by its rules (readTripForm). */

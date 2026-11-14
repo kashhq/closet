@@ -1,5 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
-import { ListOf, withoutNulls, withoutNullsDeep } from '../api/resource';
+import { asResource, ListOf, withoutNulls } from '../api/resource';
 import { imageUrl } from '../files/image-url';
 import { RowId } from '../schemas';
 import type { CapsuleCard, CapsuleDetail, SyncedCapsuleRow } from './queries';
@@ -68,7 +68,7 @@ export function capsuleListRecord(card: CapsuleCard) {
 export type CapsuleListRecord = ReturnType<typeof capsuleListRecord>;
 
 export function toCapsuleListItem(card: CapsuleCard): CapsuleListItem {
-  return withoutNullsDeep(capsuleListRecord(card));
+  return asResource(CapsuleListItem, capsuleListRecord(card));
 }
 
 export const Capsule = Type.Object(
@@ -93,7 +93,7 @@ export type CapsuleRecord = ReturnType<typeof capsuleRecord>;
 export function toCapsuleResource(
   capsule: CapsuleDetail,
 ): Static<typeof Capsule> {
-  return withoutNullsDeep(capsuleRecord(capsule));
+  return asResource(Capsule, capsuleRecord(capsule));
 }
 
 /**

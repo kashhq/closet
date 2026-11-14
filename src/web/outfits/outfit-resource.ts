@@ -6,12 +6,7 @@ import { OUTFIT_ORIGINS } from '../../wardrobe/outfit-origin';
 import { categoryRole, GARMENT_ROLES } from '../../wardrobe/properties';
 import { GARMENT_STATUSES } from '../../wardrobe/status';
 import { OUTFIT_DISMISS_REASONS } from '../../wardrobe/suggestions';
-import {
-  literals,
-  Nullable,
-  withoutNulls,
-  withoutNullsDeep,
-} from '../api/resource';
+import { asResource, literals, Nullable, withoutNulls } from '../api/resource';
 import type { ScheduleOutcome } from '../calendar/queries';
 import { HttpError } from '../errors';
 import { imageUrl } from '../files/image-url';
@@ -41,7 +36,7 @@ import { AgentResource, agentNameOf, toAgentResource } from '../write-origin';
  * null fields left out. An outfit's garments are as its collage shows them;
  * a client reads the rest from GET /garments/{id}. The records keep their
  * nulls (`outfitListRecord`, `outfitGarmentRecord`): the API sends them
- * through withoutNullsDeep, MCP's tools project them.
+ * through asResource, MCP's tools project them.
  */
 
 /** Also a calendar entry's and a trip outfit's garments (calendar/entry-resource.ts, trips/trip-resource.ts). */
@@ -188,11 +183,11 @@ export function outfitListRecord(outfit: ToolOutfit) {
 export type OutfitListRecord = ReturnType<typeof outfitListRecord>;
 
 export function toOutfitListItem(outfit: ToolOutfit): OutfitListItem {
-  return withoutNullsDeep(outfitListRecord(outfit));
+  return asResource(OutfitListItem, outfitListRecord(outfit));
 }
 
 export function toOutfitResource({ outfit, entries }: OutfitContext): Outfit {
-  return withoutNullsDeep({
+  return asResource(Outfit, {
     ...outfitFieldsRecord(outfit),
     planned: entries.planned,
     worn: entries.worn.map(({ entryId, day }) => ({ entryId, day })),

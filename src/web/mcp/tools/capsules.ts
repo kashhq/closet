@@ -4,6 +4,8 @@ import {
   setCapsuleMembers,
 } from '../../capsules/capsule-actions';
 import {
+  Capsule,
+  CapsuleListItem,
   capsuleListRecord,
   type CapsuleListRecord,
   capsuleRecord,
@@ -49,7 +51,12 @@ export const capsuleTools = [
       const capsules = await listCapsules(ctx.db, access.ownerId);
       return {
         capsules: capsules.map((card) =>
-          project(capsuleListRecord(card), CAPSULE_LIST_ITEM_FOR_MCP, {}),
+          project(
+            capsuleListRecord(card),
+            CapsuleListItem,
+            CAPSULE_LIST_ITEM_FOR_MCP,
+            {},
+          ),
         ),
       };
     },
@@ -78,7 +85,7 @@ export const capsuleTools = [
         { ...CLOSET_FILTERS, capsule: id },
         { before: readPageCursor(before), limit: GRID_PAGE_SIZE },
       );
-      return project(capsuleRecord(capsule), CAPSULE_FOR_MCP, {
+      return project(capsuleRecord(capsule), Capsule, CAPSULE_FOR_MCP, {
         garments: page.garments.map((garment) =>
           summaryForAgent(garment, ctx.cutouts.enabled),
         ),

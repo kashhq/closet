@@ -1,5 +1,6 @@
-import type { TObject } from '@sinclair/typebox';
+import { KindGuard, type TObject, type TSchema } from '@sinclair/typebox';
 import { describe, expect, it } from 'vitest';
+import { project } from '../api/resource';
 import { CalendarEntryResource } from '../calendar/entry-resource';
 import { Capsule, CapsuleListItem } from '../capsules/capsule-resource';
 import {
@@ -29,7 +30,9 @@ import {
  * Every MCP projection decides every field of its API resource (#711): the
  * compiler holds a projection to its mapper's record (Projection<T>), and
  * this holds it to the resource's schema, so a field the API gains is
- * either answered to the agent or omitted on purpose, never dropped.
+ * either answered to the agent or omitted on purpose, never dropped. And
+ * a kept field answers only its schema's keys at every level (a stored
+ * row's other columns, a trip's extras, never reach the agent).
  */
 
 const packing = Trip.properties.packing;
@@ -70,4 +73,46 @@ describe('MCP projections', () => {
       );
     },
   );
+
+  it.each(PROJECTIONS)(
+    "%s's kept fields answer only the resource's keys, however deep",
+    (_name, schema, projection) => {
+      const own = Object.fromEntries(
+        Object.entries(projection)
+          .filter(([, as]) => as === 'own')
+          .map(([field]) => [field, 'own']),
+      );
+      const answer = project(
+        sampleOf(schema) as object,
+        schema,
+        projection as never,
+        own as never,
+      );
+      expect(JSON.stringify(answer)).not.toContain(INTERNAL);
+    },
+  );
 });
+
+const INTERNAL = 'internal_column';
+
+/** A value of `schema` with every optional field set and, in every object, a column the schema lacks. */
+function sampleOf(schema: TSchema): unknown {
+  if (KindGuard.IsObject(schema)) {
+    return {
+      ...Object.fromEntries(
+        Object.entries(schema.properties).map(([key, field]) => [
+          key,
+          sampleOf(field),
+        ]),
+      ),
+      [INTERNAL]: true,
+    };
+  }
+  if (KindGuard.IsArray(schema)) return [sampleOf(schema.items)];
+  if (KindGuard.IsUnion(schema)) return sampleOf(schema.anyOf[0]);
+  if (KindGuard.IsLiteral(schema)) return schema.const;
+  if (KindGuard.IsInteger(schema) || KindGuard.IsNumber(schema)) return 1;
+  if (KindGuard.IsBoolean(schema)) return true;
+  if (KindGuard.IsString(schema)) return 'text';
+  throw new Error(`no sample for ${String(schema.type)}`);
+}

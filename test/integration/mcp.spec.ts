@@ -563,7 +563,9 @@ describe('the MCP endpoint', () => {
         colors: ['white'],
         properties: { type: 't-shirt', warmth: 2, formality: 2 },
         hasPhoto: false,
-        care: { worn: 0 },
+        // The API's record (#711): every care field, and an unset one null.
+        care: { worn: 0, washedAt: null },
+        agent: null,
       });
       expect(JSON.stringify(found)).not.toContain('/file/');
     });
@@ -1150,7 +1152,15 @@ describe('the MCP endpoint', () => {
         expect.objectContaining({
           day: today(),
           occasion: 'all-day',
-          outfit: expect.objectContaining({ id: outfitId }),
+          outfit: expect.objectContaining({
+            id: outfitId,
+            // The API's entry outfit (#711): its garments, not the id alone.
+            garments: [
+              garments.tee.id,
+              garments.jeans.id,
+              garments.boots.id,
+            ].map((id) => expect.objectContaining({ id })),
+          }),
         }),
       ]);
       // The same outfit again, for another occasion: kept as it was.

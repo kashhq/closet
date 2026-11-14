@@ -1,7 +1,7 @@
 import { CloneType, type Static, Type } from '@sinclair/typebox';
 import { OCCASIONS } from '../../wardrobe/occasions';
 import { PLANNED_BY } from '../../wardrobe/week';
-import { literals, withoutNullsDeep } from '../api/resource';
+import { asResource, literals } from '../api/resource';
 import { MAX_PICKED } from '../gallery/pick';
 import { OUTFIT_NAME_MAX, outfitText } from '../outfits/queries';
 import {
@@ -89,7 +89,7 @@ export type CalendarEntryRecord = ReturnType<typeof calendarEntryRecord>;
 export function toCalendarEntryResource(
   entry: CalendarEntry,
 ): CalendarEntryResource {
-  return withoutNullsDeep(calendarEntryRecord(entry));
+  return asResource(CalendarEntryResource, calendarEntryRecord(entry));
 }
 
 /**

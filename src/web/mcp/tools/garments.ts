@@ -32,6 +32,8 @@ import { GRID_PAGE_SIZE } from '../../wardrobe/grid-page-size';
 import { closetLookalikes } from '../../wardrobe/lookalikes';
 import { garmentContext } from '../../wardrobe/garment-context';
 import {
+  Garment,
+  GarmentListItem,
   garmentListRecord,
   type GarmentListRecord,
   garmentRecord,
@@ -126,6 +128,7 @@ export function summaryForAgent(
 ) {
   return project(
     garmentListRecord(garment, cutoutsEnabled),
+    GarmentListItem,
     GARMENT_SUMMARY_FOR_MCP,
     {},
   );
@@ -149,8 +152,8 @@ async function garmentForAgent(
     todayIn(ctx.timeZone, new Date()),
   );
   const record = garmentRecord(garment, context, ctx.cutouts.enabled);
-  return project(record, GARMENT_FOR_MCP, {
-    agent: record.agent?.name,
+  return project(record, Garment, GARMENT_FOR_MCP, {
+    agent: record.agent?.name ?? null,
     hasPhoto: record.photo !== null,
     // The care label's notes, also answered here since get_garment began.
     washingDetails: record.careLabel.notes,

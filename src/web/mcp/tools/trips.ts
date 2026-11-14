@@ -12,6 +12,8 @@ import {
   requireTripModel,
 } from '../../trips/trip-actions';
 import {
+  Trip,
+  TripListItem,
   tripListRecord,
   type TripListRecord,
   tripRecord,
@@ -111,20 +113,27 @@ export const PACKING_GARMENT_FOR_MCP = {
   warnings: 'keep',
 } as const satisfies Projection<PackingGroupRecord['garments'][number]>;
 
+// The nested levels' schemas, which project shapes their kept fields by.
+const TRIP_DAY = Trip.properties.days.items;
+const TRIP_OUTFIT = Trip.properties.anyDay.items;
+const PACKING = Trip.properties.packing;
+const PACKING_GROUP = PACKING.properties.groups.items;
+const PACKING_GARMENT = PACKING_GROUP.properties.garments.items;
+
 function tripOutfitForAgent(outfit: TripOutfitRecord) {
-  return project(outfit, TRIP_OUTFIT_FOR_MCP, {
+  return project(outfit, TRIP_OUTFIT, TRIP_OUTFIT_FOR_MCP, {
     tripOutfitId: outfit.id,
-    agent: outfit.agent?.name,
+    agent: outfit.agent?.name ?? null,
     garments: outfit.garments.map(outfitGarmentForAgent),
   });
 }
 
 function packingForAgent(packing: PackingRecord) {
-  return project(packing, PACKING_FOR_MCP, {
+  return project(packing, PACKING, PACKING_FOR_MCP, {
     groups: packing.groups.map((group) =>
-      project(group, PACKING_GROUP_FOR_MCP, {
+      project(group, PACKING_GROUP, PACKING_GROUP_FOR_MCP, {
         garments: group.garments.map((row) =>
-          project(row, PACKING_GARMENT_FOR_MCP, {}),
+          project(row, PACKING_GARMENT, PACKING_GARMENT_FOR_MCP, {}),
         ),
       }),
     ),
@@ -210,7 +219,7 @@ export const tripTools = [
         today,
         trips: trips.map((trip) => {
           const record = tripListRecord(trip, today);
-          return project(record, TRIP_LIST_ITEM_FOR_MCP, {
+          return project(record, TripListItem, TRIP_LIST_ITEM_FOR_MCP, {
             outfits: record.outfitCount,
             extras: record.extraCount,
           });
@@ -238,9 +247,9 @@ export const tripTools = [
           )
         : null;
       const record = tripRecord(model);
-      return project(record, TRIP_FOR_MCP, {
+      return project(record, Trip, TRIP_FOR_MCP, {
         days: record.days.map((day) =>
-          project(day, TRIP_DAY_FOR_MCP, {
+          project(day, TRIP_DAY, TRIP_DAY_FOR_MCP, {
             outfits: day.outfits.map(tripOutfitForAgent),
           }),
         ),
