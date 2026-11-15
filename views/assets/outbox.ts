@@ -64,6 +64,13 @@ import {
   packedCount,
   OUTBOX_MAX_PENDING,
   OUTBOX_SYNCED,
+  OUTBOX_SYNCED_EVENT,
+  intentEnding,
+  type IntentEnd,
+  regionEnd,
+  discardedRecord,
+  tombstoneExpired,
+  showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
   queueableKindOf,
@@ -106,8 +113,10 @@ interface OutboxRecord {
   /** Consecutive 5xx answers, and when it became stuck (replayQueue): absent on a record without either. */
   serverErrors?: number;
   stuckAt?: number;
-  state: 'pending' | 'failed';
+  /** `discarded`: Discard's tombstone (discardedRecord), kept so no reader takes the write for saved. */
+  state: 'pending' | 'failed' | 'discarded';
   reason?: ReplayFailure;
+  discardedAt?: number;
 }
 
 /** A region's write, read from the page at the tap. */
@@ -270,13 +279,17 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
   }
 }
 
+/** A stored record still waiting to be sent or settled: not replaced, not discarded. */
+const queuedIn = (stored: OutboxRecord | undefined) =>
+  stored !== undefined && stored.state !== 'discarded';
+
 /** Whether a record is still in the store: not replaced by a newer intent. */
 async function isQueued(record: OutboxRecord): Promise<boolean> {
   let queued = false;
   await transact('readonly', (objects) => {
-    const request = objects.getKey(record.id);
+    const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = request.result !== undefined;
+      queued = queuedIn(request.result as OutboxRecord | undefined);
     };
   });
   return queued;
@@ -286,7 +299,8 @@ async function isQueued(record: OutboxRecord): Promise<boolean> {
  * A replay's answer applied to its record (`next` in its place, or deleted)
  * only if it is still queued, in one transaction: a newer intent for its
  * key that replaced it while it was in flight must not get the old one
- * back beside it. Whether it was still queued.
+ * back beside it. Whether it was still queued. Discard passes its
+ * tombstone as `next` (discardedRecord).
  */
 async function settle(
   record: OutboxRecord,
@@ -294,9 +308,9 @@ async function settle(
 ): Promise<boolean> {
   let queued = false;
   await write((objects) => {
-    const request = objects.getKey(record.id);
+    const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = request.result !== undefined;
+      queued = queuedIn(request.result as OutboxRecord | undefined);
       if (!queued) return;
       if (next) objects.put(next);
       else objects.delete(record.id);
@@ -312,18 +326,28 @@ const remove = (records: OutboxRecord[]) =>
 
 /**
  * A page of another account than the records' deletes them unsent (plan
- * section 6): never replayed into, or shown to, the new account.
+ * section 6): never replayed into, or shown to, the new account. Discard's
+ * tombstones past DISCARD_TOMBSTONE_MS go here too: every tab has re-read
+ * the store since.
  */
 async function claimForAccount(): Promise<void> {
   const account = pageAccount();
-  const others = (await readAll()).filter(
-    (record) => record.account !== account,
+  const now = Date.now();
+  const all = await readAll();
+  const others = all.filter((record) => record.account !== account);
+  const expired = all.filter(
+    (record) => record.account === account && tombstoneExpired(record, now),
   );
-  if (others.length === 0) return;
-  await remove(others);
-  console.info(
-    `[outbox] ${others.length} queued change(s) of another account deleted unsent`,
-  );
+  if (others.length === 0 && expired.length === 0) return;
+  await remove([...others, ...expired]);
+  if (others.length > 0) {
+    console.info(
+      `[outbox] ${others.length} queued change(s) of another account deleted unsent`,
+    );
+  }
+  if (expired.length > 0) {
+    console.info(`[outbox] ${expired.length} discard tombstone(s) pruned`);
+  }
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -334,6 +358,8 @@ let signedOut = false;
 let syncing = false;
 
 const isPending = (record: OutboxRecord) => record.state === 'pending';
+/** Neither saved nor dropped yet: what sign-out still has to drain or ask about. */
+const isUnsaved = (record: OutboxRecord) => record.state !== 'discarded';
 
 /**
  * Re-reads the store and draws it. Single-flight: a call during a render
@@ -358,7 +384,10 @@ function render(records: OutboxRecord[]): void {
     ),
   );
   renderNotice(
-    records.filter((record) => !isPending(record) || isStuck(record)),
+    records.filter(
+      (record) =>
+        record.state === 'failed' || (isPending(record) && isStuck(record)),
+    ),
   );
   guardFull(waiting);
 }
@@ -408,15 +437,16 @@ const intentOf = (record: OutboxRecord | undefined) =>
 
 /**
  * A region with a pending record is marked and shows the intent it waits
- * to save; one whose record failed shows the server's state again; one
- * whose record was saved keeps what it shows, now the server's too.
+ * to save; one whose record failed or was discarded shows the server's
+ * state again; one whose record was saved keeps what it shows, now the
+ * server's too (endIntent). Which is read from the store alone
+ * (regionEnd): Discard leaves a tombstone, so a record gone means saved
+ * whichever tab reads first; a session boundary's deletion leaves the page
+ * anyway.
  */
 function renderRegions(records: OutboxRecord[]): void {
   const waiting = new Map(
     records.filter(isPending).map((record) => [record.key, record]),
-  );
-  const failed = new Set(
-    records.filter((r) => !isPending(r)).map((r) => r.key),
   );
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
     const key = regionKey(region);
@@ -428,8 +458,8 @@ function renderRegions(records: OutboxRecord[]): void {
       continue;
     }
     delete region.dataset.outbox;
-    if (failed.has(key)) showServerState(region);
-    delete region.dataset[INTENT_MARK];
+    const end = regionEnd(key, records);
+    if (end !== 'pending') endIntent(region, end);
   }
 }
 
@@ -458,28 +488,38 @@ function showIntent(region: HTMLElement, record: OutboxRecord): void {
 }
 
 /**
- * A failed record's region back to what the server rendered (the notice
- * says it was not saved): a tick to its markup's `checked`, a flipped
- * control flipped back.
+ * A region whose record is no longer pending, its intent mark gone
+ * (intentEnding: only a region that showed the intent changes). Put back
+ * (failed: the notice says it was not saved; discarded): a tick to its
+ * markup's `checked`, a flipped control flipped back. Saved: a flipped
+ * control already shows the server's state; a tick becomes the row's
+ * served state (`defaultChecked`), and every counter of its section counts
+ * it as served (`data-packed-served`), so renderPackedCounts keeps the
+ * line once nothing is pending instead of the page-load number (#823).
  */
-function showServerState(region: HTMLElement): void {
+function endIntent(region: HTMLElement, end: IntentEnd): void {
   const mark = region.dataset[INTENT_MARK];
-  if (mark === 'ticked') {
-    const checkbox = region.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    );
-    if (checkbox) checkbox.checked = checkbox.defaultChecked;
-  } else if (mark === 'flipped') {
-    flip(region);
-  }
-}
-
-/** A discarded record's region back to the server's state, its intent mark gone. */
-function revertRegions(key: string): void {
-  for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    if (regionKey(region) !== key) continue;
-    showServerState(region);
-    delete region.dataset[INTENT_MARK];
+  delete region.dataset[INTENT_MARK];
+  const ending = intentEnding(mark, end);
+  if (ending === 'none') return;
+  const checkbox = region.querySelector<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  if (mark === 'flipped') {
+    if (ending === 'revert') flip(region);
+  } else if (checkbox && ending === 'revert') {
+    checkbox.checked = checkbox.defaultChecked;
+  } else if (checkbox && checkbox.checked !== checkbox.defaultChecked) {
+    for (const counter of region
+      .closest('section')
+      ?.querySelectorAll<HTMLElement>('[data-packed-served]') ?? []) {
+      counter.dataset.packedServed = String(
+        packedCount(Number(counter.dataset.packedServed), [
+          { served: checkbox.defaultChecked, queued: checkbox.checked },
+        ]),
+      );
+    }
+    checkbox.defaultChecked = checkbox.checked;
   }
 }
 
@@ -1086,23 +1126,41 @@ const drain = singleFlight(async (reason: string) => {
       ttlMs: SAVED_TOAST_MS,
     });
   }
-  if (result.saved > 0) refetchSyncedPages(result.savedPaths);
+  if (result.saved > 0) announceSynced(result.savedPaths);
 });
 
 /**
- * The worker refetches its cached copies of the pages that show what was
- * saved (src-sw.ts, OUTBOX_SYNCED), so one reopened offline later shows it,
- * and tells every open tab which changed (PAGES_RENEWED), this one
- * included: freshness.js swaps in the server's copy of a page on screen
- * among them, so its counts and lines are the server's. A failure needs
- * neither: its region is put back here (showServerState). Without a
- * controlling worker there is nothing cached and nobody to tell.
+ * What a sync saved, told to whoever shows it. The worker refetches its
+ * cached copies of the pages that show it (src-sw.ts, OUTBOX_SYNCED), so
+ * one reopened offline later shows it; without a controlling worker there
+ * is nothing cached. Every open tab, this one included, takes the server's
+ * copy of the page on screen when it shows one of them (showSynced), so its
+ * counts and lines are the server's, worker or not. A failure needs none of
+ * it: its region is put back here (endIntent).
  */
-function refetchSyncedPages(paths: string[]): void {
+function announceSynced(paths: string[]): void {
   navigator.serviceWorker?.controller?.postMessage({
     type: OUTBOX_SYNCED,
     paths,
   });
+  channel?.postMessage({ drain: false, synced: paths } satisfies OutboxChange);
+  showSynced(paths);
+}
+
+/**
+ * freshness.js fetches the server's copy of a page that shows a saved
+ * write (OUTBOX_SYNCED_EVENT): the outbox draws only the controls, and the
+ * page's counts and lines ("Worn once", the laundry, a trip's summary) come
+ * with the server's markup.
+ */
+function showSynced(paths: readonly string[]): void {
+  if (!showsSyncedWrite(paths, location.pathname)) return;
+  console.info(
+    `[outbox] ${location.pathname.split('/')[1] || 'today'} shows ${paths.length} saved change(s): asking for the server's copy`,
+  );
+  document.dispatchEvent(
+    new CustomEvent(OUTBOX_SYNCED_EVENT, { detail: { paths } }),
+  );
 }
 
 /**
@@ -1133,7 +1191,7 @@ async function drainBeforeLeaving(
   account: string,
   discardLeftovers: boolean,
 ): Promise<boolean> {
-  if ((await recordsOf(account)).length === 0) return true;
+  if ((await recordsOf(account)).filter(isUnsaved).length === 0) return true;
   let waited: ReturnType<typeof setTimeout> | undefined;
   const drained = await Promise.race([
     schedule('sign-out').then(() => true),
@@ -1147,7 +1205,7 @@ async function drainBeforeLeaving(
       `[outbox] sign-out: still syncing after ${SIGN_OUT_DRAIN_MS / 1000} s`,
     );
   }
-  const left = await recordsOf(account);
+  const left = (await recordsOf(account)).filter(isUnsaved);
   if (left.length === 0 || !discardLeftovers) return true;
   const discard = await confirmAction({
     question: counted('Discard', left.length),
@@ -1220,8 +1278,8 @@ const arrivals = new BodyArrivals(
  * The day what `element` shows is of, for its day labels: a live answer's
  * own, else the page's (src/page-day.ts's pageDay: the stamp freshness.js
  * keeps on `#freshness`, from the load, the cached copy's arrival or its
- * last revalidation, kept in htmx's history snapshots; else, without a
- * service worker, when the body arrived).
+ * last revalidation, kept in htmx's history snapshots; else, without
+ * freshness.js (PWA_ENABLED off), when the body arrived).
  */
 function pageDayOf(element: Element, timeZone: string): string {
   return (
@@ -1333,7 +1391,9 @@ document.addEventListener('click', (event) => {
   const account = pageAccount();
   if (!account) return;
   void (async () => {
-    const dismissed = (await recordsOf(account)).filter((r) => !isPending(r));
+    const dismissed = (await recordsOf(account)).filter(
+      (r) => r.state === 'failed',
+    );
     await remove(dismissed);
     console.info(`[outbox] ${dismissed.length} failure(s) dismissed`);
   })().catch((error: unknown) => {
@@ -1349,10 +1409,12 @@ const actionStore: StuckActionStore<OutboxRecord> = {
       : undefined;
   },
   settle,
+  discard: (record) => settle(record, discardedRecord(record, Date.now())),
 };
 
 // A stuck write's notice: Try again clears its count and drains; Discard
-// deletes it and puts its region back to the server's state.
+// leaves its tombstone, and every tab's next read puts its regions back to
+// the server's state (regionEnd).
 document.addEventListener('click', (event) => {
   if (!(event.target instanceof Element)) return;
   const retry = event.target.closest('[data-outbox-retry]');
@@ -1387,7 +1449,6 @@ document.addEventListener('click', (event) => {
       } else {
         const record = await discardStuck(actionStore, exclusively, id);
         if (!record) return;
-        revertRegions(record.key);
         console.info(`[outbox] ${name(record)} discarded by the user`);
         announce('textOutboxDiscarded', record);
       }
@@ -1404,6 +1465,7 @@ document.addEventListener('click', (event) => {
 // when this tab can reach the server (the lock keeps it to one drainer).
 channel?.addEventListener('message', (event: MessageEvent<OutboxChange>) => {
   void refresh();
+  if (event.data.synced) showSynced(event.data.synced);
   if (event.data.drain) void schedule('another tab');
 });
 

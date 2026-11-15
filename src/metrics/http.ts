@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isWarmRequest } from '../warm-request';
 import type { Metrics } from './metrics';
 import { serverTimingHeader } from './request-timing';
@@ -6,12 +6,16 @@ import { serverTimingHeader } from './request-timing';
 /** The route label of a request no route matched (the 404 page). */
 export const UNMATCHED_ROUTE = 'unmatched';
 
+/** The answer's ETag as one string (a page's, set by src/web/render.ts), if any. */
+const etagOf = (header: ReturnType<FastifyReply['getHeader']>) =>
+  typeof header === 'string' ? header : undefined;
+
 /**
  * The per-request half of the metrics, on the root instance before anything
  * else (createApp): every route's template is noted as it is registered (the
  * device beacon may name only those), each request answers with its
  * RequestTiming (created by src/request-context.ts) as `Server-Timing` (db,
- * render, the route template; not once a secret was checked,
+ * render, the route template, a page's ETag; not once a secret was checked,
  * markSecretChecked) and lands in
  * http_request_duration_seconds and http_request_db_statements under its
  * route template, never its URL, so
@@ -33,7 +37,11 @@ export function registerHttpMetrics(
     if (request.timing && !request.timing.secretChecked) {
       reply.header(
         'Server-Timing',
-        serverTimingHeader(request.timing, request.routeOptions.url),
+        serverTimingHeader(
+          request.timing,
+          request.routeOptions.url,
+          etagOf(reply.getHeader('ETag')),
+        ),
       );
     }
     done(null, payload);

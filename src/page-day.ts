@@ -56,9 +56,9 @@ export function dayText(
 
 /**
  * The day a page's copy is of: its stamp's (dayOfStamp), else the day its
- * body arrived (`arrivedAt`, epoch ms: BodyArrivals). A page without a
- * service worker never gets a stamp (freshness.js's watchFreshness), and
- * one fetched from the network is of its arrival.
+ * body arrived (`arrivedAt`, epoch ms: BodyArrivals). A page without
+ * freshness.js (PWA_ENABLED off) never gets a stamp, and one fetched from
+ * the network is of its arrival.
  */
 export function pageDay(
   stamp: string | undefined,
@@ -70,7 +70,7 @@ export function pageDay(
 
 /**
  * When the body on screen arrived from the server, for a page nothing
- * stamps (no service worker: the HTTP twin, PWA_ENABLED off; #990). The
+ * stamps (PWA_ENABLED off, where freshness.js is not loaded; #990, #900). The
  * document's load is only the first page's: a boosted navigation swaps in
  * a body that arrived now, and htmx's history restores a snapshot that
  * arrived when it was first shown, so each arrival is kept by the page's

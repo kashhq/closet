@@ -36,6 +36,12 @@ import {
   retryDelayMs,
   routesThroughOutbox,
   showsQueuedWrite,
+  showsSyncedWrite,
+  intentEnding,
+  regionEnd,
+  discardedRecord,
+  DISCARD_TOMBSTONE_MS,
+  tombstoneExpired,
   type StoredRecord,
   syncedWritePaths,
   takesDay,
@@ -606,6 +612,11 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
           else w.stored.delete(record.id);
           return Promise.resolve(true);
         },
+        discard(record) {
+          if (!w.stored.has(record.id)) return Promise.resolve(false);
+          w.stored.set(record.id, discardedRecord(record, w.clock.now));
+          return Promise.resolve(true);
+        },
       };
       return store;
     };
@@ -635,7 +646,7 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       expect(w.stored.size).toBe(0);
     });
 
-    it('Discard after a replay that failed again deletes the record and nothing resends it', async () => {
+    it('Discard after a replay that failed again leaves its tombstone, and nothing resends it', async () => {
       const w = world([stuckRow()], () => SERVER, { now: STUCK_RETRY_MS });
       const gate = held(w);
       const turn = createTurns();
@@ -645,7 +656,8 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       gate.release(SERVER);
       await Promise.all([drain, discard]);
       expect((await discard)?.id).toBe('bad');
-      expect(w.stored.size).toBe(0);
+      expect(w.stored.get('bad')).toMatchObject({ state: 'discarded' });
+      await w.drain();
       expect(w.sent).toEqual(['bad']);
     });
 
@@ -761,6 +773,116 @@ describe('after a sync, the worker’s refetch', () => {
   );
 });
 
+describe('showsSyncedWrite', () => {
+  it('asks for the server copy of a page that draws any saved write, and of no other', () => {
+    const saved = ['/wardrobe/41/wear', '/trips/7/packed'];
+    expect(showsSyncedWrite(saved, '/trips/7')).toBe(true);
+    expect(showsSyncedWrite(saved, '/laundry')).toBe(true);
+    expect(showsSyncedWrite(saved, '/wardrobe/4')).toBe(false);
+    expect(showsSyncedWrite([], '/trips/7')).toBe(false);
+  });
+});
+
+describe('intentEnding', () => {
+  it('leaves a region that never showed the intent alone, whatever ended it (#876)', () => {
+    for (const end of ['saved', 'failed', 'discarded'] as const) {
+      expect(intentEnding(undefined, end), end).toBe('none');
+      expect(intentEnding('', end), end).toBe('none');
+    }
+  });
+
+  it('puts a failed or discarded intent back, and keeps a saved one as the server’s', () => {
+    for (const mark of ['flipped', 'ticked']) {
+      expect(intentEnding(mark, 'failed'), mark).toBe('revert');
+      expect(intentEnding(mark, 'discarded'), mark).toBe('revert');
+      expect(intentEnding(mark, 'saved'), mark).toBe('confirm');
+    }
+  });
+});
+
+describe('regionEnd: a Discard is never read as a save (#900)', () => {
+  const record = (
+    state: StoredRecord['state'],
+    key = 'packed:7:41',
+  ): StoredRecord => ({ account: '1', key, state });
+  const discard = (): ReplayRecord =>
+    discardedRecord(
+      { ...record('pending'), attempts: 3, serverErrors: 3, stuckAt: 0 },
+      1_000,
+    );
+  /**
+   * A region showing a tick through a sequence of store reads, as
+   * renderRegions draws it: what each read did to it.
+   */
+  function drawn(reads: StoredRecord[][]): string[] {
+    let mark: string | undefined = 'ticked';
+    const done: string[] = [];
+    for (const records of reads) {
+      const end = regionEnd('packed:7:41', records);
+      if (end === 'pending') {
+        mark = 'ticked';
+        continue;
+      }
+      done.push(intentEnding(mark, end));
+      mark = undefined;
+    }
+    return done;
+  }
+
+  it('reads each state from the store, and saved only from a record gone', () => {
+    expect(regionEnd('packed:7:41', [record('pending')])).toBe('pending');
+    expect(regionEnd('packed:7:41', [record('failed')])).toBe('failed');
+    expect(regionEnd('packed:7:41', [discard()])).toBe('discarded');
+    expect(regionEnd('packed:7:41', [record('pending', 'other')])).toBe(
+      'saved',
+    );
+    expect(regionEnd('packed:7:41', [])).toBe('saved');
+  });
+
+  it('reverts once and never confirms, whether a tab reads before the Discard commits or after', () => {
+    // Another tab's refresh lands before the commit and its message's
+    // re-read after it, or (the race) the refresh reads after the commit,
+    // before the message arrives: every read after the commit sees the
+    // tombstone, so none can take the vanished record for a save.
+    const before = [record('pending')];
+    const after = [discard()];
+    expect(drawn([before, after])).toEqual(['revert']);
+    expect(drawn([after, after])).toEqual(['revert', 'none']);
+  });
+
+  it('a tombstone is no pending, failed or stuck record, and is pruned after DISCARD_TOMBSTONE_MS', () => {
+    const tombstone = discard();
+    expect(tombstone).toMatchObject({ state: 'discarded', discardedAt: 1_000 });
+    expect(isStuck(tombstone)).toBe(false);
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS - 1)).toBe(
+      false,
+    );
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS)).toBe(
+      true,
+    );
+    expect(tombstoneExpired(tombstone, 0)).toBe(false);
+    expect(tombstoneExpired(record('failed'), Infinity)).toBe(false);
+  });
+
+  it('a newer tap on the key replaces the tombstone: pending again', async () => {
+    const rows: StoredRecord[] = [discard()];
+    const store: OutboxStore<StoredRecord> = {
+      records: () => Promise.resolve(rows),
+      putCollapsed(records) {
+        const keys = new Set(records.map((r) => r.key));
+        rows.splice(0, rows.length, ...rows.filter((o) => !keys.has(o.key)));
+        rows.push(...records);
+        return Promise.resolve();
+      },
+    };
+    expect(await routesThroughOutbox(store, '1', false, ['packed:7:41'])).toBe(
+      false,
+    );
+    await enqueue(store, '1', [record('pending')]);
+    expect(regionEnd('packed:7:41', rows)).toBe('pending');
+  });
+});
+
 describe('queuedWritesGoneAtClaim', () => {
   it('deletes every other account’s records when the cache gets a new owner, keeping the claimant’s', () => {
     for (const owner of ['7', undefined]) {
@@ -833,6 +955,16 @@ describe('packedCount', () => {
 
   it('ignores a queued record that agrees with the server', () => {
     expect(packedCount(1, [{ served: true, queued: true }])).toBe(1);
+  });
+
+  it('keeps a saved tick’s line once it is folded into the served count (#823)', () => {
+    const waiting = [{ served: false, queued: true }];
+    expect(packedCount(1, waiting)).toBe(2);
+    // endIntent's confirm: the row's served state and the counter's number
+    // take the saved tick; with nothing pending the line stays 2, not 1.
+    const served = packedCount(1, waiting);
+    expect(packedCount(served, [{ served: true, queued: undefined }])).toBe(2);
+    expect(packedCount(1, [{ served: true, queued: undefined }])).toBe(1);
   });
 });
 

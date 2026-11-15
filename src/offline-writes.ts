@@ -209,11 +209,17 @@ export function goesThroughOutbox(
   return offline || keys.some((key) => pendingKeys.has(key));
 }
 
-/** What the queue's rules read of a stored record. */
+/**
+ * What the queue's rules read of a stored record. `discarded` is a
+ * tombstone (`discardedRecord`): the notice's Discard leaves it in the
+ * record's place, so every reader learns the write was dropped, not saved.
+ */
 export interface StoredRecord {
   account: string;
   key: string;
-  state: 'pending' | 'failed';
+  state: 'pending' | 'failed' | 'discarded';
+  /** When Discard left the tombstone (epoch ms): its prune clock. */
+  discardedAt?: number;
 }
 
 /**
@@ -443,18 +449,96 @@ export const REPLAY_TIMEOUT_MS = 15_000;
  * writes (plan section 5): `{ type, paths }`, the saved records' paths. The
  * worker refetches the cached pages that show them (`showsQueuedWrite`), so
  * a page reopened offline later shows the synced state, not the one cached
- * before the tap (views/assets/src-sw.ts, refetchSyncedPages).
+ * before the tap (views/assets/src-sw.ts, refetchSyncedPages). The pages
+ * on screen take the server's copy themselves (OUTBOX_SYNCED_EVENT).
  */
 export const OUTBOX_SYNCED = 'OUTBOX_SYNCED';
 
 /**
- * The worker's answer to every tab it controls once that refetch is done:
- * `{ type, pages: [{ url, fragment, html, fetchedAt }] }`, each cached page
- * (or `|hx` fragment) whose server copy differs from the one it replaced. A
- * tab showing one swaps it in as a revalidation's (public/js/freshness.js,
- * which spells this string itself: it cannot import a TS module).
+ * The document event every tab whose page shows a saved write gets once a
+ * drain (its own or another tab's) saved it: `detail.paths`. freshness.js
+ * (which spells this string itself: it cannot import a TS module) fetches
+ * the page's server copy and takes it as a revalidation's `updated`, so its
+ * counts and lines are the server's whether or not a worker controls the
+ * page, cached it, or could refetch it (#900).
  */
-export const PAGES_RENEWED = 'PAGES_RENEWED';
+export const OUTBOX_SYNCED_EVENT = 'outbox:synced';
+
+/** Whether a page (its pathname) shows any of a sync's saved writes. */
+export function showsSyncedWrite(
+  writePaths: readonly string[],
+  pagePath: string,
+): boolean {
+  return writePaths.some((write) => showsQueuedWrite(write, pagePath));
+}
+
+/** How a record stopped being pending, as the page learns it. */
+export type IntentEnd = 'saved' | 'failed' | 'discarded';
+
+/**
+ * Where a region's write stands, read from the store as committed (the
+ * account's records): pending while a record of its key waits, `failed` or
+ * `discarded` as its record says, and `saved` only when no record of its
+ * key is left. Discard leaves a tombstone in the same transaction that
+ * ends the record (`discardedRecord`), so a read can never see a discarded
+ * write as gone, and so as saved, whichever tab reads first or whenever the
+ * channel's message arrives (#900).
+ */
+export function regionEnd(
+  key: string,
+  records: readonly StoredRecord[],
+): 'pending' | IntentEnd {
+  const states = new Set(
+    records.filter((record) => record.key === key).map((r) => r.state),
+  );
+  if (states.has('pending')) return 'pending';
+  if (states.has('failed')) return 'failed';
+  if (states.has('discarded')) return 'discarded';
+  return 'saved';
+}
+
+/**
+ * How long a Discard's tombstone stays: long enough for every open tab to
+ * re-read the store (a tab asleep in the background re-reads on its next
+ * render), pruned at a later page load (`tombstoneExpired`). A newer tap on
+ * its key replaces it at once (`OutboxStore.putCollapsed`).
+ */
+export const DISCARD_TOMBSTONE_MS = 24 * 60 * 60 * 1000;
+
+/** The tombstone a Discard writes in a record's place: never sent, shown or counted. */
+export function discardedRecord<R extends ReplayRecord>(
+  record: R,
+  now: number,
+): R {
+  return {
+    ...unstuck(record),
+    state: 'discarded',
+    discardedAt: now,
+  };
+}
+
+/** A tombstone past DISCARD_TOMBSTONE_MS; one stamped in the future (a clock moved back) waits. */
+export const tombstoneExpired = (record: StoredRecord, now: number): boolean =>
+  record.state === 'discarded' &&
+  now - (record.discardedAt ?? 0) >= DISCARD_TOMBSTONE_MS;
+
+/**
+ * What a region does once its record is no longer pending (outbox.ts,
+ * endIntent): only a region that showed the intent has anything to undo or
+ * keep (#876); one whose markup was already in the record's state shows
+ * the server's and is left alone. A failed or discarded intent is put back
+ * to the server's state (`revert`); a saved one is now the server's state
+ * (`confirm`): a tick becomes the row's served state, and its counter's
+ * served number with it (#823), so the line never falls back to the
+ * page-load count.
+ */
+export function intentEnding(
+  mark: string | undefined,
+  end: IntentEnd,
+): 'none' | 'revert' | 'confirm' {
+  if (mark !== 'flipped' && mark !== 'ticked') return 'none';
+  return end === 'saved' ? 'confirm' : 'revert';
+}
 
 /**
  * Which queued writes go when a page claims the worker's page cache
@@ -772,6 +856,8 @@ export interface StuckActionStore<R extends ReplayRecord> {
   find(id: string): Promise<R | undefined>;
   /** replayQueue's `settle`: `next` in the record's place, or deleted; whether it was still queued. */
   settle(record: R, next?: R): Promise<boolean>;
+  /** The record's tombstone (`discardedRecord`) in its place if it is still queued; whether it was. */
+  discard(record: R): Promise<boolean>;
 }
 
 /**
@@ -805,6 +891,6 @@ export async function discardStuck<R extends ReplayRecord>(
   return exclusively(async () => {
     const record = await store.find(id);
     if (!record) return undefined;
-    return (await store.settle(record)) ? record : undefined;
+    return (await store.discard(record)) ? record : undefined;
   });
 }

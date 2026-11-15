@@ -1,7 +1,10 @@
 /**
  * The freshness indicator (frontend-pwa.md: reads render from cache with a
- * "last updated" timestamp). Started by pwa.js where there is a service
- * worker.
+ * "last updated" timestamp). Started by pwa.js on every page, with or
+ * without a service worker: htmx's history snapshots and the back-forward
+ * cache are caches too, and a page no worker controls (the HTTP twin, which
+ * has no `navigator.serviceWorker` at all) still takes the server's copy
+ * after a sync.
  *
  * What is on screen came from the network (live: nothing to say) or from a
  * cache: the service worker's (views/assets/src-sw.ts: a tab root opened
@@ -12,10 +15,11 @@
  * A cached page asks the worker to revalidate itself as soon as this script
  * runs (checkDocument), and again whenever the device comes back online
  * while showing one (connectivity:change): the same REVALIDATE_PAGE request
- * every time. Once the outbox has saved queued writes, the worker renews
- * the cached pages that show them and says which (PAGES_RENEWED), so any
- * page on screen among them, live or cached, takes the server's copy the
- * same way. When the server's page differs it is swapped in at once if
+ * every time. Once the outbox has saved queued writes a page on screen
+ * shows (outbox:synced, outbox.js), the page fetches its server copy
+ * itself and takes it the same way, live or cached, controlled or not: the
+ * worker renews only the copies it cached, so asking it would find nothing
+ * new (#900). When the server's page differs it is swapped in at once if
  * the page is untouched (no tap, key or wheel yet, scrolled to the top, no
  * dialog open); otherwise a toast offers it ("Newer version of this page",
  * Refresh), so content never moves under a thumb or a half-typed form. When
@@ -23,6 +27,7 @@
  * reloads: what is on screen is not this session's.
  */
 import { ageLabel } from 'age-label';
+import { latestOnly } from 'single-flight';
 import { showToast } from 'toast';
 
 // Stamped by the worker on the copies it caches (src/web/page-cache.ts).
@@ -32,9 +37,12 @@ const CACHED_AT_HEADER = 'X-SW-Cached-At';
 // module), for a full navigation a document's own script cannot read any
 // other way (#240).
 const CACHED_AT_TIMING_NAME = 'cache';
-// The worker's list of the copies a sync renewed (src/offline-writes.ts's
-// PAGES_RENEWED, duplicated for the same reason).
-const PAGES_RENEWED = 'PAGES_RENEWED';
+// A page's ETag, for the same reason (src/metrics/request-timing.ts's
+// PAGE_TAG_TIMING_NAME): its opaque value, without W/ or quotes.
+const PAGE_TAG_TIMING_NAME = 'etag';
+// Queued writes saved that the page shows (src/offline-writes.ts's
+// OUTBOX_SYNCED_EVENT, duplicated for the same reason).
+const OUTBOX_SYNCED_EVENT = 'outbox:synced';
 // Online, a revalidation lands within a few hundred ms: the age waits this
 // long so a copy about to be replaced does not flash it.
 const REVALIDATION_GRACE_MS = 1_000;
@@ -52,6 +60,13 @@ function newDisplay() {
     url: pageUrl(),
     /** When the server produced what is on screen (epoch ms). */
     fetchedAt: Date.now(),
+    /**
+     * The server's tag for what is on screen (tagOf: its opaque value), sent
+     * back as If-None-Match after a sync; undefined when unknown (a fragment,
+     * a copy taken before the worker said it), and then any copy is newer.
+     * @type {string | undefined}
+     */
+    etag: undefined,
     fromCache: false,
     /** The age stays hidden until then, waiting for a revalidation. */
     quietUntil: 0,
@@ -91,6 +106,11 @@ function update(fields) {
   // The page's day is read from it too (views/assets/outbox.ts, #708: Wore
   // today's state and guard, the day labels), which this event re-applies.
   const element = document.getElementById('freshness');
+  // The tag too, so a history restore knows which copy it shows.
+  if (element) {
+    if (display.etag) element.dataset.etag = display.etag;
+    else delete element.dataset.etag;
+  }
   if (element && element.dataset.fetchedAt !== String(display.fetchedAt)) {
     element.dataset.fetchedAt = String(display.fetchedAt);
     document.dispatchEvent(new CustomEvent('freshness:change'));
@@ -107,11 +127,16 @@ function startDisplay(fields = {}) {
   update(fields);
 }
 
+/** An ETag header's opaque value (W/ and quotes off): the weak comparison's. */
+const tagOf = (header) =>
+  header?.replace(/^W\//, '').replace(/"/g, '') || undefined;
+
 function fromResponse(xhr) {
   const cachedAt = Number(xhr.getResponseHeader(CACHED_AT_HEADER));
+  const etag = tagOf(xhr.getResponseHeader('ETag'));
   return cachedAt > 0
-    ? { fetchedAt: cachedAt, fromCache: true }
-    : { fetchedAt: Date.now(), fromCache: false };
+    ? { fetchedAt: cachedAt, fromCache: true, etag }
+    : { fetchedAt: Date.now(), fromCache: false, etag };
 }
 
 /**
@@ -153,17 +178,24 @@ function swapIn(html, fields) {
   startDisplay({ ...fields, fragment });
 }
 
-function onRevalidated(id, { outcome, html, fetchedAt }) {
+/**
+ * A revalidation's answer: the worker's (REVALIDATE_PAGE, its `etag` the
+ * ETag header) or the page's own after a sync (takeServerCopy).
+ */
+function onRevalidated(id, { outcome, html, fetchedAt, etag: header }) {
   if (id !== display.id) return; // the user has moved on
   const path = location.pathname;
+  const etag = tagOf(header);
   if (outcome === 'current') {
     update({ fetchedAt, fromCache: false, quietUntil: 0 });
   } else if (outcome === 'updated' && untouched()) {
     console.info(`[freshness] ${path}: newer copy swapped in`);
-    swapIn(html, { fetchedAt, fromCache: false });
+    swapIn(html, { fetchedAt, fromCache: false, etag });
   } else if (outcome === 'updated') {
     console.info(`[freshness] ${path}: newer copy offered`);
     update({ quietUntil: 0 });
+    // One offer at a time: the newest copy replaces an older one's.
+    display.offer?.dismiss();
     display.offer = showToast({
       text: strings().textNewerPage,
       kind: 'info',
@@ -172,7 +204,7 @@ function onRevalidated(id, { outcome, html, fetchedAt }) {
         onClick: () => {
           if (id !== display.id) return;
           // Held since the revalidation: it says its age if that is long.
-          swapIn(html, { fetchedAt, fromCache: true });
+          swapIn(html, { fetchedAt, fromCache: true, etag });
           window.scrollTo(0, 0);
         },
       },
@@ -186,9 +218,12 @@ function onRevalidated(id, { outcome, html, fetchedAt }) {
   }
 }
 
-/** Posts to the controlling worker; its answers come back on a port. */
+/**
+ * Posts to the controlling worker; its answers come back on a port.
+ * `navigator.serviceWorker` is undefined without a secure context.
+ */
 function ask(message, onAnswer) {
-  const worker = navigator.serviceWorker.controller;
+  const worker = navigator.serviceWorker?.controller;
   if (!worker) return;
   const channel = new MessageChannel();
   channel.port1.onmessage = (event) => onAnswer(event.data);
@@ -207,13 +242,17 @@ function ask(message, onAnswer) {
  * between the two.
  */
 function checkDocument() {
-  const entry = performance
-    .getEntriesByType('navigation')[0]
-    ?.serverTiming?.find((timing) => timing.name === CACHED_AT_TIMING_NAME);
-  if (!entry) return; // answered live: nothing to say
+  const timings =
+    performance.getEntriesByType('navigation')[0]?.serverTiming ?? [];
+  const named = (name) =>
+    timings.find((timing) => timing.name === name)?.description;
+  // The server's tag for this document, live or cached (the copy keeps it).
+  update({ etag: named(PAGE_TAG_TIMING_NAME) || undefined });
+  const cachedAt = named(CACHED_AT_TIMING_NAME);
+  if (cachedAt === undefined) return; // answered live: nothing more to say
   const id = display.id;
   update({
-    fetchedAt: Number(entry.description),
+    fetchedAt: Number(cachedAt),
     fromCache: true,
     quietUntil: Date.now() + REVALIDATION_GRACE_MS,
   });
@@ -222,6 +261,64 @@ function checkDocument() {
     (answer) => onRevalidated(id, answer),
   );
 }
+
+/**
+ * The server's copy of the display, fetched by the page itself (a
+ * fragment's with HX-Request, as its request was) and conditional on the
+ * tag of what is on screen: a 304, or a 200 with that same tag, is
+ * `current` (nothing offered, #900); a 200 with another tag, or with none
+ * known, is `updated`: swapped in if untouched, else offered. Only a 200
+ * HTML answer that was not redirected is a copy of this page; anything else
+ * (unreachable, signed out, an error page) leaves the page as the outbox
+ * drew it, and the next revalidation or load asks again.
+ *
+ * One at a time per page (latestOnly): each outbox:synced asks again, the
+ * newer request aborts the older, and an older answer arriving late is
+ * dropped, so a stale copy never replaces a newer one. A display left
+ * meanwhile drops it too (onRevalidated's id).
+ */
+const takeServerCopy = latestOnly(
+  async (signal) => {
+    const { id, url, fragment, etag } = display;
+    const path = location.pathname;
+    const headers = {};
+    if (fragment) headers['HX-Request'] = 'true';
+    else if (etag) headers['If-None-Match'] = `W/"${etag}"`;
+    try {
+      // no-store: the server's own 304 reaches this script, never the HTTP
+      // cache's 200 in its place.
+      const response = await fetch(url, { headers, cache: 'no-store', signal });
+      const tag = tagOf(response.headers.get('ETag') ?? undefined);
+      if (response.status === 304 || (tag && tag === etag)) {
+        console.info(`[freshness] ${path}: server copy after a sync unchanged`);
+        return { id, answer: { outcome: 'current', fetchedAt: Date.now() } };
+      }
+      const type = response.headers.get('Content-Type') ?? '';
+      if (!response.ok || response.redirected || !type.includes('text/html')) {
+        console.info(
+          `[freshness] ${path}: server copy after a sync answered ${response.status}, kept`,
+        );
+        return null;
+      }
+      const html = await response.text();
+      return {
+        id,
+        answer: { outcome: 'updated', html, fetchedAt: Date.now(), etag: tag },
+      };
+    } catch (error) {
+      if (!signal.aborted) {
+        console.info(
+          `[freshness] ${path}: server copy after a sync failed`,
+          error,
+        );
+      }
+      return null;
+    }
+  },
+  (taken) => {
+    if (taken) onRevalidated(taken.id, taken.answer);
+  },
+);
 
 export function watchFreshness() {
   startDisplay();
@@ -265,15 +362,21 @@ export function watchFreshness() {
       missed = null;
       return;
     }
-    const stamp = Number(
-      document.getElementById('freshness')?.dataset.fetchedAt,
-    );
-    startDisplay({ fetchedAt: stamp || Date.now(), fromCache: true });
+    const kept = document.getElementById('freshness')?.dataset;
+    startDisplay({
+      fetchedAt: Number(kept?.fetchedAt) || Date.now(),
+      fromCache: true,
+      etag: kept?.etag,
+    });
   });
   // The browser's back-forward cache is a cache too.
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
-      startDisplay({ fetchedAt: display.fetchedAt, fromCache: true });
+      startDisplay({
+        fetchedAt: display.fetchedAt,
+        fromCache: true,
+        etag: display.etag,
+      });
     }
   });
 
@@ -294,23 +397,11 @@ export function watchFreshness() {
   document.addEventListener('connectivity:change', (event) => {
     if (event.detail.state === 'online' && display.fromCache) revalidate();
   });
-  // Queued writes saved (outbox.js, #178): what is on screen shows them only
-  // as the outbox drew them, live or cached; the counts and lines come with
-  // the server's copy. The worker has already stored it (refetchSyncedPages
-  // in src-sw.ts), so asking REVALIDATE_PAGE now would find nothing new: the
-  // copy comes with the message, and is taken as a revalidation's would be.
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type !== PAGES_RENEWED) return;
-    const fragment = display.fragment !== null;
-    const renewed = event.data.pages.find(
-      (page) => page.url === display.url && page.fragment === fragment,
-    );
-    if (!renewed) return;
-    onRevalidated(display.id, {
-      outcome: 'updated',
-      html: renewed.html,
-      fetchedAt: renewed.fetchedAt,
-    });
+  // Queued writes saved that the page shows (outbox.js, #178): what is on
+  // screen shows them only as the outbox drew them; the counts and lines
+  // come with the server's copy, fetched here.
+  document.addEventListener(OUTBOX_SYNCED_EVENT, () => {
+    void takeServerCopy();
   });
 
   setInterval(render, TICK_MS);

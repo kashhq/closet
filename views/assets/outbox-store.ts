@@ -16,6 +16,8 @@ const CHANNEL = 'closet-outbox';
 export interface OutboxChange {
   /** A put: a tab that can reach the server should drain it. */
   drain: boolean;
+  /** The paths a drain saved: a tab showing one takes the server's copy (#900). */
+  synced?: string[];
 }
 
 /** The slice of IDBFactory the store uses, so a spec can hand it a stub. */

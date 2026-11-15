@@ -37,6 +37,9 @@ describe('registerHttpMetrics, Server-Timing', () => {
       }),
     );
     app.post('/plain', () => Promise.resolve({ ok: true }));
+    app.get('/tagged', (_request, reply) =>
+      reply.header('ETag', 'W/"abc-123"').send('page'),
+    );
     await app.ready();
   });
 
@@ -60,5 +63,14 @@ describe('registerHttpMetrics, Server-Timing', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers['server-timing']).toContain('route;desc="/plain"');
+  });
+
+  // A document's script reads no header but Server-Timing: freshness.js
+  // sends the tag back as If-None-Match after a sync (#900).
+  it('repeats an answer’s ETag as its opaque value', async () => {
+    const res = await app.inject({ method: 'GET', url: '/tagged' });
+    expect(res.headers['server-timing']).toContain('etag;desc="abc-123"');
+    const plain = await app.inject({ method: 'POST', url: '/plain' });
+    expect(plain.headers['server-timing']).not.toContain('etag');
   });
 });
