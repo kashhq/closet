@@ -11,10 +11,10 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, isNotNull } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
-import { file, install, pendingPhoto } from '../../src/db/schema';
+import { file, garment, install, pendingPhoto } from '../../src/db/schema';
 import { reconcileStorage } from '../../src/maintenance/reconcile';
 import {
   PhotoStorage,
@@ -397,6 +397,53 @@ describe('the photo storage marker', () => {
     expect(claimed.installId).toBe(winner);
     expect(installIdOf(await readFile(markerPath(), 'utf8'))).toBe(winner);
     expect(await pairedIds()).toEqual([winner]);
+  });
+
+  // #850: with no photo rows, a bare mountpoint marked with the paired id
+  // would pass for the real share once that was mounted over it.
+  it('never gives an unmarked directory with no photo rows the id of the share the database is paired with', async () => {
+    const rows = await t.db.select().from(file);
+    const shown = await t.db
+      .select({ id: garment.id, photoId: garment.photoId })
+      .from(garment)
+      .where(isNotNull(garment.photoId));
+    await asFixture(t.db, (tx) => tx.delete(file));
+    const mountpoint = await mkdtemp(join(tmpdir(), 'closet-bare-'));
+    try {
+      const boot = createApp(
+        { ...production(), DATA_PATH: mountpoint },
+        silentLogger,
+      );
+      await expect(boot).rejects.toThrow(
+        /^DATA_PATH has no \.closet-storage marker/,
+      );
+      expect(await readdir(mountpoint)).not.toContain(STORAGE_MARKER);
+
+      // Elsewhere it is new storage of its own: the real share, mounted
+      // over it later, reads as foreign.
+      const dev = await createApp(
+        { ...t.config, DATA_PATH: mountpoint },
+        silentLogger,
+      );
+      await dev.app.close();
+      const own = installIdOf(
+        await readFile(join(mountpoint, STORAGE_MARKER), 'utf8'),
+      );
+      expect(own).not.toBe(installIdOf(marker));
+      expect(await pairedIds()).toEqual([installIdOf(marker)]);
+      const remounted = new PhotoStorage(mountpoint, silentLogger);
+      remounted.claim({ installId: own, createdAt: 'then' }, 'advisory');
+      await writeFile(join(mountpoint, STORAGE_MARKER), marker);
+      expect(await remounted.identityProblem()).toEqual({ kind: 'foreign' });
+    } finally {
+      await rm(mountpoint, { recursive: true, force: true });
+      await asFixture(t.db, async (tx) => {
+        await tx.insert(file).values(rows);
+        for (const { id, photoId } of shown) {
+          await tx.update(garment).set({ photoId }).where(eq(garment.id, id));
+        }
+      });
+    }
   });
 
   it('refuses a boot whose racing process left a malformed marker, naming the code only', async () => {

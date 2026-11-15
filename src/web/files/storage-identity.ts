@@ -34,7 +34,9 @@ export const ADOPT_MIN_COVERAGE = 0.9;
  * while uploads landed where the remount hides them. So the directory
  * carries a marker (STORAGE_MARKER), written only when this process can
  * prove the directory is the right one:
- *   - the `file` table is empty: a first boot, nothing to lose;
+ *   - the `file` table is empty: a first boot, nothing to lose (beside a
+ *     database already paired, new storage with an id of its own, or
+ *     refused where the pairing is enforced: #850);
  *   - the directory holds the sets of at least ADOPT_MIN_COVERAGE of the
  *     rows: an existing share from before the marker, adopted.
  * Anything else unmarked is the unmounted share or the wrong directory, and
@@ -71,7 +73,7 @@ export async function claimStorage(
           paired:
             pairedAtStart ?? (await pair(db, read.marker.installId, logger)),
         }
-      : await markUnmarked(storage, db, pairedAtStart, logger);
+      : await markUnmarked(storage, db, pairedAtStart, pairing, logger);
   if (paired !== marker.installId) {
     const mismatch = `photo storage ${marker.installId}: this database belongs to install ${paired}`;
     if (pairing === 'enforced') {
@@ -109,6 +111,7 @@ async function markUnmarked(
   storage: PhotoStorage,
   db: Db,
   pairedAtStart: string | undefined,
+  pairing: InstallPairing,
   logger: Logger,
 ): Promise<{ marker: StorageMarker; paired: string }> {
   const rows = await photoRowNames(db);
@@ -120,15 +123,21 @@ async function markUnmarked(
     throw new StorageIdentityError({ kind: 'absent' });
   }
   const paired = pairedAtStart ?? (await pair(db, randomUUID(), logger));
+  const installId =
+    pairedAtStart === undefined || rows.length > 0
+      ? paired
+      : newStorageBesidePaired(paired, pairing, logger);
   // Ours, or the marker a process booting beside this one linked first.
-  const created = await storage.createMarker(paired);
+  const created = await storage.createMarker(installId);
   if (created.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: created.code });
   }
   const { marker } = created;
   if (rows.length === 0) {
     logger.info(
-      `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`,
+      pairedAtStart === undefined
+        ? `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`
+        : `Photo storage ${marker.installId}: marked as new storage (no photo rows)`,
     );
   } else {
     logger.warn(
@@ -136,6 +145,29 @@ async function markUnmarked(
     );
   }
   return { marker, paired };
+}
+
+// An unmarked DATA_PATH with no photo rows beside a database already paired
+// with a share (#850). Coverage is what proves a directory is the paired
+// share (a restore re-adopting as itself); an empty table proves only that
+// nothing is lost, and a bare mountpoint is exactly that. Given the paired
+// id, it would pass for the real share once that is mounted over it, and
+// the uploads made meanwhile would vanish unseen. So it is never given that
+// id: production refuses it, as an unmounted share; elsewhere (worktrees on
+// one database) it is new storage with an id of its own, which the claim
+// then warns about, and a remount reads as foreign.
+function newStorageBesidePaired(
+  paired: string,
+  pairing: InstallPairing,
+  logger: Logger,
+): string {
+  if (pairing === 'enforced') {
+    logger.warn(
+      `Refusing an unmarked DATA_PATH with no photo rows: this database belongs to photo storage ${paired}`,
+    );
+    throw new StorageIdentityError({ kind: 'absent' });
+  }
+  return randomUUID();
 }
 
 /**
