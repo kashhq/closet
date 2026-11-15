@@ -52,6 +52,9 @@ describe('page ETags', () => {
     expect(page.headers['content-encoding']).toBe('br');
     const etag = String(page.headers.etag);
     expect(etag).toMatch(/^W\/"[\w-]{27}"$/);
+    // For the document's own script (freshness.js, #900), and on the 304.
+    const timingTag = `etag;desc="${etag.slice(3, -1)}"`;
+    expect(page.headers['server-timing']).toContain(timingTag);
 
     const again = await get(url, {
       'accept-encoding': 'br, gzip',
@@ -64,6 +67,7 @@ describe('page ETags', () => {
     expect(again.headers['content-length']).toBeUndefined();
     expect(again.headers['content-type']).toBeUndefined();
     expect(again.headers.etag).toBe(etag);
+    expect(again.headers['server-timing']).toContain(timingTag);
     expect(again.headers['cache-control']).toBe('private, no-cache');
     expect(again.headers['x-page-account']).toBe(String(t.owner.id));
     expect(again.headers[ASSET_VERSION_HEADER.toLowerCase()]).toBe(RELEASE);

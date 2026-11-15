@@ -59,19 +59,33 @@ export async function timeRender<T>(render: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * The Server-Timing entry that repeats a page's ETag (src/web/render.ts),
+ * its opaque value without `W/` or quotes, for the one reader that cannot
+ * see the header: a document's own script, through Navigation Timing.
+ * public/js/freshness.js sends it back as If-None-Match after a sync, so an
+ * unchanged page answers 304 and offers nothing (#900); it duplicates this
+ * name (it cannot import a TS module).
+ */
+export const PAGE_TAG_TIMING_NAME = 'etag';
+
+/**
  * The header's value. `route` carries the matched route template as a
  * description, which is how public/js/vitals.js names what it measured
  * without ever sending a URL (a full load reads it from Navigation Timing's
- * serverTiming, an htmx request from the header).
+ * serverTiming, an htmx request from the header). `etag`, the answer's
+ * ETag, is repeated as PAGE_TAG_TIMING_NAME.
  */
 export function serverTimingHeader(
   timing: RequestTiming,
   route: string | undefined,
+  etag?: string,
 ): string {
   const entries = [
     `db;dur=${timing.dbMs.toFixed(1)}`,
     `render;dur=${timing.renderMs.toFixed(1)}`,
   ];
   if (route) entries.push(`route;desc="${route}"`);
+  const opaque = etag?.replace(/^W\//, '').replace(/"/g, '');
+  if (opaque) entries.push(`${PAGE_TAG_TIMING_NAME};desc="${opaque}"`);
   return entries.join(', ');
 }

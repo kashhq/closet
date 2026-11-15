@@ -359,7 +359,12 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
         reached = resolve;
       });
     let held = reachedOnce();
-    await page.goto(`/wardrobe/${chinos}`);
+    // Opened by a boosted tap, whose answer's ETag names the copy on screen:
+    // page.clock replaces `performance`, so a full load's tag (Navigation
+    // Timing's Server-Timing) cannot be read under it.
+    await page.goto('/wardrobe');
+    await page.locator(`main a[href="/wardrobe/${chinos}"]`).first().click();
+    await expect(wore).toBeVisible();
     await page.route(`**${wearPath}`, async (route) => {
       const now = answer;
       if (now === 'refuse-worn' && worn(route) === '1') {
@@ -394,9 +399,20 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await setWritesReachable(page, true);
     await backingOff;
     const undone = replayed('0');
+    // The Undo leaves the server as the page was loaded: the sync's server
+    // copy answers 304 to the page's tag, and nothing is offered (#900).
+    const unchanged = page.waitForEvent('console', (message) =>
+      message.text().includes('server copy after a sync unchanged'),
+    );
     await undo.click();
     await undone;
     await expect(waiting).toHaveCount(0);
+    await unchanged;
+    await expect(
+      page.locator('#toast-host > div', {
+        hasText: 'Newer version of this page',
+      }),
+    ).toHaveCount(0);
     await page.reload();
     await expect(wore).toBeVisible();
     await expect(waiting).toHaveCount(0);

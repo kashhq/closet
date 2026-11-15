@@ -34,3 +34,42 @@ export function singleFlight(task) {
     return next;
   };
 }
+
+/**
+ * The newest call wins: every call runs `fetchAnswer` at once, aborting the
+ * one in flight through its signal, and only the newest call's answer is
+ * handed to `apply`. An older answer that arrives late, or an older call's
+ * rejection (its abort included), is dropped, so the network's order never
+ * decides what is applied. Resolves whether this call's answer was applied.
+ *
+ * Used by freshness.js's server copy after a sync (#900); unit-tested in
+ * src/web/layout/single-flight.spec.ts.
+ *
+ * @template {unknown[]} A
+ * @template T
+ * @param {(signal: AbortSignal, ...args: A) => Promise<T>} fetchAnswer
+ * @param {(answer: T, ...args: A) => void} apply
+ * @returns {(...args: A) => Promise<boolean>}
+ */
+export function latestOnly(fetchAnswer, apply) {
+  let sequence = 0;
+  let inFlight = null;
+  return async (...args) => {
+    sequence += 1;
+    const mine = sequence;
+    inFlight?.abort();
+    const controller = new AbortController();
+    inFlight = controller;
+    try {
+      const answer = await fetchAnswer(controller.signal, ...args);
+      if (mine !== sequence) return false;
+      apply(answer, ...args);
+      return true;
+    } catch (error) {
+      if (mine !== sequence) return false;
+      throw error;
+    } finally {
+      if (inFlight === controller) inFlight = null;
+    }
+  };
+}

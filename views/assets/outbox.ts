@@ -67,6 +67,9 @@ import {
   OUTBOX_SYNCED_EVENT,
   intentEnding,
   type IntentEnd,
+  regionEnd,
+  discardedRecord,
+  tombstoneExpired,
   showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
@@ -110,8 +113,10 @@ interface OutboxRecord {
   /** Consecutive 5xx answers, and when it became stuck (replayQueue): absent on a record without either. */
   serverErrors?: number;
   stuckAt?: number;
-  state: 'pending' | 'failed';
+  /** `discarded`: Discard's tombstone (discardedRecord), kept so no reader takes the write for saved. */
+  state: 'pending' | 'failed' | 'discarded';
   reason?: ReplayFailure;
+  discardedAt?: number;
 }
 
 /** A region's write, read from the page at the tap. */
@@ -219,18 +224,14 @@ const channel = openOutboxChannel();
 /**
  * A committed write: re-rendered here, announced to the other tabs. Every
  * readwrite transaction goes through it, so no tab shows a store it has
- * not re-read. `reverted` is filled by `work` with the keys it discarded:
- * their regions are put back before any render can read the records gone
- * and keep their intents as saved, here at once and in the other tabs with
- * the same message.
+ * not re-read.
  */
 async function write(
   work: (store: IDBObjectStore) => void,
-  { drain = false, reverted = [] as string[] } = {},
+  { drain = false } = {},
 ): Promise<void> {
   await transact('readwrite', work);
-  revertRegions(reverted);
-  channel?.postMessage({ drain, reverted } satisfies OutboxChange);
+  channel?.postMessage({ drain } satisfies OutboxChange);
   void refresh();
 }
 
@@ -278,13 +279,17 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
   }
 }
 
+/** A stored record still waiting to be sent or settled: not replaced, not discarded. */
+const queuedIn = (stored: OutboxRecord | undefined) =>
+  stored !== undefined && stored.state !== 'discarded';
+
 /** Whether a record is still in the store: not replaced by a newer intent. */
 async function isQueued(record: OutboxRecord): Promise<boolean> {
   let queued = false;
   await transact('readonly', (objects) => {
-    const request = objects.getKey(record.id);
+    const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = request.result !== undefined;
+      queued = queuedIn(request.result as OutboxRecord | undefined);
     };
   });
   return queued;
@@ -294,29 +299,23 @@ async function isQueued(record: OutboxRecord): Promise<boolean> {
  * A replay's answer applied to its record (`next` in its place, or deleted)
  * only if it is still queued, in one transaction: a newer intent for its
  * key that replaced it while it was in flight must not get the old one
- * back beside it. Whether it was still queued. A `discard` deletes it
- * unsaved: its regions are put back (write's `reverted`).
+ * back beside it. Whether it was still queued. Discard passes its
+ * tombstone as `next` (discardedRecord).
  */
 async function settle(
   record: OutboxRecord,
   next?: OutboxRecord,
-  { discard = false } = {},
 ): Promise<boolean> {
   let queued = false;
-  const reverted: string[] = [];
-  await write(
-    (objects) => {
-      const request = objects.getKey(record.id);
-      request.onsuccess = () => {
-        queued = request.result !== undefined;
-        if (!queued) return;
-        if (next) objects.put(next);
-        else objects.delete(record.id);
-        if (discard) reverted.push(record.key);
-      };
-    },
-    { reverted },
-  );
+  await write((objects) => {
+    const request = objects.get(record.id);
+    request.onsuccess = () => {
+      queued = queuedIn(request.result as OutboxRecord | undefined);
+      if (!queued) return;
+      if (next) objects.put(next);
+      else objects.delete(record.id);
+    };
+  });
   return queued;
 }
 
@@ -327,18 +326,28 @@ const remove = (records: OutboxRecord[]) =>
 
 /**
  * A page of another account than the records' deletes them unsent (plan
- * section 6): never replayed into, or shown to, the new account.
+ * section 6): never replayed into, or shown to, the new account. Discard's
+ * tombstones past DISCARD_TOMBSTONE_MS go here too: every tab has re-read
+ * the store since.
  */
 async function claimForAccount(): Promise<void> {
   const account = pageAccount();
-  const others = (await readAll()).filter(
-    (record) => record.account !== account,
+  const now = Date.now();
+  const all = await readAll();
+  const others = all.filter((record) => record.account !== account);
+  const expired = all.filter(
+    (record) => record.account === account && tombstoneExpired(record, now),
   );
-  if (others.length === 0) return;
-  await remove(others);
-  console.info(
-    `[outbox] ${others.length} queued change(s) of another account deleted unsent`,
-  );
+  if (others.length === 0 && expired.length === 0) return;
+  await remove([...others, ...expired]);
+  if (others.length > 0) {
+    console.info(
+      `[outbox] ${others.length} queued change(s) of another account deleted unsent`,
+    );
+  }
+  if (expired.length > 0) {
+    console.info(`[outbox] ${expired.length} discard tombstone(s) pruned`);
+  }
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -349,6 +358,8 @@ let signedOut = false;
 let syncing = false;
 
 const isPending = (record: OutboxRecord) => record.state === 'pending';
+/** Neither saved nor dropped yet: what sign-out still has to drain or ask about. */
+const isUnsaved = (record: OutboxRecord) => record.state !== 'discarded';
 
 /**
  * Re-reads the store and draws it. Single-flight: a call during a render
@@ -373,7 +384,10 @@ function render(records: OutboxRecord[]): void {
     ),
   );
   renderNotice(
-    records.filter((record) => !isPending(record) || isStuck(record)),
+    records.filter(
+      (record) =>
+        record.state === 'failed' || (isPending(record) && isStuck(record)),
+    ),
   );
   guardFull(waiting);
 }
@@ -423,18 +437,16 @@ const intentOf = (record: OutboxRecord | undefined) =>
 
 /**
  * A region with a pending record is marked and shows the intent it waits
- * to save; one whose record failed shows the server's state again; one
- * whose record was saved keeps what it shows, now the server's too
- * (endIntent). A record gone from the store without failing was saved:
- * a Discard puts its regions back before any render (write's `reverted`),
- * and a session boundary's deletion leaves the page anyway.
+ * to save; one whose record failed or was discarded shows the server's
+ * state again; one whose record was saved keeps what it shows, now the
+ * server's too (endIntent). Which is read from the store alone
+ * (regionEnd): Discard leaves a tombstone, so a record gone means saved
+ * whichever tab reads first; a session boundary's deletion leaves the page
+ * anyway.
  */
 function renderRegions(records: OutboxRecord[]): void {
   const waiting = new Map(
     records.filter(isPending).map((record) => [record.key, record]),
-  );
-  const failed = new Set(
-    records.filter((r) => !isPending(r)).map((r) => r.key),
   );
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
     const key = regionKey(region);
@@ -446,7 +458,8 @@ function renderRegions(records: OutboxRecord[]): void {
       continue;
     }
     delete region.dataset.outbox;
-    endIntent(region, failed.has(key) ? 'failed' : 'saved');
+    const end = regionEnd(key, records);
+    if (end !== 'pending') endIntent(region, end);
   }
 }
 
@@ -507,15 +520,6 @@ function endIntent(region: HTMLElement, end: IntentEnd): void {
       );
     }
     checkbox.defaultChecked = checkbox.checked;
-  }
-}
-
-/** Discarded records' regions back to the server's state (write's `reverted`). */
-function revertRegions(keys: readonly string[]): void {
-  if (keys.length === 0) return;
-  for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    const key = regionKey(region);
-    if (key !== undefined && keys.includes(key)) endIntent(region, 'discarded');
   }
 }
 
@@ -1187,7 +1191,7 @@ async function drainBeforeLeaving(
   account: string,
   discardLeftovers: boolean,
 ): Promise<boolean> {
-  if ((await recordsOf(account)).length === 0) return true;
+  if ((await recordsOf(account)).filter(isUnsaved).length === 0) return true;
   let waited: ReturnType<typeof setTimeout> | undefined;
   const drained = await Promise.race([
     schedule('sign-out').then(() => true),
@@ -1201,7 +1205,7 @@ async function drainBeforeLeaving(
       `[outbox] sign-out: still syncing after ${SIGN_OUT_DRAIN_MS / 1000} s`,
     );
   }
-  const left = await recordsOf(account);
+  const left = (await recordsOf(account)).filter(isUnsaved);
   if (left.length === 0 || !discardLeftovers) return true;
   const discard = await confirmAction({
     question: counted('Discard', left.length),
@@ -1387,7 +1391,9 @@ document.addEventListener('click', (event) => {
   const account = pageAccount();
   if (!account) return;
   void (async () => {
-    const dismissed = (await recordsOf(account)).filter((r) => !isPending(r));
+    const dismissed = (await recordsOf(account)).filter(
+      (r) => r.state === 'failed',
+    );
     await remove(dismissed);
     console.info(`[outbox] ${dismissed.length} failure(s) dismissed`);
   })().catch((error: unknown) => {
@@ -1402,14 +1408,13 @@ const actionStore: StuckActionStore<OutboxRecord> = {
       ? (await recordsOf(account)).find((r) => r.id === id)
       : undefined;
   },
-  // Try again puts the cleared copy back; Discard's delete (no `next`) is
-  // the only settle here without one, and leaves the write unsaved.
-  settle: (record, next) => settle(record, next, { discard: !next }),
+  settle,
+  discard: (record) => settle(record, discardedRecord(record, Date.now())),
 };
 
 // A stuck write's notice: Try again clears its count and drains; Discard
-// deletes it, and its regions go back to the server's state (settle's
-// `discard`, in every tab).
+// leaves its tombstone, and every tab's next read puts its regions back to
+// the server's state (regionEnd).
 document.addEventListener('click', (event) => {
   if (!(event.target instanceof Element)) return;
   const retry = event.target.closest('[data-outbox-retry]');
@@ -1459,8 +1464,6 @@ document.addEventListener('click', (event) => {
 // Another tab wrote: what is shown is re-read; a put is drained here too
 // when this tab can reach the server (the lock keeps it to one drainer).
 channel?.addEventListener('message', (event: MessageEvent<OutboxChange>) => {
-  // Before the re-read, which would take the discarded records for saved.
-  revertRegions(event.data.reverted ?? []);
   void refresh();
   if (event.data.synced) showSynced(event.data.synced);
   if (event.data.drain) void schedule('another tab');

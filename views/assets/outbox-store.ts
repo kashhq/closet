@@ -16,12 +16,6 @@ const CHANNEL = 'closet-outbox';
 export interface OutboxChange {
   /** A put: a tab that can reach the server should drain it. */
   drain: boolean;
-  /**
-   * Keys whose records were discarded (the notice's Discard): their regions
-   * go back to the server's state. Without it a record that vanished reads
-   * as saved, and its intent would be kept as the server's (#900).
-   */
-  reverted?: string[];
   /** The paths a drain saved: a tab showing one takes the server's copy (#900). */
   synced?: string[];
 }

@@ -366,6 +366,8 @@ interface RevalidationResult {
   fetchedAt: number;
   /** The server's page, when it differs from the cached copy. */
   html?: string;
+  /** Its ETag: freshness.js sends it back after a sync, so an unchanged page answers 304 (#900). */
+  etag?: string;
 }
 
 /**
@@ -849,8 +851,10 @@ async function revalidate(
 ): Promise<RevalidationResult> {
   const path = new URL(request.url).pathname;
   let fresh: FreshPage | undefined;
+  let etag: string | undefined;
   try {
     const response = await handler.fetch(request);
+    etag = response.headers.get('ETag') ?? undefined;
     await handler.cachePut(request, response.clone());
     fresh = {
       status: response.status,
@@ -875,6 +879,7 @@ async function revalidate(
     outcome,
     fetchedAt: Date.now(),
     html: outcome === 'updated' ? fresh?.body : undefined,
+    etag: outcome === 'updated' ? etag : undefined,
   };
 }
 

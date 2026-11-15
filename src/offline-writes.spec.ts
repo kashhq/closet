@@ -38,6 +38,10 @@ import {
   showsQueuedWrite,
   showsSyncedWrite,
   intentEnding,
+  regionEnd,
+  discardedRecord,
+  DISCARD_TOMBSTONE_MS,
+  tombstoneExpired,
   type StoredRecord,
   syncedWritePaths,
   takesDay,
@@ -608,6 +612,11 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
           else w.stored.delete(record.id);
           return Promise.resolve(true);
         },
+        discard(record) {
+          if (!w.stored.has(record.id)) return Promise.resolve(false);
+          w.stored.set(record.id, discardedRecord(record, w.clock.now));
+          return Promise.resolve(true);
+        },
       };
       return store;
     };
@@ -637,7 +646,7 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       expect(w.stored.size).toBe(0);
     });
 
-    it('Discard after a replay that failed again deletes the record and nothing resends it', async () => {
+    it('Discard after a replay that failed again leaves its tombstone, and nothing resends it', async () => {
       const w = world([stuckRow()], () => SERVER, { now: STUCK_RETRY_MS });
       const gate = held(w);
       const turn = createTurns();
@@ -647,7 +656,8 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       gate.release(SERVER);
       await Promise.all([drain, discard]);
       expect((await discard)?.id).toBe('bad');
-      expect(w.stored.size).toBe(0);
+      expect(w.stored.get('bad')).toMatchObject({ state: 'discarded' });
+      await w.drain();
       expect(w.sent).toEqual(['bad']);
     });
 
@@ -787,6 +797,89 @@ describe('intentEnding', () => {
       expect(intentEnding(mark, 'discarded'), mark).toBe('revert');
       expect(intentEnding(mark, 'saved'), mark).toBe('confirm');
     }
+  });
+});
+
+describe('regionEnd: a Discard is never read as a save (#900)', () => {
+  const record = (
+    state: StoredRecord['state'],
+    key = 'packed:7:41',
+  ): StoredRecord => ({ account: '1', key, state });
+  const discard = (): ReplayRecord =>
+    discardedRecord(
+      { ...record('pending'), attempts: 3, serverErrors: 3, stuckAt: 0 },
+      1_000,
+    );
+  /**
+   * A region showing a tick through a sequence of store reads, as
+   * renderRegions draws it: what each read did to it.
+   */
+  function drawn(reads: StoredRecord[][]): string[] {
+    let mark: string | undefined = 'ticked';
+    const done: string[] = [];
+    for (const records of reads) {
+      const end = regionEnd('packed:7:41', records);
+      if (end === 'pending') {
+        mark = 'ticked';
+        continue;
+      }
+      done.push(intentEnding(mark, end));
+      mark = undefined;
+    }
+    return done;
+  }
+
+  it('reads each state from the store, and saved only from a record gone', () => {
+    expect(regionEnd('packed:7:41', [record('pending')])).toBe('pending');
+    expect(regionEnd('packed:7:41', [record('failed')])).toBe('failed');
+    expect(regionEnd('packed:7:41', [discard()])).toBe('discarded');
+    expect(regionEnd('packed:7:41', [record('pending', 'other')])).toBe(
+      'saved',
+    );
+    expect(regionEnd('packed:7:41', [])).toBe('saved');
+  });
+
+  it('reverts once and never confirms, whether a tab reads before the Discard commits or after', () => {
+    // Another tab's refresh lands before the commit and its message's
+    // re-read after it, or (the race) the refresh reads after the commit,
+    // before the message arrives: every read after the commit sees the
+    // tombstone, so none can take the vanished record for a save.
+    const before = [record('pending')];
+    const after = [discard()];
+    expect(drawn([before, after])).toEqual(['revert']);
+    expect(drawn([after, after])).toEqual(['revert', 'none']);
+  });
+
+  it('a tombstone is no pending, failed or stuck record, and is pruned after DISCARD_TOMBSTONE_MS', () => {
+    const tombstone = discard();
+    expect(tombstone).toMatchObject({ state: 'discarded', discardedAt: 1_000 });
+    expect(isStuck(tombstone)).toBe(false);
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS - 1)).toBe(
+      false,
+    );
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS)).toBe(
+      true,
+    );
+    expect(tombstoneExpired(tombstone, 0)).toBe(false);
+    expect(tombstoneExpired(record('failed'), Infinity)).toBe(false);
+  });
+
+  it('a newer tap on the key replaces the tombstone: pending again', async () => {
+    const rows: StoredRecord[] = [discard()];
+    const store: OutboxStore<StoredRecord> = {
+      records: () => Promise.resolve(rows),
+      putCollapsed(records) {
+        const keys = new Set(records.map((r) => r.key));
+        rows.splice(0, rows.length, ...rows.filter((o) => !keys.has(o.key)));
+        rows.push(...records);
+        return Promise.resolve();
+      },
+    };
+    expect(await routesThroughOutbox(store, '1', false, ['packed:7:41'])).toBe(
+      false,
+    );
+    await enqueue(store, '1', [record('pending')]);
+    expect(regionEnd('packed:7:41', rows)).toBe('pending');
   });
 });
 
