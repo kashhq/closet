@@ -162,29 +162,37 @@ export class DatabasePoolBusy extends HttpError {
  * log, until the database answers again. createApp wires `recovered` to the
  * pool's `onAnswer` (createDb): a connection opened, or a query answered, so
  * the first success ends it even when the pool opens no connection for it;
- * one while the database is up finds no outage to end. One per app.
+ * one while the database is up finds no outage to end. Only an answer to
+ * something begun after the outage did ends it: a query sent before and
+ * answered late would otherwise end it while the database is still down,
+ * and the next failure would be captured as a second outage (#842).
+ * `now` is the pool's clock (performance.now(), monotonic). One per app.
  */
 export class DatabaseOutage {
   private since: number | undefined;
   private failed = 0;
 
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly now: () => number = () => performance.now(),
+  ) {}
 
   /** Counts a failed request; true for the one that begins an outage. */
   failure(): boolean {
     this.failed += 1;
     if (this.since !== undefined) return false;
-    this.since = Date.now();
+    this.since = this.now();
     this.logger.warn(
       'Database unavailable: requests answer busy until it is back',
     );
     return true;
   }
 
-  recovered(): void {
-    if (this.since === undefined) return;
+  /** The database answered something begun at `startedAt` (the pool's onAnswer). */
+  recovered(startedAt: number): void {
+    if (this.since === undefined || startedAt < this.since) return;
     this.logger.info(
-      `Database reachable again after ${Math.round((Date.now() - this.since) / 1000)} s; ${this.failed} request(s) answered busy`,
+      `Database reachable again after ${Math.round((this.now() - this.since) / 1000)} s; ${this.failed} request(s) answered busy`,
     );
     this.since = undefined;
     this.failed = 0;
