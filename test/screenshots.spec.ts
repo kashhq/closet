@@ -83,10 +83,14 @@ async function shot(page: Page, name: string, url?: string): Promise<void> {
   if (url) await page.goto(url);
   await page.waitForLoadState('networkidle');
   // Every shot of a page with section tabs, in both themes, proves them
-  // readable (#726); a page without tabs skips it, and so does one with a
-  // sheet open (its backdrop dims the tabs on purpose).
+  // readable (#726); a page without an inactive tab skips it (the picker
+  // shows the Closet tab alone), and so does one with a sheet open (its
+  // backdrop dims the tabs on purpose).
   const sheetOpen = (await page.locator('dialog[open]').count()) > 0;
-  if (!sheetOpen && (await page.locator('nav.tabs').count()) > 0) {
+  const inactiveTabs = page.locator(
+    'nav.tabs a.tab:not([aria-current="page"])',
+  );
+  if (!sheetOpen && (await inactiveTabs.count()) > 0) {
     await expectReadableTabs(page);
   }
   await page.screenshot({
@@ -192,15 +196,8 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
     path: `${DIR}/71-demo-calendar-plan-sheet.png`,
     animations: 'disabled',
   });
-  // Sharing is Profile's section since #82: the old page's link lands there,
-  // and the shot is the section (65 is the whole of Profile).
-  await page.goto('/wardrobe-share/manage');
-  await expect(page).toHaveURL(/\/auth\/profile#sharing$/);
-  await page.waitForLoadState('networkidle');
-  await page.locator('#sharing').screenshot({
-    path: `${DIR}/11-demo-shares.png`,
-    animations: 'disabled',
-  });
+  // Sharing is its own settings page since #728 (65 is Profile's index).
+  await shot(page, '11-demo-shares', '/auth/profile/sharing');
   await shot(page, '65-demo-profile', '/auth/profile');
   // The Wardrobe's header (R3, #83): the switcher in the title (Dana's
   // wardrobe is shared with Theo), the ⋯ menu, the add sheet, and the grid
@@ -280,6 +277,8 @@ test('demo: Theo, capsules', async ({ page }) => {
   await signInAs(page, 'demo');
   await shot(page, '17-demo-capsules', '/capsules');
   await page.getByRole('link', { name: /^Weekend/ }).click();
+  // The list's card has the name too: the URL says the boosted tap landed.
+  await expect(page).toHaveURL(/\/capsules\/\d+$/);
   await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
   await shot(page, '18-demo-capsule');
   await page.getByRole('link', { name: 'Choose garments' }).first().click();
@@ -354,9 +353,8 @@ test('demo: Theo, weather', async ({ page }) => {
   await signInAs(page, 'demo');
   // Today's line (the seed's simulated weather, from the test server's
   // stand-in for Open-Meteo) in °F, then the forecast on this week's days.
-  await page.goto('/wardrobe');
+  await page.goto('/');
   await expect(page.locator('p#weather-line')).toContainText('°F');
-  await shot(page, '35-demo-weather-wardrobe');
   // Today carries Open-Meteo's credit (CC BY 4.0, #640) on a row of its own:
   // the credit is one text line at 390 px and the weather line above it is
   // not pushed onto more rows by it.
@@ -372,11 +370,10 @@ test('demo: Theo, weather', async ({ page }) => {
   await page.goto('/calendar');
   await expect(page.locator('[data-weather-day]')).not.toHaveCount(0);
   await shot(page, '36-demo-weather-calendar');
-  await page.goto('/auth/profile');
-  await expect(page.locator('#weather')).toContainText(
+  await page.goto('/auth/profile/weather');
+  await expect(page.locator('main')).toContainText(
     'Home: Fort Greene, Brooklyn',
   );
-  await page.locator('#weather').scrollIntoViewIfNeeded();
   await shot(page, '37-demo-weather-profile');
 });
 
@@ -387,17 +384,13 @@ test('demo: Theo, his style profile', async ({ page }) => {
 
 test('demo: Theo, his sizes (#24)', async ({ page }) => {
   await signInAs(page, 'demo');
-  // Profile › Sizes (the section alone; 65 is the whole of Profile), its
-  // editor, and a brand's note where he shops: a wishlist item's page and
-  // its form.
-  await page.goto('/auth/profile#sizes');
-  await expect(page.locator('#sizes')).toContainText('Your size in Uniqlo');
-  await page.waitForLoadState('networkidle');
-  await page.locator('#sizes').screenshot({
-    path: `${DIR}/75-demo-profile-sizes.png`,
-    animations: 'disabled',
-  });
-  await shot(page, '76-demo-sizes-editor', '/auth/profile/sizes');
+  // Profile › Sizes (its own page since #728), and a brand's note where he
+  // shops: a wishlist item's page and its form.
+  await page.goto('/auth/profile/sizes');
+  await expect(
+    page.locator('input[name="brand"][value="Uniqlo"]'),
+  ).toBeVisible();
+  await shot(page, '76-demo-sizes-editor');
   await page.goto('/wardrobe/wishlist');
   await page.getByRole('link', { name: 'White Couriers' }).click();
   await expect(page).toHaveURL(/\/wardrobe\/\d+$/);
@@ -509,8 +502,6 @@ test('sparse: Dana, untagged and degraded', async ({ page }) => {
 test('fresh: Riley, the empty states', async ({ page }) => {
   await signInAs(page, 'fresh');
   await shot(page, '14-fresh-wardrobe', '/wardrobe');
-  // No city yet: the header's weather line asks for one.
-  await expect(page.getByText('Add your city for the weather')).toBeVisible();
   await shot(page, '15-fresh-outfits', '/outfits');
   await shot(page, '65-fresh-styling', '/styling');
   await shot(page, '16-fresh-calendar', `/calendar?week=${ANCHOR}`);
@@ -582,7 +573,7 @@ test('demo: Theo, Today and his reminders (#15)', async ({ page }) => {
   // headless shell has no push service or permission, so both are stubbed
   // (test/support/push-stub.ts); the server's side is real.
   await stubPushManager(page, fakeSubscription(), true, { granted: true });
-  await page.goto('/auth/profile');
+  await page.goto('/auth/profile/notifications');
   const reminders = page.locator('#push-reminders');
   await expect(reminders).toBeVisible();
   await reminders
@@ -595,8 +586,7 @@ test('demo: Theo, Today and his reminders (#15)', async ({ page }) => {
   // The weekly auto-plan (#16): his week template on the Profile, and the
   // days after today that "Plan my week" filled (the seed's, demo.md step
   // 7), marked Auto on the calendar: tomorrow's week has some.
-  await page.locator('#week').scrollIntoViewIfNeeded();
-  await shot(page, '58-demo-week-template');
+  await shot(page, '58-demo-week-template', '/auth/profile/week');
   await shot(
     page,
     '59-demo-week-planned',
