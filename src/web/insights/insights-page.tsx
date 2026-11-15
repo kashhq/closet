@@ -24,7 +24,6 @@ import { garmentUrl } from '../wardrobe/urls';
 import { styleThisUrl } from '../styling/urls';
 import { Card, GarmentList, garmentName, perWearLine, Strip } from './parts';
 import {
-  INSIGHTS_PATH,
   insightsUrl,
   NEEDS_ATTENTION_URL,
   RECAP_PATH,
@@ -205,7 +204,11 @@ export function UnwornPage(props: {
   const { ctx, model } = props;
   return (
     <Layout ctx={ctx} title={t(UNWORN_KEY)}>
-      <AppBar ctx={ctx} title={t(UNWORN_KEY)} back={INSIGHTS_PATH} />
+      <AppBar
+        ctx={ctx}
+        title={t(UNWORN_KEY)}
+        back={insightsUrl(model.insights.unworn.days)}
+      />
       <PageMain class="p-4 pt-20 pb-24 flex flex-col gap-4">
         <Unworn
           unworn={model.insights.unworn}

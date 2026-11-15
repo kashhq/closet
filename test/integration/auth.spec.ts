@@ -310,6 +310,11 @@ describe('sessions', () => {
       expect(res.headers.location).toBe(WEEK);
     });
 
+    it('lands back on Profile › Devices, which lives at /auth/devices', async () => {
+      const res = await signInFrom('/auth/devices?revoked=1');
+      expect(res.headers.location).toBe('/auth/devices?revoked=1');
+    });
+
     it.each([
       ['an absolute URL', 'https://evil.example/'],
       ['a protocol-relative URL', '//evil.example'],

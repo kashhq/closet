@@ -133,6 +133,13 @@ describe('insights over the seed personas', () => {
     expect(all.body).not.toContain('data-see-all');
     // Its window chips stay on the list's page.
     expect(all.body).toContain('href="/wardrobe/insights/unworn?unworn=30"');
+    // Back keeps the window chosen here (#1041).
+    const thirty = await t.inject({
+      method: 'GET',
+      url: '/wardrobe/insights/unworn?unworn=30',
+      headers: { cookie: demoCookie },
+    });
+    expect(thirty.body).toContain('href="/wardrobe/insights?unworn=30"');
   });
 
   // #733: `price` is per piece, so the six-pair socks pack is its pair price

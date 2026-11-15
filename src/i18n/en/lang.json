@@ -38,8 +38,10 @@
     "SUMMARY_NONE": "Not shared",
     "SUMMARY_SHARED": "Shared with {count}",
     "SUMMARY_INBOUND": "{count} shared with you",
-    "SUMMARY_OPEN_ONE": "1 open invite",
-    "SUMMARY_OPEN_MANY": "{count} open invites"
+    "SUMMARY_ANSWER_ONE": "1 invite to answer",
+    "SUMMARY_ANSWER_MANY": "{count} invites to answer",
+    "SUMMARY_LINKS_ONE": "1 link open",
+    "SUMMARY_LINKS_MANY": "{count} links open"
   },
   "FILES": "Files",
   "WARDROBE": "Wardrobe",
