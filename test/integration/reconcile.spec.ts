@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  link,
   mkdir,
   readdir,
   readFile,
@@ -22,7 +23,13 @@ import { PartialFailure } from '../../src/metrics/partial-failure';
 import { restoreFromTrash } from '../../src/maintenance/trash';
 import { addDays, todayIn } from '../../src/calendar-date';
 import { variantFileName } from '../../src/web/files/image-variant';
-import { STORAGE_MARKER, TRASH_DIR } from '../../src/web/files/storage';
+import {
+  PhotoStorage,
+  RestoreFailed,
+  STORAGE_MARKER,
+  TRASH_DIR,
+} from '../../src/web/files/storage';
+import { captureLogs } from '../support/log-capture';
 import {
   createGarment,
   jpegPhoto,
@@ -469,6 +476,103 @@ describe('storage reconciliation', () => {
         hashes[0],
       );
       await t.photos.deleteFiles(names);
+    });
+
+    // #841: the outcome line says what storage holds, and a partial
+    // outcome is finished by running the restore again.
+    describe('a restore that fails partway', () => {
+      const eio = () =>
+        Promise.reject(Object.assign(new Error('EIO'), { code: 'EIO' }));
+      /** Storage whose `fail`-matching calls reject with EIO, once each. */
+      const failingStorage = (fail: {
+        link?: (to: string) => boolean;
+        remove?: (file: string) => boolean;
+      }) => {
+        const failed = new Set<string>();
+        const once = (kind: string, path: string, matches?: boolean) =>
+          matches === true && !failed.has(`${kind} ${path}`)
+            ? (failed.add(`${kind} ${path}`), true)
+            : false;
+        return new PhotoStorage(t.dataPath, silentLogger, {
+          readText: (path) => readFile(path, 'utf8'),
+          writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
+          link: (from, to) =>
+            once('link', to, fail.link?.(to)) ? eio() : link(from, to),
+          remove: (path) =>
+            once('remove', path, fail.remove?.(path))
+              ? eio()
+              : rm(path, { force: true }),
+        });
+      };
+      const expectRestored = async (names: string[], hashes: string[]) => {
+        for (const [i, name] of names.entries()) {
+          expect(await hashOf(join(t.dataPath, name))).toBe(hashes[i]);
+        }
+      };
+
+      it('once live, says the trash kept a name (never "rolled back"), and a second run clears it', async () => {
+        const { baseName, names, hashes } = await restoredAway();
+        await t.photos.storage.quarantine(baseName, names, today());
+        const { logger, logs } = captureLogs();
+        const stuck = failingStorage({
+          remove: (path) => path === trashPath(today(), baseName, names[0]),
+        });
+
+        expect(
+          await restoreFromTrash(stuck, baseName, logger, now),
+        ).toMatchObject({
+          restored: [{ entry: baseName }],
+          leftInTrash: [`${today()}/${baseName}/${names[0]}`],
+        });
+        await expectRestored(names, hashes);
+        expect(logs.messages('warn')).toEqual([
+          `Restored, but .trash still holds ${today()}/${baseName}/${names[0]}; run --restore-from-trash ${baseName} again to clear it`,
+        ]);
+
+        // The live original is the trash file itself: no refusal.
+        expect(
+          await restoreFromTrash(t.photos.storage, baseName, silentLogger, now),
+        ).toMatchObject({ restored: [{ entry: baseName }], leftInTrash: [] });
+        await expectRestored(names, hashes);
+        expect(
+          (await t.photos.storage.trash()).some((s) => s.entry === baseName),
+        ).toBe(false);
+        await t.photos.deleteFiles(names);
+      });
+
+      it('rolled back but for a name it could not unlink: says so, and a second run restores the rest', async () => {
+        const { baseName, names, hashes } = await restoredAway();
+        await t.photos.storage.quarantine(baseName, names, today());
+        // In the order the restore links them: the trash lists them sorted.
+        const [first, second, third] = [...names].sort();
+        const { logger, logs } = captureLogs();
+        const stuck = failingStorage({
+          link: (to) => to === join(t.dataPath, third),
+          remove: (path) => path === join(t.dataPath, first),
+        });
+
+        await expect(
+          restoreFromTrash(stuck, baseName, logger, now),
+        ).rejects.toBeInstanceOf(RestoreFailed);
+        expect(logs.messages('warn')).toEqual([
+          `Restore of ${today()}/${baseName} failed; ${first} could not be taken back (live, and still in the trash); run --restore-from-trash ${baseName} again`,
+        ]);
+        // Only the stranded one is live; the trash still holds all three.
+        const live = await listed();
+        expect(live).toContain(first);
+        expect(live).not.toContain(second);
+        for (const [i, name] of names.entries()) {
+          expect(await hashOf(trashPath(today(), baseName, name))).toBe(
+            hashes[i],
+          );
+        }
+
+        expect(
+          await restoreFromTrash(t.photos.storage, baseName, silentLogger, now),
+        ).toMatchObject({ restored: [{ entry: baseName }], leftInTrash: [] });
+        await expectRestored(names, hashes);
+        await t.photos.deleteFiles(names);
+      });
     });
 
     it('purges trash days past the retention, never newer ones or foreign directories', async () => {
