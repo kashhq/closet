@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
 import { parseStoredName } from './image-variant';
@@ -62,21 +63,15 @@ export async function claimStorage(
   if (read.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: read.code });
   }
-  let paired = await pairedInstallId(db);
-  const marker =
+  const pairedAtStart = await pairedInstallId(db);
+  const { marker, paired } =
     read.state === 'present'
-      ? read.marker
-      : await markUnmarked(storage, db, paired, logger);
-  if (paired === undefined) {
-    await pairInstallOnce(db, marker.installId);
-    // Read back: a process claiming beside this one may have paired first.
-    paired = await pairedInstallId(db);
-    if (paired === marker.installId) {
-      logger.info(
-        `Photo storage ${marker.installId} paired with this database`,
-      );
-    }
-  }
+      ? {
+          marker: read.marker,
+          paired:
+            pairedAtStart ?? (await pair(db, read.marker.installId, logger)),
+        }
+      : await markUnmarked(storage, db, pairedAtStart, logger);
   if (paired !== marker.installId) {
     const mismatch = `photo storage ${marker.installId}: this database belongs to install ${paired}`;
     if (pairing === 'enforced') {
@@ -90,14 +85,32 @@ export async function claimStorage(
   return marker;
 }
 
-// An unmarked DATA_PATH: marked when #650's rules prove it is ours, with the
-// database's install id once it has one.
+// Pairs an unpaired database with `installId`, answering the id it is paired
+// with: a process claiming beside this one may have paired first.
+async function pair(
+  db: Db,
+  installId: string,
+  logger: Logger,
+): Promise<string> {
+  const paired = await pairInstallOnce(db, installId);
+  if (paired === installId) {
+    logger.info(`Photo storage ${installId} paired with this database`);
+  }
+  return paired;
+}
+
+// An unmarked DATA_PATH: marked when #650's rules prove it is ours. The id
+// it gets is settled before anything is written (#851): an unpaired
+// database is paired first, so a claim that loses the pairing race writes
+// the winner's id, never a marker of its own that the database refuses
+// forever after. The marker is still created exclusively (createMarker:
+// written new, then linked).
 async function markUnmarked(
   storage: PhotoStorage,
   db: Db,
-  paired: string | undefined,
+  pairedAtStart: string | undefined,
   logger: Logger,
-): Promise<StorageMarker> {
+): Promise<{ marker: StorageMarker; paired: string }> {
   const rows = await photoRowNames(db);
   const covered = rows.length === 0 ? 0 : await coveredRows(storage, rows);
   if (rows.length > 0 && covered < rows.length * ADOPT_MIN_COVERAGE) {
@@ -106,6 +119,7 @@ async function markUnmarked(
     );
     throw new StorageIdentityError({ kind: 'absent' });
   }
+  const paired = pairedAtStart ?? (await pair(db, randomUUID(), logger));
   // Ours, or the marker a process booting beside this one linked first.
   const created = await storage.createMarker(paired);
   if (created.state === 'unreadable') {
@@ -121,7 +135,7 @@ async function markUnmarked(
       `Photo storage ${marker.installId}: adopted an unmarked directory holding the photos of ${covered} of ${rows.length} rows`,
     );
   }
-  return marker;
+  return { marker, paired };
 }
 
 /**

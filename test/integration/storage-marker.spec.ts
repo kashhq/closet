@@ -377,6 +377,28 @@ describe('the photo storage marker', () => {
     expect(await readdir(t.dataPath)).not.toContain(STORAGE_MARKER);
   });
 
+  // #851: the marker used to be written with a fresh id before the pairing,
+  // so a claim that lost the pairing race left a marker its database
+  // refuses on every boot after.
+  it('marks an unmarked share with the id a racing claim paired first, never one of its own', async () => {
+    await rm(markerPath());
+    await t.db.delete(install);
+    const winner = randomUUID();
+    // The racing claim pairs while this one scans the share (the adoption's
+    // listing, after this claim found the database unpaired).
+    class PairedMidScan extends PhotoStorage {
+      override async *list() {
+        await t.db.insert(install).values({ installId: winner });
+        yield* super.list();
+      }
+    }
+    const storage = new PairedMidScan(t.dataPath, silentLogger);
+    const claimed = await claimStorage(storage, t.db, silentLogger, 'enforced');
+    expect(claimed.installId).toBe(winner);
+    expect(installIdOf(await readFile(markerPath(), 'utf8'))).toBe(winner);
+    expect(await pairedIds()).toEqual([winner]);
+  });
+
   it('refuses a boot whose racing process left a malformed marker, naming the code only', async () => {
     await rm(markerPath());
     const racing = new PhotoStorage(t.dataPath, silentLogger, {
