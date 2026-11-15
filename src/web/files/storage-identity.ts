@@ -101,12 +101,16 @@ async function pair(
   return paired;
 }
 
-// An unmarked DATA_PATH: marked when #650's rules prove it is ours. The id
-// it gets is settled before anything is written (#851): an unpaired
-// database is paired first, so a claim that loses the pairing race writes
-// the winner's id, never a marker of its own that the database refuses
-// forever after. The marker is still created exclusively (createMarker:
-// written new, then linked).
+// An unmarked DATA_PATH: marked when #650's rules prove it is ours. Every
+// crash point must heal at the next boot, so an unpaired database is paired
+// only after the marker exists (a marker beside an unpaired database is
+// adopted: claimStorage), never before it: a pairing whose marker write
+// failed would leave a database whose next boot over that directory, with
+// no photo rows, refuses forever (#850's rule). A pairing that loses to
+// another claim (another DATA_PATH on this database) withdraws the marker
+// this claim wrote and marks as beside a paired database; a marker linked
+// first by a process booting on this directory is that process's, and both
+// pair with it (#851).
 async function markUnmarked(
   storage: PhotoStorage,
   db: Db,
@@ -122,29 +126,83 @@ async function markUnmarked(
     );
     throw new StorageIdentityError({ kind: 'absent' });
   }
-  const paired = pairedAtStart ?? (await pair(db, randomUUID(), logger));
+  const proof: RowProof =
+    rows.length === 0 ? undefined : { covered, rows: rows.length };
+  let paired = pairedAtStart;
+  if (paired === undefined) {
+    const marked = await markThenPair(storage, db, proof, logger);
+    if ('marker' in marked) return marked;
+    paired = marked.lostTo;
+  }
   const installId =
-    pairedAtStart === undefined || rows.length > 0
-      ? paired
-      : newStorageBesidePaired(paired, pairing, logger);
-  // Ours, or the marker a process booting beside this one linked first.
+    proof === undefined
+      ? newStorageBesidePaired(paired, pairing, logger)
+      : paired;
+  const marker = await createMarker(storage, installId);
+  if (marker.installId === installId) {
+    logMarked(logger, marker, proof, true);
+  }
+  return { marker, paired };
+}
+
+type RowProof = { covered: number; rows: number } | undefined;
+
+// An unpaired database: the marker first, with an id of its own, then the
+// pairing with whichever marker is on disk now. Answers `lostTo` when
+// another claim paired the database meanwhile, with this claim's marker
+// withdrawn: the caller marks as beside that pairing.
+async function markThenPair(
+  storage: PhotoStorage,
+  db: Db,
+  proof: RowProof,
+  logger: Logger,
+): Promise<{ marker: StorageMarker; paired: string } | { lostTo: string }> {
+  const ownId = randomUUID();
+  const marker = await createMarker(storage, ownId);
+  const paired = await pair(db, marker.installId, logger);
+  const ours = marker.installId === ownId;
+  // Another process's marker: claimStorage's comparison decides.
+  if (!ours) return { marker, paired };
+  if (paired === ownId) {
+    logMarked(logger, marker, proof, false);
+    return { marker, paired };
+  }
+  logger.warn(
+    `Photo storage ${ownId}: this database was paired with install ${paired} meanwhile; withdrawing the marker`,
+  );
+  await storage.withdrawMarker(marker);
+  return { lostTo: paired };
+}
+
+// Ours, or the marker a process booting beside this one linked first.
+async function createMarker(
+  storage: PhotoStorage,
+  installId: string,
+): Promise<StorageMarker> {
   const created = await storage.createMarker(installId);
   if (created.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: created.code });
   }
-  const { marker } = created;
-  if (rows.length === 0) {
-    logger.info(
-      pairedAtStart === undefined
-        ? `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`
-        : `Photo storage ${marker.installId}: marked as new storage (no photo rows)`,
+  return created.marker;
+}
+
+function logMarked(
+  logger: Logger,
+  marker: StorageMarker,
+  proof: RowProof,
+  besidePaired: boolean,
+): void {
+  if (proof) {
+    logger.warn(
+      `Photo storage ${marker.installId}: adopted an unmarked directory holding the photos of ${proof.covered} of ${proof.rows} rows`,
     );
   } else {
-    logger.warn(
-      `Photo storage ${marker.installId}: adopted an unmarked directory holding the photos of ${covered} of ${rows.length} rows`,
+    logger.info(
+      besidePaired
+        ? `Photo storage ${marker.installId}: marked as new storage (no photo rows)`
+        : `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`,
     );
   }
-  return { marker, paired };
 }
 
 // An unmarked DATA_PATH with no photo rows beside a database already paired

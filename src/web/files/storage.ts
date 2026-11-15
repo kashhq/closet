@@ -235,6 +235,21 @@ export class PhotoStorage {
   }
 
   /**
+   * Removes the marker only while it is `marker` (same id, same timestamp):
+   * claimStorage's own, written by a claim whose pairing then lost to
+   * another install's. Answers whether it did; another's is never removed.
+   */
+  async withdrawMarker(marker: StorageMarker): Promise<boolean> {
+    const read = await this.readMarker();
+    const ours =
+      read.state === 'present' &&
+      read.marker.installId === marker.installId &&
+      read.marker.createdAt === marker.createdAt;
+    if (ours) await this.storageFs.remove(this.pathOf(STORAGE_MARKER));
+    return ours;
+  }
+
+  /**
    * Records the marker claimStorage verified (identityProblem compares with
    * it) and whether the database's pairing with it is enforced, which
    * storageIdentityProblem reads (#833: production only).
