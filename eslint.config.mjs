@@ -13,6 +13,13 @@ import webImports from './scripts/lint/web-imports.mjs';
 // esquery regexes (no `/` inside) for the theme rule in no-restricted-syntax.
 const PALETTE_CLASS =
   '/\\b(?:(?:bg|text|border|ring|outline|fill|stroke|from|via|to|divide|decoration|accent|caret|placeholder|shadow)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\\d{2,3}|(?:bg|text|border|fill|stroke)-(?:white|black))\\b/';
+// A shadow class on anything but a floating layer: a dropdown, a toast (an
+// alert) or a sheet (modal-box). The theme is flat (#727); a card is `Card`.
+// The lookahead lets a string naming one of those through.
+const SHADOW_CLASS =
+  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?<![\\w-])shadow-/';
+const FLAT_THEME =
+  'The theme is flat (views/assets/AGENTS.md, Cards): no shadow outside a dropdown, a toast or a sheet. A card is src/web/card.tsx (#727).';
 const RETIRED_CHIP_CLASS = '/\\bchip-\\d\\b/';
 const INLINE_COLOUR =
   '/#[0-9a-fA-F]{3,8}\\b|\\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color-mix)\\(/';
@@ -134,6 +141,14 @@ export default tseslint.config(
             message: THEME_TOKENS_ONLY,
           },
         ]),
+        {
+          selector: `Literal[value=${SHADOW_CLASS}]`,
+          message: FLAT_THEME,
+        },
+        {
+          selector: `TemplateElement[value.raw=${SHADOW_CLASS}]`,
+          message: FLAT_THEME,
+        },
         // Below /70 the base content fails AA on some base (#88): muted
         // text is the one text-muted tone, faint the decorative graphics.
         {

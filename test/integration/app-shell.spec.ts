@@ -140,7 +140,7 @@ describe('app shell', () => {
       // No device signed in: no Devices row.
       expect(body).not.toContain('id="devices"');
       for (const id of ['account', 'export', 'sign-out']) {
-        expect(body).toContain(`<section id="${id}"`);
+        expect(body).toMatch(new RegExp(`<section[^>]* id="${id}"`));
       }
       const order = [
         'account',

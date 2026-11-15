@@ -1,3 +1,4 @@
+import { cardClass } from '../card';
 import { queuedTarget } from '../../offline-writes';
 import { PostForm } from '../form';
 import { t } from '../i18n';
@@ -122,7 +123,10 @@ function LaundryRow({ item }: { item: LaundryItem }) {
   const name = item.name ?? categoryLabel(item.category);
   return (
     <label
-      class="flex items-center gap-3 rounded-box bg-base-100 shadow-sm p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-primary"
+      class={cardClass(
+        'content',
+        'flex-row items-center gap-3 p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-primary',
+      )}
       {...outboxRegion(queuedTarget('wash', item.id), name)}
     >
       <input

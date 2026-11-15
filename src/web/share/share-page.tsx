@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
@@ -71,7 +72,7 @@ function SharedItem({ shared }: { shared: Shared }) {
         <OutfitCard outfit={shared.outfit} />
       )}
       {owner && (
-        <div class="fixed bottom-dock left-rail right-0 p-4 shadow-lg bg-gradient-to-t from-base-100 via-base-100/50 to-transparent">
+        <div class="fixed bottom-dock left-rail right-0 p-4 bg-gradient-to-t from-base-100 via-base-100/50 to-transparent">
           <div class="flex flex-row gap-2 items-center justify-center">
             <p>
               {t('SHARED_BY')} {owner}
@@ -85,7 +86,7 @@ function SharedItem({ shared }: { shared: Shared }) {
 
 function GarmentCard({ garment }: { garment: SharedGarment }) {
   return (
-    <div class="card bg-base-100 w-full max-w-sm shadow-sm">
+    <Card variant="content" class="w-full max-w-sm">
       {garment.photo ? (
         <figure class="aspect-square overflow-hidden">
           <img
@@ -104,34 +105,29 @@ function GarmentCard({ garment }: { garment: SharedGarment }) {
         <p class="capitalize text-muted text-sm">{garment.category}</p>
         {garment.brand && <p class="text-sm">{garment.brand}</p>}
       </div>
-    </div>
+    </Card>
   );
 }
 
 function OutfitCard({ outfit }: { outfit: SharedOutfit }) {
   return (
-    <div class="card bg-base-100 w-full max-w-sm shadow-sm">
-      <div class="card-body gap-4">
-        <h2 class="card-title">{outfit.name}</h2>
-        {outfit.notes && <p class="text-muted text-sm">{outfit.notes}</p>}
-        {outfit.garments.length > 0 && (
-          <div class="flex flex-wrap gap-2">
-            {outfit.garments.map((garment) =>
-              isPieceToBuy(garment) ? (
-                <span class="relative">
-                  <GarmentThumb
-                    garment={garment}
-                    class="rounded-box shadow-sm"
-                  />
-                  <FootMark marks={['to-buy']} />
-                </span>
-              ) : (
-                <GarmentThumb garment={garment} class="rounded-box shadow-sm" />
-              ),
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    <Card variant="content" class="w-full max-w-sm" bodyClass="gap-4">
+      <h2 class="card-title">{outfit.name}</h2>
+      {outfit.notes && <p class="text-muted text-sm">{outfit.notes}</p>}
+      {outfit.garments.length > 0 && (
+        <div class="flex flex-wrap gap-2">
+          {outfit.garments.map((garment) =>
+            isPieceToBuy(garment) ? (
+              <span class="relative">
+                <GarmentThumb garment={garment} class="rounded-box" />
+                <FootMark marks={['to-buy']} />
+              </span>
+            ) : (
+              <GarmentThumb garment={garment} class="rounded-box" />
+            ),
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

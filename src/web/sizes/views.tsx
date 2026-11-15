@@ -1,3 +1,4 @@
+import { cardClass } from '../card';
 import {
   LENGTH_UNITS,
   type LengthUnit,
@@ -277,7 +278,7 @@ function BrandForm(props: {
   return (
     <PostForm
       action={id === undefined ? BRAND_SIZES_PATH : brandSizeUrl(id)}
-      class="card bg-base-200 card-body p-3 gap-2"
+      class={cardClass('inset', 'card-body p-3 gap-2')}
     >
       <div class="grid grid-cols-[2fr_1fr] gap-2">
         <BrandInput

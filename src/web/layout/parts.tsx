@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import {
   type SignablePhotoRef,
@@ -410,17 +411,18 @@ export function ProfileSection(props: {
 }) {
   const headingId = `${props.id}-heading`;
   return (
-    <section
+    <Card
+      as="section"
+      variant="content"
+      class="w-full scroll-mt-20"
+      bodyClass="gap-3"
       id={props.id}
-      class="card bg-base-200 w-full scroll-mt-20"
       aria-labelledby={headingId}
     >
-      <div class="card-body gap-3">
-        <h2 id={headingId} class="card-title">
-          {props.heading}
-        </h2>
-        {props.children}
-      </div>
-    </section>
+      <h2 id={headingId} class="card-title">
+        {props.heading}
+      </h2>
+      {props.children}
+    </Card>
   );
 }

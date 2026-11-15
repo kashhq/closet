@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
 import { categoryLabel } from '../wardrobe/garment';
@@ -69,57 +70,53 @@ export function SuggestionSection(props: {
   const state = stateOf(garment, suggestion);
   const self = garmentUrl(garment.id, viewOwner);
   return (
-    <section
-      class="card bg-base-100 border border-base-300"
-      aria-label={t('muse.FROM', {
-        agent: museName(suggestion.agent),
-      })}
+    <Card
+      as="section"
+      variant="content"
+      bodyClass="p-4 gap-3"
+      aria-label={t('muse.FROM', { agent: museName(suggestion.agent) })}
       data-suggestion-state={state}
     >
-      <div class="card-body p-4 gap-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <FromAgent agent={suggestion.agent} />
-          <StateBadge state={state} suggestion={suggestion} />
-        </div>
-        {need && (
-          <NeedLink name={need.name} href={needUrl(need.id, viewOwner)} />
-        )}
-        {garment.status === 'wishlist' && (
-          <PriceAgainstBudget
-            price={garment.price}
-            budget={need?.budget ?? null}
-          />
-        )}
-        {suggestion.note && (
-          // Clamped to three lines; a tap opens the rest in place.
-          <details class="group text-sm" data-suggestion-note="">
-            <summary class="list-none cursor-pointer">
-              <p class="line-clamp-3 group-open:line-clamp-none whitespace-pre-line">
-                {suggestion.note}
-              </p>
-            </summary>
-          </details>
-        )}
-        {props.isOwner && garment.status === 'wishlist' && (
-          <Decisions
-            garment={garment}
-            suggestion={suggestion}
-            state={state}
-            self={self}
-            canEdit={props.canEdit}
-          />
-        )}
-        {need && (
-          <OtherOptions
-            picks={need.picks.filter(
-              (pick) => pick.id !== garment.id && isOpenPick(pick),
-            )}
-            compare={needUrl(need.id, viewOwner)}
-            viewOwner={viewOwner}
-          />
-        )}
+      <div class="flex flex-wrap items-center gap-2">
+        <FromAgent agent={suggestion.agent} />
+        <StateBadge state={state} suggestion={suggestion} />
       </div>
-    </section>
+      {need && <NeedLink name={need.name} href={needUrl(need.id, viewOwner)} />}
+      {garment.status === 'wishlist' && (
+        <PriceAgainstBudget
+          price={garment.price}
+          budget={need?.budget ?? null}
+        />
+      )}
+      {suggestion.note && (
+        // Clamped to three lines; a tap opens the rest in place.
+        <details class="group text-sm" data-suggestion-note="">
+          <summary class="list-none cursor-pointer">
+            <p class="line-clamp-3 group-open:line-clamp-none whitespace-pre-line">
+              {suggestion.note}
+            </p>
+          </summary>
+        </details>
+      )}
+      {props.isOwner && garment.status === 'wishlist' && (
+        <Decisions
+          garment={garment}
+          suggestion={suggestion}
+          state={state}
+          self={self}
+          canEdit={props.canEdit}
+        />
+      )}
+      {need && (
+        <OtherOptions
+          picks={need.picks.filter(
+            (pick) => pick.id !== garment.id && isOpenPick(pick),
+          )}
+          compare={needUrl(need.id, viewOwner)}
+          viewOwner={viewOwner}
+        />
+      )}
+    </Card>
   );
 }
 

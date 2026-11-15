@@ -1,3 +1,4 @@
+import { Card } from '../../card';
 import { PostForm } from '../../form';
 import { shortDayLabel } from '../../date-labels';
 import { t } from '../../i18n';
@@ -49,49 +50,52 @@ export function OrderReviewPage(props: {
 function OrderItemCard({ item }: { item: ReviewItem }) {
   const store = new URL(item.productUrl).hostname.replace(/^www\./, '');
   return (
-    <li class="card bg-base-100 shadow-sm" id={`order-item-${item.id}`}>
-      <div class="card-body p-3 gap-1">
-        <p class="card-title text-sm">{item.name ?? store}</p>
-        <p class="text-xs text-muted truncate">
-          {[
-            item.brand,
-            store,
-            t('orders.ORDERED_ON', { date: shortDayLabel(item.orderedOn) }),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-        <div class="flex flex-wrap items-center gap-2 mt-1">
-          {item.price && (
-            <span class="font-medium text-sm">
-              {item.currency === null || item.currency === 'USD'
-                ? priceLabel(item.price)
-                : `${item.price} ${item.currency}`}
-            </span>
-          )}
-          {/* http(s) only (the column's check); a new tab, as on the wishlist. */}
-          <a
-            href={item.productUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="link link-primary text-xs"
-          >
-            {t('VIEW_PRODUCT')}
-          </a>
-          <div class="flex gap-2 ml-auto">
-            <PostForm action={orderItemUrl(item.id, 'dismiss')}>
-              <button type="submit" class="btn btn-sm btn-ghost">
-                {t('orders.DISMISS')}
-              </button>
-            </PostForm>
-            <PostForm action={orderItemUrl(item.id, 'add')}>
-              <button type="submit" class="btn btn-sm btn-primary">
-                {t('orders.ADD_TO_CLOSET')}
-              </button>
-            </PostForm>
-          </div>
+    <Card
+      as="li"
+      variant="content"
+      bodyClass="p-3 gap-1"
+      id={`order-item-${item.id}`}
+    >
+      <p class="card-title text-sm">{item.name ?? store}</p>
+      <p class="text-xs text-muted truncate">
+        {[
+          item.brand,
+          store,
+          t('orders.ORDERED_ON', { date: shortDayLabel(item.orderedOn) }),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+      <div class="flex flex-wrap items-center gap-2 mt-1">
+        {item.price && (
+          <span class="font-medium text-sm">
+            {item.currency === null || item.currency === 'USD'
+              ? priceLabel(item.price)
+              : `${item.price} ${item.currency}`}
+          </span>
+        )}
+        {/* http(s) only (the column's check); a new tab, as on the wishlist. */}
+        <a
+          href={item.productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="link link-primary text-xs"
+        >
+          {t('VIEW_PRODUCT')}
+        </a>
+        <div class="flex gap-2 ml-auto">
+          <PostForm action={orderItemUrl(item.id, 'dismiss')}>
+            <button type="submit" class="btn btn-sm btn-ghost">
+              {t('orders.DISMISS')}
+            </button>
+          </PostForm>
+          <PostForm action={orderItemUrl(item.id, 'add')}>
+            <button type="submit" class="btn btn-sm btn-primary">
+              {t('orders.ADD_TO_CLOSET')}
+            </button>
+          </PostForm>
         </div>
       </div>
-    </li>
+    </Card>
   );
 }

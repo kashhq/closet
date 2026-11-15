@@ -4,6 +4,7 @@ import {
   typesOf,
   WARMTHS,
 } from '../../wardrobe/properties';
+import { Card } from '../card';
 import { AutosaveForm } from '../autosave';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
@@ -80,10 +81,7 @@ export function TagCard({ model }: { model: TagCardModel }) {
   return (
     <div id={TAG_CARD_ID} class="flex flex-col gap-4">
       <TagLeft left={model.left} />
-      <a
-        href={garmentUrl(garment.id, viewOwner)}
-        class="card bg-base-100 shadow-sm"
-      >
+      <Card as="a" variant="content" href={garmentUrl(garment.id, viewOwner)}>
         <figure class="aspect-square bg-base-200">
           {garment.photo ? (
             <img
@@ -104,7 +102,7 @@ export function TagCard({ model }: { model: TagCardModel }) {
             {categoryLabel(garment.category)}
           </p>
         </div>
-      </a>
+      </Card>
       {/* Not a native form: nothing here can be refused with a 4xx a person
           could cause (the chips are the only values). */}
       <AutosaveForm
