@@ -5,7 +5,6 @@ import {
   LEAST_WORN_MIN_OWNED_DAYS,
   RANKED_LIMIT,
   UNWORN_CHOICES,
-  UNWORN_SHOWN,
   type UnwornDays,
   type WardrobeInsights,
 } from '../../wardrobe/insights';
@@ -194,9 +193,10 @@ function WornLately({
 }
 
 /**
- * GET /wardrobe/insights/unworn[?unworn=30|90|180] (#728): the whole unworn
- * list, which insights cuts to its first five, up to UNWORN_SHOWN with the
- * rest counted; the same window chips, here linking to this page.
+ * GET /wardrobe/insights/unworn[?unworn=30|90|180] (#728): every unworn
+ * garment, which insights cuts to its first five; the same window chips,
+ * here linking to this page. Uncapped: "See all" must reach the whole list,
+ * and a closet is a household's own wardrobe, not an unbounded feed.
  */
 export function UnwornPage(props: {
   ctx: ViewContext;
@@ -210,7 +210,6 @@ export function UnwornPage(props: {
         <Unworn
           unworn={model.insights.unworn}
           today={model.today}
-          shown={UNWORN_SHOWN}
           windowUrl={unwornListUrl}
         />
       </PageMain>
@@ -221,13 +220,13 @@ export function UnwornPage(props: {
 
 /**
  * The unworn list's card: the window chips (`windowUrl`), the count, the
- * first `shown` garments with "Style this", and past them "See all" (to
- * the list's page, `seeAll`) or how many more there are.
+ * first `shown` garments (all of them when unset) with "Style this", and
+ * past them "See all" to the list's page (`seeAll`).
  */
 function Unworn(props: {
   unworn: WardrobeInsights<SignablePhotoRef>['unworn'];
   today: IsoDate;
-  shown: number;
+  shown?: number;
   windowUrl: (days: UnwornDays) => string;
   seeAll?: boolean;
 }) {
@@ -271,20 +270,15 @@ function Unworn(props: {
           </a>
         )}
       />
-      {more > 0 &&
-        (props.seeAll ? (
-          <a
-            href={unwornListUrl(days)}
-            class="btn btn-outline btn-sm self-start"
-            data-see-all
-          >
-            {t('insights.SEE_ALL')}
-          </a>
-        ) : (
-          <p class="text-xs text-muted">
-            {t('insights.UNWORN_MORE', { count: more })}
-          </p>
-        ))}
+      {more > 0 && props.seeAll && (
+        <a
+          href={unwornListUrl(days)}
+          class="btn btn-outline btn-sm self-start"
+          data-see-all
+        >
+          {t('insights.SEE_ALL')}
+        </a>
+      )}
     </Card>
   );
 }

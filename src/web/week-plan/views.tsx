@@ -253,11 +253,12 @@ export function WeekTemplatePage(props: {
 }
 
 /**
- * Profile's Your week row: how many weekdays hold an outfit, or that the
- * template is empty ("Plan my week" then asks for it first).
+ * Profile's Your week row: how many weekdays have a slot the planner reads (a day
+ * outfit or an occasion around it: any stored slot, as planMyWeek's
+ * `template.length === 0` check), or that the template is empty ("Plan my week" then asks for it first).
  */
 export function weekTemplateSummary(slots: readonly TemplateSlot[]): string {
-  const days = templateDays(slots).filter((day) => day.day !== null).length;
+  const days = new Set(slots.map((slot) => slot.weekday)).size;
   return days === 0
     ? t('weekPlan.template.SUMMARY_NONE')
     : t('weekPlan.template.SUMMARY_DAYS', { count: days });

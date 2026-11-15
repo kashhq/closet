@@ -1295,7 +1295,6 @@
     "UNWORN_DAYS": "{days} days",
     "UNWORN_COUNT": "Not worn in {days} days: {count}",
     "UNWORN_NONE": "Everything you have owned that long was worn in the last {days} days.",
-    "UNWORN_MORE": "and {count} more",
     "NEVER_WORN": "Never worn",
     "LAST_WORN": "Last worn {when}",
     "MOST_WORN": "Most worn",
@@ -1505,7 +1504,7 @@
       "NO_DAY": "No outfit for the day",
       "SAVED": "Week saved",
       "SUMMARY_NONE": "Not set yet",
-      "SUMMARY_DAYS": "Outfits on {count} of 7 days"
+      "SUMMARY_DAYS": "Set for {count} of 7 days"
     },
     "push": {
       "TITLE": "Your week changed",

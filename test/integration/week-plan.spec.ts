@@ -380,7 +380,7 @@ describe('the weekly auto-plan', () => {
       expect(page).toMatch(/name="day-2"[\s\S]*?value="all-day" selected/);
       expect(page).toMatch(/name="around-2" value="evening"[^>]*checked/);
       expect((await get('/auth/profile')).body).toContain(
-        'Outfits on 7 of 7 days',
+        'Set for 7 of 7 days',
       );
     });
 
@@ -405,6 +405,15 @@ describe('the weekly auto-plan', () => {
         (await get('/auth/profile/week', { cookie: stranger })).body,
       );
       expect(theirs).not.toMatch(/value="all-day" selected/);
+    });
+
+    it('counts a day with only an occasion around it as set', async () => {
+      await post('/auth/profile/week', { 'around-3': 'evening' });
+      const row = (await get('/auth/profile')).body;
+      expect(row).toContain('Set for 1 of 7 days');
+      expect(row).not.toContain('Not set yet');
+      // The later suites plan from the full template.
+      await post('/auth/profile/week', TEMPLATE);
     });
   });
 

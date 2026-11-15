@@ -69,6 +69,7 @@ export function WeatherSettingsPage(props: {
       ctx={ctx}
       title={t('weather.SETTINGS_HEADING')}
       back={profileSection(WEATHER_SETTINGS_ID)}
+      formPage
     >
       <WeatherLocation {...location} />
       <AutosaveForm action="/weather/unit">
