@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,8 +15,10 @@ import {
   CutoutModel,
   type Fetch,
   ModelChecksumError,
+  ModelDownloadError,
   type ModelSpec,
 } from './model';
+import { modelUnavailableKind } from './queue-state';
 
 const MODEL_BYTES = Buffer.from('pretend onnx weights');
 
@@ -82,6 +91,53 @@ describe('CutoutModel.ready', () => {
     );
     expect(await readdir(directory)).toEqual([]);
   });
+
+  // #870: a body that broke off partway was a bare stream error, so the
+  // queue waited as `other` with the generic fix.
+  it('fails a body that breaks off as a download failure, keeping nothing', async () => {
+    const brokenOff = vi.fn<Fetch>(() =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(MODEL_BYTES.subarray(0, 4)));
+              controller.error(new TypeError('terminated'));
+            },
+          }),
+        ),
+      ),
+    );
+    const model = new CutoutModel(spec, directory, logger, brokenOff);
+
+    const failure = await model.ready().catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ModelDownloadError);
+    expect((failure as Error).message).toBe(
+      'Model download failed: the transfer from models.test broke off',
+    );
+    expect(modelUnavailableKind(failure)).toBe('download');
+    expect(await readdir(directory)).toEqual([]);
+  });
+
+  // Root writes through mode bits: the read-only case means nothing there.
+  it.skipIf(process.getuid?.() === 0)(
+    'keeps a failed write of the download its own code, not a download failure',
+    async () => {
+      await chmod(directory, 0o555);
+      try {
+        const model = new CutoutModel(
+          spec,
+          directory,
+          logger,
+          serving(MODEL_BYTES),
+        );
+        const failure = await model.ready().catch((error: unknown) => error);
+        expect(failure).not.toBeInstanceOf(ModelDownloadError);
+        expect(modelUnavailableKind(failure)).toBe('permission');
+      } finally {
+        await chmod(directory, 0o755);
+      }
+    },
+  );
 
   it('verifies a model already on disk without downloading', async () => {
     await writeFile(join(directory, 'test.onnx'), MODEL_BYTES);
