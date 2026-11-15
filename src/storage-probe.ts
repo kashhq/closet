@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -29,7 +30,14 @@ const nodeFs: ProbeFs & SweepFs = { mkdir, writeFile, rm, readdir };
 
 /** Every probe file's name starts so, whichever process wrote it. */
 const PROBE_FAMILY = '.write-probe-';
-const PROBE_PREFIX = `${PROBE_FAMILY}${process.pid}-`;
+/**
+ * This process's names carry a random id, never the pid, which is 1 in
+ * most containers: two containers on one share (production and its HTTP
+ * twin) would mint the same names, and one's `wx` write would meet the
+ * other's file (#857). Not seededRandom's business: that rule is for data
+ * that must come out the same, and this must not.
+ */
+const PROBE_PREFIX = `${PROBE_FAMILY}${randomUUID()}-`;
 let probeCounter = 0;
 
 /**
@@ -52,9 +60,10 @@ let probeCounter = 0;
  * O(1) in the directory's size (#855): a mkdir, one named write and its
  * unlink, never a listing, which on a large NFS share could outlast the
  * readiness bound; and nothing but its own file decides the verdict (#856).
- * Each probe's file is named for this process and a counter, so no two
- * of its probes share one (DATA_PATH and MODELS_PATH may be the same; the
- * boot probe and the readiness check overlap). A write that
+ * Each probe's file is named for this process's random id and a counter,
+ * so no two probes anywhere share one (DATA_PATH and MODELS_PATH may be
+ * the same; the boot probe and the readiness check overlap; two
+ * containers may mount one share). A write that
  * hangs on a stalled share unlinks once it settles; only a process that
  * died first leaves its file behind, for the next boot's
  * sweepProbeLeftovers.

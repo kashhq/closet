@@ -301,10 +301,29 @@ describe('createStorageCheck', () => {
     const enospc = (): never => {
       throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
     };
-    /** A probe file of this process under /app/data. */
-    const PROBE_FILE = new RegExp(
-      `/app/data/\\.write-probe-${process.pid}-\\d+$`,
-    );
+    /** A probe file under /app/data: a random id and a counter. */
+    const PROBE_FILE =
+      /\/app\/data\/\.write-probe-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(\d+)$/;
+
+    // #857: the pid is 1 in most containers, so two on one share would
+    // mint the same names and one's `wx` would meet the other's file.
+    it("names its files for the process's random id, never the pid, and a counter", async () => {
+      const written: string[] = [];
+      const fs: ProbeFs = {
+        mkdir: () => Promise.resolve(),
+        writeFile: (path) => {
+          written.push(path);
+          return Promise.resolve();
+        },
+        rm: () => Promise.resolve(),
+      };
+      await probeWritable('/app/data', fs);
+      await probeWritable('/app/data', fs);
+      const [first, second] = written.map((path) => PROBE_FILE.exec(path));
+      expect(first?.[1]).toBeDefined();
+      expect(second?.[1]).toBe(first?.[1]);
+      expect(Number(second?.[2])).toBe(Number(first?.[2]) + 1);
+    });
 
     it('gives concurrent probes of one directory their own files and leaves every other file alone', async () => {
       const dir = join(root, 'shared');
