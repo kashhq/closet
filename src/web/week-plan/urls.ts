@@ -1,7 +1,7 @@
 /**
  * The weekly auto-plan's addresses (#16). "Plan my week" and its Undo are
- * calendar writes (the dock marks Calendar); the template is a section of
- * the Profile, saved under it.
+ * calendar writes (the dock marks Calendar); the template is Profile › Your
+ * week, its own page since #728, saved by a post to the same address.
  */
 
 import { CALENDAR_PATH, dayAnchor } from '../calendar/urls';
@@ -32,9 +32,11 @@ export function plannedWeekUrl(
 export const PLANNED_FLAG = 'planned';
 export const UNDONE_FLAG = 'undone';
 
-/** The Profile's week template section, and where its form posts. */
+/**
+ * Profile's Your week row (its id: `/auth/profile#week`, from before the
+ * split, lands on it) and the template's page, where its form posts.
+ */
 export const WEEK_SETTINGS_ID = 'week';
-export const WEEK_SETTINGS_PATH = `/auth/profile#${WEEK_SETTINGS_ID}`;
-export const WEEK_TEMPLATE_PATH = '/auth/profile/week';
-/** The Profile's one-shot flag after the template is saved. */
-export const WEEK_SAVED_FLAG = 'weekSaved';
+export const WEEK_SETTINGS_PATH = '/auth/profile/week';
+/** The page's one-shot flag after the template is saved. */
+export const WEEK_SAVED_FLAG = 'saved';

@@ -513,21 +513,25 @@ describe('agent access tokens', () => {
       expect(ids).toEqual(expect.arrayContaining([a.evictedId, b.evictedId]));
     });
 
-    it('Profile › Devices lists the user’s own by name and last use, never the token, and hides while there are none', async () => {
+    it('Profile › Devices lists the user’s own by name and last use, never the token; its row hides while there are none', async () => {
       const { cookie, id } = await signedUp('devices@example.com');
-      const profile = () =>
-        t.inject({ method: 'GET', url: '/auth/profile', headers: { cookie } });
-      expect((await profile()).body).not.toContain('id="devices"');
+      const get = (url: string) =>
+        t.inject({ method: 'GET', url, headers: { cookie } });
+      expect((await get('/auth/profile')).body).not.toContain('id="devices"');
 
       const phone = await minted(id, 'Pixel 9');
       await minted(id, 'Claude Code', 'mcp');
       const stranger = await signedUp('devices-stranger@example.com');
       await minted(stranger.id, 'Not mine');
 
-      const res = await profile();
+      const row = await get('/auth/profile');
+      expect(row.body).toContain('<li id="devices"><a href="/auth/devices"');
+      expect(row.body).toContain('1 signed in');
+      expect(row.body).not.toContain('Pixel 9');
+
+      const res = await get('/auth/devices');
       expect(res.statusCode).toBe(200);
       expectNativePostForms(res);
-      expect(res.body).toContain('id="devices"');
       expect(res.body).toContain('Pixel 9');
       expect(res.body).toContain('never used');
       expect(res.body).toContain(`action="/auth/devices/${phone.id}/revoke"`);
@@ -544,7 +548,7 @@ describe('agent access tokens', () => {
       expect(agents.body).not.toContain('Pixel 9');
     });
 
-    it('revoking a device lands on the profile; a stale, someone else’s or an agent token’s id is a notice, never an error page', async () => {
+    it('revoking a device lands on Devices; a stale, someone else’s or an agent token’s id is a notice, never an error page', async () => {
       const { cookie, id } = await signedUp('signout@example.com');
       const phone = await minted(id, 'Old phone');
       const agent = await minted(id, 'Claude Code', 'mcp');
@@ -560,9 +564,7 @@ describe('agent access tokens', () => {
 
       const done = await revoke(phone.id);
       expect(done.statusCode).toBe(303);
-      expect(done.headers.location).toBe(
-        '/auth/profile?deviceRevoked=1#devices',
-      );
+      expect(done.headers.location).toBe('/auth/devices?revoked=1');
       expect(await revokedAtOf(phone.id)).not.toBeNull();
       expect(t.logs.ops('token.revoked')).toContainEqual(
         expect.objectContaining({
@@ -574,25 +576,29 @@ describe('agent access tokens', () => {
       );
       const landed = await t.inject({
         method: 'GET',
-        url: '/auth/profile?deviceRevoked=1',
+        url: '/auth/devices?revoked=1',
         headers: { cookie },
       });
       expect(landed.body).toContain('Device signed out.');
-      // The last one gone, so is the section; the notice stays above.
-      expect(landed.body).not.toContain('id="devices"');
+      // The last one gone: the page says none, and Profile drops the row.
+      expect(landed.body).toContain('No apps are signed in.');
+      const profile = await t.inject({
+        method: 'GET',
+        url: '/auth/profile',
+        headers: { cookie },
+      });
+      expect(profile.body).not.toContain('id="devices"');
 
       for (const stale of [phone.id, theirs.id, agent.id]) {
         const res = await revoke(stale);
         expect(res.statusCode).toBe(303);
-        expect(res.headers.location).toBe(
-          '/auth/profile?deviceRevoked=0#devices',
-        );
+        expect(res.headers.location).toBe('/auth/devices?revoked=0');
       }
       expect(await revokedAtOf(theirs.id)).toBeNull();
       expect(await revokedAtOf(agent.id)).toBeNull();
       const notice = await t.inject({
         method: 'GET',
-        url: '/auth/profile?deviceRevoked=0',
+        url: '/auth/devices?revoked=0',
         headers: { cookie },
       });
       expect(notice.body).toContain('That device was already signed out.');

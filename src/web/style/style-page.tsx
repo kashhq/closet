@@ -14,12 +14,8 @@ import type { ViewContext } from '../view-context';
 import { WEEK_SETTINGS_PATH } from '../week-plan/urls';
 import { budgetLabel, styleLabel } from './labels';
 import { OutfitRulesSection, type OutfitRulesModel } from './outfit-rules';
-import {
-  STYLE_PROFILE_PATH,
-  STYLE_SAVED_FLAG,
-  type StyleSaved,
-  WEATHER_SETTINGS_PATH,
-} from './urls';
+import { STYLE_PROFILE_PATH, STYLE_SAVED_FLAG, type StyleSaved } from './urls';
+import { WEATHER_SETTINGS_PATH } from '../weather/urls';
 import { STYLE_NOTES_MAX, type StyleProfileBody } from './validation';
 
 export interface StyleProfileModel {
@@ -150,7 +146,7 @@ export function StyleProfilePage(props: {
   );
 }
 
-/** The weather's home city, and where to change it (the profile's Weather section). */
+/** The weather's home city, and where to change it (Profile › Weather). */
 function HomeCity({ name }: { name: string | null }) {
   return (
     <p class="text-sm mb-4" id="style-home">

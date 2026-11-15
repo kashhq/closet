@@ -307,10 +307,86 @@ export const ROUTES: Route[] = [
       stranger: 'ignored',
     },
   },
+  // The pages #728 split out of Profile: each the signed-in account's own,
+  // never reachable through a share. Sharing lists the owner's live invite
+  // links, whose token is a bearer secret.
+  {
+    name: 'GET /auth/profile/sharing',
+    kind: 'read',
+    ok: 200,
+    secret: (f) => f.inviteToken,
+    shows: true,
+    vias: ['own'],
+    request: () => ({ method: 'GET', url: '/auth/profile/sharing' }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    name: 'GET /auth/profile/week',
+    kind: 'read',
+    ok: 200,
+    secret: garmentName,
+    vias: ['own'],
+    request: () => ({ method: 'GET', url: '/auth/profile/week' }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    name: 'GET /auth/profile/weather',
+    kind: 'read',
+    ok: 200,
+    feature: 'weather',
+    secret: garmentName,
+    vias: ['own'],
+    request: () => ({ method: 'GET', url: '/auth/profile/weather' }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    name: 'GET /auth/profile/notifications',
+    kind: 'read',
+    ok: 200,
+    feature: 'pwa',
+    secret: garmentName,
+    vias: ['own'],
+    request: () => ({ method: 'GET', url: '/auth/profile/notifications' }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    name: 'GET /wardrobe/insights/unworn',
+    kind: 'read',
+    ok: 200,
+    secret: garmentName,
+    vias: ['own'],
+    request: () => ({ method: 'GET', url: '/wardrobe/insights/unworn' }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
   // Profile › Devices (#189): a native client's sign-in, the account's like
   // its agent tokens.
   {
-    name: 'GET /auth/profile (the devices)',
+    name: 'GET /auth/devices',
     kind: 'read',
     ok: 200,
     secret: () => OWNER_DEVICE_NAME,
@@ -318,7 +394,7 @@ export const ROUTES: Route[] = [
     vias: ['own'],
     request: async (f) => {
       await f.ownerToken('device');
-      return { method: 'GET', url: '/auth/profile' };
+      return { method: 'GET', url: '/auth/devices' };
     },
     expect: {
       owner: 'ok',

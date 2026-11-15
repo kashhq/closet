@@ -17,6 +17,18 @@ export function insightsUrl(days: UnwornDays): string {
     : `${INSIGHTS_PATH}?unworn=${days}`;
 }
 
+/**
+ * The whole unworn list over `days` (#728): insights shows its first
+ * RANKED_LIMIT and links here with "See all".
+ */
+export const UNWORN_LIST_PATH = `${INSIGHTS_PATH}/unworn`;
+
+export function unwornListUrl(days: UnwornDays): string {
+  return days === DEFAULT_UNWORN_DAYS
+    ? UNWORN_LIST_PATH
+    : `${UNWORN_LIST_PATH}?unworn=${days}`;
+}
+
 /** The grid's "Needs attention" filter (condition not good). */
 export const NEEDS_ATTENTION_URL = wardrobeUrl(undefined, {
   attention: 'true',

@@ -1,13 +1,13 @@
-import { profileSection, PROFILE_PATH } from '../auth/urls';
 import type { AcceptRefusal } from './queries';
 
 /**
- * Where sharing is managed: Profile › Sharing (docs/plans/
- * 2026-09-26-redesign.md, "Where every route goes"). The writes under
- * /wardrobe-share land there, and the old manage page redirects there.
+ * Where sharing is managed: Profile › Sharing, its own page since #728
+ * (a section of Profile from #82). The writes under /wardrobe-share land
+ * there, and the old manage page redirects there. Profile's row keeps the
+ * section's id, so `/auth/profile#sharing` lands on the row opening it.
  */
 export const SHARING_SECTION_ID = 'sharing';
-export const SHARING_PATH = profileSection(SHARING_SECTION_ID);
+export const SHARING_PATH = '/auth/profile/sharing';
 
 /**
  * The manage page before Sharing moved into Profile (#82). Pages the
@@ -32,9 +32,9 @@ export function invitePath(token: string): string {
   return `/wardrobe-share/invite/${encodeURIComponent(token)}`;
 }
 
-/** Profile's query parameter naming why an invite could not be accepted. */
+/** The sharing page's query parameter naming why an invite could not be accepted. */
 export const SHARE_ERROR_PARAM = 'shareError';
 
 export function sharingRefusalUrl(refusal: AcceptRefusal): string {
-  return `${PROFILE_PATH}?${SHARE_ERROR_PARAM}=${refusal}#${SHARING_SECTION_ID}`;
+  return `${SHARING_PATH}?${SHARE_ERROR_PARAM}=${refusal}`;
 }

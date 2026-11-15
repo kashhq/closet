@@ -100,6 +100,41 @@ describe('insights over the seed personas', () => {
     expect(html).toContain('data-pair=');
   });
 
+  // #728: Theo's 20-odd unworn garments made the page 7,200 px at 390 px.
+  it('lists at most five rows per garment list, the unworn list whole on its own page', async () => {
+    const html = (await demoPage()).body;
+    const rowsIn = (source: string, id: string) =>
+      [
+        ...(
+          new RegExp(`id="${id}"[^]*?</section>`).exec(source)?.[0] ?? ''
+        ).matchAll(/data-garment-id="/g),
+      ].length;
+    for (const id of [
+      'insights-unworn',
+      'insights-most-worn',
+      'insights-least-worn',
+    ]) {
+      expect(rowsIn(html, id), id).toBeGreaterThan(0);
+      expect(rowsIn(html, id), id).toBeLessThanOrEqual(5);
+    }
+    const count = Number(/data-unworn-count="(\d+)"/.exec(html)![1]);
+    expect(count).toBeGreaterThan(5);
+    expect(html).toMatch(
+      /id="insights-unworn"[^]*?<a href="\/wardrobe\/insights\/unworn"[^>]*data-see-all/,
+    );
+
+    const all = await t.inject({
+      method: 'GET',
+      url: '/wardrobe/insights/unworn',
+      headers: { cookie: demoCookie },
+    });
+    expect(all.statusCode).toBe(200);
+    expect(rowsIn(all.body, 'insights-unworn')).toBe(count);
+    expect(all.body).not.toContain('data-see-all');
+    // Its window chips stay on the list's page.
+    expect(all.body).toContain('href="/wardrobe/insights/unworn?unworn=30"');
+  });
+
   // #733: `price` is per piece, so the six-pair socks pack is its pair price
   // (the bible once listed the pack's $105, which counted six times over).
   it('prices Theo’s socks per piece, so six cost what the pack did', async () => {

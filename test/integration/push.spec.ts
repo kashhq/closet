@@ -13,7 +13,11 @@ import webpush, { type PushSubscription } from 'web-push';
 import { user, userDevice } from '../../src/db/schema';
 import { PUSH_TEST_LIMIT } from '../../src/web/security/rate-limit';
 import { createTestApp, PWA_ENV, TestApp } from './harness';
-import { expectFragment, expectFullPage } from './pages';
+import {
+  expectAutosaveControls,
+  expectFragment,
+  expectFullPage,
+} from './pages';
 
 /**
  * Web Push (src/web/push/): subscriptions stored per browser endpoint, the
@@ -329,7 +333,7 @@ describe('web push (PWA_ENABLED=true)', () => {
       expect(JSON.parse(String(payload))).toEqual({
         title: 'Closet notifications work',
         body: 'This is the test you sent from your profile.',
-        url: '/auth/profile#notifications',
+        url: '/auth/profile/notifications',
         tag: 'push-test',
       });
       expect(options).toMatchObject({
@@ -494,10 +498,25 @@ describe('web push (PWA_ENABLED=true)', () => {
     });
   });
 
-  describe('profile page', () => {
-    it('renders the notification controls and marks the page signed in', async () => {
+  describe('Profile › Notifications (#728: its own page)', () => {
+    it('is a row on Profile, keeping the old anchor', async () => {
       const res = await t.inject({ method: 'GET', url: '/auth/profile' });
+      expect(res.body).toContain(
+        '<li id="notifications"><a href="/auth/profile/notifications"',
+      );
+      expect(res.body).not.toContain('<push-settings');
+    });
+
+    it('renders the notification controls and marks the page signed in', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/auth/profile/notifications',
+      });
       expectFullPage(res);
+      expectAutosaveControls(res);
+      expect(res.body).toMatch(
+        /<a href="\/auth\/profile#notifications" class="btn[^"]*" aria-label="Back"/,
+      );
       expect(res.body).toMatch(/<html[^>]*\bdata-signed-in\b/);
       expect(res.body).toContain('<push-settings');
       expect(res.body).toContain('data-action="enable"');

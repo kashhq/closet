@@ -649,7 +649,7 @@ describe.each(ZONES)('"today" in $zone', ({ zone, instants }) => {
       ).toBe(409);
     });
 
-    it("Profile's Devices (#189) writes a device's last use as the household's day", async () => {
+    it("Profile › Devices (#189) writes a device's last use as the household's day", async () => {
       const minted = await mintToken(
         t,
         await userIdOf(t, OWNER_EMAIL),
@@ -661,7 +661,7 @@ describe.each(ZONES)('"today" in $zone', ({ zone, instants }) => {
         .update(personalAccessToken)
         .set({ lastUsedAt: new Date(at) })
         .where(eq(personalAccessToken.id, minted.id));
-      const page = unescapeHtml((await get('/auth/profile')).body);
+      const page = unescapeHtml((await get('/auth/devices')).body);
       expect(page).toContain(`last used ${today}`);
     });
   });

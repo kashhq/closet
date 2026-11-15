@@ -91,7 +91,7 @@ describe('the style profile', () => {
   it("shows the week's rhythm read-only, derived from the week template (#16)", async () => {
     const unset = await get('/auth/profile/style');
     expect(unset.body).toContain('Not set yet');
-    expect(unset.body).toContain('href="/auth/profile#week"');
+    expect(unset.body).toContain('href="/auth/profile/week"');
     await saveWeekTemplate(t.db, ownerId, [
       { weekday: 1, occasion: 'work' },
       { weekday: 2, occasion: 'work' },
@@ -383,7 +383,7 @@ describe('the style profile beside the weather', () => {
       (await t.inject({ method: 'GET', url: '/auth/profile/style' })).body,
     );
     expect(page).toMatch(
-      /id="style-home"[\s\S]*href="\/auth\/profile#weather"[^>]*>Add your city for the weather/,
+      /id="style-home"[\s\S]*href="\/auth\/profile\/weather"[^>]*>Add your city for the weather/,
     );
   });
 
@@ -397,7 +397,7 @@ describe('the style profile beside the weather', () => {
     );
     expect(page).toContain('Home: Fort Greene, Brooklyn');
     expect(page).toMatch(
-      /id="style-home"[\s\S]*href="\/auth\/profile#weather"[^>]*>Change it in Weather/,
+      /id="style-home"[\s\S]*href="\/auth\/profile\/weather"[^>]*>Change it in Weather/,
     );
     // No field posts it: saving the style profile cannot write a location.
     expect(page).not.toMatch(/name="(home|city|location)/);
