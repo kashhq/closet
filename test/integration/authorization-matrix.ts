@@ -47,6 +47,7 @@ import {
   uniqueClient,
   userIdOf,
   asFixture,
+  PWA_ENV,
 } from './harness';
 import { jpeg, type LinkSites, startLinkSites } from './link-sites';
 import { deviceToken } from './api';
@@ -209,8 +210,9 @@ export interface Fixture {
   orderItemName: string;
   /** A batch of the weekly auto-plan of the owner's, all its entries gone. */
   weekPlanId: number;
-  /** An open invite link to the owner's wardrobe, not yet accepted. */
+  /** An open invite link to the owner's wardrobe, not yet accepted, and its token (a bearer secret). */
   inviteShareId: number;
+  inviteToken: string;
   /** A phone photo and a cutout to upload, the file's own for every test. */
   photo: Buffer;
   cutout: Buffer;
@@ -286,7 +288,7 @@ export const OWNER_TOKEN_NAME = 'Owner laptop token';
 export const OWNER_DEVICE_NAME = 'Owner phone app';
 
 /** A feature off by default whose routes exist only with it on. */
-export type Feature = 'weather' | 'orderMail';
+export type Feature = 'weather' | 'orderMail' | 'pwa';
 
 const ORDER_MAIL_TOKEN = 'authorization-matrix';
 
@@ -308,6 +310,7 @@ export async function featureApp(features: ReadonlySet<Feature>): Promise<{
   return {
     env: {
       ...(weather ? { WEATHER_ENABLED: 'true' } : {}),
+      ...(features.has('pwa') ? PWA_ENV : {}),
       ...(jmap
         ? {
             ORDER_MAIL_JMAP_TOKEN: ORDER_MAIL_TOKEN,
@@ -878,6 +881,7 @@ export function describeMatrix(
         orderItemName,
         weekPlanId,
         inviteShareId,
+        inviteToken,
         photo,
         cutout,
         shopPhotoUrl: sites.url('/photo.jpg'),

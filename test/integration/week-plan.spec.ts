@@ -342,18 +342,25 @@ describe('the weekly auto-plan', () => {
     vi.useRealTimers();
   });
 
-  describe('the week template, on the Profile', () => {
+  describe('the week template, Profile › Your week (its own page, #728)', () => {
     it('shows an empty week, saves it whole, and shows it again', async () => {
-      const blank = await get('/auth/profile');
+      const row = await get('/auth/profile');
+      expect(row.body).toContain('<li id="week"><a href="/auth/profile/week"');
+      expect(row.body).toContain('Not set yet');
+      expect(row.body).not.toContain('action="/auth/profile/week"');
+
+      const blank = await get('/auth/profile/week');
       expectFullPage(blank);
       expectNativePostForms(blank);
-      expect(blank.body).toContain('id="week"');
       expect(blank.body).toContain('action="/auth/profile/week"');
+      expect(blank.body).toMatch(
+        /<a href="\/auth\/profile#week" class="btn[^"]*" aria-label="Back"/,
+      );
 
       t.logs.clear();
       const res = await post('/auth/profile/week', TEMPLATE);
       expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/auth/profile?weekSaved=1#week');
+      expect(res.headers.location).toBe('/auth/profile/week?saved=1');
       const rows = await t.db
         .select({
           weekday: weekTemplate.weekday,
@@ -368,10 +375,13 @@ describe('the weekly auto-plan', () => {
         expect.objectContaining({ userId: t.owner.id, slots: 8, days: 7 }),
       );
 
-      const page = unescapeHtml((await get('/auth/profile?weekSaved=1')).body);
+      const page = unescapeHtml((await get('/auth/profile/week?saved=1')).body);
       expect(page).toContain('Week saved');
       expect(page).toMatch(/name="day-2"[\s\S]*?value="all-day" selected/);
       expect(page).toMatch(/name="around-2" value="evening"[^>]*checked/);
+      expect((await get('/auth/profile')).body).toContain(
+        'Set for 7 of 7 days',
+      );
     });
 
     it('refuses what the week cannot hold: two outfits for one day, an unknown occasion', async () => {
@@ -389,12 +399,21 @@ describe('the weekly auto-plan', () => {
       ).toBe(8);
     });
 
-    it('is the user’s own: another user’s profile shows their empty week', async () => {
+    it('is the user’s own: another user’s page shows their empty week', async () => {
       const stranger = await t.register('stranger-week@example.com');
       const theirs = unescapeHtml(
-        (await get('/auth/profile', { cookie: stranger })).body,
+        (await get('/auth/profile/week', { cookie: stranger })).body,
       );
       expect(theirs).not.toMatch(/value="all-day" selected/);
+    });
+
+    it('counts a day with only an occasion around it as set', async () => {
+      await post('/auth/profile/week', { 'around-3': 'evening' });
+      const row = (await get('/auth/profile')).body;
+      expect(row).toContain('Set for 1 of 7 days');
+      expect(row).not.toContain('Not set yet');
+      // The later suites plan from the full template.
+      await post('/auth/profile/week', TEMPLATE);
     });
   });
 
@@ -459,7 +478,7 @@ describe('the weekly auto-plan', () => {
       const cookie = await t.register('no-template@example.com');
       const res = await post('/calendar/plan-week', {}, cookie);
       expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/auth/profile#week');
+      expect(res.headers.location).toBe('/auth/profile/week');
       expect(await t.db.$count(weekPlan)).toBe(0);
     });
 

@@ -7,10 +7,11 @@ import { AutosaveSaved } from '../autosave';
 import { addDays, daysBetween, type IsoDate } from '../../calendar-date';
 import { HttpError } from '../errors';
 import type { WebOptions } from '../plugin';
-import { renderFragment } from '../render';
+import { renderFragment, renderPage } from '../render';
 import { IsoDateSchema } from '../schemas';
 import { enforceLimit, type WeatherLimits } from '../security/rate-limit';
 import { actorOf } from '../sharing/access';
+import { viewContext } from '../view-context';
 import { FEELINGS, TEMPERATURE_UNITS } from '../../weather/temperature';
 import {
   findWeatherSettings,
@@ -37,9 +38,10 @@ import {
 import {
   HomePlaceResults,
   OffsetControls,
-  WEATHER_SETTINGS_ID,
   WeatherLocation,
+  WeatherSettingsPage,
 } from './settings';
+import { WEATHER_SETTINGS_PATH } from './urls';
 import { dayChips, MAX_SUMMARY_DAYS } from './summary';
 import { UserWeatherLine, WeatherCellDay, WeatherDay } from './views';
 
@@ -86,23 +88,25 @@ export interface WeatherRouteOptions extends WebOptions, WeatherLimits {
  *   days, their chips out of band; with view=month (the month grid, #201)
  *   only the cells' compact chips. Always a fragment: the pages load it in
  *   place. The same cached forecast as every other reader.
+ * - GET /auth/profile/weather (WEATHER_SETTINGS_PATH): Profile › Weather,
+ *   the settings page (#728), so it too is a 404 with the weather off.
  * - GET /weather/places?q=: the city search (Open-Meteo geocoding through
  *   the server), WEATHER_SEARCH_LIMIT. `secretPath`: the request log shows
  *   the route, never the typed city.
  * - POST /weather/home, /home/clear, /here, /here/clear, /unit, /feedback,
- *   /offset/reset: the profile's settings (home and here, which set a
+ *   /offset/reset: that page's settings (home and here, which set a
  *   location to fetch for, WEATHER_LOCATION_LIMIT), each answering to htmx the part
- *   of the section it changed (the location, the offset; the unit its status
- *   line and the offset) or a 303 to the profile. Coordinates are rounded
+ *   of the page it changed (the location, the offset; the unit its status
+ *   line and the offset) or a 303 to the page. Coordinates are rounded
  *   before they are stored; the logs name the user, never a location.
  */
 export const weatherRoutes: FastifyPluginCallbackTypebox<
   WeatherRouteOptions
 > = (app, { db, config, logger, weather, weatherLimits }, done) => {
   /**
-   * To htmx, the part of the settings section a write changed (`part`, from
-   * the user's settings); to a plain post, the profile. Never the whole
-   * section: it holds the unit's AutosaveForm (src/web/weather/settings.tsx).
+   * To htmx, the part of the settings page a write changed (`part`, from
+   * the user's settings); to a plain post, the page (a 303). Never the
+   * page's whole content: it holds the unit's AutosaveForm (settings.tsx).
    */
   async function answer(
     request: FastifyRequest,
@@ -110,7 +114,7 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
     part: (settings: WeatherSettingsRow) => JSX.Element,
   ) {
     if (!request.headers['hx-request']) {
-      return reply.redirect(`/auth/profile#${WEATHER_SETTINGS_ID}`, 303);
+      return reply.redirect(WEATHER_SETTINGS_PATH, 303);
     }
     const settings = await findWeatherSettings(db, sessionUserId(request));
     return renderFragment(reply, part(settings));
@@ -166,6 +170,19 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
         </>,
       );
     },
+  );
+
+  // Profile › Weather: the settings page every write here answers a part of.
+  app.get(WEATHER_SETTINGS_PATH, async (request, reply) =>
+    renderPage(
+      reply,
+      <WeatherSettingsPage
+        ctx={viewContext(reply)}
+        settings={await findWeatherSettings(db, sessionUserId(request))}
+        timeZone={config.timeZone}
+        now={new Date()}
+      />,
+    ),
   );
 
   app.get(

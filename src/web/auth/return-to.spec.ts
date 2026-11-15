@@ -14,6 +14,7 @@ describe('signInReturnTo', () => {
     '/wardrobe?ownerId=12',
     '/wardrobe-share/invite/0b0e4c52-6f43-4bd1-9b0f-6f0a3f4f1d2e',
     '/auth/profile',
+    '/auth/profile/sharing',
     '/%2F/evil.example',
   ])('lands on the page %s', (path) => {
     expect(signInReturnTo(path)).toBe(path);
@@ -35,6 +36,7 @@ describe('signInReturnTo', () => {
     ['sign-out', '/auth/logout'],
     ['a form validator', '/auth/validate/register'],
     ['an account form behind Profile', '/auth/change-password'],
+    ['a settings fragment', '/auth/profile/sizes/hint?brand=Uniqlo'],
     ['the API', '/api/v1/me'],
     ['the MCP endpoint', '/mcp'],
     ['an export download', '/wardrobe/export.csv'],

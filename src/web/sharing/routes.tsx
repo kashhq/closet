@@ -18,6 +18,7 @@ import {
   InvitePage,
   inviteUrl,
   parseRefusal,
+  SharingPage,
 } from './pages';
 import {
   acceptInvite,
@@ -25,15 +26,23 @@ import {
   declineInvite,
   findInvite,
   removeShare,
+  sharesOf,
 } from './queries';
 import { wardrobeUrl } from '../wardrobe/urls';
 import {
   CREATE_INVITE_PATH,
   EDIT_INVITE_PATH,
   LEGACY_MANAGE_PATH,
+  SHARE_ERROR_PARAM,
   SHARING_PATH,
   sharingRefusalUrl,
 } from './urls';
+
+// Navigation state: why an invite could not be accepted (the accept's
+// redirect), shown or not; no value is a 400.
+const SharingQuery = Type.Object({
+  [SHARE_ERROR_PARAM]: Type.Optional(Type.String()),
+});
 
 const LegacyManageQuery = Type.Object({
   // A refusal code from an accept redirect made before #82; unknown values
@@ -55,16 +64,37 @@ const InviteParams = Type.Object({ token: Type.String({ maxLength: 255 }) });
 
 /**
  * /wardrobe-share: invite links (view or edit) between users, their answers
- * and the public invite landing. Sharing is managed in Profile › Sharing
- * (SharingSection, rendered by the profile route), where every write here
- * lands. Invite tokens are bearer secrets in the path: those routes log
- * their pattern, never the URL (secretPath).
+ * and the public invite landing. Sharing is managed on Profile › Sharing
+ * (SHARING_PATH, SharingPage), where every write here lands. Invite tokens
+ * are bearer secrets in the path: those routes log their pattern, never
+ * the URL (secretPath).
  */
 export const sharingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,
   { db, logger },
   done,
 ) => {
+  // Profile › Sharing: the signed-in user's own shares and invites, its
+  // three lists in one statement (sharesOf).
+  app.get(
+    SHARING_PATH,
+    { schema: { querystring: SharingQuery } },
+    async (request, reply) => {
+      const shares = await sharesOf(db, sessionUserId(request));
+      return renderPage(
+        reply,
+        <SharingPage
+          ctx={viewContext(reply)}
+          model={{
+            ...shares,
+            origin: requestOrigin(request),
+            refusal: parseRefusal(request.query[SHARE_ERROR_PARAM]),
+          }}
+        />,
+      );
+    },
+  );
+
   // The manage page moved into Profile (#82). Links in pages the installed
   // app cached still come here: a permanent redirect, keeping a refusal.
   app.get(

@@ -6,7 +6,9 @@ import {
 } from '../../push/reminders';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { ProfileSection } from '../layout/parts';
+import { profileSection } from '../auth/urls';
+import { SettingsPage } from '../layout/settings-page';
+import type { ViewContext } from '../view-context';
 import type { ReminderSettings } from './queries';
 import type { SendReport } from './sender';
 
@@ -14,7 +16,9 @@ import type { SendReport } from './sender';
 const REMINDERS_ID = 'push-reminders';
 
 /**
- * The profile page's notification controls. Whether this browser can and
+ * Profile › Notifications (a Profile section until #728, its own page
+ * since, PUSH_SETTINGS_PATH; only with PWA_ENABLED, like every /push
+ * route): this device's notification controls. Whether this browser can and
  * does receive notifications is only known in the browser, so every state's
  * text is rendered here, hidden, and the <push-settings> element
  * (public/js/push.js) shows the one that applies. The permission prompt
@@ -25,12 +29,17 @@ const REMINDERS_ID = 'push-reminders';
  * (permission denied), unsupported, install (iOS/iPadOS outside the
  * installed app, where there is no push at all), error.
  */
-/** The Profile's notifications section: its anchor. */
+/** Profile's Notifications row (`/auth/profile#notifications` lands on it), and its page. */
 export const PUSH_SETTINGS_ID = 'notifications';
+export const PUSH_SETTINGS_PATH = '/auth/profile/notifications';
 
-export function PushSettings() {
+export function PushSettingsPage(props: { ctx: ViewContext }) {
   return (
-    <ProfileSection id={PUSH_SETTINGS_ID} heading={t('PUSH_HEADING')}>
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('PUSH_HEADING')}
+      back={profileSection(PUSH_SETTINGS_ID)}
+    >
       <push-settings class="flex flex-col gap-2">
         <p data-show="checking">{t('PUSH_CHECKING')}</p>
         <p data-show="on" hidden>
@@ -87,7 +96,7 @@ export function PushSettings() {
         {t('PUSH_SEND_TEST')}
       </button>
       <div id="push-test-result" aria-live="polite"></div>
-    </ProfileSection>
+    </SettingsPage>
   );
 }
 

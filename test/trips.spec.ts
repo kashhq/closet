@@ -201,6 +201,18 @@ test.describe('Trips', () => {
     await page.goto('/auth/profile');
     await expectNoZoomingFields(page);
     await expectTouchTargets(page);
+    // Profile is an index (#728): two screens at most, and Sign out is the
+    // first form on it, so it is reached without passing a setting's.
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeLessThanOrEqual(2 * 844);
+    await expect(page.locator('main form').first()).toHaveAttribute(
+      'id',
+      'logout-form',
+    );
+    await expect(
+      page.getByRole('button', { name: 'Sign out', exact: true }),
+    ).toBeVisible();
     // The app bar's menus close on Escape, focus back on the summary (#730).
     await page.goto(`/outfits/${outfit}`);
     const menu = page.locator('#outfit-menu');

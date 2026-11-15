@@ -6,6 +6,7 @@ import type { Condition } from '../../weather/forecast';
 import type { TemperatureUnit } from '../../weather/temperature';
 import type { UserWeather } from './service';
 import { type DayChip, type TodayLine, todayLine } from './summary';
+import { WEATHER_SETTINGS_PATH } from './urls';
 
 /**
  * The weather's pieces on other pages (#14). A page renders WeatherSlot in
@@ -266,7 +267,7 @@ export function UserWeatherLine(props: {
 function WeatherPrompt() {
   return (
     <p id={WEATHER_LINE_ID} class="mb-3 px-2 text-sm">
-      <a class="link link-hover text-muted" href="/auth/profile#weather">
+      <a class="link link-hover text-muted" href={WEATHER_SETTINGS_PATH}>
         {t('weather.SET_LOCATION')}
       </a>
     </p>

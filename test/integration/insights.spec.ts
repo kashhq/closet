@@ -8,6 +8,7 @@ import {
   outfitCalendar,
 } from '../../src/db/schema';
 import { addDays, type IsoDate } from '../../src/calendar-date';
+import { UNWORN_SHOWN } from '../../src/wardrobe/insights';
 import { dateLabel } from '../../src/web/date-labels';
 import { deviceToken } from './api';
 import { createWishlistItem } from './garments';
@@ -476,6 +477,22 @@ describe('insights', () => {
     expect(other.statusCode).toBe(200);
     expect(other.body).toContain('1 garments in your closet');
     expect(other.body).not.toContain('White tee');
+  });
+
+  it('the unworn page lists every garment, past the five of the dashboard and the 48 of the API', async () => {
+    const cookie = await t.register('many@example.com');
+    const total = UNWORN_SHOWN + 4;
+    for (let n = 0; n < total; n++) {
+      await newGarment({ name: `Sock ${n}`, category: 'Socks' }, cookie);
+    }
+    const read = (url: string) =>
+      t.inject({ method: 'GET', url, headers: { cookie } });
+    const dashboard = (await read('/wardrobe/insights')).body;
+    expect(idsIn(dashboard, 'insights-unworn')).toHaveLength(5);
+    expect(dashboard).toContain('data-see-all');
+    const all = (await read('/wardrobe/insights/unworn')).body;
+    expect(idsIn(all, 'insights-unworn')).toHaveLength(total);
+    expect(all).toContain(`data-unworn-count="${total}"`);
   });
 
   it('an empty closet says what to do', async () => {

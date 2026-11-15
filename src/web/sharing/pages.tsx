@@ -1,6 +1,7 @@
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
+import { profileSection } from '../auth/urls';
 import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
 import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
@@ -8,7 +9,7 @@ import { t, type StringKey } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { BrandMark } from '../layout/brand-mark';
 import { Layout } from '../layout/layout';
-import { ProfileSection } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
 import { CopyableText } from '../share/share-button';
 // eslint-disable-next-line closet/no-foreign-page-import -- sharedBy is a share-page helper that is no markup; it moves to share/ with its next change (#718)
 import { sharedBy } from '../share/share-page';
@@ -28,7 +29,7 @@ import {
   SHARING_SECTION_ID,
 } from './urls';
 
-/** Views of sharing: Profile's Sharing section, the invite landing, the new-link fragment. */
+/** Views of sharing: Profile › Sharing's page, the invite landing, the new-link fragment. */
 
 const REFUSAL_MESSAGES: Record<AcceptRefusal, StringKey> = {
   'not-found': 'SHARE_ERROR_NOT_FOUND',
@@ -95,11 +96,11 @@ function partyName(party: ShareParty): string {
   return party.email ?? '';
 }
 
-/** A list within the Sharing section: outbound, pending or inbound shares. */
+/** A list on the Sharing page: outbound, pending or inbound shares. */
 function ShareList(props: { title: string; children: Child }) {
   return (
     <div class="flex flex-col">
-      <h3 class="font-semibold text-sm">{props.title}</h3>
+      <h2 class="font-semibold text-sm">{props.title}</h2>
       <ul class="divide-y divide-base-300">{props.children}</ul>
     </div>
   );
@@ -116,19 +117,27 @@ export interface SharingModel {
 }
 
 /**
- * Profile › Sharing (the manage page until #82): invite links, the
- * wardrobes this user shares and the ones shared with them, and invites
- * waiting for an answer. Every write posts to /wardrobe-share/* and lands
- * back here (SHARING_PATH).
+ * Profile › Sharing (the manage page until #82, a Profile section until
+ * #728): invite links, the wardrobes this user shares and the ones shared
+ * with them, and invites waiting for an answer. Every write posts to
+ * /wardrobe-share/* and lands back here (SHARING_PATH), so it is a
+ * `formPage`: Back from a landing returns to Profile, not the page before
+ * the write.
  */
-export function SharingSection(props: SharingModel) {
-  const { outbound, inbound, pending } = props;
+export function SharingPage(props: { ctx: ViewContext; model: SharingModel }) {
+  const { model } = props;
+  const { outbound, inbound, pending } = model;
   const empty = !outbound.length && !inbound.length && !pending.length;
   return (
-    <ProfileSection id={SHARING_SECTION_ID} heading={t('WARDROBE_SHARING')}>
-      {props.refusal && (
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('WARDROBE_SHARING')}
+      back={profileSection(SHARING_SECTION_ID)}
+      formPage
+    >
+      {model.refusal && (
         <div role="alert" class="alert alert-error">
-          <span>{t(REFUSAL_MESSAGES[props.refusal])}</span>
+          <span>{t(REFUSAL_MESSAGES[model.refusal])}</span>
         </div>
       )}
 
@@ -168,7 +177,7 @@ export function SharingSection(props: SharingModel) {
                 </div>
                 {share.inviteToken && !share.expired && (
                   <CopyableText
-                    value={inviteUrl(props.origin, share.inviteToken)}
+                    value={inviteUrl(model.origin, share.inviteToken)}
                     size="xs"
                     label={t('COPY_INVITE_LINK')}
                   />
@@ -240,8 +249,29 @@ export function SharingSection(props: SharingModel) {
       )}
 
       {empty && <p class="text-sm text-muted">{t('NO_SHARES_YET')}</p>}
-    </ProfileSection>
+    </SettingsPage>
   );
+}
+
+/**
+ * Profile's Sharing row: who has this wardrobe, whose this user has, and
+ * the invites still open, from the lists the page shows.
+ */
+export function sharingSummary(
+  model: Pick<SharingModel, 'outbound' | 'inbound' | 'pending'>,
+): string {
+  const shared = model.outbound.filter((share) => share.acceptedAt).length;
+  const open =
+    model.outbound.filter((share) => !share.acceptedAt && !share.expired)
+      .length + model.pending.filter((share) => !share.expired).length;
+  const parts = [
+    shared > 0 && t('sharing.SUMMARY_SHARED', { count: shared }),
+    model.inbound.length > 0 &&
+      t('sharing.SUMMARY_INBOUND', { count: model.inbound.length }),
+    open === 1 && t('sharing.SUMMARY_OPEN_ONE'),
+    open > 1 && t('sharing.SUMMARY_OPEN_MANY', { count: open }),
+  ].filter((part) => part !== false);
+  return parts.length > 0 ? parts.join(' · ') : t('sharing.SUMMARY_NONE');
 }
 
 /** An unanswered invite's badge: pending, or expired (listed, never offered). */

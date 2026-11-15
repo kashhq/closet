@@ -62,6 +62,12 @@ describe('MCP over the seed personas', () => {
     expect(JSON.stringify(t.logs.records)).not.toContain(demoToken);
   });
 
+  it('audits a seed-minted token as the command line’s, not a page’s', () => {
+    expect(t.logs.ops('token.created')).toContainEqual(
+      expect.objectContaining({ surface: 'cli' }),
+    );
+  });
+
   it('lets the owner’s Claude search Theo’s wardrobe through the share', async () => {
     const demoId = await userIdOf(t, 'demo@closet.invalid');
     const { wardrobes } = await tool<{
