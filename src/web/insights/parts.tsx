@@ -4,6 +4,7 @@ import type {
   CostPerWear,
   InsightGarment,
 } from '../../wardrobe/insights';
+import { Card } from '../card';
 import type { SignablePhotoRef } from '../files/image-url';
 import { t } from '../i18n';
 import { GarmentThumb } from '../layout/parts';
@@ -16,14 +17,16 @@ import { garmentUrl } from '../wardrobe/urls';
  * list, the per-wear line and the colour strip.
  */
 
-export function Card(props: { id: string; title: string; children: Child }) {
+export function InsightCard(props: {
+  id: string;
+  title: string;
+  children: Child;
+}) {
   return (
-    <section class="card bg-base-100 shadow-sm" id={props.id}>
-      <div class="card-body p-3 gap-2">
-        <h2 class="font-semibold">{props.title}</h2>
-        {props.children}
-      </div>
-    </section>
+    <Card as="section" variant="content" bodyClass="p-3 gap-2" id={props.id}>
+      <h2 class="font-semibold">{props.title}</h2>
+      {props.children}
+    </Card>
   );
 }
 

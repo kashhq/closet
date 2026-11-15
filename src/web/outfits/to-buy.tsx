@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import { t } from '../i18n';
 import { GarmentThumb } from '../layout/parts';
 import type { OutfitGarment } from './queries';
@@ -49,9 +50,11 @@ export function ToBuySection(props: { pieces: readonly OutfitGarment[] }) {
       <ul class="flex flex-col gap-2">
         {props.pieces.map((piece) => (
           <li>
-            <a
+            <Card
+              as="a"
+              variant="content"
+              class="flex-row items-center gap-3 p-2"
               href={`/wardrobe/${piece.id}`}
-              class="flex items-center gap-3 rounded-box bg-base-100 p-2 shadow-sm"
               data-piece-to-buy={piece.id}
             >
               <GarmentThumb
@@ -66,7 +69,7 @@ export function ToBuySection(props: { pieces: readonly OutfitGarment[] }) {
                   {t('outfits.NOT_BOUGHT')}
                 </span>
               </span>
-            </a>
+            </Card>
           </li>
         ))}
       </ul>

@@ -1,3 +1,4 @@
+import { cardClass } from '../card';
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import { t } from '../i18n';
@@ -32,7 +33,10 @@ function SavedOutfitButton(props: {
       type="submit"
       name="outfitId"
       value={String(outfit.id)}
-      class="group card bg-base-100 shadow-sm gap-2 p-2 text-left disabled:bg-base-200 disabled:shadow-none disabled:cursor-not-allowed"
+      class={cardClass(
+        'content',
+        'group gap-2 p-2 text-left disabled:bg-base-200 disabled:cursor-not-allowed',
+      )}
       disabled={note !== undefined}
     >
       <span class="flex min-w-0 group-disabled:opacity-50" aria-hidden="true">

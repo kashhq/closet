@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import { todayIn } from '../../calendar-date';
 import { type StringKey, t } from '../i18n';
@@ -152,9 +153,9 @@ export function LoginPage(props: {
 /** The sign-in forms' card: the frame their `bare` Fieldset leaves to it. */
 function SignedOutFrame(props: { children: Child }) {
   return (
-    <div class="card card-border bg-base-200 w-full max-w-xs p-4">
+    <Card variant="inset" class="w-full max-w-xs p-4">
       {props.children}
-    </div>
+    </Card>
   );
 }
 
@@ -343,7 +344,12 @@ export function ProfilePage(props: ProfileProps) {
       <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-4">
         <ProfileNotices {...props} />
         <AccountSection ctx={ctx} />
-        <nav aria-label={t('profile.SETTINGS')} class="card bg-base-200 w-full">
+        <Card
+          as="nav"
+          variant="content"
+          class="w-full"
+          aria-label={t('profile.SETTINGS')}
+        >
           <ul class="card-body py-1 gap-0 divide-y divide-base-300">
             <SettingsRow
               id={SHARING_SECTION_ID}
@@ -406,7 +412,7 @@ export function ProfilePage(props: ProfileProps) {
               />
             )}
           </ul>
-        </nav>
+        </Card>
         <ExportSection />
         <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
           <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>

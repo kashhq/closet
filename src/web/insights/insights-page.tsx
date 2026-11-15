@@ -22,7 +22,13 @@ import type { ViewContext } from '../view-context';
 import { categoryLabel, priceLabel } from '../wardrobe/garment';
 import { garmentUrl } from '../wardrobe/urls';
 import { styleThisUrl } from '../styling/urls';
-import { Card, GarmentList, garmentName, perWearLine, Strip } from './parts';
+import {
+  InsightCard,
+  GarmentList,
+  garmentName,
+  perWearLine,
+  Strip,
+} from './parts';
 import {
   insightsUrl,
   NEEDS_ATTENTION_URL,
@@ -99,7 +105,7 @@ function Figures({ model }: { model: InsightsPageModel }) {
       <div class={CARD_COLUMNS}>
         <WornLately insights={insights} />
         {condition.needsRepair + condition.replaceSoon > 0 && (
-          <Card id="insights-attention" title={t('insights.ATTENTION')}>
+          <InsightCard id="insights-attention" title={t('insights.ATTENTION')}>
             <p class="text-sm">
               {[
                 condition.needsRepair > 0 &&
@@ -113,7 +119,7 @@ function Figures({ model }: { model: InsightsPageModel }) {
             <a href={NEEDS_ATTENTION_URL} class="btn btn-outline btn-sm">
               {t('insights.ATTENTION')}
             </a>
-          </Card>
+          </InsightCard>
         )}
         <Unworn
           unworn={insights.unworn}
@@ -123,32 +129,35 @@ function Figures({ model }: { model: InsightsPageModel }) {
           seeAll
         />
         {insights.mostWorn.length > 0 && (
-          <Card id="insights-most-worn" title={t('insights.MOST_WORN')}>
+          <InsightCard id="insights-most-worn" title={t('insights.MOST_WORN')}>
             <GarmentList rows={wornRows(insights.mostWorn, today)} />
-          </Card>
+          </InsightCard>
         )}
         {/* Empty while every garment is newer than the threshold. */}
         {insights.leastWorn.length > 0 && (
-          <Card id="insights-least-worn" title={t('insights.LEAST_WORN')}>
+          <InsightCard
+            id="insights-least-worn"
+            title={t('insights.LEAST_WORN')}
+          >
             <p class="text-xs text-muted">
               {t('insights.LEAST_WORN_NOTE', {
                 days: LEAST_WORN_MIN_OWNED_DAYS,
               })}
             </p>
             <GarmentList rows={wornRows(insights.leastWorn, today)} />
-          </Card>
+          </InsightCard>
         )}
         <Cost cost={insights.cost} />
         <Pairs insights={insights} />
         <Colours insights={insights} />
-        <Card id="insights-categories" title={t('insights.CATEGORIES')}>
+        <InsightCard id="insights-categories" title={t('insights.CATEGORIES')}>
           <BreakdownList
             rows={insights.categories}
             label={(key) => categoryLabel(key!)}
           />
-        </Card>
+        </InsightCard>
         {insights.brands.length > 0 && (
-          <Card id="insights-brands" title={t('insights.BRANDS')}>
+          <InsightCard id="insights-brands" title={t('insights.BRANDS')}>
             <BreakdownList
               rows={insights.brands}
               label={(key) => key ?? t('insights.OTHER_BRANDS')}
@@ -158,7 +167,7 @@ function Figures({ model }: { model: InsightsPageModel }) {
                 {t('insights.UNBRANDED', { count: insights.unbranded })}
               </p>
             )}
-          </Card>
+          </InsightCard>
         )}
       </div>
     </>
@@ -171,7 +180,7 @@ function WornLately({
   insights: WardrobeInsights<SignablePhotoRef>;
 }) {
   return (
-    <Card id="insights-worn" title={t('insights.WORN_LATELY')}>
+    <InsightCard id="insights-worn" title={t('insights.WORN_LATELY')}>
       <div class="grid grid-cols-3 gap-2 text-center">
         {insights.worn.map((share) => (
           <div class="rounded-box bg-base-200 p-2" data-window={share.days}>
@@ -187,7 +196,7 @@ function WornLately({
           </div>
         ))}
       </div>
-    </Card>
+    </InsightCard>
   );
 }
 
@@ -237,7 +246,7 @@ function Unworn(props: {
   const shown = garments.slice(0, props.shown);
   const more = garments.length - shown.length;
   return (
-    <Card id="insights-unworn" title={t(UNWORN_KEY)}>
+    <InsightCard id="insights-unworn" title={t(UNWORN_KEY)}>
       <nav
         class="flex items-center gap-2 flex-wrap"
         aria-label={t('insights.UNWORN_FOR')}
@@ -282,7 +291,7 @@ function Unworn(props: {
           {t('insights.SEE_ALL')}
         </a>
       )}
-    </Card>
+    </InsightCard>
   );
 }
 
@@ -332,7 +341,7 @@ function CostList(props: {
 
 function Cost({ cost }: { cost: WardrobeInsights<SignablePhotoRef>['cost'] }) {
   return (
-    <Card id="insights-cost" title={t('insights.COST_PER_WEAR')}>
+    <InsightCard id="insights-cost" title={t('insights.COST_PER_WEAR')}>
       {cost.priced === 0 ? (
         <p class="text-sm text-muted">{t('insights.NO_PRICES')}</p>
       ) : (
@@ -364,13 +373,13 @@ function Cost({ cost }: { cost: WardrobeInsights<SignablePhotoRef>['cost'] }) {
           />
         </>
       )}
-    </Card>
+    </InsightCard>
   );
 }
 
 function Pairs({ insights }: { insights: WardrobeInsights<SignablePhotoRef> }) {
   return (
-    <Card id="insights-pairs" title={t('insights.PAIRS')}>
+    <InsightCard id="insights-pairs" title={t('insights.PAIRS')}>
       {insights.pairs.length === 0 ? (
         <p class="text-sm text-muted">{t('insights.PAIRS_NONE')}</p>
       ) : (
@@ -400,7 +409,7 @@ function Pairs({ insights }: { insights: WardrobeInsights<SignablePhotoRef> }) {
           </ul>
         </>
       )}
-    </Card>
+    </InsightCard>
   );
 }
 
@@ -420,7 +429,7 @@ function Colours({
   if (insights.colours.length === 0) return null;
   const { uncoloured } = insights;
   return (
-    <Card id="insights-colours" title={t('insights.COLOURS')}>
+    <InsightCard id="insights-colours" title={t('insights.COLOURS')}>
       <Strip
         name="closet"
         title={t('insights.COLOURS_CLOSET')}
@@ -462,7 +471,7 @@ function Colours({
           })}
         </p>
       )}
-    </Card>
+    </InsightCard>
   );
 }
 

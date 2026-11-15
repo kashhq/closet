@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import {
   type PackingRow,
   type PackingWarning,
@@ -315,7 +316,12 @@ function TripOutfitRow(props: {
   const name = outfit.name || t('UNTITLED_OUTFIT');
   const worn = tripWornControl(model, outfit);
   return (
-    <article class="card bg-base-200 gap-2 p-2" data-trip-outfit={outfit.id}>
+    <Card
+      as="article"
+      variant="content"
+      class="gap-2 p-2"
+      data-trip-outfit={outfit.id}
+    >
       <div class="flex items-start gap-2">
         {/* The picture links too, but the name's link is the one assistive tech reads. */}
         <a
@@ -363,7 +369,7 @@ function TripOutfitRow(props: {
           </span>
         )}
       </div>
-    </article>
+    </Card>
   );
 }
 

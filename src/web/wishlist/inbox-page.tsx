@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import type { OutfitCount } from '../../wardrobe/goes-with';
 import { unlocksText } from '../gallery/goes-with';
@@ -332,51 +333,52 @@ function GroupCard(props: {
   // The same count on every option decides nothing: said once, above them.
   const shared = sharedUnlocks(options, group.unlocks);
   return (
-    <li
-      class="card bg-base-100 border border-base-300 relative"
+    <Card
+      as="li"
+      variant="content"
+      class="relative"
+      bodyClass="p-4 gap-3"
       data-need={String(need.id)}
     >
-      <div class="card-body p-4 gap-3">
-        <div class="min-w-0">
-          <h3 class="font-semibold break-words">{need.name}</h3>
-          <NeedFacts
-            budget={need.budget}
-            options={options.length}
-            unlocks={shared}
-          />
-        </div>
-        <ul class="grid grid-cols-3 gap-2 lg:gap-3">
-          {options.map((pick) => (
-            <li>
-              <a
-                href={needUrl(need.id, viewOwner, '', { option: pick.id })}
-                class="relative z-10 flex flex-col gap-1 no-underline"
-                aria-label={itemName(pick)}
-                data-option={String(pick.id)}
-              >
-                <ProductPhoto photo={pick.photo} alt="" />
-                <PriceAgainstBudget
-                  price={pick.price}
-                  budget={need.budget}
-                  class="text-xs"
-                  compact
-                />
-                {!shared && <Unlocks count={group.unlocks?.get(pick.id)} />}
-              </a>
-            </li>
-          ))}
-        </ul>
-        {/* `static`: the theme's touch hit area makes a btn-sm its own
+      <div class="min-w-0">
+        <h3 class="font-semibold break-words">{need.name}</h3>
+        <NeedFacts
+          budget={need.budget}
+          options={options.length}
+          unlocks={shared}
+        />
+      </div>
+      <ul class="grid grid-cols-3 gap-2 lg:gap-3">
+        {options.map((pick) => (
+          <li>
+            <a
+              href={needUrl(need.id, viewOwner, '', { option: pick.id })}
+              class="relative z-10 flex flex-col gap-1 no-underline"
+              aria-label={itemName(pick)}
+              data-option={String(pick.id)}
+            >
+              <ProductPhoto photo={pick.photo} alt="" />
+              <PriceAgainstBudget
+                price={pick.price}
+                budget={need.budget}
+                class="text-xs"
+                compact
+              />
+              {!shared && <Unlocks count={group.unlocks?.get(pick.id)} />}
+            </a>
+          </li>
+        ))}
+      </ul>
+      {/* `static`: the theme's touch hit area makes a btn-sm its own
             containing block (views/assets/main.css), which would shrink the
             stretched ::after to the button. */}
-        <a
-          href={needUrl(need.id, viewOwner)}
-          class="btn btn-primary btn-sm static self-start after:absolute after:inset-0"
-        >
-          {t('muse.DECIDE')}
-        </a>
-      </div>
-    </li>
+      <a
+        href={needUrl(need.id, viewOwner)}
+        class="btn btn-primary btn-sm static self-start after:absolute after:inset-0"
+      >
+        {t('muse.DECIDE')}
+      </a>
+    </Card>
   );
 }
 

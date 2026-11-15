@@ -2,6 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { Idea } from '../../wardrobe/generator';
 import type { Occasion } from '../../wardrobe/occasions';
 import { AgentBadge } from '../agent-badge';
+import { Card } from '../card';
 import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { type CalendarEntry, entryPieces } from '../calendar/calendar-view';
@@ -151,34 +152,34 @@ export function TodayPage(props: {
 function FirstRunCard({ stage }: { stage: FirstRun }) {
   const empty = stage === 'empty';
   return (
-    <section
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="section"
+      variant="content"
+      bodyClass="p-4 gap-3 items-center text-center"
       data-first-run={stage}
       aria-labelledby="first-run-title"
     >
-      <div class="card-body p-4 gap-3 items-center text-center">
-        <HangerIcon class="size-12 text-muted" strokeWidth="1.5" />
-        <h2 id="first-run-title" class="card-title">
-          {t(
-            empty
-              ? 'today.firstRun.WELCOME_TITLE'
-              : 'today.firstRun.INCOMPLETE_TITLE',
-          )}
-        </h2>
-        <p class="text-sm text-muted">
-          {t(empty ? 'today.firstRun.WELCOME' : 'today.firstRun.INCOMPLETE')}
-        </p>
-        <button
-          type="button"
-          class="btn btn-primary"
-          aria-haspopup="dialog"
-          onclick={OPEN_ADD_SHEET}
-          data-first-run-add=""
-        >
-          {t(empty ? 'today.firstRun.ADD_FIRST' : 'today.firstRun.ADD_MORE')}
-        </button>
-      </div>
-    </section>
+      <HangerIcon class="size-12 text-muted" strokeWidth="1.5" />
+      <h2 id="first-run-title" class="card-title">
+        {t(
+          empty
+            ? 'today.firstRun.WELCOME_TITLE'
+            : 'today.firstRun.INCOMPLETE_TITLE',
+        )}
+      </h2>
+      <p class="text-sm text-muted">
+        {t(empty ? 'today.firstRun.WELCOME' : 'today.firstRun.INCOMPLETE')}
+      </p>
+      <button
+        type="button"
+        class="btn btn-primary"
+        aria-haspopup="dialog"
+        onclick={OPEN_ADD_SHEET}
+        data-first-run-add=""
+      >
+        {t(empty ? 'today.firstRun.ADD_FIRST' : 'today.firstRun.ADD_MORE')}
+      </button>
+    </Card>
   );
 }
 
@@ -197,30 +198,27 @@ function MuseCard(props: Pick<TodayModel, 'round' | 'needs'>) {
  */
 function RoundCard({ round }: { round: MuseRound }) {
   return (
-    <article
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 flex-row items-center gap-3"
       data-muse-round={String(round.id)}
     >
-      <div class="card-body p-3 flex-row items-center gap-3">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold break-words">
-            {t('muse.round.CARD', {
-              agent: museName(round.agent),
-              what: roundWhat(round),
-            })}
-          </p>
-          {round.summary && (
-            <p class="text-sm text-muted line-clamp-1">{round.summary}</p>
-          )}
-        </div>
-        <a
-          href={roundReviewPath(round)}
-          class="btn btn-primary btn-sm shrink-0"
-        >
-          {t('muse.REVIEW')}
-        </a>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold break-words">
+          {t('muse.round.CARD', {
+            agent: museName(round.agent),
+            what: roundWhat(round),
+          })}
+        </p>
+        {round.summary && (
+          <p class="text-sm text-muted line-clamp-1">{round.summary}</p>
+        )}
       </div>
-    </article>
+      <a href={roundReviewPath(round)} class="btn btn-primary btn-sm shrink-0">
+        {t('muse.REVIEW')}
+      </a>
+    </Card>
   );
 }
 
@@ -232,21 +230,21 @@ function RoundCard({ round }: { round: MuseRound }) {
 function NeedsCard({ needs }: { needs: NeedsToDecide }) {
   const params = { agent: museName(needs.agent), count: needs.count };
   return (
-    <article
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 flex-row items-center gap-3"
       data-muse-needs={String(needs.count)}
     >
-      <div class="card-body p-3 flex-row items-center gap-3">
-        <p class="text-sm flex-1 min-w-0 break-words">
-          {needs.count === 1
-            ? t('muse.TODAY_CARD_ONE', params)
-            : t('muse.TODAY_CARD', params)}
-        </p>
-        <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
-          {t('muse.REVIEW')}
-        </a>
-      </div>
-    </article>
+      <p class="text-sm flex-1 min-w-0 break-words">
+        {needs.count === 1
+          ? t('muse.TODAY_CARD_ONE', params)
+          : t('muse.TODAY_CARD', params)}
+      </p>
+      <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
+        {t('muse.REVIEW')}
+      </a>
+    </Card>
   );
 }
 
@@ -297,59 +295,62 @@ function PlannedCard(props: {
   const name = entry.outfit.name || t('UNTITLED_OUTFIT');
   const pieces = entryPieces(entry, today);
   return (
-    <article class="card bg-base-100 shadow-sm" data-entry={entry.id}>
-      <div class="card-body p-3 gap-3">
-        <a
-          href={`/outfits/${entry.outfit.id}`}
-          aria-label={outfitLabel(name, pieces)}
-        >
-          <OutfitCollage garments={pieces} eager={props.eager} />
-        </a>
-        <div class="flex items-center gap-2">
-          <h3 class="font-semibold text-sm line-clamp-2 flex-1">{name}</h3>
-          <AgentBadge agent={entry.agent} />
-          {/* The mirror photo, or the camera to take it: taking one marks
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
+      data-entry={entry.id}
+    >
+      <a
+        href={`/outfits/${entry.outfit.id}`}
+        aria-label={outfitLabel(name, pieces)}
+      >
+        <OutfitCollage garments={pieces} eager={props.eager} />
+      </a>
+      <div class="flex items-center gap-2">
+        <h3 class="font-semibold text-sm line-clamp-2 flex-1">{name}</h3>
+        <AgentBadge agent={entry.agent} />
+        {/* The mirror photo, or the camera to take it: taking one marks
               the entry worn (#19). */}
-          <EntrySelfie
-            entryId={entry.id}
-            day={today}
-            selfie={entry.selfie}
-            canTake
-            returnTo={TODAY_PATH}
-            size="card"
-          />
-        </div>
-        <div class="flex items-center gap-2">
-          <WornControl
-            entryId={entry.id}
-            worn={entry.worn}
-            label={name}
-            size="button"
-            returnTo={TODAY_PATH}
-            autofocus={props.focused}
-          />
-          {/* The gallery for this entry's place: a pick changes its outfit
+        <EntrySelfie
+          entryId={entry.id}
+          day={today}
+          selfie={entry.selfie}
+          canTake
+          returnTo={TODAY_PATH}
+          size="card"
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <WornControl
+          entryId={entry.id}
+          worn={entry.worn}
+          label={name}
+          size="button"
+          returnTo={TODAY_PATH}
+          autofocus={props.focused}
+        />
+        {/* The gallery for this entry's place: a pick changes its outfit
               rather than adding one (#69). Not once worn: a worn entry is
               that day's record. */}
-          {!entry.worn && (
-            <a
-              href={ideasUrl({
-                destination: {
-                  kind: 'day',
-                  day: today,
-                  occasion: entry.occasion,
-                  replace: entry.id,
-                },
-              })}
-              class="btn btn-ghost btn-sm"
-              data-change-entry={entry.id}
-            >
-              {t('today.CHANGE')}
-            </a>
-          )}
-        </div>
+        {!entry.worn && (
+          <a
+            href={ideasUrl({
+              destination: {
+                kind: 'day',
+                day: today,
+                occasion: entry.occasion,
+                replace: entry.id,
+              },
+            })}
+            class="btn btn-ghost btn-sm"
+            data-change-entry={entry.id}
+          >
+            {t('today.CHANGE')}
+          </a>
+        )}
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -431,32 +432,32 @@ function IdeaCard(props: {
   const { idea } = props;
   const ideaKey = idea.garments.map((g) => g.id).join(',');
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
       {...snapItem({
         value: ideaKey,
         selected: props.eager,
         size: 'peek',
         listbox: false,
-        class: 'card bg-base-100 shadow-sm',
       })}
       data-idea={ideaKey}
     >
-      <div class="card-body p-3 gap-3">
-        <OutfitCollage garments={idea.garments} eager={props.eager} />
-        <h3 class="font-semibold text-sm line-clamp-2">
-          {ideaName(idea.garments)}
-        </h3>
-        <Reasons idea={idea} weather={props.weather} />
-        <PostForm action={WEAR_THIS_PATH} class="mt-auto">
-          {idea.garments.map((g) => (
-            <input type="hidden" name="garmentId" value={String(g.id)} />
-          ))}
-          <input type="hidden" name="occasion" value={props.occasion} />
-          <button type="submit" class="btn btn-primary w-full">
-            {t('today.WEAR_THIS')}
-          </button>
-        </PostForm>
-      </div>
-    </article>
+      <OutfitCollage garments={idea.garments} eager={props.eager} />
+      <h3 class="font-semibold text-sm line-clamp-2">
+        {ideaName(idea.garments)}
+      </h3>
+      <Reasons idea={idea} weather={props.weather} />
+      <PostForm action={WEAR_THIS_PATH} class="mt-auto">
+        {idea.garments.map((g) => (
+          <input type="hidden" name="garmentId" value={String(g.id)} />
+        ))}
+        <input type="hidden" name="occasion" value={props.occasion} />
+        <button type="submit" class="btn btn-primary w-full">
+          {t('today.WEAR_THIS')}
+        </button>
+      </PostForm>
+    </Card>
   );
 }

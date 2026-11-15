@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { BestOutfits } from '../../wardrobe/goes-with';
 import { PhotoSet, viewerTrigger, enlargeLabel } from '../files/photo-viewer';
 import type { ClosetGarment } from '../gallery/queries';
@@ -258,59 +259,54 @@ function OptionCard(props: {
   const { need, judged, brandSizes } = model.detail;
   const best = judged?.get(pick.id);
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-2 flex-1"
       {...snapItem({
         value: String(pick.id),
         selected: props.selected,
         size: 'options',
         listbox: false,
-        class: 'card bg-base-100 border border-base-300',
       })}
       data-option={String(pick.id)}
     >
-      <div class="card-body p-3 gap-2 flex-1">
-        {pick.photo ? (
-          <button
-            type="button"
-            class="block w-full"
-            aria-label={enlargeLabel(pick.name)}
-            {...viewerTrigger(PHOTO_SET, pick.photo, 'original')}
-          >
-            <ProductPhoto
-              photo={pick.photo}
-              alt={pickName(pick)}
-              eager={props.selected}
-            />
-          </button>
-        ) : (
-          <ProductPhoto photo={null} alt="" />
-        )}
-        <div>
-          <h2 class="font-semibold break-words">{pickName(pick)}</h2>
-          {pick.brand && <p class="text-sm text-muted">{pick.brand}</p>}
-        </div>
-        <PriceAgainstBudget price={pick.price} budget={need.budget} />
-        {model.isOwner && props.showUnlocks && <Unlocks count={best} />}
-        {brandSizes && (
-          <BrandSizeNote note={brandSizes(pick.brand)} size="text-xs" clamp />
-        )}
-        {pick.note && (
-          <p class="text-sm line-clamp-2" data-pick-note="">
-            {pick.note}
-          </p>
-        )}
-        {/* At the card's foot, so This one lines up across the columns. */}
-        <div class="mt-auto flex flex-col gap-2">
-          <OptionActions
-            model={model}
-            pick={pick}
-            chosen={chosen}
-            self={self}
+      {pick.photo ? (
+        <button
+          type="button"
+          class="block w-full"
+          aria-label={enlargeLabel(pick.name)}
+          {...viewerTrigger(PHOTO_SET, pick.photo, 'original')}
+        >
+          <ProductPhoto
+            photo={pick.photo}
+            alt={pickName(pick)}
+            eager={props.selected}
           />
-          {best && <BestOutfitRows best={best} pickId={pick.id} />}
-        </div>
+        </button>
+      ) : (
+        <ProductPhoto photo={null} alt="" />
+      )}
+      <div>
+        <h2 class="font-semibold break-words">{pickName(pick)}</h2>
+        {pick.brand && <p class="text-sm text-muted">{pick.brand}</p>}
       </div>
-    </article>
+      <PriceAgainstBudget price={pick.price} budget={need.budget} />
+      {model.isOwner && props.showUnlocks && <Unlocks count={best} />}
+      {brandSizes && (
+        <BrandSizeNote note={brandSizes(pick.brand)} size="text-xs" clamp />
+      )}
+      {pick.note && (
+        <p class="text-sm line-clamp-2" data-pick-note="">
+          {pick.note}
+        </p>
+      )}
+      {/* At the card's foot, so This one lines up across the columns. */}
+      <div class="mt-auto flex flex-col gap-2">
+        <OptionActions model={model} pick={pick} chosen={chosen} self={self} />
+        {best && <BestOutfitRows best={best} pickId={pick.id} />}
+      </div>
+    </Card>
   );
 }
 

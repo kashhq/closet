@@ -1,3 +1,4 @@
+import { cardClass } from '../card';
 import { REPAIR_KINDS } from '../../wardrobe/care';
 import { PostForm } from '../form';
 import { dateParts } from '../../calendar-date';
@@ -119,10 +120,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
           ))}
         </ul>
       )}
-      <PostForm
-        action={action}
-        class="card bg-base-200 p-4 flex flex-col gap-3"
-      >
+      <PostForm action={action} class={cardClass('inset', 'p-4 gap-3')}>
         <h3 class="font-medium">{t('care.REPAIR_ADD_TITLE')}</h3>
         <div role="group" aria-label={t('care.REPAIR_KIND')} class="flex gap-2">
           {REPAIR_KINDS.map((kind) => (

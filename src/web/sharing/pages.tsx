@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
@@ -344,24 +345,22 @@ export function InvitePage(props: {
       />
       <main class="flex flex-col justify-center items-center gap-4 min-h-[80vh] px-4 pt-20">
         {!ctx.user && <BrandMark ctx={ctx} />}
-        <div class="card bg-base-100 shadow-md w-full max-w-md">
-          <div class="card-body">
-            {invite && !invite.expired ? (
-              <InviteDetails invite={invite} token={props.token} ctx={ctx} />
-            ) : (
-              <>
-                <div role="alert" class="alert alert-error mb-4">
-                  <span>
-                    {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
-                  </span>
-                </div>
-                <a href="/" class="btn btn-primary btn-sm">
-                  {t('RETURN_TO_HOME')}
-                </a>
-              </>
-            )}
-          </div>
-        </div>
+        <Card variant="content" class="w-full max-w-md" bodyClass="">
+          {invite && !invite.expired ? (
+            <InviteDetails invite={invite} token={props.token} ctx={ctx} />
+          ) : (
+            <>
+              <div role="alert" class="alert alert-error mb-4">
+                <span>
+                  {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
+                </span>
+              </div>
+              <a href="/" class="btn btn-primary btn-sm">
+                {t('RETURN_TO_HOME')}
+              </a>
+            </>
+          )}
+        </Card>
       </main>
     </Layout>
   );
