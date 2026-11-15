@@ -199,7 +199,7 @@ describe('app shell', () => {
         (await get('/auth/profile', alice.cookie)).body,
       );
       expect(herProfile).toContain(`Signed in as ${alice.email}`);
-      expect(herProfile).toContain('1 open invite');
+      expect(herProfile).toContain('1 link open');
       expect(herProfile).toContain('1 active');
       expect(
         unescapeHtml((await get('/auth/tokens', alice.cookie)).body),

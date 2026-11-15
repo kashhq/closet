@@ -255,21 +255,25 @@ export function SharingPage(props: { ctx: ViewContext; model: SharingModel }) {
 
 /**
  * Profile's Sharing row: who has this wardrobe, whose this user has, and
- * the invites still open, from the lists the page shows.
+ * the invites to answer and the links still open (told apart: one needs
+ * this user, the other someone else), from the lists the page shows.
  */
 export function sharingSummary(
   model: Pick<SharingModel, 'outbound' | 'inbound' | 'pending'>,
 ): string {
   const shared = model.outbound.filter((share) => share.acceptedAt).length;
-  const open =
-    model.outbound.filter((share) => !share.acceptedAt && !share.expired)
-      .length + model.pending.filter((share) => !share.expired).length;
+  const links = model.outbound.filter(
+    (share) => !share.acceptedAt && !share.expired,
+  ).length;
+  const toAnswer = model.pending.filter((share) => !share.expired).length;
   const parts = [
     shared > 0 && t('sharing.SUMMARY_SHARED', { count: shared }),
     model.inbound.length > 0 &&
       t('sharing.SUMMARY_INBOUND', { count: model.inbound.length }),
-    open === 1 && t('sharing.SUMMARY_OPEN_ONE'),
-    open > 1 && t('sharing.SUMMARY_OPEN_MANY', { count: open }),
+    toAnswer === 1 && t('sharing.SUMMARY_ANSWER_ONE'),
+    toAnswer > 1 && t('sharing.SUMMARY_ANSWER_MANY', { count: toAnswer }),
+    links === 1 && t('sharing.SUMMARY_LINKS_ONE'),
+    links > 1 && t('sharing.SUMMARY_LINKS_MANY', { count: links }),
   ].filter((part) => part !== false);
   return parts.length > 0 ? parts.join(' · ') : t('sharing.SUMMARY_NONE');
 }

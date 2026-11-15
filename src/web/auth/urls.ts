@@ -15,7 +15,8 @@ export function profileSection(id: string): string {
 /**
  * A setting's own page under Profile (`/auth/profile/<one segment>`: style,
  * sizes, sharing, weather, week, notifications), which sign-in may return
- * to (return-to.ts). Their fragments and writes are deeper or POST-only.
+ * to (return-to.ts), as may Devices (`DEVICES_PATH`, not under Profile
+ * by path). Their fragments and writes are deeper or POST-only.
  */
 export const PROFILE_PAGE = /^\/auth\/profile\/[a-z-]+$/;
 
