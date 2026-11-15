@@ -15,9 +15,11 @@ const PALETTE_CLASS =
   '/\\b(?:(?:bg|text|border|ring|outline|fill|stroke|from|via|to|divide|decoration|accent|caret|placeholder|shadow)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\\d{2,3}|(?:bg|text|border|fill|stroke)-(?:white|black))\\b/';
 // A shadow class on anything but a floating layer: a dropdown, a toast (an
 // alert) or a sheet (modal-box). The theme is flat (#727); a card is `Card`.
-// The lookahead lets a string naming one of those through.
+// The lookahead lets a string naming one of those through. A class token is
+// `shadow` bare or `shadow-*`, with an optional `inset-`, `text-` or `drop-`
+// (a drop shadow is a shadow too) and any variant prefix (`hover:`).
 const SHADOW_CLASS =
-  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?<![\\w-])shadow-/';
+  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?:^|[\\s:])(?:(?:inset|text|drop)-)?shadow(?:-\\S+)?(?=\\s|$)/';
 const FLAT_THEME =
   'The theme is flat (views/assets/AGENTS.md, Cards): no shadow outside a dropdown, a toast or a sheet. A card is src/web/card.tsx (#727).';
 const RETIRED_CHIP_CLASS = '/\\bchip-\\d\\b/';
