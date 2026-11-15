@@ -3,10 +3,10 @@ import { Type } from '@sinclair/typebox';
 import type { Db } from '../../db/client';
 import { loginRequired, sessionUserId } from '../auth/require-session';
 import { endSession, sessionStamp } from '../auth/session';
-import { profileSection } from '../auth/urls';
 import { t } from '../i18n';
 import type { Logger } from '../../logger';
-import { renderFragment } from '../render';
+import { renderFragment, renderPage } from '../render';
+import { viewContext } from '../view-context';
 import { HttpError } from '../errors';
 import { countAgainst, PUSH_TEST_LIMIT } from '../security/rate-limit';
 import { isReminderChoice, type ReminderKind } from '../../push/reminders';
@@ -19,7 +19,8 @@ import {
 } from './queries';
 import type { PushSender, VapidConfig } from './sender';
 import {
-  PUSH_SETTINGS_ID,
+  PUSH_SETTINGS_PATH,
+  PushSettingsPage,
   ReminderSettingsForm,
   ReminderStatus,
   TestResult,
@@ -88,8 +89,8 @@ export interface PushRouteOptions {
 
 /**
  * /push: Web Push subscriptions of the signed-in user's browsers, each
- * device's reminders (#15) and the test send on the profile page
- * (src/web/push/settings.tsx). Registered only
+ * device's reminders (#15) and the test send, and their page, Profile ›
+ * Notifications (src/web/push/settings.tsx, #728). Registered only
  * when PWA_ENABLED (there is no service worker to receive anything
  * otherwise). Every route needs a session; the writes are fetches and htmx
  * posts, so a signed-out caller gets a 401, and the same-origin check
@@ -100,6 +101,10 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
   { db, logger, appName, vapid, sender },
   done,
 ) => {
+  app.get(PUSH_SETTINGS_PATH, async (_request, reply) =>
+    renderPage(reply, <PushSettingsPage ctx={viewContext(reply)} />),
+  );
+
   // Read by push.js before subscribing and by the service worker when the
   // browser renews a subscription (pushsubscriptionchange).
   app.get('/push/vapid-public-key', async (_request, reply) =>
@@ -243,7 +248,7 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
       {
         title: t('PUSH_TEST_TITLE', { appName }),
         body: t('PUSH_TEST_BODY'),
-        url: profileSection(PUSH_SETTINGS_ID),
+        url: PUSH_SETTINGS_PATH,
         tag: 'push-test',
       },
       { ttlSeconds: TEST_TTL_SECONDS },

@@ -1,30 +1,28 @@
 import {
   LENGTH_UNITS,
-  lengthText,
   type LengthUnit,
   type Measurement,
   MEASUREMENTS,
 } from '../../wardrobe/measurements';
 import { PostForm } from '../form';
+import { profileSection } from '../auth/urls';
 import type { FieldErrors } from '../auth/validation';
 import { type StringKey, t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
 import { FormField, inputAttributes } from '../form-field';
-import { ProfileSection, SavedToast, StripFlags } from '../layout/parts';
+import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { BRAND_MAX, SIZE_MAX } from '../wardrobe/garment-input';
-import type { BodyMeasurements, BrandSize } from './queries';
+import type { BrandSize } from './queries';
 import {
   BRAND_SIZE_HINT_PATH,
   BRAND_SIZES_PATH,
   brandSizeUrl,
   SIZES_MEASUREMENTS_PATH,
-  SIZES_PATH,
   SIZES_SAVED_FLAG,
   SIZES_SECTION_ID,
-  SIZES_SECTION_PATH,
   SIZES_UNIT_PATH,
   type SizesSaved,
 } from './urls';
@@ -36,15 +34,15 @@ import {
 } from './validation';
 
 /**
- * Sizes (#24; plan section 16): the Profile's section, its editor, and the
- * brand note other pages show. The signed-in user's own: the garment form
+ * Sizes (#24; plan section 16): the editor (Profile › Sizes) and the brand
+ * note other pages show. The signed-in user's own: the garment form
  * and the wishlist render a note only on the user's own wardrobe (never on a
  * shared one, where it would describe the wrong body).
  */
 
 const HINT_ID = 'brand-size-hint';
 
-/** "Sizes": the Profile section's heading and the editor's title. */
+/** "Sizes": the editor's title (Profile's row names it too). */
 const SIZES_TITLE_KEY = 'sizes.TITLE' satisfies StringKey;
 
 /** "Your size in Uniqlo: M · Runs big, never L"; "Uniqlo: Runs big" without a size. */
@@ -101,51 +99,6 @@ export const BRAND_SIZE_HINT_TRIGGER = {
   'hx-indicator': `#${HINT_ID}`,
 } as const;
 
-function lengthLabel(cm: number, unit: LengthUnit): string {
-  return t('sizes.LENGTH', {
-    value: lengthText(cm, unit),
-    unit: t(`sizes.unit.${unit}`),
-  });
-}
-
-/** Profile › Sizes: what is stored, read-only, and the editor's link. */
-export function SizesSection(props: {
-  measurements: BodyMeasurements;
-  brands: BrandSize[];
-}) {
-  const { unit, lengths } = props.measurements;
-  const set = MEASUREMENTS.filter((m) => lengths[m] !== null);
-  return (
-    <ProfileSection id={SIZES_SECTION_ID} heading={t(SIZES_TITLE_KEY)}>
-      <p class="text-sm text-muted">{t('sizes.HINT')}</p>
-      {set.length === 0 ? (
-        <p class="text-sm">{t('sizes.NO_MEASUREMENTS')}</p>
-      ) : (
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          {set.map((m) => (
-            <div class="flex justify-between gap-2">
-              <dt class="text-muted">{t(`sizes.measurement.${m}`)}</dt>
-              <dd>{lengthLabel(lengths[m]!, unit)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {props.brands.length === 0 ? (
-        <p class="text-sm">{t('sizes.NO_BRANDS')}</p>
-      ) : (
-        <ul class="text-sm flex flex-col gap-1" aria-label={t('sizes.BRANDS')}>
-          {props.brands.map((brand) => (
-            <li>{brandSizeText(brand)}</li>
-          ))}
-        </ul>
-      )}
-      <a href={SIZES_PATH} class="btn btn-sm self-start">
-        {t('sizes.EDIT')}
-      </a>
-    </ProfileSection>
-  );
-}
-
 export interface SizesPageModel {
   unit: LengthUnit;
   /** The measurement fields as shown: the stored ones, or what was posted. */
@@ -181,7 +134,7 @@ export function SizesPage(props: { ctx: ViewContext; model: SizesPageModel }) {
       <AppBar
         ctx={ctx}
         title={t(SIZES_TITLE_KEY)}
-        back={SIZES_SECTION_PATH}
+        back={profileSection(SIZES_SECTION_ID)}
         formPage
       />
       <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-6">

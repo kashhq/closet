@@ -127,7 +127,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
   await test.step('every PostForm on a page is disabled offline and restored online', async () => {
     await signIn(page, 'offline-writes');
     let outside = 0;
-    for (const url of ['/wardrobe', '/auth/profile', '/auth/tokens']) {
+    for (const url of ['/wardrobe', '/auth/profile/week', '/auth/tokens']) {
       await page.goto(url);
       const online = await guardedControls(page);
       expect(online.length, url).toBeGreaterThan(0);

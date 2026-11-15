@@ -1,13 +1,10 @@
-import { profileSection } from '../auth/urls';
-
 /**
- * Sizes' addresses (#24): a section of the Profile, and its editor under it
- * (the style profile's shape). The signed-in user's own: none takes
+ * Sizes' addresses (#24): Profile's Sizes row (its id), and the editor under
+ * it (the style profile's shape). The signed-in user's own: none takes
  * `?ownerId=`.
  */
 
 export const SIZES_SECTION_ID = 'sizes';
-export const SIZES_SECTION_PATH = profileSection(SIZES_SECTION_ID);
 
 /** The editor, and the root of its writes. */
 export const SIZES_PATH = '/auth/profile/sizes';

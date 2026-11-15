@@ -18,14 +18,9 @@ import {
 import { verifyPassword } from './passwords';
 import { sessionUserId } from './require-session';
 import { sessionAccount } from './session';
+import { DevicesPage } from './pages';
 import { TokensPage } from './tokens-page';
-import {
-  DEVICES_PATH,
-  DEVICES_SECTION_ID,
-  PROFILE_PATH,
-  revokeNotice,
-  TOKENS_PATH,
-} from './urls';
+import { DEVICES_PATH, revokeNotice, TOKENS_PATH } from './urls';
 import { Password } from './validation';
 
 const TokensQuery = Type.Object({
@@ -174,6 +169,24 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
+  // Profile › Devices (#728): the native clients signed in, and the
+  // revoke redirect's notice.
+  app.get(
+    DEVICES_PATH,
+    { schema: { querystring: TokensQuery } },
+    async (request, reply) =>
+      renderPage(
+        reply,
+        <DevicesPage
+          ctx={viewContext(reply)}
+          tokens={await listTokens(db, sessionUserId(request), 'device')}
+          timeZone={config.timeZone}
+          now={new Date()}
+          notice={revokeNotice(request.query.revoked)}
+        />,
+      ),
+  );
+
   // Profile › Devices: a native client's sign-in, revoked from the web.
   app.post(
     `${DEVICES_PATH}/:id/revoke`,
@@ -186,10 +199,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         'device',
         id,
       );
-      return reply.redirect(
-        `${PROFILE_PATH}?deviceRevoked=${revoked ? 1 : 0}#${DEVICES_SECTION_ID}`,
-        303,
-      );
+      return reply.redirect(`${DEVICES_PATH}?revoked=${revoked ? 1 : 0}`, 303);
     },
   );
 

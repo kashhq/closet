@@ -17,11 +17,12 @@
     "NEXT": "Next: {label}"
   },
   "profile": {
-    "SECTIONS": "Profile sections",
     "ACCOUNT": "Account",
+    "SETTINGS": "Settings",
     "SIGNED_IN_AS": "Signed in as {email}",
     "STYLE_HINT": "Your styles, palette and budget: what your agent goes by.",
-    "EDIT_STYLE": "Edit your style profile",
+    "SIZES_SUMMARY": "Measurements and your size in each brand",
+    "NOTIFICATIONS_SUMMARY": "Reminders and alerts on this device",
     "SIGN_OUT": "Sign out",
     "SIGN_OUT_HINT": "Signs out this device only.",
     "SIGN_OUT_EVERYWHERE": "Sign out everywhere",
@@ -32,6 +33,13 @@
     "EXPORT_HINT": "Download your garment list with all its details: a CSV for spreadsheets, or JSON with links to the photos. It holds your garments and Muse needs only: no photo files (the links point to this server and stop working if it goes away), outfits, calendar, wears, washes, capsules, trips, sizes, style profile, selfies or saved looks. It is not a backup; backups are the operator's database dump plus the photo share.",
     "EXPORT_CSV": "Download CSV",
     "EXPORT_JSON": "Download JSON"
+  },
+  "sharing": {
+    "SUMMARY_NONE": "Not shared",
+    "SUMMARY_SHARED": "Shared with {count}",
+    "SUMMARY_INBOUND": "{count} shared with you",
+    "SUMMARY_OPEN_ONE": "1 open invite",
+    "SUMMARY_OPEN_MANY": "{count} open invites"
   },
   "FILES": "Files",
   "WARDROBE": "Wardrobe",
@@ -426,7 +434,8 @@
     "OWN_ONLY_HINT": "It cannot see or change wardrobes shared with you.",
     "READ_ONLY": "Read only",
     "READ_WRITE": "Can make changes",
-    "OWN_WARDROBE_ONLY": "My wardrobe only"
+    "OWN_WARDROBE_ONLY": "My wardrobe only",
+    "SUMMARY": "{count} active"
   },
   "devices": {
     "TITLE": "Devices",
@@ -437,7 +446,9 @@
     "REVOKE": "Sign out",
     "REVOKE_CONFIRM": "Sign out {name}? It needs your password to sign in again.",
     "REVOKED": "Device signed out.",
-    "ALREADY_REVOKED": "That device was already signed out."
+    "ALREADY_REVOKED": "That device was already signed out.",
+    "SUMMARY": "{count} signed in",
+    "NONE": "No apps are signed in."
   },
   "SHARE_WARDROBE": "Share your wardrobe",
   "SHARE_WARDROBE_DESC": "Invite someone to view or edit your wardrobe. A link works for 7 days.",
@@ -1090,7 +1101,8 @@
       "rain": "Rain",
       "snow": "Snow",
       "thunderstorm": "Thunderstorm"
-    }
+    },
+    "SUMMARY_NO_HOME": "No home city yet"
   },
   "MORE_ACTIONS": "More",
   "roles": {
@@ -1314,7 +1326,8 @@
     "BRANDS": "Brands",
     "OTHER_BRANDS": "Other brands",
     "UNBRANDED": "{count} without a brand",
-    "BREAKDOWN_LINE": "{garments} garments · {pieces} pieces · {worn}% of wears"
+    "BREAKDOWN_LINE": "{garments} garments · {pieces} pieces · {worn}% of wears",
+    "SEE_ALL": "See all"
   },
   "recap": {
     "TITLE": "Year in review",
@@ -1490,7 +1503,9 @@
       "DAY_LABEL": "{weekday}: the outfit for the day",
       "AROUND_LABEL": "{weekday}: also",
       "NO_DAY": "No outfit for the day",
-      "SAVED": "Week saved"
+      "SAVED": "Week saved",
+      "SUMMARY_NONE": "Not set yet",
+      "SUMMARY_DAYS": "Outfits on {count} of 7 days"
     },
     "push": {
       "TITLE": "Your week changed",
@@ -1648,12 +1663,9 @@
   "sizes": {
     "TITLE": "Sizes",
     "HINT": "Your measurements and the size you wear in each brand. Only you see them: the garment form and your wishlist show a brand's note.",
-    "EDIT": "Edit sizes",
     "MEASUREMENTS": "Measurements",
-    "NO_MEASUREMENTS": "No measurements yet.",
     "BRANDS": "Brand sizes",
     "BRANDS_HINT": "The size you wear in a brand, and how it runs.",
-    "NO_BRANDS": "No brand notes yet.",
     "LENGTH": "{value} {unit}",
     "unit": {
       "in": "in",

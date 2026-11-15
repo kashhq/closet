@@ -1,8 +1,10 @@
 /**
  * The account's pages. Profile is the avatar's page (layout/app-bar.tsx):
- * the account and every setting in sections, each an anchor on the page
- * (docs/plans/2026-09-26-redesign.md, "The app bar"). A section that links
- * or redirects to itself builds its URL here: `profileSection('sharing')`.
+ * an index of the account's settings, one row each, every row an anchor
+ * (#728, docs/decisions.md 2026-11-14). A setting's own page goes back to
+ * its row: `profileSection('sharing')`. The rows keep the ids the sections
+ * had, so a link from before the split (`/auth/profile#sharing`) still
+ * lands on the row that opens the page.
  */
 export const PROFILE_PATH = '/auth/profile';
 
@@ -11,8 +13,15 @@ export function profileSection(id: string): string {
 }
 
 /**
- * Profile's own sections, which its sub-pages' back arrows return to. The
- * features' sections name theirs beside them (sharing, weather, the week,
+ * A setting's own page under Profile (`/auth/profile/<one segment>`: style,
+ * sizes, sharing, weather, week, notifications), which sign-in may return
+ * to (return-to.ts). Their fragments and writes are deeper or POST-only.
+ */
+export const PROFILE_PAGE = /^\/auth\/profile\/[a-z-]+$/;
+
+/**
+ * Profile's own rows, which their pages' back arrows return to. The
+ * features' rows name theirs beside them (sharing, weather, the week,
  * notifications).
  */
 export const ACCOUNT_SECTION_ID = 'account';
@@ -31,7 +40,7 @@ export const SIGN_OUT_EVERYWHERE_PATH = '/auth/sign-out-everywhere';
 /** Agent access: the MCP endpoint's personal access tokens (token-routes.tsx). */
 export const TOKENS_PATH = '/auth/tokens';
 
-/** Profile › Devices: a native client's device tokens, revoked under it (token-routes.tsx). */
+/** Profile › Devices: a native client's device tokens, listed and revoked here (token-routes.tsx). */
 export const DEVICES_PATH = '/auth/devices';
 
 /**

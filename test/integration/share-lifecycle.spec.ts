@@ -45,7 +45,7 @@ describe('wardrobe share lifecycle', () => {
   }
 
   /** Where sharing is managed since #82: Profile › Sharing. */
-  const SHARING = '/auth/profile#sharing';
+  const SHARING = '/auth/profile/sharing';
 
   const signUp = async (label: string): Promise<Account> => {
     const email = `${label}-${randomUUID().slice(0, 8)}@example.com`;
@@ -102,8 +102,8 @@ describe('wardrobe share lifecycle', () => {
   };
 
   /**
-   * A refused accept: redirect back to Profile › Sharing carrying the
-   * refusal code, which the section shows as its message.
+   * A refused accept: redirect back to Profile › Sharing's page carrying the
+   * refusal code, which the page shows as its message.
    */
   const expectAcceptRefused = async (
     res: Awaited<ReturnType<typeof accept>>,
@@ -113,11 +113,11 @@ describe('wardrobe share lifecycle', () => {
   ) => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe(
-      `/auth/profile?shareError=${code}#sharing`,
+      `/auth/profile/sharing?shareError=${code}`,
     );
     const page = await t.inject({
       method: 'GET',
-      url: `/auth/profile?shareError=${code}`,
+      url: `/auth/profile/sharing?shareError=${code}`,
       headers: { cookie: account.cookie },
     });
     expect(page.body).toContain(message);
@@ -216,7 +216,7 @@ describe('wardrobe share lifecycle', () => {
     expect(menu).toContain(`href="/wardrobe?ownerId=${owner.id}"`);
     expect(menu).not.toContain('hx-target');
     expect(menu).toContain('View only');
-    expect(menu).toContain('href="/auth/profile#sharing"');
+    expect(menu).toContain('href="/auth/profile/sharing"');
 
     const shared = await t.inject({
       method: 'GET',
@@ -698,7 +698,7 @@ describe('wardrobe share lifecycle', () => {
         .where(eq(wardrobeShare.grantorId, grantor.id));
       const profile = await t.inject({
         method: 'GET',
-        url: '/auth/profile',
+        url: '/auth/profile/sharing',
         headers: { cookie: grantor.cookie },
       });
       expect(unescapeHtml(profile.body)).toContain(invitePath(row.token!));
@@ -770,7 +770,7 @@ describe('wardrobe share lifecycle', () => {
       // Listed to its grantor as expired, without its link, still revocable.
       const profile = await t.inject({
         method: 'GET',
-        url: '/auth/profile',
+        url: '/auth/profile/sharing',
         headers: { cookie: owner.cookie },
       });
       expect(unescapeHtml(profile.body)).not.toContain(invitePath(token));

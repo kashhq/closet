@@ -1,7 +1,9 @@
 import type { Child } from 'hono/jsx';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { ProfileSection } from '../layout/parts';
+import { profileSection } from '../auth/urls';
+import { SettingsPage } from '../layout/settings-page';
+import type { ViewContext } from '../view-context';
 import {
   displayDifference,
   OFFSET_LIMIT,
@@ -18,11 +20,12 @@ import {
   HERE_FRESH_HOURS,
   type WeatherSettings,
 } from './queries';
+import { WEATHER_SETTINGS_ID } from './urls';
 import { fetchedLabel } from './views';
 
 /**
- * The profile's weather section (#14; the redesign's Profile slots it in
- * unchanged, docs/plans/2026-09-26-redesign.md): the home city (a search on
+ * Profile › Weather (#14; a Profile section until #728, its own page since,
+ * WEATHER_SETTINGS_PATH): the home city (a search on
  * Open-Meteo's geocoding, through the server), "Use my location" (the
  * phone's position, rounded to 2 decimals in the browser and again on the
  * server; public/js/locate.js), the unit, and the personal temperature
@@ -35,7 +38,6 @@ import { fetchedLabel } from './views';
  * would die with it (src/web/autosave.tsx). Each is disabled offline.
  */
 
-export const WEATHER_SETTINGS_ID = 'weather';
 const LOCATION_ID = 'weather-location';
 const OFFSET_ID = 'weather-offset';
 
@@ -54,18 +56,21 @@ const OFFSET_SWAP = swapInto(OFFSET_ID);
 const LOCATE_MODULE = `import { initLocate } from 'locate';
 initLocate(document.getElementById('${LOCATION_ID}'));`;
 
-export function WeatherSettings(props: {
+export function WeatherSettingsPage(props: {
+  ctx: ViewContext;
   settings: WeatherSettings;
   timeZone: string;
   now: Date;
 }) {
+  const { ctx, ...location } = props;
   const { settings } = props;
   return (
-    <ProfileSection
-      id={WEATHER_SETTINGS_ID}
-      heading={t('weather.SETTINGS_HEADING')}
+    <SettingsPage
+      ctx={ctx}
+      title={t('weather.SETTINGS_HEADING')}
+      back={profileSection(WEATHER_SETTINGS_ID)}
     >
-      <WeatherLocation {...props} />
+      <WeatherLocation {...location} />
       <AutosaveForm action="/weather/unit">
         <div class="flex items-center gap-2">
           <span class="text-sm">{t('weather.UNIT')}</span>
@@ -84,8 +89,15 @@ export function WeatherSettings(props: {
         </div>
       </AutosaveForm>
       <OffsetControls settings={settings} />
-    </ProfileSection>
+    </SettingsPage>
   );
+}
+
+/** Profile's Weather row: the home city, or that there is none. */
+export function weatherSummary(settings: WeatherSettings): string {
+  return settings.home
+    ? t('weather.HOME_IS', { name: settings.home.name })
+    : t('weather.SUMMARY_NO_HOME');
 }
 
 /** Home, the city search and "Use my location": what the location forms answer. */

@@ -310,7 +310,7 @@ export const ROUTES: Route[] = [
   // Profile › Devices (#189): a native client's sign-in, the account's like
   // its agent tokens.
   {
-    name: 'GET /auth/profile (the devices)',
+    name: 'GET /auth/devices',
     kind: 'read',
     ok: 200,
     secret: () => OWNER_DEVICE_NAME,
@@ -318,7 +318,7 @@ export const ROUTES: Route[] = [
     vias: ['own'],
     request: async (f) => {
       await f.ownerToken('device');
-      return { method: 'GET', url: '/auth/profile' };
+      return { method: 'GET', url: '/auth/devices' };
     },
     expect: {
       owner: 'ok',

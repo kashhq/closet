@@ -806,7 +806,7 @@ describe('a device token idle past its expiry', () => {
 
     const profile = await t.inject({
       method: 'GET',
-      url: '/auth/profile',
+      url: '/auth/devices',
       headers: { cookie },
     });
     expect(profile.statusCode).toBe(200);

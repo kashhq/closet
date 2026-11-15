@@ -3,6 +3,7 @@ import {
   type CostPerWear,
   type InsightGarment,
   LEAST_WORN_MIN_OWNED_DAYS,
+  RANKED_LIMIT,
   UNWORN_CHOICES,
   UNWORN_SHOWN,
   type UnwornDays,
@@ -11,7 +12,7 @@ import {
 import type { IsoDate } from '../../calendar-date';
 import { relativeDay } from '../date-labels';
 import type { SignablePhotoRef } from '../files/image-url';
-import { t } from '../i18n';
+import { type StringKey, t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { CARD_COLUMNS } from '../layout/columns';
@@ -23,7 +24,16 @@ import { categoryLabel, priceLabel } from '../wardrobe/garment';
 import { garmentUrl } from '../wardrobe/urls';
 import { styleThisUrl } from '../styling/urls';
 import { Card, GarmentList, garmentName, perWearLine, Strip } from './parts';
-import { insightsUrl, NEEDS_ATTENTION_URL, RECAP_PATH } from './urls';
+import {
+  INSIGHTS_PATH,
+  insightsUrl,
+  NEEDS_ATTENTION_URL,
+  RECAP_PATH,
+  unwornListUrl,
+} from './urls';
+
+/** "Not worn lately": the unworn card's title and its own page's. */
+const UNWORN_KEY = 'insights.UNWORN' satisfies StringKey;
 
 export interface InsightsPageModel {
   insights: WardrobeInsights<SignablePhotoRef>;
@@ -37,7 +47,10 @@ export interface InsightsPageModel {
  * attention, what has not been worn (with "Style this"), most and least
  * worn, cost per wear, the pairs worn together, the colours, categories
  * and brands. Every figure is src/wardrobe/insights.ts's; the page only
- * lays them out. The owner's own, like wears.
+ * lays them out. The owner's own, like wears. Every garment list shows at
+ * most RANKED_LIMIT (5) rows (#728): the ranked ones are cut there by
+ * insights.ts, and the unworn list, which is whole, links to its own page
+ * with "See all" (UnwornPage).
  */
 export function InsightsPage(props: {
   ctx: ViewContext;
@@ -104,7 +117,13 @@ function Figures({ model }: { model: InsightsPageModel }) {
             </a>
           </Card>
         )}
-        <Unworn insights={insights} today={today} />
+        <Unworn
+          unworn={insights.unworn}
+          today={today}
+          shown={RANKED_LIMIT}
+          windowUrl={(choice) => `${insightsUrl(choice)}#insights-unworn`}
+          seeAll
+        />
         {insights.mostWorn.length > 0 && (
           <Card id="insights-most-worn" title={t('insights.MOST_WORN')}>
             <GarmentList rows={wornRows(insights.mostWorn, today)} />
@@ -174,21 +193,56 @@ function WornLately({
   );
 }
 
-function Unworn(props: {
-  insights: WardrobeInsights<SignablePhotoRef>;
-  today: IsoDate;
+/**
+ * GET /wardrobe/insights/unworn[?unworn=30|90|180] (#728): the whole unworn
+ * list, which insights cuts to its first five, up to UNWORN_SHOWN with the
+ * rest counted; the same window chips, here linking to this page.
+ */
+export function UnwornPage(props: {
+  ctx: ViewContext;
+  model: InsightsPageModel;
 }) {
-  const { days, garments } = props.insights.unworn;
-  const shown = garments.slice(0, UNWORN_SHOWN);
+  const { ctx, model } = props;
   return (
-    <Card id="insights-unworn" title={t('insights.UNWORN')}>
+    <Layout ctx={ctx} title={t(UNWORN_KEY)}>
+      <AppBar ctx={ctx} title={t(UNWORN_KEY)} back={INSIGHTS_PATH} />
+      <PageMain class="p-4 pt-20 pb-24 flex flex-col gap-4">
+        <Unworn
+          unworn={model.insights.unworn}
+          today={model.today}
+          shown={UNWORN_SHOWN}
+          windowUrl={unwornListUrl}
+        />
+      </PageMain>
+      <Dock ctx={ctx} />
+    </Layout>
+  );
+}
+
+/**
+ * The unworn list's card: the window chips (`windowUrl`), the count, the
+ * first `shown` garments with "Style this", and past them "See all" (to
+ * the list's page, `seeAll`) or how many more there are.
+ */
+function Unworn(props: {
+  unworn: WardrobeInsights<SignablePhotoRef>['unworn'];
+  today: IsoDate;
+  shown: number;
+  windowUrl: (days: UnwornDays) => string;
+  seeAll?: boolean;
+}) {
+  const { days, garments } = props.unworn;
+  const shown = garments.slice(0, props.shown);
+  const more = garments.length - shown.length;
+  return (
+    <Card id="insights-unworn" title={t(UNWORN_KEY)}>
       <nav
         class="flex items-center gap-2 flex-wrap"
         aria-label={t('insights.UNWORN_FOR')}
       >
         {UNWORN_CHOICES.map((choice: UnwornDays) => (
           <a
-            href={`${insightsUrl(choice)}#insights-unworn`}
+            href={props.windowUrl(choice)}
             class={`btn btn-xs ${choice === days ? 'btn-primary' : 'btn-ghost'}`}
             aria-current={choice === days ? 'true' : undefined}
           >
@@ -217,11 +271,20 @@ function Unworn(props: {
           </a>
         )}
       />
-      {garments.length > shown.length && (
-        <p class="text-xs text-muted">
-          {t('insights.UNWORN_MORE', { count: garments.length - shown.length })}
-        </p>
-      )}
+      {more > 0 &&
+        (props.seeAll ? (
+          <a
+            href={unwornListUrl(days)}
+            class="btn btn-outline btn-sm self-start"
+            data-see-all
+          >
+            {t('insights.SEE_ALL')}
+          </a>
+        ) : (
+          <p class="text-xs text-muted">
+            {t('insights.UNWORN_MORE', { count: more })}
+          </p>
+        ))}
     </Card>
   );
 }

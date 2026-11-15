@@ -323,8 +323,11 @@ describe('push reminders', () => {
       expect(res.statusCode).toBe(401);
     });
 
-    it('the profile holds the slot push.js fills once the device is on', async () => {
-      const res = await t.inject({ method: 'GET', url: '/auth/profile' });
+    it('Profile › Notifications holds the slot push.js fills once the device is on', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/auth/profile/notifications',
+      });
       expect(res.body).toContain('id="push-reminders" data-show="on" hidden');
     });
   });
