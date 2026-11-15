@@ -16,6 +16,8 @@ import {
   storageFix,
   probeWritable,
   type ProbeFs,
+  type SweepFs,
+  sweepProbeLeftovers,
   type WriteProbe,
 } from '../../storage-probe';
 import {
@@ -299,20 +301,48 @@ describe('createStorageCheck', () => {
     const enospc = (): never => {
       throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
     };
+    /** A probe file of this process under /app/data. */
+    const PROBE_FILE = new RegExp(
+      `/app/data/\\.write-probe-${process.pid}-\\d+$`,
+    );
 
-    it('gives concurrent probes of one directory their own files and cleans only stale ones', async () => {
+    it('gives concurrent probes of one directory their own files and leaves every other file alone', async () => {
       const dir = join(root, 'shared');
-      const stale = `.write-probe-${process.pid}-0`;
       await probeWritable(dir);
-      await writeFile(join(dir, stale), 'left by a hung write');
-      await writeFile(join(dir, '.write-probe-0-1'), 'another process');
+      await writeFile(join(dir, '.write-probe-1-1'), 'a dead process');
       const results = await Promise.all([
         probeWritable(dir),
         probeWritable(dir),
         probeWritable(dir),
       ]);
       expect(results).toEqual(Array(3).fill({ writable: true }));
-      expect(await readdir(dir)).toEqual(['.write-probe-0-1']);
+      expect(await readdir(dir)).toEqual(['.write-probe-1-1']);
+    });
+
+    // #855, #856: no listing (O(1) on a large share), and only its own file
+    // decides the verdict.
+    it('makes exactly a mkdir, its own write and its unlink', async () => {
+      const calls: string[] = [];
+      const fs: ProbeFs = {
+        mkdir: (directory) => {
+          calls.push(`mkdir ${directory}`);
+          return Promise.resolve();
+        },
+        writeFile: (path) => {
+          calls.push(`write ${path}`);
+          return Promise.resolve();
+        },
+        rm: (path) => {
+          calls.push(`rm ${path}`);
+          return Promise.resolve();
+        },
+      };
+      expect(await probeWritable('/app/data', fs)).toEqual({ writable: true });
+      expect(calls).toHaveLength(3);
+      const [, write, unlink] = calls;
+      expect(calls[0]).toBe('mkdir /app/data');
+      expect(write).toMatch(PROBE_FILE);
+      expect(unlink).toBe(write?.replace(/^write/, 'rm'));
     });
 
     it('writes PROBE_BYTES and reports ENOSPC from the write, code only, cleaning up', async () => {
@@ -320,7 +350,6 @@ describe('createStorageCheck', () => {
       const removed: string[] = [];
       const fs: ProbeFs = {
         mkdir: () => Promise.resolve(),
-        readdir: () => Promise.resolve([]),
         writeFile: (_path, data) => {
           writes.push(data.byteLength);
           return Promise.resolve().then(enospc);
@@ -335,9 +364,7 @@ describe('createStorageCheck', () => {
         code: 'ENOSPC',
       });
       expect(writes).toEqual([PROBE_BYTES]);
-      expect(removed.at(-1)).toMatch(
-        new RegExp(`^/app/data/\\.write-probe-${process.pid}-\\d+$`),
-      );
+      expect(removed.at(-1)).toMatch(PROBE_FILE);
 
       logs.clear();
       const storage = createStorageCheck({
@@ -400,5 +427,51 @@ describe('createStorageCheck', () => {
       expect(await storage()).toEqual(up(true));
       expect(probes).toBe(2);
     });
+  });
+});
+
+describe('sweepProbeLeftovers', () => {
+  const failing = (code: string) => (): Promise<never> =>
+    Promise.reject(Object.assign(new Error(code), { code }));
+
+  it('removes every probe file, whoever wrote it, and nothing else', async () => {
+    const removed: string[] = [];
+    const fs: SweepFs = {
+      readdir: () =>
+        Promise.resolve([
+          '.write-probe-1-3',
+          '.write-probe-7b0c2f4e-0d3a-4c5e-9f1a-2b3c4d5e6f70-1',
+          '.closet-storage',
+          'a1b2.webp',
+        ]),
+      rm: (path) => {
+        removed.push(path);
+        return Promise.resolve();
+      },
+    };
+    expect(await sweepProbeLeftovers('/app/data', fs)).toEqual({
+      swept: true,
+      removed: 2,
+    });
+    expect(removed).toEqual([
+      '/app/data/.write-probe-1-3',
+      '/app/data/.write-probe-7b0c2f4e-0d3a-4c5e-9f1a-2b3c4d5e6f70-1',
+    ]);
+  });
+
+  it('treats a directory not made yet as clean, and reports any other failure by code', async () => {
+    const rm = () => Promise.resolve();
+    expect(
+      await sweepProbeLeftovers('/app/models', {
+        readdir: failing('ENOENT'),
+        rm,
+      }),
+    ).toEqual({ swept: true, removed: 0 });
+    expect(
+      await sweepProbeLeftovers('/app/data', {
+        readdir: () => Promise.resolve(['.write-probe-1-3']),
+        rm: failing('EACCES'),
+      }),
+    ).toEqual({ swept: false, code: 'EACCES' });
   });
 });

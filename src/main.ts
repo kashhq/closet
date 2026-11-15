@@ -10,7 +10,11 @@ import {
   reportBootFailure,
 } from './metrics/error-tracker';
 import { serve } from './server';
-import { probeWritable, storageFix } from './storage-probe';
+import {
+  probeWritable,
+  storageFix,
+  sweepProbeLeftovers,
+} from './storage-probe';
 import {
   identityRefusal,
   StorageIdentityError,
@@ -44,6 +48,18 @@ async function main(): Promise<void> {
   // stack: refuse the boot, naming the fix. Only DATA_PATH stops
   // the boot: an unwritable MODELS_PATH leaves every page serving, so it is
   // /health/ready's `storage` check that reports it (src/web/health).
+  // The sweep first: a dead predecessor's probe files go here, once, since
+  // the probes never list a directory (#855).
+  for (const directory of new Set([config.DATA_PATH, config.MODELS_PATH])) {
+    const sweep = await sweepProbeLeftovers(directory);
+    if (!sweep.swept) {
+      boot.warn(
+        `Could not sweep probe leftovers in ${directory} (${sweep.code})`,
+      );
+    } else if (sweep.removed > 0) {
+      boot.info(`Removed ${sweep.removed} probe leftovers in ${directory}`);
+    }
+  }
   const data = await probeWritable(config.DATA_PATH);
   if (!data.writable) {
     boot.fatal(
