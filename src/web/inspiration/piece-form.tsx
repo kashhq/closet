@@ -7,7 +7,7 @@ import type { LookPiece } from '../../wardrobe/recreate';
 import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { FormField } from '../form-field';
-import { t } from '../i18n';
+import { joinCopy, t, type Translated } from '../i18n';
 import { roleGroupLabel, roleLabel, valueLabel } from '../wardrobe/labels';
 import { PIECE_KINDS, type PieceKind, pieceKindValue } from './piece-input';
 import { INSPIRATION_MAX_PIECES, type StoredPiece } from './queries';
@@ -30,14 +30,17 @@ import {
  */
 
 /** A piece in words: "Blazer · Blue, White". */
-export function pieceName(piece: LookPiece): string {
+export function pieceName(piece: LookPiece): Translated {
   const kind = piece.type
     ? valueLabel('type', piece.type)
     : roleLabel(piece.role);
   if (piece.colors.length === 0) return kind;
   return t('inspiration.PIECE_NAME', {
     kind,
-    colors: piece.colors.map((c) => valueLabel('color', c)).join(', '),
+    colors: joinCopy(
+      piece.colors.map((c) => valueLabel('color', c)),
+      ', ',
+    ),
   });
 }
 

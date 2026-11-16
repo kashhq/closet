@@ -20,7 +20,7 @@ import { dayOfWeek, hourIn, type IsoDate, todayIn } from '../../calendar-date';
 import { DAY_NAMES, occasionLabel } from '../date-labels';
 import { ideaName } from '../gallery/ideas';
 import type { WeekPoolGarment } from '../gallery/queries';
-import { t, type StringKey } from '../i18n';
+import { type DataKey, t, type StringKey } from '../i18n';
 import { awayTripsSql, tripsOn } from '../trips/away';
 import type { PushPayload } from '../push/payload';
 import type { PushSender, SendReport } from '../push/sender';
@@ -690,7 +690,7 @@ function unwearableText(unwearable: Unwearable): string {
     : `${unwearable.reason} garment ${unwearable.garmentId}`;
 }
 
-const CHANGE_LINES: Readonly<Record<NeedsChange, StringKey>> = {
+const CHANGE_LINES: Readonly<Record<NeedsChange, DataKey>> = {
   forecast: 'weekPlan.push.FORECAST',
   rain: 'weekPlan.push.RAIN',
   colder: 'weekPlan.push.COLDER',
@@ -710,7 +710,7 @@ const CHANGE_WHY: Readonly<Record<NeedsChange, StringKey>> = {
   swing: 'weekPlan.why.SWING',
 };
 
-const UNWEARABLE_WHY: Readonly<Record<Unwearable['reason'], StringKey>> = {
+const UNWEARABLE_WHY: Readonly<Record<Unwearable['reason'], DataKey>> = {
   lent: 'weekPlan.why.LENT',
   repair: 'weekPlan.why.REPAIR',
   archived: 'weekPlan.why.ARCHIVED',
@@ -733,7 +733,7 @@ export function reminderSwapLine(swap: Swap): string {
   return t('today.push.SWAPPED', { garments: swap.swappedIn, why });
 }
 
-const UNWEARABLE_LINES: Readonly<Record<Unwearable['reason'], StringKey>> = {
+const UNWEARABLE_LINES: Readonly<Record<Unwearable['reason'], DataKey>> = {
   lent: 'weekPlan.push.LENT',
   repair: 'weekPlan.push.REPAIR',
   archived: 'weekPlan.push.ARCHIVED',

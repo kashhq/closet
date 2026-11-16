@@ -1,5 +1,5 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
-import { type StringKey, t } from '../i18n';
+import { type StringKey, t, type Translated } from '../i18n';
 
 /**
  * Each mark's one look and one string: the badge variant, the dot (its fill,
@@ -45,7 +45,7 @@ export interface WashCount {
   copies: number;
 }
 
-export function markLabel(mark: GarmentMarkKind, wash?: WashCount): string {
+export function markLabel(mark: GarmentMarkKind, wash?: WashCount): Translated {
   if (mark === 'needs-wash' && wash && wash.copies > 1) {
     return t('mark.NEEDS_WASH_COPIES', { ...wash });
   }
