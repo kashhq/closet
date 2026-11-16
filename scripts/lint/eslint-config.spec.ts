@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // The real flat config, so a selector or regex edit in eslint.config.mjs is
 // what fails here. Only no-restricted-syntax messages are read. The file
 // path must be one the TypeScript project service knows; its text is replaced.
-const root = resolve(import.meta.dirname, '../..');
+const root = resolve(__dirname, '../..');
 const eslint = new ESLint({ cwd: root });
 
 const restricted = async (code: string, file: string) => {

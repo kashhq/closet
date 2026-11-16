@@ -28,7 +28,7 @@ describe('sharedValidators', () => {
 
   it('refuses ajv plugins and onCreate, which the key cannot hold', () => {
     expect(() =>
-      sharedValidators({}, { customOptions: {}, plugins: [() => undefined] }),
+      sharedValidators({}, { customOptions: {}, plugins: [(ajv) => ajv] }),
     ).toThrow(/plugins and onCreate/);
     expect(() =>
       sharedValidators({}, { customOptions: {}, onCreate: () => undefined }),
