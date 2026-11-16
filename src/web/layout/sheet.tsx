@@ -12,10 +12,12 @@ import { SheetBackdrop } from './parts';
  *    until D9 docks them).
  *  - `menu`: hung under the control that opened it (CSS anchor positioning,
  *    main.css; centred where a browser has none): the Wardrobe's Add.
+ *  - `dialog`: centred at every size, the phone included, for what is shown
+ *    rather than asked or filled in (the mask editor's canvas, a selfie).
  * D9 adds `filters`, docked in a `facets` page's aside rather than modal;
  * main.css finds every kind by `dialog[data-sheet=<kind>]`.
  */
-export type SheetKind = 'choice' | 'form' | 'menu';
+export type SheetKind = 'choice' | 'form' | 'menu' | 'dialog';
 
 // Whole class names, so Tailwind finds them. The dialog is daisyUI's
 // `modal`, the box its `modal-box`: guards.conf `@sheet` keeps both here.
@@ -23,11 +25,13 @@ const DIALOG_CLASS: Readonly<Record<SheetKind, string>> = {
   choice: 'modal modal-bottom lg:modal-middle',
   form: 'modal modal-bottom lg:modal-end',
   menu: 'modal modal-bottom lg:modal-middle',
+  dialog: 'modal',
 };
 const BOX_CLASS: Readonly<Record<SheetKind, string>> = {
   choice: '',
   form: ' lg:w-full lg:max-w-md',
   menu: '',
+  dialog: '',
 };
 
 /**
@@ -45,10 +49,15 @@ const GAP_CLASS: Readonly<Record<SheetGap, string>> = {
   4: ' flex flex-col gap-4',
 };
 
-function boxClass(kind: SheetKind, gap: SheetGap | undefined): string {
+function boxClass(
+  kind: SheetKind,
+  gap: SheetGap | undefined,
+  extra: string | undefined,
+): string {
   const flow = gap === undefined ? '' : GAP_CLASS[gap];
-  const foot = gap !== undefined && kind !== 'menu' ? ' pb-8' : '';
-  return `modal-box group/sheet${flow}${foot}${BOX_CLASS[kind]}`;
+  const foot =
+    gap !== undefined && (kind === 'choice' || kind === 'form') ? ' pb-8' : '';
+  return `modal-box group/sheet${flow}${foot}${BOX_CLASS[kind]}${extra === undefined ? '' : ` ${extra}`}`;
 }
 
 export interface SheetProps {
@@ -57,6 +66,8 @@ export interface SheetProps {
   /** The id of the sheet's heading (or, for the confirmation, its question): its accessible name. */
   labelledBy: string;
   gap?: SheetGap;
+  /** A `dialog`'s own width and padding (a viewer sizes to what it shows); the other kinds are sized by their kind. */
+  boxClass?: string;
   /**
    * The tap-outside close's name (SheetBackdrop): `close` on a sheet that
    * shows or offers, `cancel` on one that asks for a choice.
@@ -74,8 +85,7 @@ export interface SheetProps {
  * one) and the inert page behind are `showModal()`'s; the page's scroll is
  * locked by daisyUI's `modal[open]` rule. The box is `group/sheet`, for
  * content that reacts to something in it (the add sheet's "Uploading…").
- * The photo viewer, the mask editor and a selfie's dialog are not sheets:
- * centred or full-screen on the phone too (guards.conf `known`).
+ * The photo viewer is not a sheet: a full-screen dialog of its own.
  */
 export function Sheet(props: SheetProps) {
   return (
@@ -85,7 +95,9 @@ export function Sheet(props: SheetProps) {
       data-sheet={props.kind}
       aria-labelledby={props.labelledBy}
     >
-      <div class={boxClass(props.kind, props.gap)}>{props.children}</div>
+      <div class={boxClass(props.kind, props.gap, props.boxClass)}>
+        {props.children}
+      </div>
       <SheetBackdrop
         label={t(props.dismiss === 'close' ? 'CLOSE' : 'CANCEL')}
       />

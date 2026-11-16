@@ -322,6 +322,9 @@ async function sheetShots(page: Page, suffix: string): Promise<void> {
   await page.getByRole('button', { name: 'Set…', exact: true }).click();
   await open('bulk-set', '#bulk-dialog');
   await openRawSelvedgeJeans(page);
+  await page.locator('#editMaskBtn').click();
+  await open('mask-editor', '#maskEditorDialog');
+  await page.reload();
   await openPhotoSheet(page);
   await open('garment-photo', '#garment-photo-sheet');
   await page.reload();

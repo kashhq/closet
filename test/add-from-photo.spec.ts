@@ -31,6 +31,29 @@ async function openAddSheet(page: Page) {
   return sheet;
 }
 
+/**
+ * A tall menu opened from a mid-page trigger at desktop width (Today's
+ * first-run button on a short window) is capped to the room beside its
+ * anchor and scrolls inside itself, so its last row stays reachable under
+ * the locked page.
+ */
+async function checkAddMenuReach(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 560 });
+  const sheet = await openAddSheet(page);
+  const box = sheet.locator('.modal-box');
+  const last = box.locator('a, button, label').last();
+  await last.scrollIntoViewIfNeeded();
+  const view = page.viewportSize()!;
+  const at = (await last.boundingBox())!;
+  const frame = (await box.boundingBox())!;
+  expect(at.y).toBeGreaterThanOrEqual(frame.y);
+  expect(at.y + at.height).toBeLessThanOrEqual(frame.y + frame.height + 1);
+  expect(frame.y).toBeGreaterThanOrEqual(0);
+  expect(frame.y + frame.height).toBeLessThanOrEqual(view.height);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 390, height: 844 });
+}
+
 const photo = () =>
   sharp({
     create: { width: 900, height: 1200, channels: 3, background: '#357' },
@@ -44,6 +67,7 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
 }) => {
   const email = await signIn(page, 'add-photo');
   await cutouts.hold(email);
+  await checkAddMenuReach(page);
   const sheet = await openAddSheet(page);
 
   const camera = sheet.locator('[data-photo-source="camera"]');

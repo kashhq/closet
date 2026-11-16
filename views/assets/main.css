@@ -454,7 +454,10 @@ html {
    (layout/sheet.tsx, #1062; docs/plans/2026-11-16-desktop-layout.md §3.3):
    confirm-sheet.js marks the open sheet's trigger `data-sheet-anchor`, and
    the box is placed below it, its end edge on the trigger's, flipping above
-   when there is no room. Fixed, not absolute: an anchor outside the dialog
+   when there is more room there. Its height is capped to the room beside
+   the anchor (a percentage of the placement's area, not the screen) and
+   the box scrolls inside itself past that, so a tall menu opened from
+   mid-page never loses its last row under the locked page. Fixed, not absolute: an anchor outside the dialog
    is valid only for a box whose containing block is the viewport, and
    `place-self: normal` lets the anchor, not the modal's grid, align it.
    Where anchor positioning is missing the sheet stays centred (its
@@ -473,9 +476,10 @@ html {
         position-anchor: --sheet-trigger;
         position-area: block-end span-inline-start;
         position-try-fallbacks: flip-block;
+        position-try-order: most-block-size;
         margin-block: 0.5rem;
         width: 20rem;
-        max-height: calc(100dvh - var(--app-bar-h) - 1rem);
+        max-height: calc(100% - 1rem);
       }
     }
   }

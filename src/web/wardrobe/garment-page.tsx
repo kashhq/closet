@@ -27,7 +27,6 @@ import {
   PhotoLibraryIcon,
   PREPARE_AND_SUBMIT_PHOTO,
   SavedToast,
-  SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
 import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
@@ -140,7 +139,8 @@ const CLOSE_MENU = "this.closest('details').removeAttribute('open')";
  * so repeated quarter turns are one tap each. A fixed string, placed after
  * the dialog; StripFlags drops the marker, so a reload does not reopen it.
  */
-const REOPEN_PHOTO_SHEET = `document.getElementById('${PHOTO_SHEET_ID}').showModal();`;
+const REOPEN_PHOTO_SHEET = `import { openSheet } from 'confirm-sheet';
+openSheet(document.getElementById('${PHOTO_SHEET_ID}'), null);`;
 
 /**
  * The mask editor's pencil (mask-editor.js), as an inline module so it runs
@@ -341,7 +341,10 @@ function PhotoTools({ model }: { model: GarmentPageModel }) {
     <>
       <PhotoSheet garment={garment} viewOwner={model.viewOwner} />
       {model.justRotatedPhoto && (
-        <script dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }} />
+        <script
+          type="module"
+          dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }}
+        />
       )}
       {garment.photo && (
         <>
@@ -1159,48 +1162,54 @@ function RotateButtons(props: { action: string }) {
 /** The mask editor (public/js/mask-editor.js), opened by the pencil on the photo. */
 function MaskEditorDialog() {
   return (
-    <dialog id="maskEditorDialog" class="modal">
-      <div class="modal-box w-full max-w-lg p-4 flex flex-col gap-4">
-        <h3 class="font-bold text-lg">{t('MASK_EDITOR_TITLE')}</h3>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="join">
-            <button id="maskBrushErase" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_ERASE')}
-            </button>
-            <button id="maskBrushRestore" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_RESTORE')}
-            </button>
-          </div>
-          <div class="flex items-center gap-2 flex-1 min-w-32">
-            <span class="text-xs text-muted shrink-0">
-              {t('MASK_BRUSH_SIZE')}
-            </span>
-            <input
-              id="maskBrushSize"
-              type="range"
-              min="4"
-              max="80"
-              value="20"
-              class="range range-xs flex-1"
-            />
-          </div>
-        </div>
-        <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
-          <canvas
-            id="maskEditorCanvas"
-            class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
-          ></canvas>
-        </div>
-        <div class="modal-action mt-0">
-          <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
-            {t('MASK_EDITOR_SKIP')}
+    <Sheet
+      id="maskEditorDialog"
+      kind="dialog"
+      labelledBy="mask-editor-title"
+      gap={4}
+      boxClass="w-full max-w-lg p-4"
+      dismiss="close"
+    >
+      <h3 id="mask-editor-title" class="font-bold text-lg">
+        {t('MASK_EDITOR_TITLE')}
+      </h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="join">
+          <button id="maskBrushErase" class="btn btn-sm join-item">
+            {t('MASK_BRUSH_ERASE')}
           </button>
-          <button id="maskEditorAccept" class="btn btn-primary btn-sm">
-            {t('MASK_EDITOR_ACCEPT')}
+          <button id="maskBrushRestore" class="btn btn-sm join-item">
+            {t('MASK_BRUSH_RESTORE')}
           </button>
+        </div>
+        <div class="flex items-center gap-2 flex-1 min-w-32">
+          <span class="text-xs text-muted shrink-0">
+            {t('MASK_BRUSH_SIZE')}
+          </span>
+          <input
+            id="maskBrushSize"
+            type="range"
+            min="4"
+            max="80"
+            value="20"
+            class="range range-xs flex-1"
+          />
         </div>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
+        <canvas
+          id="maskEditorCanvas"
+          class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
+        ></canvas>
+      </div>
+      <div class="modal-action mt-0">
+        <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
+          {t('MASK_EDITOR_SKIP')}
+        </button>
+        <button id="maskEditorAccept" class="btn btn-primary btn-sm">
+          {t('MASK_EDITOR_ACCEPT')}
+        </button>
+      </div>
+    </Sheet>
   );
 }
