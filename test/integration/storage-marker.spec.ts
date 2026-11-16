@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  link,
   mkdir,
   mkdtemp,
   readdir,
@@ -11,14 +12,16 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, isNotNull } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
-import { file, install, pendingPhoto } from '../../src/db/schema';
+import { file, garment, install, pendingPhoto } from '../../src/db/schema';
 import { reconcileStorage } from '../../src/maintenance/reconcile';
+import { repairInstallId } from '../../src/web/files/queries';
 import {
   PhotoStorage,
   STORAGE_MARKER,
+  type StorageFs,
   type StorageMarker,
 } from '../../src/web/files/storage';
 import {
@@ -74,6 +77,31 @@ describe('the photo storage marker', () => {
   const production = () => ({ ...t.config, APP_ENV: 'production' as const });
   const otherInstallMarker = () =>
     JSON.stringify({ installId: randomUUID(), createdAt: 'then' });
+  const diskFs: StorageFs = {
+    readText: (path) => readFile(path, 'utf8'),
+    writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
+    link: (from, to) => link(from, to),
+    remove: (path) => rm(path, { force: true }),
+  };
+  const fsError = (code: string) =>
+    Object.assign(new Error(`${code}: /secret/path`), { code });
+  // Empties the file table (an install with no photos yet), answering how
+  // to put it back.
+  const stashPhotoRows = async () => {
+    const rows = await t.db.select().from(file);
+    const shown = await t.db
+      .select({ id: garment.id, photoId: garment.photoId })
+      .from(garment)
+      .where(isNotNull(garment.photoId));
+    await asFixture(t.db, (tx) => tx.delete(file));
+    return () =>
+      asFixture(t.db, async (tx) => {
+        await tx.insert(file).values(rows);
+        for (const { id, photoId } of shown) {
+          await tx.update(garment).set({ photoId }).where(eq(garment.id, id));
+        }
+      });
+  };
   const pendingNames = async () =>
     (await t.db.select({ name: pendingPhoto.fileName }).from(pendingPhoto))
       .map((row) => row.name)
@@ -102,7 +130,7 @@ describe('the photo storage marker', () => {
   // Every test leaves the marker the app booted with, and its pairing.
   afterEach(async () => {
     await writeFile(markerPath(), marker);
-    await t.db.update(install).set({ installId: installIdOf(marker) });
+    await repairInstallId(t.db, installIdOf(marker));
   });
 
   afterAll(() => t?.cleanup());
@@ -377,31 +405,246 @@ describe('the photo storage marker', () => {
     expect(await readdir(t.dataPath)).not.toContain(STORAGE_MARKER);
   });
 
-  it('refuses a boot whose racing process left a malformed marker, naming the code only', async () => {
+  // #851: the marker used to be written with a fresh id before the pairing,
+  // so a claim that lost the pairing race left a marker its database
+  // refuses on every boot after.
+  it('marks an unmarked share with the id a racing claim paired first, never one of its own', async () => {
     await rm(markerPath());
-    const racing = new PhotoStorage(t.dataPath, silentLogger, {
-      readText: (path) => readFile(path, 'utf8'),
-      writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
-      link: async () => {
-        await writeFile(markerPath(), 'not json');
-        throw Object.assign(new Error('EEXIST: /secret/path'), {
-          code: 'EEXIST',
-        });
-      },
-      remove: (path) => rm(path, { force: true }),
+    await t.db.delete(install);
+    const winner = randomUUID();
+    // The racing claim pairs while this one scans the share (the adoption's
+    // listing, after this claim found the database unpaired).
+    class PairedMidScan extends PhotoStorage {
+      override async *list() {
+        await t.db.insert(install).values({ installId: winner });
+        yield* super.list();
+      }
+    }
+    const storage = new PairedMidScan(t.dataPath, silentLogger);
+    const claimed = await claimStorage(storage, t.db, silentLogger, 'enforced');
+    expect(claimed.installId).toBe(winner);
+    expect(installIdOf(await readFile(markerPath(), 'utf8'))).toBe(winner);
+    expect(await pairedIds()).toEqual([winner]);
+  });
+
+  // #850: with no photo rows, a bare mountpoint marked with the paired id
+  // would pass for the real share once that was mounted over it.
+  it('never gives an unmarked directory with no photo rows the id of the share the database is paired with', async () => {
+    const restoreRows = await stashPhotoRows();
+    const mountpoint = await mkdtemp(join(tmpdir(), 'closet-bare-'));
+    try {
+      const boot = createApp(
+        { ...production(), DATA_PATH: mountpoint },
+        silentLogger,
+      );
+      await expect(boot).rejects.toThrow(
+        /^DATA_PATH has no \.closet-storage marker/,
+      );
+      expect(await readdir(mountpoint)).not.toContain(STORAGE_MARKER);
+
+      // Elsewhere it is new storage of its own: the real share, mounted
+      // over it later, reads as foreign.
+      const dev = await createApp(
+        { ...t.config, DATA_PATH: mountpoint },
+        silentLogger,
+      );
+      await dev.app.close();
+      const own = installIdOf(
+        await readFile(join(mountpoint, STORAGE_MARKER), 'utf8'),
+      );
+      expect(own).not.toBe(installIdOf(marker));
+      expect(await pairedIds()).toEqual([installIdOf(marker)]);
+      const remounted = new PhotoStorage(mountpoint, silentLogger);
+      remounted.claim({ installId: own, createdAt: 'then' }, 'advisory');
+      await writeFile(join(mountpoint, STORAGE_MARKER), marker);
+      expect(await remounted.identityProblem()).toEqual({ kind: 'foreign' });
+    } finally {
+      await rm(mountpoint, { recursive: true, force: true });
+      await restoreRows();
+    }
+  });
+
+  /**
+   * A fresh install's first claim (no photo rows, database unpaired) cut
+   * short at each point between the marker and the pairing. The marker is
+   * written first, so every crash leaves either nothing (the next boot is a
+   * first boot) or a marker beside an unpaired database (adopted). Paired
+   * first, a failed marker write left a database paired with an id no
+   * marker carries, and #850's rule refused every boot after.
+   */
+  describe('a first claim cut short', () => {
+    let restoreRows: () => Promise<void>;
+    let directory = '';
+    const racer = randomUUID();
+    const otherShare = randomUUID();
+    const markerIn = (dir: string) => join(dir, STORAGE_MARKER);
+    const onDisk = async () =>
+      installIdOf(await readFile(markerIn(directory), 'utf8'));
+    const storageOver = (dir: string, fs: StorageFs = diskFs) => {
+      const storage = new PhotoStorage(dir, silentLogger, fs);
+      storage.prepare();
+      return storage;
+    };
+    // The process dies once its marker is linked, before it pairs.
+    class DiesAfterMarking extends PhotoStorage {
+      override async createMarker(installId?: string): Promise<never> {
+        await super.createMarker(installId);
+        throw new Error('killed');
+      }
+    }
+    // Another DATA_PATH's claim pairs this database between this claim's
+    // marker and its pairing.
+    class OutPaired extends PhotoStorage {
+      override async createMarker(installId?: string) {
+        const created = await super.createMarker(installId);
+        await t.db
+          .insert(install)
+          .values({ installId: otherShare })
+          .onConflictDoNothing();
+        return created;
+      }
+    }
+
+    beforeAll(async () => {
+      restoreRows = await stashPhotoRows();
     });
-    const error = await claimStorage(
-      racing,
-      t.db,
-      silentLogger,
-      'enforced',
-    ).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(StorageIdentityError);
-    expect((error as StorageIdentityError).message).toMatch(
-      /^DATA_PATH storage unreadable: MALFORMED /,
-    );
-    expect((error as StorageIdentityError).message).not.toContain(t.dataPath);
-    expect(await readFile(markerPath(), 'utf8')).toBe('not json');
+    afterAll(() => restoreRows());
+    afterEach(async () => {
+      if (directory) await rm(directory, { recursive: true, force: true });
+    });
+
+    interface CrashPoint {
+      point: string;
+      first: (dir: string) => PhotoStorage;
+      claimed: 'rejects' | 'claims';
+      next: 'paired' | { refused: RegExp; paired: string | undefined };
+      pairedWith?: string;
+    }
+    const crashPoints: CrashPoint[] = [
+      {
+        point: 'the marker write fails (ENOSPC)',
+        first: (dir) =>
+          storageOver(dir, {
+            ...diskFs,
+            writeNew: () => Promise.reject(fsError('ENOSPC')),
+          }),
+        claimed: 'rejects',
+        next: 'paired',
+      },
+      {
+        point: 'the marker link fails (EIO)',
+        first: (dir) =>
+          storageOver(dir, {
+            ...diskFs,
+            link: () => Promise.reject(fsError('EIO')),
+          }),
+        claimed: 'rejects',
+        next: 'paired',
+      },
+      {
+        point: 'the process dies after the marker, before the pairing',
+        first: (dir) => {
+          const storage = new DiesAfterMarking(dir, silentLogger);
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        next: 'paired',
+      },
+      {
+        point: 'a process booting on this directory links its marker first',
+        first: (dir) =>
+          storageOver(dir, {
+            ...diskFs,
+            link: async () => {
+              await writeFile(
+                markerIn(dir),
+                JSON.stringify({ installId: racer, createdAt: 'then' }),
+              );
+              throw fsError('EEXIST');
+            },
+          }),
+        claimed: 'claims',
+        next: 'paired',
+        pairedWith: racer,
+      },
+      {
+        // A human must look: the racer's marker is not one (operations.md).
+        point: 'the racing process leaves a malformed marker',
+        first: (dir) =>
+          storageOver(dir, {
+            ...diskFs,
+            link: async () => {
+              await writeFile(markerIn(dir), 'not json');
+              throw fsError('EEXIST');
+            },
+          }),
+        claimed: 'rejects',
+        next: {
+          refused: /^DATA_PATH storage unreadable: MALFORMED /,
+          paired: undefined,
+        },
+      },
+      {
+        // A human must look: two shares claimed one database at once, and
+        // this one, with no photo rows, proves nothing (#850).
+        point: 'another share pairs the database first',
+        first: (dir) => {
+          const storage = new OutPaired(dir, silentLogger);
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        next: {
+          refused: /^DATA_PATH has no \.closet-storage marker/,
+          paired: otherShare,
+        },
+      },
+    ];
+
+    it.each(crashPoints)('$point: the next boot heals', async (row) => {
+      await t.db.delete(install);
+      directory = await mkdtemp(join(tmpdir(), 'closet-first-claim-'));
+      const claim = (storage: PhotoStorage) =>
+        claimStorage(storage, t.db, silentLogger, 'enforced');
+      const first = claim(row.first(directory));
+      if (row.claimed === 'rejects') {
+        await expect(first).rejects.toThrow();
+      } else {
+        await first;
+      }
+      const next = claim(storageOver(directory));
+      if (row.next === 'paired') {
+        const claimed = await next;
+        expect(await pairedIds()).toEqual([claimed.installId]);
+        expect(await onDisk()).toBe(claimed.installId);
+        if (row.pairedWith) expect(claimed.installId).toBe(row.pairedWith);
+      } else {
+        await expect(next).rejects.toThrow(row.next.refused);
+        // Named by its key and code only.
+        await expect(next).rejects.not.toThrow(directory);
+        expect(await pairedIds()).toEqual(
+          row.next.paired === undefined ? [] : [row.next.paired],
+        );
+      }
+    });
+
+    it('withdraws only its own marker when it loses the pairing', async () => {
+      await t.db.delete(install);
+      directory = await mkdtemp(join(tmpdir(), 'closet-first-claim-'));
+      const storage = new OutPaired(directory, silentLogger);
+      storage.prepare();
+      await expect(
+        claimStorage(storage, t.db, silentLogger, 'enforced'),
+      ).rejects.toThrow(/^DATA_PATH has no \.closet-storage marker/);
+      expect(await readdir(directory)).not.toContain(STORAGE_MARKER);
+      const another = { installId: randomUUID(), createdAt: 'then' };
+      await writeFile(markerIn(directory), JSON.stringify(another));
+      expect(
+        await storage.withdrawMarker({ ...another, createdAt: 'now' }),
+      ).toBe(false);
+      expect(await onDisk()).toBe(another.installId);
+    });
   });
 
   // The bug's own story: uploads made while the share was unmounted left
