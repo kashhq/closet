@@ -1,6 +1,12 @@
 import { Type } from '@sinclair/typebox';
 import { describe, expect, it } from 'vitest';
-import { asResource, Nullable, project } from './resource';
+import { apiResponses } from './contract';
+import {
+  asResource,
+  assertUnambiguousUnions,
+  Nullable,
+  project,
+} from './resource';
 
 /*
  * The one rule both surfaces answer a resource record by (#711): its
@@ -105,5 +111,64 @@ describe('project', () => {
       nested: 'mine',
       today: '2026-11-14',
     });
+  });
+});
+
+describe('an ambiguous union is refused (#997)', () => {
+  const Untagged = Type.Object(
+    {
+      id: Type.Integer(),
+      pick: Type.Union([
+        Type.Object({ a: Type.String() }),
+        Type.Object({ b: Type.String() }),
+      ]),
+    },
+    { title: 'Untagged' },
+  );
+
+  it('names the schema and the field, from asResource and project', () => {
+    const value = { id: 1, pick: { b: 'x' } };
+    expect(() => asResource(Untagged, value as never)).toThrow(
+      /Untagged\.pick: a union of objects/,
+    );
+    expect(() =>
+      project(value, Untagged, { id: 'keep', pick: 'keep' }, {}),
+    ).toThrow(/Untagged\.pick/);
+  });
+
+  it('is refused at boot through apiResponses, nested in a list too', () => {
+    expect(() =>
+      apiResponses({ 200: Type.Object({ data: Type.Array(Untagged) }) }),
+    ).toThrow(/data\[\]\.pick/);
+  });
+
+  it('refuses branches sharing the same literal, and two arrays', () => {
+    const same = Type.Union([
+      Type.Object({ kind: Type.Literal('x'), a: Type.String() }),
+      Type.Object({ kind: Type.Literal('x'), b: Type.String() }),
+    ]);
+    expect(() => assertUnambiguousUnions(same, 'Same')).toThrow(/Same/);
+    expect(() =>
+      assertUnambiguousUnions(
+        Type.Union([Type.Array(Type.String()), Type.Array(Type.Integer())]),
+        'Lists',
+      ),
+    ).toThrow(/arrays/);
+  });
+
+  it('lets a tagged union, a nullable object and a kind mix through', () => {
+    expect(() => assertUnambiguousUnions(Thing)).not.toThrow();
+    expect(() =>
+      assertUnambiguousUnions(
+        Type.Union([Type.Object({ a: Type.String() }), Type.Null()]),
+        'N',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertUnambiguousUnions(
+        Type.Union([Type.String(), Type.Array(Type.String())]),
+        'M',
+      ),
+    ).not.toThrow();
   });
 });

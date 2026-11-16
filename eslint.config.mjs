@@ -17,9 +17,10 @@ const PALETTE_CLASS =
 // alert) or a sheet (modal-box). The theme is flat (#727); a card is `Card`.
 // The lookahead lets a string naming one of those through. A class token is
 // `shadow` bare or `shadow-*`, with an optional `inset-`, `text-` or `drop-`
-// (a drop shadow is a shadow too) and any variant prefix (`hover:`).
+// (a drop shadow is a shadow too), any variant prefix (`hover:`) and
+// Tailwind's important marker, leading (`!shadow-md`) or trailing (`shadow-md!`).
 const SHADOW_CLASS =
-  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?:^|[\\s:])(?:(?:inset|text|drop)-)?shadow(?:-\\S+)?(?=\\s|$)/';
+  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?:^|[\\s:])!?(?:(?:inset|text|drop)-)?shadow(?:-\\S+)?!?(?=\\s|$)/';
 const FLAT_THEME =
   'The theme is flat (views/assets/AGENTS.md, Cards): no shadow outside a dropdown, a toast or a sheet. A card is src/web/card.tsx (#727).';
 const RETIRED_CHIP_CLASS = '/\\bchip-\\d\\b/';
@@ -90,15 +91,29 @@ const RESTRICTED_SYNTAX = [
   },
 ];
 
+const HTTP_ERROR_COPY_MESSAGE =
+  "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).";
 const HTTP_ERROR_COPY = [
   // An HttpError's message is shown to the person (or the agent), so it
   // is copy: a `t('refusal.*')` key in src/i18n/en/lang.json (#734),
-  // never an English literal. Omit it for the status text.
-  ...['Literal', 'TemplateLiteral'].map((type) => ({
-    selector: `NewExpression[callee.name='HttpError'][arguments.1.type='${type}']`,
-    message:
-      "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).",
-  })),
+  // never English written in code: a literal, a template or a concatenation
+  // (`t(...)` and variables pass). Omit it for the status text. Covers
+  // `new HttpError(...)`, `new ns.HttpError(...)` and `super(...)` in a
+  // direct subclass.
+  ...['Literal', 'TemplateLiteral', 'BinaryExpression'].flatMap((type) => [
+    {
+      selector: `NewExpression[callee.name='HttpError'][arguments.1.type='${type}']`,
+      message: HTTP_ERROR_COPY_MESSAGE,
+    },
+    {
+      selector: `NewExpression[callee.type='MemberExpression'][callee.property.name='HttpError'][arguments.1.type='${type}']`,
+      message: HTTP_ERROR_COPY_MESSAGE,
+    },
+    {
+      selector: `ClassDeclaration[superClass.name='HttpError'] CallExpression[callee.type='Super'][arguments.1.type='${type}']`,
+      message: HTTP_ERROR_COPY_MESSAGE,
+    },
+  ]),
 ];
 
 const HONO_RAW_HTML_PATHS = [

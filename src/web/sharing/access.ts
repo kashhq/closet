@@ -107,8 +107,8 @@ export function rememberShareReadAhead(
  * domain function sees a FastifyRequest.
  */
 /**
- * The Actor's door: a request's surface, or `cli` for the seed, the audit
- * fixture and the maintenance CLIs, so an audit line tells a command-line
+ * The Actor's door: a request's surface, or `cli` for the seed and the audit
+ * fixture (the maintenance CLIs build no Actor), so an audit line tells a command-line
  * credential from one a person made on a page. Never a request Surface: the
  * request gates (same-origin, bearer) must not grow a `cli` case.
  */

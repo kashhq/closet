@@ -20,10 +20,20 @@ const compiled = new Map<string, Validate>();
  * `validate.errors` per call and Fastify reads it at once, as concurrent
  * requests on one app already do.
  *
+ * The key cannot hold what JSON cannot (ajv `plugins`, `onCreate`: functions),
+ * so they are refused rather than ignored: a validator compiled without a
+ * plugin an app asked for would be handed back silently (#1083). No app sets
+ * them; one that needs them takes its own factory.
+ *
  * Used by createApp (the root's compiler, `schemaController`) and
  * jsonApiValidator (the /api/v1 scope's three, src/web/api/validator.ts).
  */
 export const sharedValidators: Build = (externalSchemas, options) => {
+  if (options?.plugins?.length || options?.onCreate) {
+    throw new TypeError(
+      'sharedValidators keys on the shared schemas and customOptions only: ajv plugins and onCreate are not supported',
+    );
+  }
   const compile = factory(externalSchemas, options);
   const scope = JSON.stringify([externalSchemas, options?.customOptions]);
   return (definition) => {
