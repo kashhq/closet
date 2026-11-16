@@ -1445,6 +1445,11 @@ Why: the sweep's readdir of MODELS_PATH ran before listen, so a stalled models s
 Decision: `sweepLeftoversInBackground` runs after `serve()` is listening, unawaited, each directory bounded by `STORAGE_PROBE_TIMEOUT_MS` (the readiness probe's 3 s, now exported from `src/storage-probe.ts`) and logging one structured line (removed, failed with a code, or timed out). The DATA_PATH writable check stays before listen.
 Consequence: a probe file may outlive a boot by up to the bound; a timed-out readdir keeps its libuv thread until the share answers.
 
+## 2026-11-16 — The probe sweep is a step of the probe, not a second operation (#1074, #1075)
+Why: a separate boot sweep competed with the readiness probe for each share's single-flight: a probe arriving mid-readdir answered TIMEOUT at once (#1074), and a sweep meeting a probe was skipped for the boot (#1075). Third review round on the same collision.
+Decision: `probeWritable` sweeps `.closet-probe` itself, once per process per directory (mkdir, list, remove leftovers, then write and unlink), inside the check's flight and 3 s bound. Flights are a join map in `createStorageCheck`; `sweepLeftoversInBackground`, `tryStart`, `storageFlights` and the late-outcome log are deleted.
+Consequence: a caller waits for an in-flight probe up to its own bound and never answers TIMEOUT early; a held list times the run out at the deadline and the next run retries the sweep. DATA_PATH's boot probe now also sweeps before listen (a list of one small directory, on a share the probe already writes).
+
 ## 2026-11-16 — The desktop layout is a named system, not per-page lg: patches
 Why: at 1440 px most pages were phone columns centred on the screen (detail pages 512 px wide, idea carousels centred in half the width, bottom bars across the viewport), and every desktop fix so far was a page's own `lg:` classes (193 in `src/web`).
 Decision: `docs/plans/2026-11-16-desktop-layout.md`, approved with every recommendation. One breakpoint (`lg`) plus auto-fill density. `PageShell` with named layouts (`single`, `split`, `panel`, `facets`, `index`) as CSS grid areas. Profile in the rail and section tabs in the app bar. `Sheet` with a desktop placement per kind (Wardrobe filters docked). `ActionBar` sticky in its column. `SnapStrip` desktop modes (`strip`, `row`, `grid`; Styling keeps `strip`). `/` is the one shortcut.
