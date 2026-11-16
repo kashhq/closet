@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { describeError, HttpError } from './errors';
+import type { Translated } from './i18n';
 import { Forbidden, NotFound } from './refusals';
 
 describe('refusals', () => {
@@ -37,7 +38,8 @@ describe('HttpError code', () => {
     expect(new HttpError(413).code).toBe('validation');
     expect(new HttpError(500).code).toBe('internal');
     expect(
-      new HttpError(409, 'Changed meanwhile', { code: 'stale' }).code,
+      new HttpError(409, 'Changed meanwhile' as Translated, { code: 'stale' })
+        .code,
     ).toBe('stale');
   });
 });

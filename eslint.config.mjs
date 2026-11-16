@@ -40,8 +40,17 @@ const COLUMN_CLASS = '/(?:^|[\\s:])(?:grid-cols|columns)-/';
 const NAMED_COLUMNS =
   "A grid's columns are named once in src/web/layout/columns.ts (#1064): use its step, or add a named one there.";
 
-// no-restricted-syntax entries every file obeys, then the HttpError copy
-// rule, which specs are exempt from (their fixtures carry arbitrary messages).
+// Copy is made by t() and joinCopy() (src/web/i18n.ts) and the status-code
+// fallback in src/web/errors.tsx: a cast anywhere else launders English
+// written in code into an HttpError's message (#734, #1098). Specs forge
+// arbitrary copy to test the error handler, so they take RESTRICTED_SYNTAX only.
+const FORGED_COPY = {
+  selector: "TSAsExpression[typeAnnotation.typeName.name='Translated']",
+  message:
+    'Only t(), joinCopy() and errors.tsx make Translated copy: build the text from lang.json keys (#1098).',
+};
+
+// no-restricted-syntax entries every file obeys.
 const RESTRICTED_SYNTAX = [
   {
     selector:
@@ -102,31 +111,6 @@ const RESTRICTED_SYNTAX = [
 const COLUMN_STEPS = ['Literal[value', 'TemplateElement[value.raw'].map(
   (node) => ({ selector: `${node}=${COLUMN_CLASS}]`, message: NAMED_COLUMNS }),
 );
-
-const HTTP_ERROR_COPY_MESSAGE =
-  "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).";
-const HTTP_ERROR_COPY = [
-  // An HttpError's message is shown to the person (or the agent), so it
-  // is copy: a `t('refusal.*')` key in src/i18n/en/lang.json (#734),
-  // never English written in code: a literal, a template or a concatenation
-  // (`t(...)` and variables pass). Omit it for the status text. Covers
-  // `new HttpError(...)`, `new ns.HttpError(...)` and `super(...)` in a
-  // direct subclass.
-  ...['Literal', 'TemplateLiteral', 'BinaryExpression'].flatMap((type) => [
-    {
-      selector: `NewExpression[callee.name='HttpError'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-    {
-      selector: `NewExpression[callee.type='MemberExpression'][callee.property.name='HttpError'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-    {
-      selector: `ClassDeclaration[superClass.name='HttpError'] CallExpression[callee.type='Super'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-  ]),
-];
 
 const HONO_RAW_HTML_PATHS = [
   {
@@ -213,7 +197,7 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         ...RESTRICTED_SYNTAX,
-        ...HTTP_ERROR_COPY,
+        FORGED_COPY,
         ...COLUMN_STEPS,
       ],
       // hono/jsx escapes every text child and attribute value. The one way to
@@ -303,17 +287,13 @@ export default tseslint.config(
     rules: sonarjsRules,
   },
   {
-    files: ['**/*.spec.{ts,tsx}'],
+    files: ['**/*.spec.{ts,tsx}', 'src/web/i18n.ts', 'src/web/errors.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
   },
   {
     files: ['src/web/layout/columns.ts'],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...RESTRICTED_SYNTAX,
-        ...HTTP_ERROR_COPY,
-      ],
+      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, FORGED_COPY],
     },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.

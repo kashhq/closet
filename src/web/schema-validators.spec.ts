@@ -35,6 +35,26 @@ describe('sharedValidators', () => {
     ).toThrow(/plugins and onCreate/);
   });
 
+  it('refuses a customOptions value JSON cannot hold, naming its path', () => {
+    const refused = (customOptions: object) => () =>
+      sharedValidators({}, { customOptions });
+    expect(refused({ formats: { id: (value: string) => !!value } })).toThrow(
+      /customOptions\.formats\.id/,
+    );
+    expect(refused({ formats: { id: /^\d+$/ } })).toThrow(
+      /customOptions\.formats\.id/,
+    );
+    expect(refused({ keywords: [() => undefined] })).toThrow(
+      /customOptions\.keywords\[0\]/,
+    );
+    expect(refused({ logger: console })).toThrow(/customOptions\.logger/);
+    expect(refused({ code: { source: new Set() } })).toThrow(
+      /customOptions\.code\.source/,
+    );
+    expect(refused({ id: Symbol('x') })).toThrow(/customOptions\.id/);
+    expect(refused({ count: Number.NaN })).toThrow(/customOptions\.count/);
+  });
+
   it('lets an empty plugins list through, as Fastify passes it', () => {
     expect(() =>
       sharedValidators({}, { customOptions: {}, plugins: [] }),

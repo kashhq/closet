@@ -1,6 +1,6 @@
 # The wardrobe grid
 
-Part of the Wardrobe (`AGENTS.md` in this directory): `GET /wardrobe` (the Closet tab, or `#wardrobe-main` to a fragment request) and `GET /wardrobe/tiles` (the next page).
+Part of the Wardrobe (`AGENTS.md` in this directory): `GET /wardrobe` (the Closet tab, or `#wardrobe-body` to a fragment request) and `GET /wardrobe/tiles` (the next page).
 
 ## What each statement reads, and why
 
@@ -16,7 +16,7 @@ Production reaches Postgres over a link that costs a round trip per statement (a
   - `toTag`: "N garments need details" (`toTagCountSql`), for an editor only;
   - `toWash`: the laundry prompt (`needingWash`, `src/web/wears/queries.ts`), for the owner only (it reads wears);
   - `drafts`: "N photos waiting · Continue" (#200, `draftsWaitingSql`), for an editor only;
-  - `sharedWardrobes`: the app bar's switcher, on a full page only (a fragment swaps `#wardrobe-main` and the ⋯ menu, never the bar).
+  - `sharedWardrobes`: the app bar's switcher, on a full page only (a fragment swaps `#wardrobe-body` and the ⋯ menu, never the bar).
 
   The picker reads only `capsules` (to refuse a foreign `?pick=` and name it); select mode reads `count` ("Select all N") and `capsules` (Add to capsule, and a foreign `?capsule=`), #677.
 
@@ -26,7 +26,7 @@ Tagging mode is 2 statements. `nextToTag` reads the card with its count left as 
 
 ## Paging, filters and search
 
-- **The grid is keyset-paged**: `GRID_PAGE_SIZE` (48, `grid-page-size.ts`, which the service worker bundles) tiles newest first, `id < before` for the next page. The last tile is followed by a sentinel (`PageSentinel`, `src/web/page-sentinel.tsx`, every paged list's since #660: `hx-trigger="revealed"`, `hx-swap="outerHTML"`) that fetches `/wardrobe/tiles` with the same filters and replaces itself with the next page and its own sentinel. Filtering and searching swap `#wardrobe-main` and so start at page one. Indexes: `(owner_id, status, id desc)` and `(owner_id, category, id desc)`, also the owner foreign key's; at household size the planner often prefers a backward primary-key scan with a filter, which is as fast (under 0.3 ms at 1,500). A new sort order needs its own cursor and index.
+- **The grid is keyset-paged**: `GRID_PAGE_SIZE` (48, `grid-page-size.ts`, which the service worker bundles) tiles newest first, `id < before` for the next page. The last tile is followed by a sentinel (`PageSentinel`, `src/web/page-sentinel.tsx`, every paged list's since #660: `hx-trigger="revealed"`, `hx-swap="outerHTML"`) that fetches `/wardrobe/tiles` with the same filters and replaces itself with the next page and its own sentinel. Filtering and searching swap `#wardrobe-body` and so start at page one. Indexes: `(owner_id, status, id desc)` and `(owner_id, category, id desc)`, also the owner foreign key's; at household size the planner often prefers a backward primary-key scan with a filter, which is as fast (under 0.3 ms at 1,500). A new sort order needs its own cursor and index.
 - **Care filters and badges** (#7): `?needsWash=true` (a copy needs a wash; the owner's own wardrobe only, `gridSearch` drops it on a share, and the modal does not offer it there) and `?attention=true` (condition not good), checkboxes in the modal's Care group. Tiles carry `quantity` ("×3") and `condition` for everyone, and `care` (dirty copies, away) only when `gridPage(..., { ownerView })` is the owner's: the correlated wear count is not even computed for a share. The owner's grid shows a "N to wash" chip linking to Laundry (`toWash`; one chip row with "N to tag" and "N photos to add", #732); Laundry is also a Wardrobe tab, not on a shared wardrobe.
 - **Capsule filter** (`?capsule=<id>`, #8): members only (`inCapsule`, `src/web/capsules/queries.ts`); chosen from the scope row's capsule menu (`CapsuleScope`, which also links the Capsules tab), carried by every link through `GridSearch`; a `?capsule=` URL is honoured wherever it comes from. Not an id is a 400, not one of the addressed wardrobe's capsules a 404.
 - **Property filters**: `type` (only with its category: `gridSearch` drops a type the chosen category lacks, so dropping the category pill drops it too), `warmth`, `formality` and `material` (`materials @> array[...]`, as the colour's `colors @> array[...]`); the scales and the material are 400 outside their sets, like a colour. No GIN index on either array: the owner's grid index narrows to one wardrobe (hundreds of rows) and the containment is a filter over those, as the other property filters are. The filter modal's values: `options` above (materials through an `unnest` subquery). `GridSearch`'s keys are the query parameters' names, so `searchParams(search)` is the whole list: links, the sentinel, the search form's hidden inputs and the bulk form's action all spread it, and a new filter needs no second list.

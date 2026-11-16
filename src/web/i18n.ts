@@ -41,9 +41,26 @@ function interpolate(
   });
 }
 
+declare const translated: unique symbol;
+
+/**
+ * Copy that came out of lang.json through `t()`: the only producer, so a
+ * parameter typed `Translated` (an HttpError's message, #734) cannot be
+ * handed English written in code. Assignable to `string`, never from it.
+ */
+export type Translated = string & { readonly [translated]: true };
+
+/** Several pieces of copy as one, for a message that lists them. */
+export function joinCopy(
+  parts: readonly Translated[],
+  separator: string,
+): Translated {
+  return parts.join(separator) as Translated;
+}
+
 /** Plain text; JSX escapes it where it lands. */
-export function t(key: StringKey, params: StringParams = {}): string {
-  return interpolate(key, params, (value) => value);
+export function t(key: StringKey, params: StringParams = {}): Translated {
+  return interpolate(key, params, (value) => value) as Translated;
 }
 
 /**

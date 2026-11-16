@@ -11,10 +11,7 @@ import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { BackLink, EmptyState, SheetBackdrop } from '../layout/parts';
 import {
   DestinationFields,
@@ -130,60 +127,64 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
     picksOffered: model.picksOffered,
   };
   return (
-    <Layout ctx={ctx} title={t('styling.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('styling.TITLE')}
-        back={model.state.returnTo}
+    <PageShell
+      ctx={ctx}
+      name="styling"
+      bar={{
+        title: t('styling.TITLE'),
+        back: model.state.returnTo,
         // Save posts natively and lands elsewhere (the outfit, a week); on a
         // shared wardrobe nothing saves.
-        formPage={!model.shared}
-        scope={
+        formPage: !model.shared,
+        scope: (
           <ScopeMenu
             capsule={model.capsule}
             capsules={model.capsules}
             state={model.state}
           />
-        }
-      />
-      {/* pb-dock: the composer's bar is sticky in the flow (StylingAside),
-          so the page leaves only the dock's height below it. */}
-      <PageMain width="wide" class="pt-20 pb-dock lg:pb-8 flex flex-col gap-3">
-        <Header model={model} />
-        {model.rows.length > 0 ? (
-          // Two columns from lg (#468): the rows, and the aside beside them.
-          // Below lg both wrappers are `contents`, so a phone lays out the
-          // same boxes as before they existed.
-          <div class={COMPOSER_COLUMNS}>
-            <div class="contents lg:flex lg:flex-col lg:gap-3 lg:min-w-0">
-              {/* Not guarded as a whole: guarding it would dim and freeze the
+        ),
+      }}
+      width="wide"
+      // The strips reach the screen's edges; the header pads its own text.
+      body={{ gutter: 'bleed', gap: 3 }}
+      // The composer's bar is sticky in the flow (StylingAside).
+      endsOnBar
+      overlays={
+        model.rows.length > 0 && !model.shared && <SaveSheet model={model} />
+      }
+    >
+      <Header model={model} />
+      {model.rows.length > 0 ? (
+        // Two columns from lg (#468): the rows, and the aside beside them.
+        // Below lg both wrappers are `contents`, so a phone lays out the
+        // same boxes as before they existed.
+        <div class={COMPOSER_COLUMNS}>
+          <div class="contents lg:flex lg:flex-col lg:gap-3 lg:min-w-0">
+            {/* Not guarded as a whole: guarding it would dim and freeze the
                   strips it wraps, and "choosing still works" offline
                   (styling.OFFLINE). Every network control around it
                   (Shuffle, picks, + Add row, the sheet's Save) carries its
                   own data-needs-network. */}
-              <PostForm
-                id="styling-form"
-                action={STYLING_PATH}
-                allowOffline="choosing a look works offline; Save is guarded in the sheet"
-              >
-                <StateFields model={model} />
-                <StylingRows model={model} context={context} />
-              </PostForm>
-              <AddRow model={model} />
-              <script
-                type="module"
-                dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
-              />
-            </div>
-            <StylingAside ctx={ctx} model={model} />
+            <PostForm
+              id="styling-form"
+              action={STYLING_PATH}
+              allowOffline="choosing a look works offline; Save is guarded in the sheet"
+            >
+              <StateFields model={model} />
+              <StylingRows model={model} context={context} />
+            </PostForm>
+            <AddRow model={model} />
+            <script
+              type="module"
+              dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
+            />
           </div>
-        ) : (
-          <Empty model={model} />
-        )}
-      </PageMain>
-      {model.rows.length > 0 && !model.shared && <SaveSheet model={model} />}
-      <Dock ctx={ctx} />
-    </Layout>
+          <StylingAside ctx={ctx} model={model} />
+        </div>
+      ) : (
+        <Empty model={model} />
+      )}
+    </PageShell>
   );
 }
 
@@ -244,7 +245,7 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
   return (
     <div
       data-styling-bar=""
-      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-20 lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
+      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-under-bar lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
     >
       {/* A tap opens the strip into the whole outfit (CSS off `open`, the
           PREVIEW_* classes). The open panel scrolls inside the space between

@@ -20,12 +20,15 @@ import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
 import { GALLERY_GRID } from '../layout/columns';
 import { GarmentMark } from '../layout/garment-mark';
-import { PageColumn, PageMain } from '../layout/page-main';
+import {
+  PageBody,
+  type PageBodyFrame,
+  PageShell,
+  type PageShellProps,
+  regionId,
+} from '../layout/page-shell';
 import {
   EmptyState,
   PlinthImage,
@@ -49,7 +52,13 @@ import {
   wardrobeUrl,
 } from './urls';
 import { BULK_PROPERTIES, type BulkProperty } from './grid-schemas';
-import { WardrobeHeader, WardrobeMenu, WardrobeTabs } from './wardrobe-header';
+import {
+  WardrobeAddSheet,
+  wardrobeBar,
+  type WardrobeHeaderProps,
+  WardrobeMenu,
+  WardrobeTabs,
+} from './wardrobe-header';
 
 /**
  * The grid's filters as the page echoes them into its links and forms. The
@@ -178,10 +187,19 @@ const BATCH_FLAGS = ['checked'] as const;
 /** Tiles above the fold on a phone load eagerly; the rest when scrolled near. */
 const EAGER_TILES = 8;
 
-// Filter links and the search form replace #wardrobe-main and push the URL;
+/**
+ * The shell's name for the Closet tab: its body, `#wardrobe-body`, is what
+ * filtering swaps. The page's and the fragment's frame alike. Flush: the
+ * sticky scope row sits right under the tabs, edge to edge, and the grid
+ * pads itself.
+ */
+const WARDROBE = 'wardrobe';
+const WARDROBE_BODY: PageBodyFrame = { gutter: 'flush' };
+
+// Filter links and the search form replace the body and push the URL;
 // their href/action keep them working without JavaScript.
-const SWAP_MAIN = {
-  'hx-target': '#wardrobe-main',
+const SWAP_BODY = {
+  'hx-target': `#${regionId(WARDROBE, 'body')}`,
   'hx-swap': 'outerHTML',
   'hx-push-url': 'true',
 } as const;
@@ -207,30 +225,31 @@ export function WardrobePage(props: {
   model: WardrobeModel;
 }) {
   const { ctx, model } = props;
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'closet',
+    viewOwner: model.viewOwner,
+    sharedWardrobes: model.sharedWardrobes,
+    canEdit: model.canEdit,
+    selectUrl: selectUrl(model),
+  };
   return (
-    <Layout ctx={ctx} title={t('WARDROBE')}>
-      {model.selecting ? (
-        <TaskBar ctx={ctx} model={model} />
-      ) : (
-        <WardrobeHeader
-          ctx={ctx}
-          tab="closet"
-          viewOwner={model.viewOwner}
-          sharedWardrobes={model.sharedWardrobes}
-          canEdit={model.canEdit}
-          selectUrl={selectUrl(model)}
-        />
-      )}
-      <div class="pt-16">
-        {!model.selecting && (
-          <PageColumn width="wide">
-            <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
-          </PageColumn>
-        )}
-        <WardrobeMain model={model} />
-      </div>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name={WARDROBE}
+      title={t('WARDROBE')}
+      bar={model.selecting ? taskBar(model) : wardrobeBar(header)}
+      width="wide"
+      tabs={
+        !model.selecting && (
+          <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
+        )
+      }
+      body={WARDROBE_BODY}
+      overlays={!model.selecting && <WardrobeAddSheet {...header} />}
+    >
+      <WardrobeMain model={model} />
+    </PageShell>
   );
 }
 
@@ -248,7 +267,9 @@ export function WardrobeFragment({
 }) {
   return (
     <>
-      <WardrobeMain model={model} />
+      <PageBody name={WARDROBE} {...WARDROBE_BODY}>
+        <WardrobeMain model={model} />
+      </PageBody>
       {!model.selecting && (
         <WardrobeMenu
           viewOwner={model.viewOwner}
@@ -275,41 +296,36 @@ function selectUrl(model: WardrobeModel): string | undefined {
  * Select mode's and the picker's bar: what the task is, and Cancel back
  * to where it began (the grid as filtered, or the picker's capsule).
  */
-function TaskBar(props: { ctx: ViewContext; model: WardrobeModel }) {
-  const { search, viewOwner, picking } = props.model;
+function taskBar(model: WardrobeModel): PageShellProps['bar'] {
+  const { search, viewOwner, picking } = model;
   const cancel = picking
     ? capsuleUrl(picking.capsuleId, viewOwner)
     : wardrobeUrl(viewOwner, searchParams(search));
-  return (
-    <AppBar
-      ctx={props.ctx}
-      title={
-        picking
-          ? t('PICK_GARMENTS_FOR', { name: picking.name })
-          : t('SELECT_GARMENTS')
-      }
-      actions={
-        <a href={cancel} class="btn btn-ghost btn-sm">
-          {t('CANCEL')}
-        </a>
-      }
-    />
-  );
+  return {
+    title: picking
+      ? t('PICK_GARMENTS_FOR', { name: picking.name })
+      : t('SELECT_GARMENTS'),
+    actions: (
+      <a href={cancel} class="btn btn-ghost btn-sm">
+        {t('CANCEL')}
+      </a>
+    ),
+  };
 }
 
 /**
- * The swappable part of the Closet tab: the sticky scope row (the capsule
- * scope, the active filters, search, the filter sheet and the count), the
- * slim prompts, the first page of the grid and the filter modal; in select
- * mode the checkbox grid and its bar. GET /wardrobe answers htmx fragment
- * requests with this element (WardrobeFragment), so filtering and searching
- * never re-render the app bar, the tabs and the dock, and always start
- * again from the first page.
+ * The swappable part of the Closet tab, inside the shell's body (`#wardrobe-body`):
+ * the sticky scope row (the capsule scope, the active filters, search, the
+ * filter sheet and the count), the slim prompts, the first page of the
+ * grid and the filter modal; in select mode the checkbox grid and its bar.
+ * GET /wardrobe answers htmx fragment requests with the body alone
+ * (WardrobeFragment), so filtering and searching never re-render the app
+ * bar, the tabs and the dock, and always start again from the first page.
  */
 function WardrobeMain({ model }: { model: WardrobeModel }) {
   const { viewOwner, selecting } = model;
   return (
-    <PageMain id="wardrobe-main" width="wide" class="pb-24">
+    <>
       {!selecting && <ScopeRow model={model} />}
       <div class="px-4 pt-3">
         {!selecting && <Prompts model={model} />}
@@ -326,7 +342,7 @@ function WardrobeMain({ model }: { model: WardrobeModel }) {
       )}
       {model.selecting && !model.picking && <BulkActions model={model} />}
       {model.bulkOutcome && <BulkToast outcome={model.bulkOutcome} />}
-    </PageMain>
+    </>
   );
 }
 
@@ -460,7 +476,7 @@ function NoTiles({ model }: { model: WardrobeModel }) {
     const clear = wardrobeUrl(viewOwner, { capsule: search.capsule });
     return (
       <EmptyState message={t('NO_GARMENTS_MATCH')}>
-        <a href={clear} hx-get={clear} {...SWAP_MAIN} class="btn btn-sm">
+        <a href={clear} hx-get={clear} {...SWAP_BODY} class="btn btn-sm">
           {t('CLEAR_FILTERS')}
         </a>
       </EmptyState>
@@ -750,7 +766,7 @@ function FilterPill(props: {
     <a
       href={href}
       hx-get={href}
-      {...SWAP_MAIN}
+      {...SWAP_BODY}
       class={`badge badge-sm shrink-0 gap-1 whitespace-nowrap cursor-pointer no-underline ${props.class}`}
     >
       {props.label} &times;
@@ -890,7 +906,7 @@ function CapsuleScope(props: {
       ...searchParams(search),
       capsule,
     });
-    return { href, 'hx-get': href, ...SWAP_MAIN };
+    return { href, 'hx-get': href, ...SWAP_BODY };
   };
   return (
     <details class="dropdown shrink-0" id="capsule-scope">
@@ -1010,7 +1026,7 @@ function SearchForm(props: {
       method="get"
       action="/wardrobe"
       hx-get="/wardrobe"
-      {...SWAP_MAIN}
+      {...SWAP_BODY}
       id="search-form"
       role="search"
       class="flex shrink-0 justify-end focus-within:flex-1"
@@ -1056,7 +1072,7 @@ function SearchForm(props: {
 
 /**
  * The filters as a GET form of their own: applying submits it into
- * #wardrobe-main like the search form (the swap takes the open dialog with
+ * #wardrobe-body like the search form (the swap takes the open dialog with
  * it), with the search box's keyword; "Clear" asks for the grid with only
  * the keyword and the capsule scope. Without JavaScript it is a plain GET
  * to /wardrobe.
@@ -1080,7 +1096,7 @@ function FilterModal(props: {
         action="/wardrobe"
         hx-get="/wardrobe"
         hx-include={INCLUDE_KEYWORD}
-        {...SWAP_MAIN}
+        {...SWAP_BODY}
         class="modal-box group/filter"
       >
         <h3 id="filter-modal-title" class="font-bold text-lg mb-4">
@@ -1148,7 +1164,7 @@ function FilterModal(props: {
             class="btn btn-ghost btn-sm"
             hx-get={wardrobeUrl(viewOwner, { capsule: search.capsule })}
             hx-include={INCLUDE_KEYWORD}
-            {...SWAP_MAIN}
+            {...SWAP_BODY}
           >
             {t('CLEAR_FILTERS')}
           </button>

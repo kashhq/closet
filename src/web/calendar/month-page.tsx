@@ -1,7 +1,4 @@
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
 import { bodyOf, OutfitCollage, outfitLabel } from '../outfits/collage';
 import { hiddenBlocking } from './month-cell';
 import { GarmentMark } from '../layout/garment-mark';
@@ -13,7 +10,7 @@ import {
   WeatherMonthLoader,
 } from '../weather/views';
 import type { MonthDayView, MonthView } from './calendar-view';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { CalendarTabs } from './calendar-tabs';
 import { DAY_LETTERS, dayLabel, monthLabel } from '../date-labels';
 import { dayUrl, monthUrl } from './urls';
@@ -33,62 +30,64 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
   const { ctx, view } = props;
   const title = monthLabel(view.month);
   return (
-    <Layout ctx={ctx} title={t('CALENDAR_PAGE_TITLE')}>
-      <AppBar ctx={ctx} title={t('CALENDAR')} />
-      <PageMain width="wide" class="p-4 pt-20 pb-24">
-        <CalendarTabs active="month" />
-        <WeatherMonthLoader ctx={ctx} days={view.forecast} />
-        <nav
-          class="flex items-center justify-between gap-2 mb-2"
-          aria-label={t('calendar.MONTH_NAV')}
+    <PageShell
+      ctx={ctx}
+      name="month"
+      title={t('CALENDAR_PAGE_TITLE')}
+      bar={{ title: t('CALENDAR') }}
+      width="wide"
+    >
+      <CalendarTabs active="month" />
+      <WeatherMonthLoader ctx={ctx} days={view.forecast} />
+      <nav
+        class="flex items-center justify-between gap-2 mb-2"
+        aria-label={t('calendar.MONTH_NAV')}
+      >
+        <a
+          href={monthUrl(view.prev)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.PREV_MONTH')}
         >
-          <a
-            href={monthUrl(view.prev)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.PREV_MONTH')}
-          >
-            ‹
-          </a>
-          <h2 class="font-semibold">{title}</h2>
-          <a
-            href={monthUrl(view.next)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.NEXT_MONTH')}
-          >
-            ›
-          </a>
-        </nav>
-        <table class="w-full table-fixed border-separate border-spacing-1 -mx-1">
-          <caption class="sr-only">{title}</caption>
-          <thead>
+          ‹
+        </a>
+        <h2 class="font-semibold">{title}</h2>
+        <a
+          href={monthUrl(view.next)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.NEXT_MONTH')}
+        >
+          ›
+        </a>
+      </nav>
+      <table class="w-full table-fixed border-separate border-spacing-1 -mx-1">
+        <caption class="sr-only">{title}</caption>
+        <thead>
+          <tr>
+            {DAY_LETTERS.map((key) => (
+              <th scope="col" class="text-xs font-medium text-muted">
+                {t(key)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {view.weeks.map((week) => (
             <tr>
-              {DAY_LETTERS.map((key) => (
-                <th scope="col" class="text-xs font-medium text-muted">
-                  {t(key)}
-                </th>
+              {week.map((day) => (
+                <td class="p-0 align-top">
+                  {day && <MonthDay ctx={ctx} day={day} />}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {view.weeks.map((week) => (
-              <tr>
-                {week.map((day) => (
-                  <td class="p-0 align-top">
-                    {day && <MonthDay ctx={ctx} day={day} />}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {ctx.weatherEnabled && view.forecast && (
-          <p class="px-2 pt-2">
-            <OpenMeteoCredit />
-          </p>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+          ))}
+        </tbody>
+      </table>
+      {ctx.weatherEnabled && view.forecast && (
+        <p class="px-2 pt-2">
+          <OpenMeteoCredit />
+        </p>
+      )}
+    </PageShell>
   );
 }
 

@@ -95,7 +95,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
   return (
     <section
       id={REPAIRS_ANCHOR}
-      class="flex flex-col gap-4 mt-8 scroll-mt-20"
+      class="flex flex-col gap-4 mt-8 scroll-mt-under-bar"
       aria-labelledby="garment-repairs-editor-title"
     >
       <div>

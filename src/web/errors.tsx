@@ -9,7 +9,7 @@ import { driverError } from '../driver-error';
 import { FRAGMENT_VARY, isFragmentRequest } from '../htmx/fragment-request';
 import { hxTrigger } from '../htmx/trigger';
 import { OWNER_LOCK_TIMEOUT_MS } from '../db/owner-lock';
-import { t } from './i18n';
+import { t, type Translated } from './i18n';
 import { ErrorPage } from './error-page';
 import { loggableUrl } from './loggable-url';
 import {
@@ -72,7 +72,9 @@ export class HttpError extends Error {
 
   constructor(
     readonly statusCode: number,
-    message: string = STATUS_CODES[statusCode] ?? 'Error',
+    // The status text is the one English the server writes itself; every
+    // other message is `t()` copy, which the type enforces (#734, #1094).
+    message = (STATUS_CODES[statusCode] ?? 'Error') as Translated,
     options: {
       logDetail?: string;
       code?: ErrorCode;

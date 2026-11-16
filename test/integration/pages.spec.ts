@@ -135,7 +135,7 @@ describe('pages', () => {
     expect(invite.body).not.toContain(t.owner.email);
   });
 
-  it('GET /wardrobe as an htmx fragment is only #wardrobe-main', async () => {
+  it('GET /wardrobe as an htmx fragment is only #wardrobe-body', async () => {
     const res = await t.inject({
       method: 'GET',
       url: '/wardrobe?keyword=Blazer',

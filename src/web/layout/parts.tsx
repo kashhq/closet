@@ -401,7 +401,7 @@ export function StripFlags(props: { names: readonly string[] }) {
  * One card of Profile (src/web/auth/pages.tsx): Account, Export, Sign out,
  * an anchor their pages go back to (`/auth/profile#sign-out`), its heading
  * and its content. A feature's settings have their own page since #728
- * (layout/settings-page.tsx), never a section here. `scroll-mt-20` keeps
+ * (layout/settings-page.tsx), never a section here. `scroll-mt-under-bar` keeps
  * the heading clear of the fixed app bar when the anchor is followed.
  */
 export function ProfileSection(props: {
@@ -414,7 +414,7 @@ export function ProfileSection(props: {
     <Card
       as="section"
       variant="content"
-      class="w-full scroll-mt-20"
+      class="w-full scroll-mt-under-bar"
       bodyClass="gap-3"
       id={props.id}
       aria-labelledby={headingId}

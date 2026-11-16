@@ -244,7 +244,7 @@ function DayBlock(props: {
   return (
     <div
       id={dayAnchor(day)}
-      class="flex flex-col gap-2 scroll-mt-20"
+      class="flex flex-col gap-2 scroll-mt-under-bar"
       data-trip-day={day ?? 'any'}
     >
       <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -571,7 +571,7 @@ function ExtrasSection({ model }: { model: TripPageModel }) {
   return (
     <section
       id="extras"
-      class="flex flex-col gap-2 scroll-mt-20"
+      class="flex flex-col gap-2 scroll-mt-under-bar"
       aria-labelledby="trip-extras-heading"
     >
       <SectionHeading id="trip-extras-heading">
