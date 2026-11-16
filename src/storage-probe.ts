@@ -135,13 +135,52 @@ export async function sweepProbeLeftovers(
 }
 
 /**
+ * At most ONE fs operation in flight per directory, across every caller that
+ * shares an instance. A timeout cannot cancel an fs call, and each abandoned
+ * one holds one of libuv's four pool threads (a few stall every fs call and
+ * DNS lookup in the process), so a caller whose directory is busy gets
+ * `undefined` and starts nothing. The slot frees when the operation settles.
+ */
+export interface DirectoryFlights {
+  tryStart: <T>(
+    directory: string,
+    run: () => Promise<T>,
+  ) => Promise<T> | undefined;
+}
+
+export function createDirectoryFlights(): DirectoryFlights {
+  const busy = new Set<string>();
+  return {
+    tryStart: (directory, run) => {
+      if (busy.has(directory)) return undefined;
+      busy.add(directory);
+      const started = (async () => run())();
+      const free = (): void => {
+        busy.delete(directory);
+      };
+      started.then(free, free);
+      return started;
+    },
+  };
+}
+
+/**
+ * The process's flights: /health/ready's storage check (routes.ts) and the
+ * boot's sweep share it, so a sweep's readdir and a readiness probe never
+ * hold two threads on one share. Specs build their own.
+ */
+export const storageFlights = createDirectoryFlights();
+
+/**
  * Sweeps each distinct directory's leftovers without ever delaying the
  * caller: a readdir on a stalled share never settles, and the boot must
  * still listen (readiness reports that share as `storage` down, #688). Each
- * directory is bounded by STORAGE_PROBE_TIMEOUT_MS and logs one line for its
- * outcome (a timeout cannot cancel the readdir; it just stops being waited
- * on). Called by main.ts after serve() is listening; the returned promise
- * never rejects and exists for the specs.
+ * sweep runs in the directory's flight (a share the readiness probe is
+ * already stuck on is skipped, logged) and is bounded by
+ * STORAGE_PROBE_TIMEOUT_MS; one line logs its outcome. A timeout cannot
+ * cancel the readdir, so it stops being waited on and its eventual outcome
+ * is logged when it settles (`late`). Called by main.ts after serve() is
+ * listening; the returned promise never rejects and exists for the specs.
  */
 export function sweepLeftoversInBackground(
   directories: readonly string[],
@@ -149,34 +188,53 @@ export function sweepLeftoversInBackground(
   {
     fs = nodeFs,
     timeoutMs = STORAGE_PROBE_TIMEOUT_MS,
-  }: { fs?: SweepFs; timeoutMs?: number } = {},
+    flights = storageFlights,
+  }: { fs?: SweepFs; timeoutMs?: number; flights?: DirectoryFlights } = {},
 ): Promise<void> {
+  const report = (
+    directory: string,
+    sweep: ProbeSweep,
+    late: true | undefined,
+  ): void => {
+    if (!sweep.swept) {
+      log.warn(
+        { directory, code: sweep.code, late },
+        'Could not sweep probe leftovers',
+      );
+    } else if (sweep.removed > 0 || late) {
+      log.info(
+        { directory, removed: sweep.removed, late },
+        'Removed probe leftovers',
+      );
+    }
+  };
   const one = async (directory: string): Promise<void> => {
+    const started = flights.tryStart(directory, () =>
+      sweepProbeLeftovers(directory, fs),
+    );
+    if (!started) {
+      log.warn(
+        { directory },
+        'Probe leftover sweep skipped; another storage call on the share has not settled',
+      );
+      return;
+    }
     let timer: NodeJS.Timeout | undefined;
     const timedOut = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => resolve('timeout'), timeoutMs);
       timer.unref();
     });
-    const sweep = await Promise.race([
-      sweepProbeLeftovers(directory, fs),
-      timedOut,
-    ]);
+    const sweep = await Promise.race([started, timedOut]);
     clearTimeout(timer);
     if (sweep === 'timeout') {
       log.warn(
         { directory, timeout_ms: timeoutMs },
         'Probe leftover sweep timed out; the share is not answering',
       );
-    } else if (!sweep.swept) {
-      log.warn(
-        { directory, code: sweep.code },
-        'Could not sweep probe leftovers',
-      );
-    } else if (sweep.removed > 0) {
-      log.info(
-        { directory, removed: sweep.removed },
-        'Removed probe leftovers',
-      );
+      // sweepProbeLeftovers never rejects.
+      void started.then((late) => report(directory, late, true));
+    } else {
+      report(directory, sweep, undefined);
     }
   };
   return Promise.all([...new Set(directories)].map(one)).then(() => undefined);
