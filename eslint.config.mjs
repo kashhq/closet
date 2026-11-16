@@ -34,6 +34,16 @@ const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
 
+// Copy is made by t() and joinCopy() (src/web/i18n.ts) and the status-code
+// fallback in src/web/errors.tsx: a cast anywhere else launders English
+// written in code into an HttpError's message (#734, #1098). Specs forge
+// arbitrary copy to test the error handler, so they take RESTRICTED_SYNTAX only.
+const FORGED_COPY = {
+  selector: "TSAsExpression[typeAnnotation.typeName.name='Translated']",
+  message:
+    'Only t(), joinCopy() and errors.tsx make Translated copy: build the text from lang.json keys (#1098).',
+};
+
 // no-restricted-syntax entries every file obeys.
 const RESTRICTED_SYNTAX = [
   {
@@ -175,6 +185,7 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         ...RESTRICTED_SYNTAX,
+        FORGED_COPY,
       ],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed
@@ -263,7 +274,7 @@ export default tseslint.config(
     rules: sonarjsRules,
   },
   {
-    files: ['**/*.spec.{ts,tsx}'],
+    files: ['**/*.spec.{ts,tsx}', 'src/web/i18n.ts', 'src/web/errors.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.

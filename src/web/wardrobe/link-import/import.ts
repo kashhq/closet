@@ -69,7 +69,10 @@ export type LinkImportRefusal =
  * What an API or agent caller is told of a refusal: the reason leads (a
  * machine-readable word to branch on), then the copy.
  */
-export function reasonLed(reason: string, message: string): Translated {
+export function reasonLed(
+  reason: LinkImportRefusal | 'title-only',
+  message: Translated,
+): Translated {
   return t('linkImport.REASON_LED', { reason, message });
 }
 
