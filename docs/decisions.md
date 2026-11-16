@@ -1427,7 +1427,7 @@ Consequence: a new card is `Card`; a shadow elsewhere fails lint (`public/js/toa
 
 ## 2026-11-14 — The storage probe never lists a directory; the boot sweeps its leftovers (#855, #901)
 Why: each 5 s window's probe ran a readdir of DATA_PATH and MODELS_PATH to remove its stale files; on a large NFS share that listing alone could outlast the 3 s bound and flap readiness, and a stale file it could not rm made storage read down though a write would succeed (#856).
-Decision: `probeWritable` is a mkdir, its own named write and its unlink, nothing else. A hung write unlinks once it settles, so only a dead process leaves a file; `sweepProbeLeftovers` removes every `.write-probe-` file once per boot (main.ts, both directories, before the boot probe), best effort: a failure is a warn line, never a refusal or a verdict.
+Decision: `probeWritable` is a mkdir, its own named write and its unlink, nothing else. A hung write unlinks once it settles, so only a dead process leaves a file; `sweepProbeLeftovers` removes every `.write-probe-` file once per boot (main.ts, both directories), best effort: a failure is a warn line, never a refusal or a verdict.
 Consequence: a file left by a write that never settles stays until the next boot (4 KB, a dotfile: reconciliation and `/file/**` never see it). The nightly run does not sweep: it never touches MODELS_PATH.
 
 ## 2026-11-14 — An unmarked DATA_PATH gets the paired id only by coverage (#850, #851)
@@ -1439,3 +1439,8 @@ Consequence: a production database paired with a share but holding no photos can
 Why: a restore whose links all landed but whose trash names could not be removed rejected and logged "rolled back, the trash keeps it", while the set was live; a retry was then refused as "storage already holds a photo set", so only hand work could clear the trash. A failing rollback unlink replaced the original error the same way.
 Decision: a live name with the same dev+ino as its trash file is restored, not a conflict (`liveFromTrash`, `linkBack` on EEXIST). Once every file is live, letting go of the trash is best effort (`leftInTrash`, a warn line, exit 0); a rollback that cannot unlink throws `RestoreFailed` with `stranded`, and the log says "rolled back" only when nothing is.
 Consequence: running `--restore-from-trash` again always finishes a partial restore; a different live photo of the name is still refused.
+
+## 2026-11-16 — The boot's probe sweep never blocks listen (#1048)
+Why: the sweep's readdir of MODELS_PATH ran before listen, so a stalled models share hung the whole boot, where it should only show `storage` down on /health/ready.
+Decision: `sweepLeftoversInBackground` runs after `serve()` is listening, unawaited, each directory bounded by `STORAGE_PROBE_TIMEOUT_MS` (the readiness probe's 3 s, now exported from `src/storage-probe.ts`) and logging one structured line (removed, failed with a code, or timed out). The DATA_PATH writable check stays before listen.
+Consequence: a probe file may outlive a boot by up to the bound; a timed-out readdir keeps its libuv thread until the share answers.
