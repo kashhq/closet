@@ -1444,3 +1444,8 @@ Consequence: running `--restore-from-trash` again always finishes a partial rest
 Why: the sweep's readdir of MODELS_PATH ran before listen, so a stalled models share hung the whole boot, where it should only show `storage` down on /health/ready.
 Decision: `sweepLeftoversInBackground` runs after `serve()` is listening, unawaited, each directory bounded by `STORAGE_PROBE_TIMEOUT_MS` (the readiness probe's 3 s, now exported from `src/storage-probe.ts`) and logging one structured line (removed, failed with a code, or timed out). The DATA_PATH writable check stays before listen.
 Consequence: a probe file may outlive a boot by up to the bound; a timed-out readdir keeps its libuv thread until the share answers.
+
+## 2026-11-16 — The desktop layout is a named system, not per-page lg: patches
+Why: at 1440 px most pages were phone columns centred on the screen (detail pages 512 px wide, idea carousels centred in half the width, bottom bars across the viewport), and every desktop fix so far was a page's own `lg:` classes (193 in `src/web`).
+Decision: `docs/plans/2026-11-16-desktop-layout.md`, approved with every recommendation. One breakpoint (`lg`) plus auto-fill density. `PageShell` with named layouts (`single`, `split`, `panel`, `facets`, `index`) as CSS grid areas. Profile in the rail and section tabs in the app bar. `Sheet` with a desktop placement per kind (Wardrobe filters docked). `ActionBar` sticky in its column. `SnapStrip` desktop modes (`strip`, `row`, `grid`; Styling keeps `strip`). `/` is the one shortcut.
+Consequence: the phone at 390 px is unchanged. A page file carries no layout `lg:` classes (a shrink-only count, slice D8), and `<main` lives only in `page-shell.tsx`.
