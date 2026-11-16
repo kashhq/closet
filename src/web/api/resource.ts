@@ -195,7 +195,62 @@ function isPlainObject(value: object): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-/** The object or array schema `value` is, a union's branch picked by its literal fields (a packing warning's `kind`). */
+/** Whether two object branches of one union can never both hold a value: a field both pin to different literals. */
+function tellApart(a: TObject, b: TObject): boolean {
+  return Object.entries(a.properties).some(([key, field]) => {
+    const other = b.properties[key];
+    return (
+      KindGuard.IsLiteral(field) &&
+      other !== undefined &&
+      KindGuard.IsLiteral(other) &&
+      other.const !== field.const
+    );
+  });
+}
+
+/**
+ * Refuses a union `shapeAs` could not pick a branch of: two object branches
+ * (or two array branches) no literal field tells apart would shape by the
+ * first, and drop the second's keys without an error (#997). A union is
+ * discriminated by a literal field (a packing warning's `kind`), or its
+ * branches differ in kind (an object or null). Walks every level; throws
+ * naming `name`. Run at boot over every API response (`apiResponses`) and on
+ * first use by `asResource` and `project`, for a schema only MCP answers.
+ */
+export function assertUnambiguousUnions(
+  schema: TSchema,
+  name = schema.title ?? 'resource',
+): void {
+  if (KindGuard.IsUnion(schema)) {
+    const objects = schema.anyOf.filter(KindGuard.IsObject);
+    const arrays = schema.anyOf.filter(KindGuard.IsArray);
+    const ambiguousObjects = objects.some((a, i) =>
+      objects.slice(i + 1).some((b) => !tellApart(a, b)),
+    );
+    if (ambiguousObjects || arrays.length > 1) {
+      throw new TypeError(
+        `${name}: a union of ${ambiguousObjects ? 'objects' : 'arrays'} with no literal field telling its branches apart would lose the later branch's keys; tag each branch (Type.Literal)`,
+      );
+    }
+    schema.anyOf.forEach((branch) => assertUnambiguousUnions(branch, name));
+  } else if (KindGuard.IsObject(schema)) {
+    for (const [key, field] of Object.entries(schema.properties)) {
+      assertUnambiguousUnions(field, `${name}.${key}`);
+    }
+  } else if (KindGuard.IsArray(schema)) {
+    assertUnambiguousUnions(schema.items, `${name}[]`);
+  }
+}
+
+const checkedSchemas = new WeakSet<TSchema>();
+
+function checkOnce(schema: TSchema): void {
+  if (checkedSchemas.has(schema)) return;
+  assertUnambiguousUnions(schema);
+  checkedSchemas.add(schema);
+}
+
+/** The object or array schema `value` is, a union's branch picked by its literal fields (a packing warning's `kind`); `assertUnambiguousUnions` guarantees at most one fits. */
 function containerOf(schema: TSchema, value: object, path: string): TSchema {
   if (!KindGuard.IsUnion(schema)) return schema;
   const wanted = Array.isArray(value) ? KindGuard.IsArray : KindGuard.IsObject;
@@ -277,6 +332,7 @@ export function asResource<S extends TSchema>(
   schema: S,
   record: NullsKept<Static<S>>,
 ): Static<S> {
+  checkOnce(schema);
   return shapeAs(schema, record, 'drop', schema.title ?? 'resource');
 }
 
@@ -316,6 +372,7 @@ export function project<
   projection: P,
   own: Own,
 ): Pick<T, Extract<FieldsAs<P, 'keep'>, keyof T>> & Own {
+  checkOnce(schema);
   const answer: Record<string, unknown> = {};
   const fields = record as Record<string, unknown>;
   const owned = own as Record<string, unknown>;
