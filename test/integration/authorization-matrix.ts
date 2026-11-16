@@ -234,12 +234,6 @@ export interface Route {
   secret: (f: Fixture) => string;
   /** Success renders the secret (detail pages, lists, forms). */
   shows?: boolean;
-  /**
-   * Fixture fields a success needs fresh beyond those its request reads
-   * (freshFixture builds only those): a part whose rows the handler finds
-   * without the request naming them.
-   */
-  needs?: (keyof Fixture)[];
   vias: Via[];
   request: (
     f: Fixture,
@@ -481,7 +475,7 @@ export function describeMatrix(
   describe(`authorization matrix: ${group}`, () => {
     let t: TestApp;
     const actors = {} as Record<ActorName, MatrixActor>;
-    /** Read-only and refused cases share it; successful writes get their own (freshFixture). */
+    /** Read-only and refused cases share it; successful writes get their own. */
     let shared: Fixture;
     let photo: Buffer;
     let cutout: Buffer;
@@ -579,414 +573,315 @@ export function describeMatrix(
       };
     };
 
-    /**
-     * The owner's rows the cases address, built in parts. The shared fixture
-     * builds every part. A successful write mutates what it addresses, so it
-     * gets fresh copies of the parts its request reads (`reads`, freshFixture)
-     * and the shared fixture's values for the rest: building all of them for
-     * each of the matrix's ~350 successful writes was most of its time (#724).
-     * A part that needs another's rows builds that part fresh too (once per
-     * fixture), so a fresh wishlist item replaces a fresh garment.
-     */
-    const createFixture = async (
-      reads?: ReadonlySet<string>,
-    ): Promise<Fixture> => {
+    const createFixture = async (): Promise<Fixture> => {
       const cookie = actors.owner.cookie!;
       const tag = randomUUID().slice(0, 8);
-      const today = t.today();
-      const once = <T>(build: () => Promise<T>): (() => Promise<T>) => {
-        let built: Promise<T> | undefined;
-        return () => (built ??= build());
-      };
-      /** The part's fields: fresh when the case reads one, else the shared fixture's. */
-      const take = async <K extends keyof Fixture>(
-        fields: readonly K[],
-        build: () => Promise<Pick<Fixture, K>>,
-      ): Promise<Pick<Fixture, K>> => {
-        if (!reads || fields.some((field) => reads.has(field))) return build();
-        const kept = {} as Pick<Fixture, K>;
-        for (const field of fields) kept[field] = shared[field];
-        return kept;
-      };
-
-      const garment = once(async () => {
-        const garmentName = `Coat ${tag}`;
-        const garmentId = await createGarment(t, { name: garmentName, cookie });
-        await uploadPhoto(t, garmentId, photo, cookie);
-        // Its cutout failed (no queue runs here), so "Try again" requeues it.
-        await failCutout(t, await photoFileName(t, garmentId));
-        return { garmentId, garmentName };
+      const garmentName = `Coat ${tag}`;
+      const capsuleName = `Capsule ${tag}`;
+      const outfitName = `Look ${tag}`;
+      const garmentId = await createGarment(t, { name: garmentName, cookie });
+      await uploadPhoto(t, garmentId, photo, cookie);
+      // Its cutout failed (no queue runs here), so "Try again" requeues it.
+      await failCutout(t, await photoFileName(t, garmentId));
+      const wishlistName = `Wish ${tag}`;
+      const brand = `Brand ${tag}`;
+      const wishlistId = await createWishlistItem(t, {
+        name: wishlistName,
+        brand,
+        replaces: garmentId,
+        cookie,
       });
-
-      const wishlist = once(async () => {
-        const wishlistName = `Wish ${tag}`;
-        const brand = `Brand ${tag}`;
-        const wishlistId = await createWishlistItem(t, {
-          name: wishlistName,
-          brand,
-          replaces: (await garment()).garmentId,
-          cookie,
-        });
-        const brandSizeId = await addBrandSize(t.db, t.owner.id, {
-          brand,
-          size: 'M',
-          note: OWNER_SIZE_NOTE,
-        });
-        if (brandSizeId === 'brand-taken') throw new Error(`${brand} is taken`);
-        return { wishlistId, wishlistName, brand, brandSizeId };
+      const brandSizeId = await addBrandSize(t.db, t.owner.id, {
+        brand,
+        size: 'M',
+        note: OWNER_SIZE_NOTE,
       });
+      if (brandSizeId === 'brand-taken') throw new Error(`${brand} is taken`);
+      const outfitRuleId = await addOutfitRule(
+        t.db,
+        { userId: t.owner.id, surface: 'page' },
+        {
+          kind: 'never',
+          a: { ...NO_MATCHER, garmentId },
+          b: { ...NO_MATCHER, color: 'black' },
+        },
+      );
+      if (typeof outfitRuleId !== 'number') {
+        throw new Error(`No outfit rule: ${outfitRuleId}`);
+      }
+      const muse = await museFixture(tag);
+      const archivedName = `Old ${tag}`;
+      const archivedId = await createGarment(t, { name: archivedName, cookie });
+      const archived = await t.inject({
+        method: 'POST',
+        url: `/wardrobe/${archivedId}/archive`,
+        headers: { cookie },
+      });
+      expect(archived.statusCode).toBe(200);
 
-      const outfitRule = async () => {
-        const outfitRuleId = await addOutfitRule(
-          t.db,
-          { userId: t.owner.id, surface: 'page' },
-          {
-            kind: 'never',
-            a: { ...NO_MATCHER, garmentId: (await garment()).garmentId },
-            b: { ...NO_MATCHER, color: 'black' },
-          },
-        );
-        if (typeof outfitRuleId !== 'number') {
-          throw new Error(`No outfit rule: ${outfitRuleId}`);
-        }
-        return { outfitRuleId };
-      };
+      const created = await t.inject({
+        method: 'POST',
+        url: '/capsules',
+        payload: { name: capsuleName },
+        headers: { cookie },
+      });
+      const capsuleId = Number(
+        /^\/capsules\/(\d+)\?/.exec(created.headers.location as string)?.[1],
+      );
+      expect(capsuleId).toBeGreaterThan(0);
+      const chosen = await t.inject({
+        method: 'POST',
+        url: `/capsules/${capsuleId}/garments`,
+        payload: { ids: [garmentId], shown: [garmentId] },
+        headers: { cookie },
+      });
+      expect(chosen.statusCode).toBe(303);
 
-      const archived = async () => {
-        const archivedName = `Old ${tag}`;
-        const archivedId = await createGarment(t, {
-          name: archivedName,
-          cookie,
-        });
-        const res = await t.inject({
-          method: 'POST',
-          url: `/wardrobe/${archivedId}/archive`,
-          headers: { cookie },
-        });
-        expect(res.statusCode).toBe(200);
-        return { archivedId, archivedName };
-      };
-
-      const capsule = async () => {
-        const capsuleName = `Capsule ${tag}`;
-        const created = await t.inject({
-          method: 'POST',
-          url: '/capsules',
-          payload: { name: capsuleName },
-          headers: { cookie },
-        });
-        const capsuleId = Number(
-          /^\/capsules\/(\d+)\?/.exec(created.headers.location as string)?.[1],
-        );
-        expect(capsuleId).toBeGreaterThan(0);
-        const { garmentId } = await garment();
-        const chosen = await t.inject({
-          method: 'POST',
-          url: `/capsules/${capsuleId}/garments`,
-          payload: { ids: [garmentId], shown: [garmentId] },
-          headers: { cookie },
-        });
-        expect(chosen.statusCode).toBe(303);
-        return { capsuleId, capsuleName };
-      };
-
-      const postOutfit = async (payload: Record<string, unknown>) => {
+      const outfit = await t.inject({
+        method: 'POST',
+        url: '/outfits',
+        payload: {
+          name: outfitName,
+          category: 'shirt',
+          garmentId: String(garmentId),
+        },
+        headers: { cookie },
+      });
+      const outfitId = Number(
+        /^\/outfits\/(\d+)$/.exec(outfit.headers.location as string)?.[1],
+      );
+      expect(outfitId).toBeGreaterThan(0);
+      const spare = await t.inject({
+        method: 'POST',
+        url: '/outfits',
+        payload: { name: `Spare ${tag}` },
+        headers: { cookie },
+      });
+      const spareOutfitId = Number(
+        /^\/outfits\/(\d+)$/.exec(spare.headers.location as string)?.[1],
+      );
+      expect(spareOutfitId).toBeGreaterThan(0);
+      // Muse's outfits (#335): the garment with the wishlist item, then
+      // marked as proposed, as the agent's tool will (phase 3).
+      const museOutfit = async (
+        reaction: 'proposed' | 'declined',
+        garments: number[],
+      ) => {
         const made = await t.inject({
           method: 'POST',
           url: '/outfits',
-          payload,
+          payload: {
+            name: `Muse ${reaction} ${tag}`,
+            category: garments.map(() => 'shirt'),
+            garmentId: garments.map(String),
+          },
           headers: { cookie },
         });
         const id = Number(
           /^\/outfits\/(\d+)$/.exec(made.headers.location as string)?.[1],
         );
         expect(id, made.body).toBeGreaterThan(0);
+        await asFixture(t.db, (tx) =>
+          tx
+            .update(outfitTable)
+            .set({
+              proposedAt: new Date(),
+              proposalNote: 'Why this',
+              reaction,
+              dismissedReason: reaction === 'declined' ? 'style' : null,
+            })
+            .where(eq(outfitTable.id, id)),
+        );
         return id;
       };
+      // Garment sets of their own: a save of a set already saved reuses it.
+      const museOutfitId = await museOutfit('proposed', [
+        garmentId,
+        wishlistId,
+      ]);
+      const museDeclinedId = await museOutfit('declined', [wishlistId]);
 
-      const outfit = once(async () => {
-        const outfitName = `Look ${tag}`;
-        const outfitId = await postOutfit({
-          name: outfitName,
-          category: 'shirt',
-          garmentId: String((await garment()).garmentId),
-        });
-        return { outfitId, outfitName };
+      const today = t.today();
+      const scheduled = await t.inject({
+        method: 'POST',
+        url: '/calendar',
+        payload: { date: today, outfitId: String(outfitId) },
+        headers: { cookie },
       });
-
-      const spareOutfit = async () => ({
-        spareOutfitId: await postOutfit({ name: `Spare ${tag}` }),
-      });
-
-      // Muse's outfits (#335): the garment with the wishlist item, then
-      // marked as proposed, as the agent's tool will (phase 3).
-      const museOutfits = async () => {
-        const museOutfit = async (
-          reaction: 'proposed' | 'declined',
-          garments: number[],
-        ) => {
-          const id = await postOutfit({
-            name: `Muse ${reaction} ${tag}`,
-            category: garments.map(() => 'shirt'),
-            garmentId: garments.map(String),
-          });
-          await asFixture(t.db, (tx) =>
-            tx
-              .update(outfitTable)
-              .set({
-                proposedAt: new Date(),
-                proposalNote: 'Why this',
-                reaction,
-                dismissedReason: reaction === 'declined' ? 'style' : null,
-              })
-              .where(eq(outfitTable.id, id)),
-          );
-          return id;
-        };
-        const { wishlistId } = await wishlist();
-        // Garment sets of their own: a save of a set already saved reuses it.
-        const museOutfitId = await museOutfit('proposed', [
-          (await garment()).garmentId,
-          wishlistId,
-        ]);
-        const museDeclinedId = await museOutfit('declined', [wishlistId]);
-        return { museOutfitId, museDeclinedId };
-      };
-
-      const entry = async () => {
-        const { outfitId } = await outfit();
-        const scheduled = await t.inject({
-          method: 'POST',
-          url: '/calendar',
-          payload: { date: today, outfitId: String(outfitId) },
-          headers: { cookie },
-        });
-        expect(scheduled.statusCode).toBe(302);
-        const [row] = await t.db
-          .select({ id: outfitCalendar.id })
-          .from(outfitCalendar)
-          .where(eq(outfitCalendar.outfitId, outfitId));
-        return { entryId: row.id };
-      };
-
+      expect(scheduled.statusCode).toBe(302);
+      const [entry] = await t.db
+        .select({ id: outfitCalendar.id })
+        .from(outfitCalendar)
+        .where(eq(outfitCalendar.outfitId, outfitId));
       // The owner's mirror photo (#19) of the same outfit yesterday, which
       // marks that entry worn (today's stays unworn for the pages' wear
       // controls and the worn pill).
-      const ownSelfie = async () => {
-        const { outfitId } = await outfit();
-        const taken = await takeSelfie(
-          t,
-          await planEntry(t, outfitId, addDays(today, -1), cookie),
-          cookie,
-        );
-        return {
-          selfieId: taken.id,
-          selfieFileName: taken.fileName,
-          selfieShareableId: taken.shareableId,
-        };
-      };
+      const ownSelfie = await takeSelfie(
+        t,
+        await planEntry(t, outfitId, addDays(today, -1), cookie),
+        cookie,
+      );
 
-      // A saved look (#22), named through its page's autosave, with one piece
-      // read in it (#22b) and a white tee of the closet, the piece's match
-      // (#22c's save).
-      const inspirationLook = async () => {
-        const inspirationTitle = `Inspo ${tag}`;
-        const look = await addLook(t, photo, cookie);
-        const named = await t.inject({
-          method: 'POST',
-          url: `/inspiration/${look.id}`,
-          payload: { title: inspirationTitle, note: '' },
-          headers: { cookie, 'hx-request': 'true' },
-        });
-        expect(named.statusCode).toBe(200);
-        const inspirationTeeId = await createGarment(t, {
-          name: `Tee ${tag}`,
-          category: 'tops',
-          cookie,
-        });
-        const tagged = await t.inject({
-          method: 'POST',
-          url: `/inspiration/${look.id}/pieces`,
-          payload: {
-            kind: 'top/t-shirt',
-            color: 'white',
-            accent: '',
-            pattern: '',
-          },
-          headers: { cookie },
-        });
-        expect(tagged.statusCode).toBe(303);
-        return {
-          inspirationId: look.id,
-          inspirationTitle,
-          inspirationFileName: look.fileName,
-          inspirationTeeId,
-        };
-      };
+      // A saved look (#22), named through its page's autosave.
+      const inspirationTitle = `Inspo ${tag}`;
+      const look = await addLook(t, photo, cookie);
+      const named = await t.inject({
+        method: 'POST',
+        url: `/inspiration/${look.id}`,
+        payload: { title: inspirationTitle, note: '' },
+        headers: { cookie, 'hx-request': 'true' },
+      });
+      expect(named.statusCode).toBe(200);
+      // A white tee of the closet, the piece's match (#22c's save).
+      const inspirationTeeId = await createGarment(t, {
+        name: `Tee ${tag}`,
+        category: 'tops',
+        cookie,
+      });
+      // One piece read in it (#22b), at position 0.
+      const tagged = await t.inject({
+        method: 'POST',
+        url: `/inspiration/${look.id}/pieces`,
+        payload: {
+          kind: 'top/t-shirt',
+          color: 'white',
+          accent: '',
+          pattern: '',
+        },
+        headers: { cookie },
+      });
+      expect(tagged.statusCode).toBe(303);
 
-      const trips = async () => {
-        const newTrip = async (name: string) => {
-          const created = await t.inject({
-            method: 'POST',
-            url: '/trips',
-            payload: { name, startsOn: today, endsOn: addDays(today, 1) },
-            headers: { cookie },
-          });
-          const id = Number(
-            /^\/trips\/(\d+)\?/.exec(created.headers.location as string)?.[1],
-          );
-          expect(id).toBeGreaterThan(0);
-          return id;
-        };
-        const tripName = `Trip ${tag}`;
-        const tripId = await newTrip(tripName);
-        const otherTripId = await newTrip(`Other ${tag}`);
-        const { outfitId } = await outfit();
-        const { garmentId } = await garment();
-        for (const [url, payload] of [
-          [
-            `/trips/${tripId}/outfits`,
-            { outfitId: String(outfitId), day: today },
-          ],
-          [`/trips/${tripId}/items`, { label: 'Charger' }],
-          [`/trips/${tripId}/packed`, { packed: String(garmentId) }],
-          [`/trips/${otherTripId}/items`, { label: 'Passport' }],
-        ] as const) {
-          const res = await t.inject({
-            method: 'POST',
-            url,
-            payload,
-            headers: { cookie },
-          });
-          expect(res.statusCode, url).toBe(303);
-        }
-        const [{ id: tripOutfitId }] = await t.db
-          .select({ id: tripOutfit.id })
-          .from(tripOutfit)
-          .where(eq(tripOutfit.tripId, tripId));
-        const [{ id: tripItemId }] = await t.db
-          .select({ id: tripItem.id })
-          .from(tripItem)
-          .where(eq(tripItem.tripId, tripId));
-        return { tripId, tripName, tripOutfitId, tripItemId, otherTripId };
-      };
-
-      const repair = async () => {
-        const repairId = await addRepair(
-          t.db,
-          t.owner.id,
-          (await garment()).garmentId,
-          { day: today, kind: 'repair', note: `Mended ${tag}`, cost: '12.00' },
-        );
-        if (repairId === undefined) throw new Error('No repair logged');
-        return { repairId };
-      };
-
-      const order = async () => {
-        const orderItemName = `Ordered ${tag}`;
-        const listed = await recordOrderEmail(
-          t.db,
-          {
-            accountId: 'authorization-matrix',
-            emailId: `order-${tag}`,
-            receivedAt: new Date(),
-            outcome: 'imported',
-          },
-          t.owner.id,
-          today,
-          [
-            {
-              productUrl: sites.url(`/products/${tag}`),
-              name: orderItemName,
-              brand: null,
-              price: '30.00',
-              currency: 'USD',
-            },
-          ],
-        );
-        expect(listed).toBe(1);
-        const [{ id: orderItemId }] = await t.db
-          .select({ id: orderItem.id })
-          .from(orderItem)
-          .where(eq(orderItem.name, orderItemName));
-        return { orderItemId, orderItemName };
-      };
-
-      const plan = async () => {
-        const [{ id: weekPlanId }] = await asFixture(t.db, (tx) =>
-          tx
-            .insert(weekPlan)
-            .values({ ownerId: t.owner.id })
-            .returning({ id: weekPlan.id }),
-        );
-        return { weekPlanId };
-      };
-
-      const invite = async () => {
-        const inviteToken = await createInviteLink('VIEW');
-        const [{ id: inviteShareId }] = await t.db
-          .select({ id: wardrobeShare.id })
-          .from(wardrobeShare)
-          .where(eq(wardrobeShare.inviteToken, inviteToken));
-        return { inviteShareId, inviteToken };
-      };
-
-      // The style profile is one row per owner, addressed by no id: every
-      // fixture writes its note back, so a case after a write that changed
-      // it still finds OWNER_STYLE_NOTE.
       await saveStyleProfile(t.db, t.owner.id, {
         ...EMPTY_STYLE_PROFILE,
         notes: OWNER_STYLE_NOTE,
       });
 
-      // In the order the rows were always made; each awaited before the next.
+      const tripName = `Trip ${tag}`;
+      const newTrip = async (name: string) => {
+        const created = await t.inject({
+          method: 'POST',
+          url: '/trips',
+          payload: { name, startsOn: today, endsOn: addDays(today, 1) },
+          headers: { cookie },
+        });
+        const id = Number(
+          /^\/trips\/(\d+)\?/.exec(created.headers.location as string)?.[1],
+        );
+        expect(id).toBeGreaterThan(0);
+        return id;
+      };
+      const tripId = await newTrip(tripName);
+      const otherTripId = await newTrip(`Other ${tag}`);
+      for (const [url, payload] of [
+        [
+          `/trips/${tripId}/outfits`,
+          { outfitId: String(outfitId), day: today },
+        ],
+        [`/trips/${tripId}/items`, { label: 'Charger' }],
+        [`/trips/${tripId}/packed`, { packed: String(garmentId) }],
+        [`/trips/${otherTripId}/items`, { label: 'Passport' }],
+      ] as const) {
+        const res = await t.inject({
+          method: 'POST',
+          url,
+          payload,
+          headers: { cookie },
+        });
+        expect(res.statusCode, url).toBe(303);
+      }
+      const [{ id: tripOutfitId }] = await t.db
+        .select({ id: tripOutfit.id })
+        .from(tripOutfit)
+        .where(eq(tripOutfit.tripId, tripId));
+      const [{ id: tripItemId }] = await t.db
+        .select({ id: tripItem.id })
+        .from(tripItem)
+        .where(eq(tripItem.tripId, tripId));
+      const repairId = await addRepair(t.db, t.owner.id, garmentId, {
+        day: today,
+        kind: 'repair',
+        note: `Mended ${tag}`,
+        cost: '12.00',
+      });
+      if (repairId === undefined) throw new Error('No repair logged');
+
+      const orderItemName = `Ordered ${tag}`;
+      const listed = await recordOrderEmail(
+        t.db,
+        {
+          accountId: 'authorization-matrix',
+          emailId: `order-${tag}`,
+          receivedAt: new Date(),
+          outcome: 'imported',
+        },
+        t.owner.id,
+        today,
+        [
+          {
+            productUrl: sites.url(`/products/${tag}`),
+            name: orderItemName,
+            brand: null,
+            price: '30.00',
+            currency: 'USD',
+          },
+        ],
+      );
+      expect(listed).toBe(1);
+      const [{ id: orderItemId }] = await t.db
+        .select({ id: orderItem.id })
+        .from(orderItem)
+        .where(eq(orderItem.name, orderItemName));
+      const [{ id: weekPlanId }] = await asFixture(t.db, (tx) =>
+        tx
+          .insert(weekPlan)
+          .values({ ownerId: t.owner.id })
+          .returning({ id: weekPlan.id }),
+      );
+      const inviteToken = await createInviteLink('VIEW');
+      const [{ id: inviteShareId }] = await t.db
+        .select({ id: wardrobeShare.id })
+        .from(wardrobeShare)
+        .where(eq(wardrobeShare.inviteToken, inviteToken));
       return {
-        ...(await take(['garmentId', 'garmentName'], garment)),
-        ...(await take(
-          ['wishlistId', 'wishlistName', 'brand', 'brandSizeId'],
-          wishlist,
-        )),
-        ...(await take(['outfitRuleId'], outfitRule)),
-        ...(await take(
-          [
-            'needId',
-            'needName',
-            'needPickId',
-            'setAsidePickId',
-            'asideNeedId',
-            'boughtPickId',
-          ],
-          () => museFixture(tag),
-        )),
-        ...(await take(['archivedId', 'archivedName'], archived)),
-        ...(await take(['capsuleId', 'capsuleName'], capsule)),
-        ...(await take(['outfitId', 'outfitName'], outfit)),
-        ...(await take(['spareOutfitId'], spareOutfit)),
-        ...(await take(['museOutfitId', 'museDeclinedId'], museOutfits)),
-        ...(await take(['entryId'], entry)),
-        ...(await take(
-          ['selfieId', 'selfieFileName', 'selfieShareableId'],
-          ownSelfie,
-        )),
-        ...(await take(
-          [
-            'inspirationId',
-            'inspirationTitle',
-            'inspirationFileName',
-            'inspirationTeeId',
-          ],
-          inspirationLook,
-        )),
-        ...(await take(
-          ['tripId', 'tripName', 'tripOutfitId', 'tripItemId', 'otherTripId'],
-          trips,
-        )),
-        ...(await take(['repairId'], repair)),
-        ...(await take(['orderItemId', 'orderItemName'], order)),
-        ...(await take(['weekPlanId'], plan)),
-        ...(await take(['inviteShareId', 'inviteToken'], invite)),
+        garmentId,
+        garmentName,
+        wishlistId,
+        wishlistName,
+        ...muse,
+        archivedId,
+        archivedName,
+        capsuleId,
+        capsuleName,
+        outfitId,
+        outfitName,
+        spareOutfitId,
+        museOutfitId,
+        museDeclinedId,
+        entryId: entry.id,
+        selfieId: ownSelfie.id,
+        selfieFileName: ownSelfie.fileName,
+        selfieShareableId: ownSelfie.shareableId,
+        inspirationId: look.id,
+        inspirationTitle,
+        inspirationFileName: look.fileName,
+        inspirationTeeId,
         today,
         ownerId: t.owner.id,
+        tripId,
+        tripName,
+        tripOutfitId,
+        tripItemId,
+        otherTripId,
+        brand,
+        brandSizeId,
+        outfitRuleId,
+        repairId,
+        orderItemId,
+        orderItemName,
+        weekPlanId,
+        inviteShareId,
+        inviteToken,
         photo,
         cutout,
         shopPhotoUrl: sites.url('/photo.jpg'),
@@ -1002,29 +897,6 @@ export function describeMatrix(
           return token.id;
         },
       };
-    };
-
-    /**
-     * A successful write's own fixture: fresh copies of the parts its
-     * request reads, found by running the request on the shared fixture
-     * behind a proxy (the route tables' requests only build the request:
-     * authorization-coverage.spec.ts runs them on a stand-in). The probe's
-     * token is a stand-in too: the real one mints a token.
-     */
-    const freshFixture = async (
-      matrixCase: Case,
-      ownerQuery: string,
-    ): Promise<Fixture> => {
-      const reads = new Set<string>(matrixCase.route.needs);
-      const probe = new Proxy(shared, {
-        get(target, field, receiver) {
-          if (typeof field === 'string') reads.add(field);
-          if (field === 'ownerToken') return () => Promise.resolve(0);
-          return Reflect.get(target, field, receiver) as unknown;
-        },
-      });
-      await onSurface(matrixCase, probe, ownerQuery);
-      return createFixture(reads);
     };
 
     const results = {} as Matrix;
@@ -1176,28 +1048,6 @@ export function describeMatrix(
       ).toEqual([]);
     };
 
-    /**
-     * Whether the case is an API twin's `?ownerId=` it does not take, now
-     * proved refused (expectOwnerIdRefused). Refused before the handler,
-     * so on the shared fixture whatever the outcome: nothing is written.
-     */
-    const refusedAsApiOwnerId = async (
-      matrixCase: Case,
-      ownerQuery: string,
-    ): Promise<boolean> => {
-      if (matrixCase.surface !== 'api' || matrixCase.via !== 'ownerId') {
-        return false;
-      }
-      const { request } = await onSurface(matrixCase, shared, ownerQuery);
-      if (apiTakesOwnerId(request)) return false;
-      await expectOwnerIdRefused(
-        matrixCase.actor,
-        request,
-        matrixCase.route.secret(shared),
-      );
-      return true;
-    };
-
     /** The case's request and success status on its surface. */
     const onSurface = async (
       { route, surface }: Pick<Case, 'route' | 'surface'>,
@@ -1311,19 +1161,19 @@ export function describeMatrix(
 
     it.each(casesOf(routes))('$title', async (matrixCase) => {
       const { route, surface, actor, via, outcome } = matrixCase;
-      const ownerQuery = via === 'ownerId' ? `?ownerId=${actors.owner.id}` : '';
-
-      if (await refusedAsApiOwnerId(matrixCase, ownerQuery)) return;
-
       const mutates = outcome === 'ok' && route.kind === 'write';
-      const fixture = mutates
-        ? await freshFixture(matrixCase, ownerQuery)
-        : shared;
+      const fixture = mutates ? await createFixture() : shared;
       const secret = route.secret(fixture);
+      const ownerQuery = via === 'ownerId' ? `?ownerId=${actors.owner.id}` : '';
       const { ok, request } = await onSurface(matrixCase, fixture, ownerQuery);
 
       if (outcome === 'ok' && route.kind === 'clone') {
         await expectCloned(matrixCase, ok, request);
+        return;
+      }
+
+      if (surface === 'api' && via === 'ownerId' && !apiTakesOwnerId(request)) {
+        await expectOwnerIdRefused(actor, request, secret);
         return;
       }
 
