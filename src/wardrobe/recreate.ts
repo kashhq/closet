@@ -95,7 +95,7 @@ export interface PieceMatch<G> {
   agrees: Agreement;
 }
 
-export interface RecreatedPiece<G> {
+interface RecreatedPiece<G> {
   /** The chosen match, then the next best: at most MATCHES_PER_PIECE; empty when missing. */
   matches: PieceMatch<G>[];
   /** The chosen one is not the closest: the closest did not go with the rest. */

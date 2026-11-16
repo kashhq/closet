@@ -43,7 +43,7 @@ export interface AttachedSelfie {
 }
 
 function notYetWorn(): HttpError {
-  return new HttpError(409, 'A planned day cannot be marked worn yet');
+  return new HttpError(409, t('refusal.day.plannedNotWorn'));
 }
 
 /**

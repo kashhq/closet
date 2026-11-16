@@ -5,7 +5,11 @@ import {
 } from '../../cutout/queue-state';
 import { schemaState } from '../../db/migrate';
 import type { Logger } from '../../logger';
-import type { StorageFailure, WriteProbe } from '../../storage-probe';
+import {
+  type StorageFailure,
+  STORAGE_PROBE_TIMEOUT_MS,
+  type WriteProbe,
+} from '../../storage-probe';
 
 /**
  * The /health/ready contract (~/.claude/conventions/observability.md,
@@ -189,9 +193,6 @@ export function checkOrderMailOwner(missing: boolean): HealthCheck {
 /** How long a storage verdict is reused: a probe writes to disk (and NFS). */
 const STORAGE_PROBE_TTL_MS = 5_000;
 
-/** The bound on one directory's probe, as the database's: under the TTL. */
-const STORAGE_PROBE_TIMEOUT_MS = 3_000;
-
 export interface StorageCheckDeps {
   /** DATA_PATH and MODELS_PATH, as the process sees them. */
   directories: readonly string[];
@@ -226,10 +227,12 @@ export interface StorageCheckDeps {
  * and concurrent callers await the same probe. Each directory's probe is
  * bounded by `timeoutMs` (code `TIMEOUT`: a stalled NFS share never answers),
  * which is under the TTL, so the cached verdict always settles. A timed-out
- * probe cannot be cancelled, so at most ONE is in flight per directory: while
- * it is pending, later windows report TIMEOUT at once and start nothing (each
- * abandoned fs call would hold one of libuv's four pool threads, and a few
- * stall every fs call and DNS lookup in the process); a new probe starts only
+ * probe cannot be cancelled, so at most ONE fs operation is in flight per
+ * directory: a probe (its one-time leftover sweep included, #1074) that is
+ * still pending is joined, never raced or duplicated, so a caller waits for
+ * it up to its own bound and answers TIMEOUT only when that bound passes
+ * (each abandoned fs call would hold one of libuv's four pool threads, and a
+ * few stall every fs call and DNS lookup in the process); a new probe starts
  * after the pending one settles. A problem is logged when it appears or
  * changes, not per probe.
  */
@@ -246,17 +249,16 @@ export function createStorageCheck({
 }: StorageCheckDeps): () => Promise<HealthCheck> {
   let cached: { at: number; verdict: Promise<HealthCheck> } | undefined;
   let reported = '';
-  const pending = new Map<string, Promise<WriteProbe>>();
+  const inFlight = new Map<string, Promise<WriteProbe>>();
   const bounded = (directory: string): Promise<WriteProbe> => {
-    if (pending.has(directory)) {
-      return Promise.resolve({ writable: false, code: 'TIMEOUT' });
+    let started = inFlight.get(directory);
+    if (!started) {
+      const own = (async () => probe(directory))().finally(() =>
+        inFlight.delete(directory),
+      );
+      inFlight.set(directory, own);
+      started = own;
     }
-    const started = probe(directory);
-    const forget = (): void => {
-      pending.delete(directory);
-    };
-    pending.set(directory, started);
-    started.then(forget, forget);
     let timer: NodeJS.Timeout | undefined;
     const expired = new Promise<WriteProbe>((resolve) => {
       timer = setTimeout(

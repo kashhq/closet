@@ -135,7 +135,7 @@ function uploadedSource(fields: Map<string, MultipartValue>): {
     const field = fields.get(name);
     if (!field) return '';
     if (typeof field.value !== 'string' || field.valueTruncated) {
-      throw new HttpError(400, `The ${name} is too long`);
+      throw new HttpError(400, t('refusal.inspiration.fieldTooLong', { name }));
     }
     return field.value.trim();
   };
@@ -143,12 +143,12 @@ function uploadedSource(fields: Map<string, MultipartValue>): {
   const title = text('title');
   const clientId = text('clientId');
   if (url && !isStorableLink(url))
-    throw new HttpError(400, 'Not an http(s) link');
+    throw new HttpError(400, t('refusal.inspiration.notALink'));
   if (title.length > INSPIRATION_TITLE_MAX) {
-    throw new HttpError(400, 'The title is too long');
+    throw new HttpError(400, t('refusal.inspiration.titleTooLong'));
   }
   if (clientId && !CLIENT_ID.test(clientId)) {
-    throw new HttpError(400, 'The clientId is not a uuid');
+    throw new HttpError(400, t('refusal.inspiration.clientIdNotUuid'));
   }
   return {
     look: { title: title || null, sourceUrl: url || null },

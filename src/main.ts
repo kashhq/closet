@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   // stack: refuse the boot, naming the fix. Only DATA_PATH stops
   // the boot: an unwritable MODELS_PATH leaves every page serving, so it is
   // /health/ready's `storage` check that reports it (src/web/health).
-  const data = await probeWritable(config.DATA_PATH);
+  const data = await probeWritable(config.DATA_PATH, { log: boot });
   if (!data.writable) {
     boot.fatal(
       `DATA_PATH ${config.DATA_PATH} is not writable by this process (${data.code}): ${storageFix([{ directory: config.DATA_PATH, code: data.code }])}`,

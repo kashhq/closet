@@ -60,7 +60,8 @@ export class ModelChecksumError extends Error {
 
 /**
  * The model's host refused the download or could not be reached (an HTTP
- * error, DNS, a reset before the first byte). The queue's waiting state
+ * error, DNS, a reset before the first byte or a body that broke off
+ * partway). The queue's waiting state
  * names it as kind `download` (queue-state.ts).
  */
 export class ModelDownloadError extends Error {
@@ -164,7 +165,10 @@ export class CutoutModel {
       const hash = createHash('sha256');
       let bytes = 0;
       await pipeline(
-        Readable.fromWeb(response.body as WebReadableStream<Uint8Array>),
+        transferFrom(
+          Readable.fromWeb(response.body as WebReadableStream<Uint8Array>),
+          host,
+        ),
         new Transform({
           transform(chunk: Buffer, _encoding, done) {
             hash.update(chunk);
@@ -193,6 +197,25 @@ export class CutoutModel {
     }
     this.logger.info(
       `Downloaded and verified ${this.spec.name} in ${seconds(startedAt)} s`,
+    );
+  }
+}
+
+// The response body's chunks, a read failure (a reset or a stalled host
+// minutes into 940 MB) a ModelDownloadError like one before the first byte
+// (#870), so the queue waits with the `download` kind and its fix. Only the
+// body's: a failed write of the temp file keeps its own code (EACCES is
+// `permission`, ENOSPC `other`).
+async function* transferFrom(
+  body: Readable,
+  host: string,
+): AsyncGenerator<Buffer> {
+  try {
+    for await (const chunk of body) yield chunk as Buffer;
+  } catch (error) {
+    throw new ModelDownloadError(
+      `Model download failed: the transfer from ${host} broke off`,
+      { cause: error },
     );
   }
 }

@@ -563,9 +563,9 @@ export interface RefreshBackoff {
 }
 
 /** The wait after a first failure, doubling with each one after it. */
-export const REFRESH_BACKOFF_BASE_MS = 5 * 60_000;
+const REFRESH_BACKOFF_BASE_MS = 5 * 60_000;
 /** The longest wait: a page that keeps failing is asked once a day. */
-export const REFRESH_BACKOFF_CAP_MS = 24 * 60 * 60_000;
+const REFRESH_BACKOFF_CAP_MS = 24 * 60 * 60_000;
 
 export function nextRefreshBackoff(
   previous: RefreshBackoff | undefined,

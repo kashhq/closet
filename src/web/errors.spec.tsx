@@ -351,3 +351,25 @@ describe('createErrorHandler', () => {
     expect(secondRender).toBe('/twice: reply already sent');
   });
 });
+
+// #842: a query sent before the outage and answered late said the database
+// was back, so the next failure was captured as a second outage.
+describe('DatabaseOutage', () => {
+  it('ends only with an answer to something begun after the outage did', () => {
+    const { logger, logs } = captureLogs();
+    let clock = 1_000;
+    const outage = new DatabaseOutage(logger, () => clock);
+    expect(outage.failure()).toBe(true);
+
+    clock = 3_000;
+    outage.recovered(900);
+    expect(outage.failure()).toBe(false);
+    expect(logs.messages('info')).toEqual([]);
+
+    outage.recovered(1_000);
+    expect(logs.messages('info')).toEqual([
+      'Database reachable again after 2 s; 2 request(s) answered busy',
+    ]);
+    expect(outage.failure()).toBe(true);
+  });
+});

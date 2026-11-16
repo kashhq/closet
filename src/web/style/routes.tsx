@@ -124,7 +124,7 @@ export const styleRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { body } = request;
       const a = readRuleSide(body.a);
       const b = readRuleSide(body.b);
-      if (!a || !b) throw new HttpError(400, 'Not a garment id');
+      if (!a || !b) throw new HttpError(400, t('refusal.form.notAGarmentId'));
       const refuse = (message: string) => {
         logger.warn(
           `Outfit rule refused for user ${userId} (${body.kind} ${body.a} with ${body.b}): ${message}`,

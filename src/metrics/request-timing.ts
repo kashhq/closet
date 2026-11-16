@@ -66,7 +66,7 @@ export async function timeRender<T>(render: () => Promise<T>): Promise<T> {
  * unchanged page answers 304 and offers nothing (#900); it duplicates this
  * name (it cannot import a TS module).
  */
-export const PAGE_TAG_TIMING_NAME = 'etag';
+const PAGE_TAG_TIMING_NAME = 'etag';
 
 /**
  * The header's value. `route` carries the matched route template as a

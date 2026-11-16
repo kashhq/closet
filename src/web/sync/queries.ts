@@ -42,7 +42,7 @@ export function inFeedSnapshot<T>(
  * every page is a 500, logged once by the root error handler with this
  * message. Fixed by `INSERT INTO sync_epoch DEFAULT VALUES`, then a bump.
  */
-export class SyncEpochMissingError extends Error {
+class SyncEpochMissingError extends Error {
   constructor() {
     super(
       'The changes feed found no sync_epoch row: the database is misconfigured (migration 0061 writes it)',

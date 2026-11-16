@@ -270,14 +270,19 @@ export async function pairedInstallId(
 }
 
 /**
- * Pairs the database with an install id, once: a row already there (another
- * process's claim racing this one) is kept, and the caller reads it back.
+ * Pairs the database with an install id, once, and answers the id it is
+ * paired with now: a row already there (another process's claim racing
+ * this one) is kept, and its id is the answer.
  */
 export async function pairInstallOnce(
   q: Queryable,
   installId: string,
-): Promise<void> {
+): Promise<string> {
   await q.insert(install).values({ installId }).onConflictDoNothing();
+  const paired = await pairedInstallId(q);
+  // Only a delete between the two statements; nothing deletes the row.
+  if (paired === undefined) throw new Error('The install row vanished');
+  return paired;
 }
 
 /** Re-pairs the database with the marker an operator vouched for (repairStorageIdentity). */

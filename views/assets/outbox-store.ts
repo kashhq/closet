@@ -9,7 +9,7 @@
 
 const DB_NAME = 'closet-outbox';
 const DB_VERSION = 1;
-export const OUTBOX_STORE = 'writes';
+const OUTBOX_STORE = 'writes';
 const CHANNEL = 'closet-outbox';
 
 /** What every write announces on the channel. */

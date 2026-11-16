@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Logger } from './logger';
 
 /**
  * The bytes a probe writes: enough that a full disk or an exhausted quota
@@ -7,6 +9,12 @@ import { join } from 'node:path';
  * file would still be created.
  */
 export const PROBE_BYTES = 4096;
+
+/**
+ * The bound on one directory's probe, as the database's: under the
+ * readiness TTL (src/web/health/checks.ts).
+ */
+export const STORAGE_PROBE_TIMEOUT_MS = 3_000;
 
 /** The filesystem calls a probe makes; the unit specs inject failing ones. */
 export interface ProbeFs {
@@ -22,10 +30,27 @@ export interface ProbeFs {
 
 const nodeFs: ProbeFs = { mkdir, writeFile, rm, readdir };
 
-const PROBE_PREFIX = `.write-probe-${process.pid}-`;
+/**
+ * Where a share's probe files live, so the probe's one-time sweep lists this small
+ * directory and never the share (#901: a readdir of a large NFS share is the
+ * cost the probes avoid). A dot-directory beside `.incoming` and `.trash`:
+ * PhotoStorage.list() skips directories and reconciliation only reads
+ * through it, so neither sees it; it sits inside the mount the image
+ * already chowns (docs/operations.md#permissions).
+ */
+export const PROBE_DIRECTORY = '.closet-probe';
+
+/** Every probe file's name starts so, whichever process wrote it. */
+const PROBE_FAMILY = '.write-probe-';
+/**
+ * This process's names carry a random id, never the pid, which is 1 in
+ * most containers: two containers on one share (production and its HTTP
+ * twin) would mint the same names, and one's `wx` write would meet the
+ * other's file (#857). Not seededRandom's business: that rule is for data
+ * that must come out the same, and this must not.
+ */
+const PROBE_PREFIX = `${PROBE_FAMILY}${randomUUID()}-`;
 let probeCounter = 0;
-/** The probe files being written now: never another probe's to clean up. */
-const inFlight = new Set<string>();
 
 /**
  * Whether this process can write a directory it needs at runtime: DATA_PATH
@@ -41,31 +66,72 @@ const inFlight = new Set<string>();
  *
  * The directory is created when missing, as its writers do (PhotoStorage's
  * prepare, CutoutModel's download), so "not writable" means exactly what
- * the first upload or download would hit. The probe file is a dotfile:
- * reconciliation and the /file routes only ever see stored photo names.
+ * the first upload or download would hit. The probe file lives in
+ * PROBE_DIRECTORY: reconciliation and the /file routes only ever see stored
+ * photo names.
  *
- * Each probe's file is named for this process and a counter, so probes of
- * one directory (DATA_PATH and MODELS_PATH may be the same; the boot probe
- * and the readiness check overlap) never share a file. A write that hangs
- * on a stalled share may never unlink: the next probe removes this
- * process's probe files that no in-flight probe owns (a restarted
- * container often reuses the pid, so its predecessor's are cleaned too).
+ * O(1) in the share's size (#855): a mkdir, one named write and its unlink,
+ * never a listing of the share, and nothing but its own file decides the
+ * verdict (#856). Each probe's file is named for this process's random id
+ * and a counter, so no two probes anywhere share one (DATA_PATH and
+ * MODELS_PATH may be the same; two containers may mount one share). A write
+ * that hangs on a stalled share unlinks once it settles.
+ *
+ * The first probe of a directory, once per process, also sweeps the files a
+ * dead process left in PROBE_DIRECTORY (a write that hung until its
+ * container stopped): it lists that small directory, never the share, and
+ * removes every `.write-probe-` file. This is a step of the probe, not a
+ * second operation, so it runs inside the caller's deadline and the check's
+ * single-flight (a separate sweep collided with the readiness probe, #1074,
+ * #1075). Any such file is fair game: another live process's is only ever
+ * mid-write, and removing it costs that probe nothing (its bytes go to the
+ * unlinked inode, its own rm is `force`). The sweep is best effort and is
+ * retried by the next probe until it has completed once; the write, not the
+ * sweep, says whether the directory can be written.
  */
 export type WriteProbe = { writable: true } | { writable: false; code: string };
 
+const sweptDirectories = new Set<string>();
+
+async function sweepLeftovers(
+  directory: string,
+  probeDirectory: string,
+  fs: ProbeFs,
+  log: Logger | undefined,
+): Promise<void> {
+  try {
+    const leftovers = (await fs.readdir(probeDirectory)).filter((name) =>
+      name.startsWith(PROBE_FAMILY),
+    );
+    for (const name of leftovers) {
+      await fs.rm(join(probeDirectory, name), { force: true });
+    }
+    sweptDirectories.add(directory);
+    if (leftovers.length > 0) {
+      log?.info(
+        { directory, removed: leftovers.length },
+        'Removed probe leftovers',
+      );
+    }
+  } catch (error) {
+    log?.warn(
+      { directory, code: String((error as NodeJS.ErrnoException).code) },
+      'Could not sweep probe leftovers',
+    );
+  }
+}
+
 export async function probeWritable(
   directory: string,
-  fs: ProbeFs = nodeFs,
+  { fs = nodeFs, log }: { fs?: ProbeFs; log?: Logger } = {},
 ): Promise<WriteProbe> {
-  const name = `${PROBE_PREFIX}${++probeCounter}`;
-  const probe = join(directory, name);
-  inFlight.add(name);
+  const probeDirectory = join(directory, PROBE_DIRECTORY);
+  const probe = join(probeDirectory, `${PROBE_PREFIX}${++probeCounter}`);
   try {
-    await fs.mkdir(directory, { recursive: true });
-    for (const stale of await fs.readdir(directory)) {
-      if (stale.startsWith(PROBE_PREFIX) && !inFlight.has(stale)) {
-        await fs.rm(join(directory, stale), { force: true });
-      }
+    // Also makes `directory`, as its writers do.
+    await fs.mkdir(probeDirectory, { recursive: true });
+    if (!sweptDirectories.has(directory)) {
+      await sweepLeftovers(directory, probeDirectory, fs, log);
     }
     // `wx`: never truncate or follow anything already at that name.
     await fs.writeFile(probe, new Uint8Array(PROBE_BYTES), { flag: 'wx' });
@@ -79,8 +145,6 @@ export async function probeWritable(
       writable: false,
       code: String((error as NodeJS.ErrnoException).code),
     };
-  } finally {
-    inFlight.delete(name);
   }
 }
 

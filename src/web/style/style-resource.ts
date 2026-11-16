@@ -76,7 +76,7 @@ export const StyleProfileValues = Type.Object(profileFields, {
 });
 
 /** A rule's side as sent: exactly one matcher. */
-export const RuleSideInput = Type.Union(
+const RuleSideInput = Type.Union(
   [
     Type.Object(
       { garmentId: CloneType(RowId, { description: 'One of your garments' }) },
@@ -279,9 +279,7 @@ export function toOutfitRule(
 }
 
 /** A side as sent, as stored: the schema let exactly one matcher through. */
-export function readRuleSideInput(
-  side: Static<typeof RuleSideInput>,
-): StoredMatcher {
+function readRuleSideInput(side: Static<typeof RuleSideInput>): StoredMatcher {
   if ('garmentId' in side) return { ...NO_MATCHER, garmentId: side.garmentId };
   if ('category' in side) {
     const type = 'type' in side ? (side.type ?? null) : null;

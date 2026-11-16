@@ -163,7 +163,7 @@ export async function insertUser(
 }
 
 /** What ending an account's other sign-ins took away, besides their sessions. */
-export interface Revocations {
+interface Revocations {
   /** Tokens revoked, by kind: the log lines name both. */
   revokedTokens: Record<TokenKind, number>;
   revokedDevices: number;

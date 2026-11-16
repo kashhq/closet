@@ -33,6 +33,74 @@ const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
 
+// no-restricted-syntax entries every file obeys, then the HttpError copy
+// rule, which specs are exempt from (their fixtures carry arbitrary messages).
+const RESTRICTED_SYNTAX = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(slice|substring|substr|split)$/][callee.object.callee.property.name='toISOString']",
+    message:
+      "A UTC date is not the household's day: use todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).",
+  },
+  {
+    selector: "CallExpression[callee.property.name='toLocaleDateString']",
+    message:
+      'A day from an instant comes from todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).',
+  },
+  // Colour comes from the two daisyUI themes in views/assets/main.css
+  // (#81): semantic tokens only (bg-base-200, text-error), so both
+  // schemes and every contrast figure hold. A Tailwind palette class
+  // or a colour in a style attribute is the same in light and dark.
+  // The retired calendar chips (chip-0..5) cycled hues per entry.
+  ...[PALETTE_CLASS, RETIRED_CHIP_CLASS].flatMap((pattern) => [
+    {
+      selector: `Literal[value=${pattern}]`,
+      message: THEME_TOKENS_ONLY,
+    },
+    {
+      selector: `TemplateElement[value.raw=${pattern}]`,
+      message: THEME_TOKENS_ONLY,
+    },
+  ]),
+  {
+    selector: `Literal[value=${SHADOW_CLASS}]`,
+    message: FLAT_THEME,
+  },
+  {
+    selector: `TemplateElement[value.raw=${SHADOW_CLASS}]`,
+    message: FLAT_THEME,
+  },
+  // Below /70 the base content fails AA on some base (#88): muted
+  // text is the one text-muted tone, faint the decorative graphics.
+  {
+    selector: `Literal[value=${FAINT_TEXT_CLASS}]`,
+    message: MUTED_TEXT,
+  },
+  {
+    selector: `TemplateElement[value.raw=${FAINT_TEXT_CLASS}]`,
+    message: MUTED_TEXT,
+  },
+  {
+    selector: `JSXAttribute[name.name='style'] Literal[value=${INLINE_COLOUR}]`,
+    message: THEME_TOKENS_ONLY,
+  },
+  {
+    selector: `JSXAttribute[name.name='style'] TemplateElement[value.raw=${INLINE_COLOUR}]`,
+    message: THEME_TOKENS_ONLY,
+  },
+];
+
+const HTTP_ERROR_COPY = [
+  // An HttpError's message is shown to the person (or the agent), so it
+  // is copy: a `t('refusal.*')` key in src/i18n/en/lang.json (#734),
+  // never an English literal. Omit it for the status text.
+  ...['Literal', 'TemplateLiteral'].map((type) => ({
+    selector: `NewExpression[callee.name='HttpError'][arguments.1.type='${type}']`,
+    message:
+      "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).",
+  })),
+];
+
 const HONO_RAW_HTML_PATHS = [
   {
     name: 'hono/html',
@@ -117,58 +185,8 @@ export default tseslint.config(
       // tomorrow every evening in New York: main went red at 00:01 UTC.
       'no-restricted-syntax': [
         'error',
-        {
-          selector:
-            "CallExpression[callee.property.name=/^(slice|substring|substr|split)$/][callee.object.callee.property.name='toISOString']",
-          message:
-            "A UTC date is not the household's day: use todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).",
-        },
-        {
-          selector: "CallExpression[callee.property.name='toLocaleDateString']",
-          message:
-            'A day from an instant comes from todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).',
-        },
-        // Colour comes from the two daisyUI themes in views/assets/main.css
-        // (#81): semantic tokens only (bg-base-200, text-error), so both
-        // schemes and every contrast figure hold. A Tailwind palette class
-        // or a colour in a style attribute is the same in light and dark.
-        // The retired calendar chips (chip-0..5) cycled hues per entry.
-        ...[PALETTE_CLASS, RETIRED_CHIP_CLASS].flatMap((pattern) => [
-          {
-            selector: `Literal[value=${pattern}]`,
-            message: THEME_TOKENS_ONLY,
-          },
-          {
-            selector: `TemplateElement[value.raw=${pattern}]`,
-            message: THEME_TOKENS_ONLY,
-          },
-        ]),
-        {
-          selector: `Literal[value=${SHADOW_CLASS}]`,
-          message: FLAT_THEME,
-        },
-        {
-          selector: `TemplateElement[value.raw=${SHADOW_CLASS}]`,
-          message: FLAT_THEME,
-        },
-        // Below /70 the base content fails AA on some base (#88): muted
-        // text is the one text-muted tone, faint the decorative graphics.
-        {
-          selector: `Literal[value=${FAINT_TEXT_CLASS}]`,
-          message: MUTED_TEXT,
-        },
-        {
-          selector: `TemplateElement[value.raw=${FAINT_TEXT_CLASS}]`,
-          message: MUTED_TEXT,
-        },
-        {
-          selector: `JSXAttribute[name.name='style'] Literal[value=${INLINE_COLOUR}]`,
-          message: THEME_TOKENS_ONLY,
-        },
-        {
-          selector: `JSXAttribute[name.name='style'] TemplateElement[value.raw=${INLINE_COLOUR}]`,
-          message: THEME_TOKENS_ONLY,
-        },
+        ...RESTRICTED_SYNTAX,
+        ...HTTP_ERROR_COPY,
       ],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed
@@ -255,6 +273,10 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: { sonarjs },
     rules: sonarjsRules,
+  },
+  {
+    files: ['**/*.spec.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.
   {

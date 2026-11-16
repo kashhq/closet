@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { HttpError } from '../../errors';
 import { sharedWardrobesOf } from '../../sharing/access';
@@ -72,7 +73,7 @@ export const sharingTools = [
     writes: false,
     async run({ ownerId }, ctx) {
       if (ownerId === ctx.userId) {
-        throw new HttpError(400, 'Compare with a wardrobe shared with you');
+        throw new HttpError(400, t('refusal.sharing.compareWithShared'));
       }
       const shared = await wardrobeFor(ctx, ownerId, 'view');
       const [mine, theirs] = await Promise.all([

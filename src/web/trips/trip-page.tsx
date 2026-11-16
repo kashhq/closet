@@ -247,7 +247,7 @@ function DayBlock(props: {
       class="flex flex-col gap-2 scroll-mt-20"
       data-trip-day={day ?? 'any'}
     >
-      <div class="flex items-baseline justify-between gap-2">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
         {day ? (
           <DayHeading as="h3" date={day} isToday={day === model.today} />
         ) : (

@@ -448,7 +448,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
 /** The save's choices: the posted pairs, a 400 when they do not pair up (saveRecreation refuses a piece twice). */
 function postedChoices(body: Static<typeof ChoicesBody>): PostedChoice[] {
   if (body.position.length !== body.garment.length) {
-    throw new HttpError(400, 'Each piece needs a position and a choice');
+    throw new HttpError(400, t('refusal.inspiration.choiceRows'));
   }
   return body.position.map((position, index) => {
     const garment = body.garment[index];

@@ -1,6 +1,5 @@
 {
   "APP_DESCRIPTION": "Wardrobe organizer: garments, outfits, and a calendar.",
-  "HOME": "Home",
   "PROFILE": "Profile",
   "photoViewer": {
     "TITLE": "Photo viewer",
@@ -43,7 +42,6 @@
     "SUMMARY_LINKS_ONE": "1 link open",
     "SUMMARY_LINKS_MANY": "{count} links open"
   },
-  "FILES": "Files",
   "WARDROBE": "Wardrobe",
   "OUTFITS": "Outfits",
   "NAV_MAIN": "Main",
@@ -68,7 +66,6 @@
   "WRONG_CURRENT_PASSWORD": "Current password is incorrect",
   "PASSWORD_CHANGED": "Password changed. Your other devices have been signed out.",
   "PASSWORD_CHANGED_SHARES": "Your unused invite links no longer work. These people still have your wardrobe; revoke any you don’t recognise under Sharing:",
-  "CHANGE": "Change",
   "DELETE_ACCOUNT": "Delete account",
   "DELETE_ACCOUNT_CONFIRMATION": "Are you sure you want to delete your account?",
   "DELETE_ACCOUNT_WARNING": "Deleting your account removes your garments, photos, outfits, calendar, wears, washes, capsules, trips, sizes, style profile, selfies and saved looks. This cannot be undone. The garment list export (Profile, Export) keeps no photos, outfits or history; download it first if you want that list.",
@@ -86,11 +83,8 @@
   "GARMENT_DELETED": "This garment was removed since, so it was not saved again.",
   "REQUEST_ID": "Request ID",
   "RETURN_TO_HOME": "Return to home",
-  "FORCE_PWA": "Force PWA install prompt",
-  "SW_UPDATE_PROMPT": "New content available! Click OK to update.",
   "COPY_TEXT": "Copy text",
   "SHARE": "Share",
-  "COPIED": "Copied!",
   "NAME": "Name",
   "NAME_PLACEHOLDER": "e.g. Black linen blazer",
   "CATEGORY": "Category",
@@ -101,7 +95,6 @@
   "SIZE_PLACEHOLDER": "M, 32, one size…",
   "NOTES": "Notes",
   "NOTES_PLACEHOLDER": "Any notes about this garment…",
-  "PHOTO": "Photo",
   "SAVE": "Save",
   "SAVED": "Saved",
   "DELETE": "Delete",
@@ -112,7 +105,6 @@
   "CLONE_NAME": "{name} (cloned)",
   "NO_GARMENTS": "No garments yet.",
   "ADD_FIRST_GARMENT": "Add your first garment",
-  "NEW_OUTFIT": "New outfit",
   "NO_OUTFITS": "No outfits yet.",
   "ADD_FIRST_OUTFIT": "Build your first outfit",
   "GARMENTS_IN_OUTFIT": "Garments in this outfit",
@@ -123,7 +115,6 @@
   "CUTOUT_FAILED": "The background could not be removed.",
   "CUTOUT_RETRY": "Try again",
   "MASK_EDITOR_TITLE": "Clean up background",
-  "MASK_EDITOR_HINT": "Review the result. Use the erase and restore brushes to fix any issues, then tap Accept.",
   "MASK_EDITOR_SKIP": "Skip",
   "MASK_EDITOR_ACCEPT": "Accept",
   "MASK_BRUSH_ERASE": "Erase",
@@ -139,10 +130,7 @@
   "CONFIRM_DELETE": "Are you sure you want to delete this?",
   "SEARCH_PLACEHOLDER": "Search garments...",
   "SEARCH": "Search",
-  "ALL_CATEGORIES": "All categories",
-  "CLEAR": "Clear",
   "RESULTS": "results",
-  "FILTER_SEARCH": "Filter search",
   "FILTERS": "Filters",
   "CLEAR_FILTERS": "Clear filters",
   "APPLY_FILTERS": "Apply filters",
@@ -160,10 +148,6 @@
   "CATEGORY_BOTTOMS": "Bottoms",
   "CATEGORY_FOOTWEAR": "Footwear",
   "CATEGORY_OTHER": "Other",
-  "CATEGORY_ACTIVEWEAR": "Activewear",
-  "CATEGORY_SWIMWEAR": "Swimwear",
-  "CATEGORY_UNDERWEAR": "Underwear",
-  "CATEGORY_LINGERIE": "Lingerie",
   "OFFLINE_TITLE": "Offline",
   "OFFLINE_NOT_SAVED": "This page wasn't saved on this device",
   "OFFLINE_DESC": "Reconnect to open it. Saved on this device:",
@@ -236,7 +220,6 @@
     "STOP": "Stop sharing",
     "CONFIRM_STOP": "Stop sharing? The link stops working; sharing again makes a new one."
   },
-  "SELECT_AN_OUTFIT": "Select an outfit...",
   "UNTITLED_OUTFIT": "Untitled outfit",
   "MONTH_JAN": "Jan",
   "MONTH_FEB": "Feb",
@@ -266,7 +249,6 @@
   "CALENDAR_DAY_SAT": "Saturday",
   "CALENDAR": "Calendar",
   "CALENDAR_PAGE_TITLE": "Outfit calendar",
-  "CALENDAR_NO_OUTFIT_PLANNED": "No outfit planned",
   "CALENDAR_DELETE_CONFIRM": "Remove this scheduled outfit?",
   "CALENDAR_REMOVE": "Remove from calendar",
   "CALENDAR_REMOVED": "Removed from the calendar",
@@ -388,6 +370,66 @@
       "tooLarge": "The request is too large",
       "unsupportedType": "This kind of request body is not accepted here",
       "unreadable": "The request could not be read"
+    },
+    "outfit": {
+      "noReason": "no reason",
+      "ownersAlready": "These garments are an outfit of the owner's own already (outfit {id})",
+      "declined": "The owner declined these garments as an outfit (outfit {id}, {reason}): never propose it again"
+    },
+    "need": {
+      "withANote": "with a note",
+      "chosen": "The owner chose an option for that need (id {id}): it is decided",
+      "open": "A need of that name is open already (id {id}): add options to it",
+      "setAside": "The owner set that need aside (id {id}, {reason}): never propose it again"
+    },
+    "form": {
+      "reminderTime": "body/{kind} must be one of the reminder times",
+      "outfitRows": "Each outfit row needs a category and a garment id (empty for none)",
+      "forNotADayOrTrip": "body/for must be a real day or trip",
+      "replaceNeedsDay": "body/replace needs a day",
+      "notAGarmentId": "Not a garment id"
+    },
+    "day": {
+      "plannedNotWorn": "A planned day cannot be marked worn yet",
+      "futureNotWorn": "A day still to come cannot be worn yet"
+    },
+    "inspiration": {
+      "tooManyPieces": "At most {max} pieces",
+      "pieceTwice": "A piece chosen twice",
+      "fieldTooLong": "The {name} is too long",
+      "notALink": "Not an http(s) link",
+      "titleTooLong": "The title is too long",
+      "clientIdNotUuid": "The clientId is not a uuid",
+      "choiceRows": "Each piece needs a position and a choice",
+      "pieceType": "pieces[{index}].type: \"{type}\" is not a type of {role} ({types})"
+    },
+    "styling": {
+      "rows": "Each row needs a role, a garment id and a lock",
+      "nothingChosen": "Choose at least one garment to save",
+      "picksNeedNoDestination": "Include picks saves an outfit, never one for a day or a trip",
+      "editInPlace": "A saved outfit changes in place: plan it on a day only"
+    },
+    "upload": {
+      "wrongType": "Wrong filetype",
+      "unreadable": "Unreadable image",
+      "tooLarge": "Image too large",
+      "heicTooLarge": "HEIC uploads are limited to {maxBytes} bytes"
+    },
+    "weather": {
+      "rangePair": "Give both from and to, or neither",
+      "daysFromTo": "Ask for days from {from} to {to}, from before to"
+    },
+    "trip": {
+      "outfitOrGarments": "Give either outfitId or garmentIds"
+    },
+    "rateLimit": {
+      "linkImport": "Too many link imports: try again in a minute"
+    },
+    "coverage": {
+      "minAboveMax": "{property}: min is above max"
+    },
+    "sharing": {
+      "compareWithShared": "Compare with a wardrobe shared with you"
     }
   },
   "WARDROBE_SHARING": "Wardrobe sharing",
@@ -428,7 +470,6 @@
     "NAME_REQUIRED": "Give the token a name.",
     "TOO_MANY": "You have {max} tokens. Revoke one first.",
     "PASSWORD_CHANGED": "Your password was changed while this token was being made, so it was not. Enter your current password again.",
-    "MANAGE": "Manage tokens",
     "SCOPE": "What it may do",
     "WRITES": "Can make changes",
     "WRITES_HINT": "Edit garments and capsules, plan and mark outfits worn, add from links, suggest to the wishlist. Off: it can only read.",
@@ -452,7 +493,6 @@
     "SUMMARY": "{count} signed in",
     "NONE": "No apps are signed in."
   },
-  "SHARE_WARDROBE": "Share your wardrobe",
   "SHARE_WARDROBE_DESC": "Invite someone to view or edit your wardrobe. A link works for 7 days.",
   "PERMISSION_VIEW": "View only",
   "PERMISSION_MANAGE": "Can edit",
@@ -461,7 +501,6 @@
   "EDIT_LINK_DESC": "Whoever accepts an edit link can add and edit garments in your wardrobe until you revoke it, even after you sign out. Enter your password to create one. The link works for 7 days.",
   "INVITE_EXPIRED": "Expired",
   "COPY_INVITE_LINK": "Copy invite link",
-  "OR": "or",
   "YOUR_SHARED_WARDROBES": "Your shared wardrobes",
   "PENDING_INVITE": "Pending invite",
   "PENDING": "Pending",
@@ -751,7 +790,6 @@
   "BULK_ADDED_ONE": "1 garment added to the capsule",
   "SELECT_ALL": "Select all {count}",
   "NO_GARMENTS_MATCH": "No garments match these filters.",
-  "GARMENTS": "Garments",
   "ALL_GARMENTS": "All garments",
   "CAPSULES": "Capsules",
   "CAPSULE": "Capsule",
@@ -1208,7 +1246,6 @@
     "FITS_WEATHER": "Fits the weather",
     "FITS_TYPICAL": "Fits the typical weather",
     "RESTED": "Not worn lately: {names}",
-    "IDEAS": "Ideas",
     "STYLE_THIS": "Style this",
     "SWIPE_OUTFITS": "Browse outfits",
     "AVOIDED_HEADING": "Never paired with",
@@ -1667,7 +1704,6 @@
     "MEASUREMENTS": "Measurements",
     "BRANDS": "Brand sizes",
     "BRANDS_HINT": "The size you wear in a brand, and how it runs.",
-    "LENGTH": "{value} {unit}",
     "unit": {
       "in": "in",
       "cm": "cm"
@@ -1732,7 +1768,6 @@
     "REPAIR_DELETE": "Remove",
     "REPAIR_CONFIRM_DELETE": "Remove this entry from the log?",
     "REPAIR_SAVED": "Logged",
-    "REPAIR_REMOVED": "Removed from the log",
     "REPAIR_DAY_VALUE": "{day}, {year}"
   },
   "orders": {
@@ -1767,14 +1802,12 @@
     "NOTE_PLACEHOLDER": "What caught your eye",
     "OPEN_LINK": "Open {host}",
     "NO_PHOTO": "No photo of this look yet.",
-    "ADD_PHOTO": "Add a photo",
     "CHANGE_PHOTO": "Change photo",
     "UNREAD": "We could not get a photo from that link.",
     "UNREAD_NO_PHOTO": "The page had no photo we could read.",
     "UNREAD_HINT": "Add one from your phone: a screenshot of the look works.",
     "DELETE": "Delete look",
     "DELETE_CONFIRM": "Delete this look and its photo?",
-    "OFFLINE": "Saving a look needs a connection.",
     "PIECES": "Pieces",
     "PIECES_HINT": "What you see in the look. Recreate it from your closet once you have tagged a piece.",
     "PIECE_KIND": "What it is",

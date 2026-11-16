@@ -1010,7 +1010,7 @@ export function tripsWithItemsSql(
 // ---- The changes feed ------------------------------------------------------------
 
 /** A trip's outfit as stored: the outfit, and the day and occasion it is for. */
-export interface StoredTripOutfit {
+interface StoredTripOutfit {
   id: number;
   outfitId: number;
   day: IsoDate | null;

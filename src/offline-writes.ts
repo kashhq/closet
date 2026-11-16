@@ -310,7 +310,7 @@ export type ReplayVerdict =
   | { verdict: 'signed-out' };
 
 const UNREACHABLE = 'unreachable';
-export type RetryCause = 'server' | typeof UNREACHABLE;
+type RetryCause = 'server' | typeof UNREACHABLE;
 
 function isRefusal(outcome: string | null): outcome is ReplayRefusal {
   return outcome === 'too-old' || outcome === 'future' || outcome === 'account';
@@ -682,7 +682,7 @@ export function unstuck<R extends ReplayRecord>(record: R): R {
 }
 
 /** What replayQueue tells its driver to do with a record. */
-export type ReplayStep<R> =
+type ReplayStep<R> =
   | { step: 'saved'; changed: boolean }
   /** Refused for good: `record` is the failed one. */
   | { step: 'failed'; record: R }

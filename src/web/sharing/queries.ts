@@ -32,7 +32,7 @@ import type { Actor } from './access';
 export const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** An unanswered invite created at or before this instant has expired. */
-export function inviteCutoff(now: Date): Date {
+function inviteCutoff(now: Date): Date {
   return new Date(now.getTime() - INVITE_LIFETIME_MS);
 }
 

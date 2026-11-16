@@ -99,7 +99,7 @@ export const mcpRoutes: FastifyPluginCallback<
       refusalLimit: bearerRefusalLimit,
       refusalSummaries,
       // quiet: the gate logs its refusals itself (bearer-gate.ts).
-      refusal: () => new HttpError(401, 'Unauthorized', { quiet: true }),
+      refusal: () => new HttpError(401, undefined, { quiet: true }),
     }),
   } as const;
 

@@ -38,7 +38,7 @@ export interface RowGarment {
 }
 
 /** A garment of a role's cycle with its place in it: 1 is the newest. */
-export interface RankedGarment extends RowGarment {
+interface RankedGarment extends RowGarment {
   rank: number;
 }
 

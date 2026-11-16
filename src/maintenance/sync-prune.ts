@@ -18,7 +18,7 @@ import type { Logger } from '../logger';
  */
 
 /** How long a deletion stays in the feed: a device offline longer syncs in full. */
-export const TOMBSTONE_RETENTION_DAYS = 90;
+const TOMBSTONE_RETENTION_DAYS = 90;
 
 /**
  * Tombstones per statement. Each statement holds its owners' locks only

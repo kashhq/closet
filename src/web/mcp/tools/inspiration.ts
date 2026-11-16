@@ -23,7 +23,11 @@ import {
 } from '../../inspiration/recreation';
 import { setLookPieces } from '../../inspiration/look-actions';
 import { addLinkedInspiration } from '../../inspiration/writes';
-import { LinkImportError, REFUSALS } from '../../wardrobe/link-import/import';
+import {
+  LinkImportError,
+  REFUSALS,
+  reasonLedMessage,
+} from '../../wardrobe/link-import/import';
 import { actorOf, defineTool, type ToolContext } from '../tool';
 import { rowId } from './common';
 
@@ -68,7 +72,12 @@ function lookPiece(
   if (type !== null && !typesOfRole(piece.role).includes(type)) {
     throw new HttpError(
       400,
-      `pieces[${index}].type: "${type}" is not a type of ${piece.role} (${typesOfRole(piece.role).join(', ')})`,
+      t('refusal.inspiration.pieceType', {
+        index,
+        type,
+        role: piece.role,
+        types: typesOfRole(piece.role).join(', '),
+      }),
     );
   }
   return {
@@ -185,10 +194,7 @@ export const inspirationTools = [
     openWorld: true,
     async run(args, ctx) {
       if (!(await ctx.allowLinkImport())) {
-        throw new HttpError(
-          429,
-          'Too many link imports: try again in a minute',
-        );
+        throw new HttpError(429, t('refusal.rateLimit.linkImport'));
       }
       let saved: Awaited<ReturnType<typeof addLinkedInspiration>>;
       try {
@@ -209,7 +215,7 @@ export const inspirationTools = [
         // reason leads, as add_garment_from_link's.
         throw new HttpError(
           REFUSALS[error.reason].status,
-          `${error.reason}: ${t(REFUSALS[error.reason].message)}`,
+          reasonLedMessage(error.reason),
         );
       }
       const look = await findInspiration(ctx.db, saved.id, ctx.userId);

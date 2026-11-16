@@ -31,7 +31,7 @@ const ACCESS_TOKEN_SECRET_MIN = 32;
 /** The bcrypt cost production must keep (the default, and the floor there). */
 export const PASSWORD_HASH_ROUNDS_PRODUCTION = 12;
 
-export const DATABASE_SSL_MODES = ['verify', 'no-verify', 'off'] as const;
+const DATABASE_SSL_MODES = ['verify', 'no-verify', 'off'] as const;
 export type DatabaseSslMode = (typeof DATABASE_SSL_MODES)[number];
 
 /**

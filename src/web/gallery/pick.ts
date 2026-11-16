@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyReply } from 'fastify';
 import type { OutfitOrigin } from '../../wardrobe/outfit-origin';
 import type { IsoDate } from '../../calendar-date';
@@ -102,10 +103,10 @@ export function postedDestination(body: {
     body.for !== undefined &&
     (destination.kind === 'none' || destinationTarget(destination) !== body.for)
   ) {
-    throw new HttpError(400, 'body/for must be a real day or trip');
+    throw new HttpError(400, t('refusal.form.forNotADayOrTrip'));
   }
   if (body.replace !== undefined && destination.kind !== 'day') {
-    throw new HttpError(400, 'body/replace needs a day');
+    throw new HttpError(400, t('refusal.form.replaceNeedsDay'));
   }
   return destination;
 }

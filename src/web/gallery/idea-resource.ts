@@ -243,7 +243,7 @@ export function ideasCursor({ seed, offset }: IdeasPosition): string {
 }
 
 /** The position an ideasCursor names; any other string is a 400 `validation`. */
-export function readIdeasCursor(cursor: string): IdeasPosition {
+function readIdeasCursor(cursor: string): IdeasPosition {
   const match = IDEAS_CURSOR.exec(Buffer.from(cursor, 'base64url').toString());
   const seed = match ? Number(match[1]) : -1;
   const offset = match ? Number(match[2]) : -1;

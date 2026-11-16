@@ -23,7 +23,7 @@ export interface StatusUndo {
 }
 
 /** The event's detail. */
-export interface StatusMessage {
+interface StatusMessage {
   message: string;
   undo?: StatusUndo;
 }
@@ -50,7 +50,7 @@ export function announce(
  * `action` again. For a request the page sent without asking because it
  * judged the write reversible and the server found it no longer is (#686).
  */
-export const CONFIRM_EVENT = 'closet:confirm';
+const CONFIRM_EVENT = 'closet:confirm';
 
 export interface ConfirmRequest {
   question: string;

@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { selectScalars } from '../../../db/select-scalars';
 import { compareOccasions } from '../../../wardrobe/occasions';
@@ -94,7 +95,7 @@ export const calendarTools = [
       if (days < 1 || days > MAX_CALENDAR_DAYS) {
         throw new HttpError(
           400,
-          `Ask for 1 to ${MAX_CALENDAR_DAYS} days, from before to`,
+          t('api.DAY_RANGE', { max: MAX_CALENDAR_DAYS }),
         );
       }
       // The entries and, when the range reaches the forecast, the settings
@@ -197,7 +198,7 @@ export const calendarTools = [
           today,
         });
         if (outcome === 'future') {
-          throw new HttpError(400, 'A day still to come cannot be worn yet');
+          throw new HttpError(400, t('refusal.day.futureNotWorn'));
         }
         return { entryId, worn: true, garmentsRecorded: outcome.wears };
       }
