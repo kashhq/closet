@@ -1480,10 +1480,16 @@ Consequence: phone pixels are unchanged except the error page (its `EmptyState` 
 **Why:** #1092 refused literals, templates and concatenations in an HttpError message with ESLint selectors, and the validator cache key with a deny-list; review kept finding another shape (conditionals, `??`, class expressions, `errors.HttpError`, grandchildren; a format function in ajv options).
 **Decision:** HttpError's message parameter is `Translated` (`src/web/i18n.ts`), which only `t()` and `joinCopy()` return, so every subclass and expression form fails the typecheck; the ESLint rule is gone and `errors.spec.tsx` holds the `@ts-expect-error` cases. `sharedValidators` throws on any non-JSON-plain `customOptions` value, naming its path.
 **Consequence:** a new message is a `lang.json` key (`FieldErrors` and the form readers carry `Translated` too); specs cast their fixtures `as Translated`.
+
 ## 2026-11-16 — Translated is made only by t(), joinCopy() and errors.tsx (#1098)
 Why: #1097 typed HttpError's message as `Translated`, but `reasonLed(reason: string, message: string)` and `joinCopy` callers could still launder English through format-only keys (`linkImport.REASON_LED`, `refusal.form.fieldErrors`).
 Decision: a function returning `Translated` takes `Translated` for its text parts (`reasonLed`'s reason is a refusal word); the MCP form refusal joins its field messages with `joinCopy`. ESLint refuses `as Translated` outside `src/web/i18n.ts` and `src/web/errors.tsx`; specs are exempt (they forge copy to test the handler).
 Consequence: `t()` params stay `string`, so a format-only key can still be handed a raw string directly; a new helper wrapping one takes `Translated`.
+
+## 2026-11-16 — One Sheet places every dialog; confirm-sheet.js opens them all (#1062)
+Why: nine hand-written `modal modal-bottom sm:modal-middle` dialogs each chose their own desktop look (always a centred modal) and opened through an inline `showModal()`, so focus never came back to a tapped trigger in Safari and nothing could anchor a menu.
+Decision: `Sheet` (`src/web/layout/sheet.tsx`) owns the dialog, the box and the backdrop, placed by `kind`: a bottom sheet below lg; from lg `choice` centred, `form` a right panel (`modal-end`), `menu` under its trigger (anchor positioning under `@supports`, `position: fixed`, since an anchor outside the dialog is valid only for a viewport-based box). Openers spread `sheetOpener(id)`; `public/js/confirm-sheet.js` gained `openSheet` (anchor, Tab kept inside, focus back to the trigger) rather than a second module, as the confirmation already needed both. Headings stay the content's and `gap` keeps each box's old flow, so the phone is pixel-identical.
+Consequence: guards.conf `@sheet` refuses daisyUI's modal box class and the placement classes outside `sheet.tsx`; the mask editor and a selfie's dialog (centred on the phone too) are its `known` lines. Evening out the sheets' headings and feet is a phone change of its own. D9 adds the docked `filters` kind on `data-sheet`.
 
 ## 2026-11-16 — Every placeholder has a kind; forged copy is judged by type (#1100)
 Why: after #1098, `t()` took every parameter as `string`, so any key (`linkImport.REASON_LED`, "Breaks: {rule}") wrapped raw English into `Translated`; the `as Translated` selector missed `<Translated>x`, `as i18n.Translated`, aliases and `as never`.

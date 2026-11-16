@@ -155,7 +155,7 @@ describe('the garment page', () => {
     const html = await page(boots);
     const menu = sectionOf(html, 'garment-menu', 'details');
     expect(menu).toContain(`href="/wardrobe/${boots}/edit"`);
-    expect(menu).toContain("getElementById('garment-photo-sheet')");
+    expect(menu).toContain('data-sheet-open="garment-photo-sheet"');
     expect(menu).toContain(`href="/wardrobe/${boots}/clone"`);
     // Not shared yet: Share makes the public link (#669).
     expect(menu).toContain(`hx-post="/wardrobe/${boots}/share"`);
@@ -186,7 +186,7 @@ describe('the garment page', () => {
     expect(sheet).not.toMatch(/id="photoInput"[^>]*capture=/);
     // No photo yet: the hero offers the sheet too.
     expect(sectionOf(html, 'garment-photo', 'div')).toContain(
-      "getElementById('garment-photo-sheet')",
+      'data-sheet-open="garment-photo-sheet"',
     );
   });
 

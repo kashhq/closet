@@ -315,9 +315,7 @@ describe('calendar', () => {
     it("each day's + Plan opens its sheet: the occasion, then Ideas, a saved outfit or Styling, all for that day", async () => {
       const html = await weekPage();
       const sheets = [
-        ...html.matchAll(
-          /<dialog[^>]*data-plan-sheet="([\d-]+)"[\s\S]*?<\/dialog>/g,
-        ),
+        ...html.matchAll(/<dialog id="plan-sheet-([\d-]+)"[\s\S]*?<\/dialog>/g),
       ];
       expect(sheets.map((m) => m[1])).toEqual(WEEK);
       const wednesday = sheets[3][0];
@@ -348,7 +346,7 @@ describe('calendar', () => {
       ).toEqual(['/outfits/ideas', '/outfits', '/styling']);
       // The day's button names the radio it checks before opening the sheet.
       expect(dayColumns(html).get('2030-10-09')).toMatch(
-        /data-plan="plan-2030-10-09-all-day" data-day-plan="2030-10-09"/,
+        /data-sheet-open="plan-sheet-2030-10-09"[^>]*data-plan="plan-2030-10-09-all-day"[^>]*data-day-plan="2030-10-09"/,
       );
     });
 

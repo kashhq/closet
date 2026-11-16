@@ -11,7 +11,8 @@ import { AgentBadge } from '../agent-badge';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
-import { GarmentThumb, SheetBackdrop } from '../layout/parts';
+import { GarmentThumb } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { EntrySelfie, SelfieView } from '../selfies/views';
 import {
   type PublicShare,
@@ -42,7 +43,6 @@ import { ToBuySection } from './to-buy';
 import { outfitUrl } from './urls';
 
 const PLAN_SHEET_ID = 'outfit-plan-sheet';
-const OPEN_PLAN_SHEET = `document.getElementById('${PLAN_SHEET_ID}').showModal()`;
 
 /**
  * GET /outfits/:id (redesign plan, "Outfits"; R5): the outfit as a record,
@@ -118,7 +118,7 @@ export function OutfitPage(props: {
             <button
               type="button"
               class="btn btn-primary flex-1"
-              onclick={OPEN_PLAN_SHEET}
+              {...sheetOpener(PLAN_SHEET_ID)}
               data-outfit-plan=""
             >
               {t('outfits.PLAN')}
@@ -376,57 +376,50 @@ function GarmentList({
  */
 function PlanSheet(props: { outfitId: number }) {
   return (
-    <dialog
+    <Sheet
       id={PLAN_SHEET_ID}
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="outfit-plan-sheet-title"
+      kind="choice"
+      labelledBy="outfit-plan-sheet-title"
+      gap={4}
+      dismiss="close"
     >
-      <div class="modal-box flex flex-col gap-4 pb-8">
-        <h2 id="outfit-plan-sheet-title" class="font-semibold text-lg">
-          {t('outfits.PLAN_TITLE')}
-        </h2>
-        <PostForm action="/calendar" class="flex flex-col gap-4">
-          <input type="hidden" name="outfitId" value={String(props.outfitId)} />
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-muted">{t('outfits.PLAN_DAY')}</span>
-            <input
-              type="date"
-              name="date"
-              class="input w-full"
-              {...defaultsToToday}
-              required
-            />
-          </label>
-          <fieldset>
-            <legend class="text-sm text-muted mb-2">{t('OCCASION')}</legend>
-            <div class="flex flex-wrap gap-2">
-              {OCCASIONS.map((occasion) => (
-                <input
-                  type="radio"
-                  name="occasion"
-                  value={occasion}
-                  class="btn btn-sm rounded-full checked:btn-primary"
-                  aria-label={occasionLabel(occasion)}
-                  checked={occasion === DEFAULT_OCCASION}
-                />
-              ))}
-            </div>
-          </fieldset>
-          <div class="modal-action mt-0">
-            <button
-              type="button"
-              class="btn btn-ghost"
-              onclick="this.closest('dialog').close()"
-            >
-              {t('CANCEL')}
-            </button>
-            <button type="submit" class="btn btn-primary">
-              {t('outfits.PLAN_SUBMIT')}
-            </button>
+      <h2 id="outfit-plan-sheet-title" class="font-semibold text-lg">
+        {t('outfits.PLAN_TITLE')}
+      </h2>
+      <PostForm action="/calendar" class="flex flex-col gap-4">
+        <input type="hidden" name="outfitId" value={String(props.outfitId)} />
+        <label class="flex flex-col gap-1">
+          <span class="text-sm text-muted">{t('outfits.PLAN_DAY')}</span>
+          <input
+            type="date"
+            name="date"
+            class="input w-full"
+            {...defaultsToToday}
+            required
+          />
+        </label>
+        <fieldset>
+          <legend class="text-sm text-muted mb-2">{t('OCCASION')}</legend>
+          <div class="flex flex-wrap gap-2">
+            {OCCASIONS.map((occasion) => (
+              <input
+                type="radio"
+                name="occasion"
+                value={occasion}
+                class="btn btn-sm rounded-full checked:btn-primary"
+                aria-label={occasionLabel(occasion)}
+                checked={occasion === DEFAULT_OCCASION}
+              />
+            ))}
           </div>
-        </PostForm>
-      </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+        </fieldset>
+        <div class="modal-action mt-0">
+          <SheetCancel />
+          <button type="submit" class="btn btn-primary">
+            {t('outfits.PLAN_SUBMIT')}
+          </button>
+        </div>
+      </PostForm>
+    </Sheet>
   );
 }

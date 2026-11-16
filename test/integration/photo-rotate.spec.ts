@@ -434,7 +434,7 @@ describe('POST /wardrobe/:id/photo/rotate', () => {
     expect(html).toMatch(/name="direction" value="right"[^>]*>.*Rotate right/s);
     expectNativePostForms(res);
     const reopen =
-      "document.getElementById('garment-photo-sheet').showModal();";
+      "openSheet(document.getElementById('garment-photo-sheet'), null);";
     expect(res.body).not.toContain(reopen);
 
     // Where a rotate lands: the sheet opens again for the next turn, after
@@ -444,7 +444,7 @@ describe('POST /wardrobe/:id/photo/rotate', () => {
       url: `/wardrobe/${id}?photoRotated=1`,
     });
     const body = unescapeHtml(landed.body);
-    expect(body).toContain(`<script>${reopen}</script>`);
+    expect(body).toContain(reopen);
     expect(body.indexOf(reopen)).toBeGreaterThan(
       body.indexOf('id="garment-photo-sheet"'),
     );

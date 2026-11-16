@@ -27,9 +27,9 @@ import {
   PhotoLibraryIcon,
   PREPARE_AND_SUBMIT_PHOTO,
   SavedToast,
-  SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { GarmentOutfitsStrip } from '../outfits/garment-outfits';
 import type { GarmentOutfits } from '../outfits/queries';
 import {
@@ -131,15 +131,16 @@ type GarmentPhoto = NonNullable<GarmentDetail['photo']>;
 
 const PHOTO_SHEET_ID = 'garment-photo-sheet';
 
-/** Opens the photo sheet (the ⋯ menu's Photo, the empty hero's button). */
-const OPEN_PHOTO_SHEET = `this.closest('details')?.removeAttribute('open'); document.getElementById('${PHOTO_SHEET_ID}').showModal()`;
+/** The ⋯ menu's Photo closes the menu as the sheet opens over it. */
+const CLOSE_MENU = "this.closest('details').removeAttribute('open')";
 
 /**
  * Opens the photo sheet as the page loads, after a rotate (?photoRotated=1),
  * so repeated quarter turns are one tap each. A fixed string, placed after
  * the dialog; StripFlags drops the marker, so a reload does not reopen it.
  */
-const REOPEN_PHOTO_SHEET = `document.getElementById('${PHOTO_SHEET_ID}').showModal();`;
+const REOPEN_PHOTO_SHEET = `import { openSheet } from 'confirm-sheet';
+openSheet(document.getElementById('${PHOTO_SHEET_ID}'), null);`;
 
 /**
  * The mask editor's pencil (mask-editor.js), as an inline module so it runs
@@ -340,7 +341,10 @@ function PhotoTools({ model }: { model: GarmentPageModel }) {
     <>
       <PhotoSheet garment={garment} viewOwner={model.viewOwner} />
       {model.justRotatedPhoto && (
-        <script dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }} />
+        <script
+          type="module"
+          dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }}
+        />
       )}
       {garment.photo && (
         <>
@@ -521,7 +525,11 @@ function GarmentMenu({
         )}
         {model.canEdit && (
           <li>
-            <button type="button" onclick={OPEN_PHOTO_SHEET}>
+            <button
+              type="button"
+              {...sheetOpener(PHOTO_SHEET_ID)}
+              onclick={CLOSE_MENU}
+            >
               {photoActionLabel(garment)}
             </button>
           </li>
@@ -689,7 +697,7 @@ export function GarmentPhotoView(props: {
           <button
             type="button"
             class="btn btn-outline btn-sm"
-            onclick={OPEN_PHOTO_SHEET}
+            {...sheetOpener(PHOTO_SHEET_ID)}
           >
             <CameraIcon class="size-4" />
             {t('garment.ADD_PHOTO')}
@@ -1040,48 +1048,41 @@ function PhotoSheet(props: {
 }) {
   const action = garmentUrl(props.garment.id, props.viewOwner, '/photo');
   return (
-    <dialog
+    <Sheet
       id={PHOTO_SHEET_ID}
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="garment-photo-sheet-title"
+      kind="form"
+      labelledBy="garment-photo-sheet-title"
+      gap={3}
+      dismiss="close"
     >
-      <div class="modal-box flex flex-col gap-3 pb-8">
-        <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
-          {photoActionLabel(props.garment)}
-        </h2>
-        <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
-        <div class="group/upload flex flex-col gap-3">
-          <PhotoSource action={action} source="camera" />
-          <PhotoSource action={action} source="library" />
-          <p
-            class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
-            role="status"
-          >
-            <span class="loading loading-spinner loading-sm"></span>
-            {t('garment.PHOTO_UPLOADING')}
-          </p>
-        </div>
-        {props.garment.photo && (
-          <RotateButtons
-            action={garmentUrl(
-              props.garment.id,
-              props.viewOwner,
-              '/photo/rotate',
-            )}
-          />
-        )}
-        <div class="modal-action mt-0">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-        </div>
+      <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
+        {photoActionLabel(props.garment)}
+      </h2>
+      <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
+      <div class="group/upload flex flex-col gap-3">
+        <PhotoSource action={action} source="camera" />
+        <PhotoSource action={action} source="library" />
+        <p
+          class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
+          role="status"
+        >
+          <span class="loading loading-spinner loading-sm"></span>
+          {t('garment.PHOTO_UPLOADING')}
+        </p>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      {props.garment.photo && (
+        <RotateButtons
+          action={garmentUrl(
+            props.garment.id,
+            props.viewOwner,
+            '/photo/rotate',
+          )}
+        />
+      )}
+      <div class="modal-action mt-0">
+        <SheetCancel />
+      </div>
+    </Sheet>
   );
 }
 
@@ -1161,48 +1162,54 @@ function RotateButtons(props: { action: string }) {
 /** The mask editor (public/js/mask-editor.js), opened by the pencil on the photo. */
 function MaskEditorDialog() {
   return (
-    <dialog id="maskEditorDialog" class="modal">
-      <div class="modal-box w-full max-w-lg p-4 flex flex-col gap-4">
-        <h3 class="font-bold text-lg">{t('MASK_EDITOR_TITLE')}</h3>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="join">
-            <button id="maskBrushErase" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_ERASE')}
-            </button>
-            <button id="maskBrushRestore" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_RESTORE')}
-            </button>
-          </div>
-          <div class="flex items-center gap-2 flex-1 min-w-32">
-            <span class="text-xs text-muted shrink-0">
-              {t('MASK_BRUSH_SIZE')}
-            </span>
-            <input
-              id="maskBrushSize"
-              type="range"
-              min="4"
-              max="80"
-              value="20"
-              class="range range-xs flex-1"
-            />
-          </div>
-        </div>
-        <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
-          <canvas
-            id="maskEditorCanvas"
-            class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
-          ></canvas>
-        </div>
-        <div class="modal-action mt-0">
-          <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
-            {t('MASK_EDITOR_SKIP')}
+    <Sheet
+      id="maskEditorDialog"
+      kind="dialog"
+      labelledBy="mask-editor-title"
+      gap={4}
+      boxClass="w-full max-w-lg p-4"
+      dismiss="close"
+    >
+      <h3 id="mask-editor-title" class="font-bold text-lg">
+        {t('MASK_EDITOR_TITLE')}
+      </h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="join">
+          <button id="maskBrushErase" class="btn btn-sm join-item">
+            {t('MASK_BRUSH_ERASE')}
           </button>
-          <button id="maskEditorAccept" class="btn btn-primary btn-sm">
-            {t('MASK_EDITOR_ACCEPT')}
+          <button id="maskBrushRestore" class="btn btn-sm join-item">
+            {t('MASK_BRUSH_RESTORE')}
           </button>
+        </div>
+        <div class="flex items-center gap-2 flex-1 min-w-32">
+          <span class="text-xs text-muted shrink-0">
+            {t('MASK_BRUSH_SIZE')}
+          </span>
+          <input
+            id="maskBrushSize"
+            type="range"
+            min="4"
+            max="80"
+            value="20"
+            class="range range-xs flex-1"
+          />
         </div>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
+        <canvas
+          id="maskEditorCanvas"
+          class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
+        ></canvas>
+      </div>
+      <div class="modal-action mt-0">
+        <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
+          {t('MASK_EDITOR_SKIP')}
+        </button>
+        <button id="maskEditorAccept" class="btn btn-primary btn-sm">
+          {t('MASK_EDITOR_ACCEPT')}
+        </button>
+      </div>
+    </Sheet>
   );
 }

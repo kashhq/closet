@@ -2,8 +2,11 @@
  * The mask editor: brush work on a cutout (erase, or restore from the
  * original). The pencil on the garment photo opens it on the stored cutout
  * (wireUpEditMask): the server's, or one the browser made before background
- * removal moved to the server.
+ * removal moved to the server. Its dialog is a `dialog`-kind Sheet, opened
+ * through openSheet like every sheet.
  */
+
+import { openSheet } from 'confirm-sheet';
 
 /**
  * Centre-pads a Blob into a square PNG OffscreenCanvas blob.
@@ -57,7 +60,9 @@ export const wireUpEditMask = (container) => {
       const nobgBlob = await nobgResp.blob();
 
       const squaredBlob = await squarePadBlob(origBlob);
-      const squaredFile = new File([squaredBlob], 'original.png', { type: 'image/png' });
+      const squaredFile = new File([squaredBlob], 'original.png', {
+        type: 'image/png',
+      });
 
       const editedBlob = await openMaskEditor(squaredFile, nobgBlob);
 
@@ -65,7 +70,10 @@ export const wireUpEditMask = (container) => {
       if (editedBlob === nobgBlob) return;
 
       const formData = new FormData();
-      formData.append('nobgPhoto', new File([editedBlob], 'nobg.webp', { type: 'image/webp' }));
+      formData.append(
+        'nobgPhoto',
+        new File([editedBlob], 'nobg.webp', { type: 'image/webp' }),
+      );
       const resp = await fetch(saveUrl, { method: 'POST', body: formData });
       if (!resp.ok) throw new Error(`POST ${saveUrl} -> ${resp.status}`);
       const saved = await resp.json();
@@ -121,7 +129,13 @@ function openMaskEditor(originalFile, nobgBlob) {
       originalCanvas.height = nobgImg.naturalHeight;
 
       // Draw original into off-screen canvas (for restore sampling).
-      origCtx.drawImage(origImg, 0, 0, originalCanvas.width, originalCanvas.height);
+      origCtx.drawImage(
+        origImg,
+        0,
+        0,
+        originalCanvas.width,
+        originalCanvas.height,
+      );
 
       // Draw no-bg result onto the visible canvas.
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -131,8 +145,14 @@ function openMaskEditor(originalFile, nobgBlob) {
       URL.revokeObjectURL(origUrl);
     };
 
-    nobgImg.onload = () => { nobgReady = true; onBothReady(); };
-    origImg.onload = () => { origReady = true; onBothReady(); };
+    nobgImg.onload = () => {
+      nobgReady = true;
+      onBothReady();
+    };
+    origImg.onload = () => {
+      origReady = true;
+      onBothReady();
+    };
     nobgImg.src = nobgUrl;
     origImg.src = origUrl;
 
@@ -173,9 +193,16 @@ function openMaskEditor(originalFile, nobgBlob) {
     };
 
     // --- Mouse events ---
-    const onMouseDown = (e) => { painting = true; paint(e.clientX, e.clientY); };
-    const onMouseMove = (e) => { if (painting) paint(e.clientX, e.clientY); };
-    const onMouseUp = () => { painting = false; };
+    const onMouseDown = (e) => {
+      painting = true;
+      paint(e.clientX, e.clientY);
+    };
+    const onMouseMove = (e) => {
+      if (painting) paint(e.clientX, e.clientY);
+    };
+    const onMouseUp = () => {
+      painting = false;
+    };
 
     // --- Touch events ---
     const onTouchStart = (e) => {
@@ -187,7 +214,9 @@ function openMaskEditor(originalFile, nobgBlob) {
       e.preventDefault();
       if (painting) paint(e.touches[0].clientX, e.touches[0].clientY);
     };
-    const onTouchEnd = () => { painting = false; };
+    const onTouchEnd = () => {
+      painting = false;
+    };
 
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
@@ -256,6 +285,6 @@ function openMaskEditor(originalFile, nobgBlob) {
     acceptBtn.addEventListener('click', onAccept);
     skipBtn.addEventListener('click', onSkip);
 
-    dialog.showModal();
+    openSheet(dialog, null);
   });
 }
