@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { SAVED_PATH } from '../outfits/urls';
 import { WISHLIST_PATH } from '../wardrobe/urls';
 import type { RoundCounts } from './rounds';
@@ -11,7 +11,7 @@ import type { RoundCounts } from './rounds';
  */
 
 /** "3 outfits, 7 pieces", "1 outfit", "7 pieces": only what there is. */
-export function roundWhat({ outfits, pieces }: RoundCounts): string {
+export function roundWhat({ outfits, pieces }: RoundCounts): Translated {
   const outfitText =
     outfits === 1
       ? t('muse.round.OUTFITS_ONE')

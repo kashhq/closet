@@ -10,7 +10,7 @@ import { type SignablePhotoRef, imageUrl } from '../files/image-url';
 import { viewerTrigger } from '../files/photo-viewer';
 import { GarmentMark, markLabel } from '../layout/garment-mark';
 import { GarmentSilhouette } from '../layout/parts';
-import { t } from '../i18n';
+import { joinCopy, t } from '../i18n';
 import { categoryLabel } from '../wardrobe/garment';
 import { isPieceToBuy } from './references';
 
@@ -92,12 +92,15 @@ export function outfitLabel(
     .map((piece) =>
       t('mark.PIECE', {
         name: piece.name || categoryLabel(piece.category),
-        marks: piece.marks!.map((mark) => markLabel(mark)).join(', '),
+        marks: joinCopy(
+          piece.marks!.map((mark) => markLabel(mark)),
+          ', ',
+        ),
       }),
     );
   return warnings.length === 0
     ? name
-    : t('mark.OUTFIT_LABEL', { name, warnings: warnings.join(', ') });
+    : t('mark.OUTFIT_LABEL', { name, warnings: joinCopy(warnings, ', ') });
 }
 
 export interface CollageGarment extends CollagePieceView {

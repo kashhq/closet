@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import { type DayChoice, plannedNote } from '../calendar/day-choice';
 import { shortDayLabel } from '../date-labels';
-import { t, type Translated } from '../i18n';
+import { t } from '../i18n';
 import { OUTFIT_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
@@ -326,11 +326,13 @@ function activityLine(
 ): string | undefined {
   if (!activity) return undefined;
   const parts = [
-    activity.nextPlanned &&
-      t('outfits.PLANNED_ON', { day: shortDayLabel(activity.nextPlanned) }),
-    activity.wornCount > 0 &&
-      t('outfits.WORN_TIMES', { count: activity.wornCount }),
-  ].filter((part): part is Translated => Boolean(part));
+    activity.nextPlanned
+      ? t('outfits.PLANNED_ON', { day: shortDayLabel(activity.nextPlanned) })
+      : undefined,
+    activity.wornCount > 0
+      ? t('outfits.WORN_TIMES', { count: activity.wornCount })
+      : undefined,
+  ].filter((part) => part !== undefined);
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 

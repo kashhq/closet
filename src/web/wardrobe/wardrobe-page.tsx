@@ -33,9 +33,9 @@ import {
   EmptyState,
   PlinthImage,
   SavedToast,
-  SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
@@ -817,6 +817,7 @@ function PropertyPills(props: {
 // The filter modal's form and its "Clear" send the search box's keyword
 // along, typed or not yet searched.
 const INCLUDE_KEYWORD = "#search-form [name='keyword']";
+const FILTER_SHEET_ID = 'filter-modal';
 
 /**
  * The scope row, sticky under the app bar (the plan's replacement for the
@@ -848,10 +849,9 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
       <SearchForm search={search} viewOwner={viewOwner} />
       <button
         type="button"
-        onclick="document.getElementById('filter-modal').showModal()"
+        {...sheetOpener(FILTER_SHEET_ID)}
         class="btn btn-ghost btn-sm btn-square shrink-0"
         aria-label={t('FILTERS')}
-        aria-haspopup="dialog"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -1079,10 +1079,11 @@ function FilterModal(props: {
 }) {
   const { search, options, viewOwner } = props;
   return (
-    <dialog
-      id="filter-modal"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="filter-modal-title"
+    <Sheet
+      id={FILTER_SHEET_ID}
+      kind="form"
+      labelledBy="filter-modal-title"
+      dismiss="close"
     >
       {/* group/filter: the chosen category reveals its type chips (TYPE_GROUP_REVEAL). */}
       <form
@@ -1091,7 +1092,7 @@ function FilterModal(props: {
         hx-get="/wardrobe"
         hx-include={INCLUDE_KEYWORD}
         {...SWAP_BODY}
-        class="modal-box group/filter"
+        class="group/filter"
       >
         <h3 id="filter-modal-title" class="font-bold text-lg mb-4">
           {t('FILTERS')}
@@ -1167,8 +1168,7 @@ function FilterModal(props: {
           </button>
         </div>
       </form>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+    </Sheet>
   );
 }
 
@@ -1329,6 +1329,9 @@ function Toggle(props: {
 }
 
 const BULK_FORM_ID = 'bulk-form';
+// Select mode's two sheets: its verbs (BulkActions) and "Set…" (BulkDialog).
+const BULK_ACTIONS_ID = 'bulk-actions';
+const BULK_SET_ID = 'bulk-dialog';
 
 /**
  * Select mode's form: the grid's checkbox tiles (later pages arrive inside
@@ -1399,14 +1402,14 @@ function BulkForm(props: {
           <button
             type="button"
             class="btn btn-sm"
-            onclick="document.getElementById('bulk-actions').showModal()"
+            {...sheetOpener(BULK_ACTIONS_ID)}
           >
             {t('BULK_ACTIONS')}
           </button>
           <button
             type="button"
             class="btn btn-primary btn-sm"
-            onclick="document.getElementById('bulk-dialog').showModal()"
+            {...sheetOpener(BULK_SET_ID)}
           >
             {t('BULK_SET')}
           </button>
@@ -1456,70 +1459,68 @@ function BulkActions({ model }: { model: WardrobeModel }) {
   const verbUrl = (verb: string) =>
     wardrobeUrl(viewOwner, searchParams(search), `/wardrobe/bulk/${verb}`);
   return (
-    <dialog id="bulk-actions" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">{t('BULK_ACTIONS_TITLE')}</h3>
-        <p class="text-sm text-muted mb-3" data-offline-note="">
-          {t('BULK_NEEDS_NETWORK')}
-        </p>
-        <div class="flex flex-col gap-4" data-needs-network="">
-          {capsules.length > 0 && (
-            <div class="flex items-end gap-2">
-              <label class="flex-1 min-w-0">
-                <span class="label text-sm mb-1">{t('CAPSULE')}</span>
-                <select
-                  name="capsuleId"
-                  form={BULK_FORM_ID}
-                  class="select select-sm w-full"
-                >
-                  {capsules.map((capsule) => (
-                    <option value={String(capsule.id)}>{capsule.name}</option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
+    <Sheet
+      id={BULK_ACTIONS_ID}
+      kind="choice"
+      labelledBy={`${BULK_ACTIONS_ID}-title`}
+      dismiss="close"
+    >
+      <h3 id={`${BULK_ACTIONS_ID}-title`} class="font-bold text-lg mb-4">
+        {t('BULK_ACTIONS_TITLE')}
+      </h3>
+      <p class="text-sm text-muted mb-3" data-offline-note="">
+        {t('BULK_NEEDS_NETWORK')}
+      </p>
+      <div class="flex flex-col gap-4" data-needs-network="">
+        {capsules.length > 0 && (
+          <div class="flex items-end gap-2">
+            <label class="flex-1 min-w-0">
+              <span class="label text-sm mb-1">{t('CAPSULE')}</span>
+              <select
+                name="capsuleId"
                 form={BULK_FORM_ID}
-                formaction={verbUrl('capsule')}
-                class="btn btn-sm"
+                class="select select-sm w-full"
               >
-                {t('BULK_ADD_TO_CAPSULE')}
-              </button>
-            </div>
-          )}
-          {model.ownerView && (
-            <div class="flex gap-2">
-              <button
-                type="submit"
-                form={BULK_FORM_ID}
-                formaction={verbUrl('washed')}
-                class="btn btn-sm flex-1"
-              >
-                {t('BULK_MARK_WASHED')}
-              </button>
-              <button
-                type="submit"
-                form={BULK_FORM_ID}
-                formaction={verbUrl('archive')}
-                class="btn btn-sm flex-1"
-              >
-                {t('BULK_ARCHIVE')}
-              </button>
-            </div>
-          )}
-        </div>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-        </div>
+                {capsules.map((capsule) => (
+                  <option value={String(capsule.id)}>{capsule.name}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('capsule')}
+              class="btn btn-sm"
+            >
+              {t('BULK_ADD_TO_CAPSULE')}
+            </button>
+          </div>
+        )}
+        {model.ownerView && (
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('washed')}
+              class="btn btn-sm flex-1"
+            >
+              {t('BULK_MARK_WASHED')}
+            </button>
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('archive')}
+              class="btn btn-sm flex-1"
+            >
+              {t('BULK_ARCHIVE')}
+            </button>
+          </div>
+        )}
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="modal-action">
+        <SheetCancel size="sm" />
+      </div>
+    </Sheet>
   );
 }
 
@@ -1612,81 +1613,79 @@ function labelled(
  */
 function BulkDialog() {
   return (
-    <dialog id="bulk-dialog" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-2">{t('BULK_TITLE')}</h3>
-        <p class="text-sm text-muted mb-4">{t('BULK_HINT')}</p>
-        <p class="text-sm text-muted mb-4" data-offline-note="">
-          {t('BULK_NEEDS_NETWORK')}
-        </p>
-        <div role="tablist" class="tabs tabs-box tabs-sm flex-wrap">
-          {BULK_PROPERTIES.map((property, index) => {
-            const choice = BULK_CHOICES[property];
-            return (
-              <>
-                <input
-                  type="radio"
-                  name="property"
-                  value={property}
-                  form={BULK_FORM_ID}
-                  role="tab"
-                  class="tab"
-                  aria-label={t(choice.label)}
-                  checked={index === 0}
-                />
-                <div class="tab-content pt-4">
-                  {property === 'materials' && (
-                    <p class="text-xs text-muted mb-2">
-                      {t('BULK_MATERIALS_ADD')}
-                    </p>
+    <Sheet
+      id={BULK_SET_ID}
+      kind="form"
+      labelledBy={`${BULK_SET_ID}-title`}
+      dismiss="close"
+    >
+      <h3 id={`${BULK_SET_ID}-title`} class="font-bold text-lg mb-2">
+        {t('BULK_TITLE')}
+      </h3>
+      <p class="text-sm text-muted mb-4">{t('BULK_HINT')}</p>
+      <p class="text-sm text-muted mb-4" data-offline-note="">
+        {t('BULK_NEEDS_NETWORK')}
+      </p>
+      <div role="tablist" class="tabs tabs-box tabs-sm flex-wrap">
+        {BULK_PROPERTIES.map((property, index) => {
+          const choice = BULK_CHOICES[property];
+          return (
+            <>
+              <input
+                type="radio"
+                name="property"
+                value={property}
+                form={BULK_FORM_ID}
+                role="tab"
+                class="tab"
+                aria-label={t(choice.label)}
+                checked={index === 0}
+              />
+              <div class="tab-content pt-4">
+                {property === 'materials' && (
+                  <p class="text-xs text-muted mb-2">
+                    {t('BULK_MATERIALS_ADD')}
+                  </p>
+                )}
+                <div class="flex flex-wrap gap-2">
+                  {choice.clearable && (
+                    <input
+                      type="radio"
+                      name={choice.field}
+                      value=""
+                      form={BULK_FORM_ID}
+                      class="btn btn-sm btn-ghost rounded-full"
+                      aria-label={t('NOT_SET')}
+                    />
                   )}
-                  <div class="flex flex-wrap gap-2">
-                    {choice.clearable && (
-                      <input
-                        type="radio"
-                        name={choice.field}
-                        value=""
-                        form={BULK_FORM_ID}
-                        class="btn btn-sm btn-ghost rounded-full"
-                        aria-label={t('NOT_SET')}
-                      />
-                    )}
-                    {choice.values.map((value) => (
-                      <input
-                        type="radio"
-                        name={choice.field}
-                        value={String(value)}
-                        form={BULK_FORM_ID}
-                        class="btn btn-sm rounded-full"
-                        aria-label={choice.labelOf(value)}
-                      />
-                    ))}
-                  </div>
+                  {choice.values.map((value) => (
+                    <input
+                      type="radio"
+                      name={choice.field}
+                      value={String(value)}
+                      form={BULK_FORM_ID}
+                      class="btn btn-sm rounded-full"
+                      aria-label={choice.labelOf(value)}
+                    />
+                  ))}
                 </div>
-              </>
-            );
-          })}
-        </div>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-          <button
-            type="submit"
-            form={BULK_FORM_ID}
-            class="btn btn-primary btn-sm"
-            data-needs-network=""
-          >
-            {t('APPLY')}
-          </button>
-        </div>
+              </div>
+            </>
+          );
+        })}
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="modal-action">
+        <SheetCancel size="sm" />
+        <button
+          type="submit"
+          form={BULK_FORM_ID}
+          class="btn btn-primary btn-sm"
+          data-needs-network=""
+        >
+          {t('APPLY')}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

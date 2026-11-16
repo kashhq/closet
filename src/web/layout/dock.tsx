@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { PROFILE_PATH } from '../auth/urls';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import type { ViewContext } from '../view-context';
 import { onProfile, ProfileAvatar } from './app-bar';
 import { HANGER_PATHS } from './parts';
@@ -57,12 +57,14 @@ export function Dock({ ctx }: { ctx: ViewContext }) {
 }
 
 /** A section's name as the dock shows it (the error page's link home). */
-export function sectionLabel(section: Section): string {
+export function sectionLabel(section: Section): Translated {
   return TABS[section].label();
 }
 
 /** Each tab's label (read at render, from the catalog) and its icon's SVG paths. */
-const TABS: Readonly<Record<Section, { label: () => string; icon: Child }>> = {
+const TABS: Readonly<
+  Record<Section, { label: () => Translated; icon: Child }>
+> = {
   today: {
     label: () => t('today.TITLE'),
     // Heroicons' sun, outline.

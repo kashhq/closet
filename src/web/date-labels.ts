@@ -1,5 +1,5 @@
 import type { Occasion } from '../wardrobe/occasions';
-import { t, type StringKey } from './i18n';
+import { t, type StringKey, type Translated } from './i18n';
 import {
   dateParts,
   dayOfWeek,
@@ -80,7 +80,7 @@ const MONTH_LONG_NAMES: StringKey[] = [
 ];
 
 /** "Tuesday, Sep 29". */
-export function dayLabel(date: IsoDate): string {
+export function dayLabel(date: IsoDate): Translated {
   const { month, day } = dateParts(date);
   return t('CALENDAR_PLAN_DAY', {
     weekday: t(DAY_NAMES[dayOfWeek(date)]),
@@ -90,13 +90,13 @@ export function dayLabel(date: IsoDate): string {
 }
 
 /** "Sep 29". */
-export function shortDayLabel(date: IsoDate): string {
+export function shortDayLabel(date: IsoDate): Translated {
   const { month, day } = dateParts(date);
   return t('calendar.SHORT_DAY', { month: t(MONTH_NAMES[month - 1]), day });
 }
 
 /** "Sep 29, 2025". */
-export function shortDayYearLabel(date: IsoDate): string {
+export function shortDayYearLabel(date: IsoDate): Translated {
   const { year, month, day } = dateParts(date);
   return t('calendar.SHORT_DAY_YEAR', {
     month: t(MONTH_NAMES[month - 1]),
@@ -109,7 +109,7 @@ export function shortDayYearLabel(date: IsoDate): string {
  * A date read on its own (the date a garment was acquired): "Tue, Sep 29"
  * in today's year, else "Sep 29, 2025".
  */
-export function dateLabel(date: IsoDate, today: IsoDate): string {
+export function dateLabel(date: IsoDate, today: IsoDate): Translated {
   if (dateParts(date).year !== dateParts(today).year) {
     return shortDayYearLabel(date);
   }
@@ -125,7 +125,7 @@ export function dateLabel(date: IsoDate, today: IsoDate): string {
  * A past day from today: "today", "yesterday", "3 days ago" up to six, then
  * `dateLabel`. Lower case: it ends a sentence ("Last worn yesterday").
  */
-export function relativeDay(day: IsoDate, today: IsoDate): string {
+export function relativeDay(day: IsoDate, today: IsoDate): Translated {
   const days = daysBetween(day, today);
   if (days === 0) return t('wear.TODAY');
   if (days === 1) return t('wear.YESTERDAY');
@@ -139,7 +139,7 @@ export function relativeDay(day: IsoDate, today: IsoDate): string {
  * "Calendar", so a `?week=` of another year would otherwise read like this
  * one's. The same for every week, so `/calendar` stays byte-stable.
  */
-export function weekRangeLabel(first: IsoDate, last: IsoDate): string {
+export function weekRangeLabel(first: IsoDate, last: IsoDate): Translated {
   const from = dateParts(first);
   const to = dateParts(last);
   if (from.year === to.year) {
@@ -156,7 +156,7 @@ export function weekRangeLabel(first: IsoDate, last: IsoDate): string {
 }
 
 /** "September 2026" (a month page's title). */
-export function monthLabel({ year, month }: YearMonth): string {
+export function monthLabel({ year, month }: YearMonth): Translated {
   return t('calendar.MONTH_TITLE', {
     month: t(MONTH_LONG_NAMES[month - 1]),
     year,
@@ -164,6 +164,6 @@ export function monthLabel({ year, month }: YearMonth): string {
 }
 
 /** "Night out". Every occasion has its catalog string: a missing one is a type error. */
-export function occasionLabel(occasion: Occasion): string {
+export function occasionLabel(occasion: Occasion): Translated {
   return t(`occasion.${occasion}`);
 }

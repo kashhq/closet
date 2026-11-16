@@ -396,6 +396,7 @@ class TimedClient extends Client {
         (error: unknown) => this.settled(error, startedAt),
       );
     }
+    // eslint-disable-next-line closet/no-forged-copy -- R is the base's own result type; nothing here makes copy
     return result as R;
   }
 

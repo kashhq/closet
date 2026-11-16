@@ -27,7 +27,7 @@ import {
   weekRangeLabel,
 } from '../date-labels';
 import { OccasionRow, OpenSlotRow } from './occasion-row';
-import { OPEN_PLAN_SHEET, PlanSheet, planSheetChoice } from './plan-sheet';
+import { PlanSheet, planSheetOpener } from './plan-sheet';
 import { dayAnchor, weekUrl } from './urls';
 import { AwayLink } from '../trips/away-link';
 import { WEEK_COLUMNS, WEEK_STRIP } from '../layout/columns';
@@ -292,9 +292,8 @@ function DaySection({
         <button
           type="button"
           class={`btn btn-ghost btn-sm mt-1 -ms-3 font-normal text-muted lg:ms-0 lg:justify-start ${rowStart(occasions.length + 3)}`}
-          data-plan={planSheetChoice(day.date, DEFAULT_OCCASION)}
+          {...planSheetOpener(day.date, DEFAULT_OCCASION)}
           data-day-plan={day.date}
-          onclick={OPEN_PLAN_SHEET}
         >
           +{' '}
           {day.entries.length > 0
@@ -318,13 +317,12 @@ function EmptyCellPlan(props: { day: IsoDate; occasion: Occasion }) {
     <button
       type="button"
       class="btn btn-ghost btn-sm w-full font-normal text-muted border border-dashed border-base-300"
-      data-plan={planSheetChoice(day, occasion)}
+      {...planSheetOpener(day, occasion)}
       data-cell-plan={occasion}
       aria-label={t('calendar.PLAN_CELL', {
         occasion: occasionLabel(occasion),
         day: dayLabel(day),
       })}
-      onclick={OPEN_PLAN_SHEET}
     >
       + {occasionLabel(occasion)}
     </button>
