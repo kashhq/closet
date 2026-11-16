@@ -31,6 +31,7 @@ import {
   reasonText,
   UndoForm,
 } from './suggestion-parts';
+import { THUMB_ROW } from '../layout/columns';
 
 export interface NeedPageModel {
   detail: NeedDetail;
@@ -382,7 +383,7 @@ function BestOutfitRows(props: {
   return (
     <div class="flex flex-col gap-1 pt-1">
       <p class="text-xs text-muted">{t('muse.BEST_LABEL')}</p>
-      <ul class="grid grid-cols-3 gap-2" data-best-outfits="">
+      <ul class={THUMB_ROW} data-best-outfits="">
         {props.best.best.map((idea) => (
           <li title={ideaName(idea.garments)}>
             <OutfitCollage

@@ -110,7 +110,7 @@ describe('OutfitCollage with two upper pieces', () => {
     { name: 'Tee', category: 'tops', photo: null },
   ];
 
-  it.each<CollageSize>(['thumb', 'cell', 'card', 'tile'])(
+  it.each<CollageSize>(['thumb', 'cell', 'month', 'card', 'tile'])(
     'lets both pieces shrink in a %s',
     async (size) => {
       const html = await renderToString(
@@ -122,4 +122,28 @@ describe('OutfitCollage with two upper pieces', () => {
       expect(html).toContain(`data-collage="${size}"`);
     },
   );
+});
+
+describe('OutfitCollage row', () => {
+  it('draws a photo-less garment as its silhouette, unlabelled, with a dot mark', async () => {
+    const html = await renderToString(
+      <OutfitCollage
+        garments={[
+          {
+            name: 'Wanted tee',
+            category: 'tops',
+            photo: null,
+            marks: ['to-buy'],
+          },
+        ]}
+        size="row"
+      />,
+    );
+    expect(html).toContain('data-collage="row"');
+    expect(html).toContain('data-collage-piece="tops"');
+    // Unlabelled: the name is not drawn under the silhouette.
+    expect(html).not.toContain('line-clamp-2');
+    // A dot, never the words over the piece's foot (FootMark).
+    expect(html).not.toContain('-translate-x-1/2');
+  });
 });

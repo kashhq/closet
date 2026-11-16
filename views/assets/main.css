@@ -260,6 +260,19 @@
   --container-page-wide: 80rem;
 }
 
+/* The galleries' least tile width from lg (layout/columns.ts): each grid
+   auto-fills as many columns of at least this as the page holds (#1064), so
+   width past 1024 px is density, never another layout. Plain custom
+   properties, not @theme: no utility is built from them, only columns.ts's
+   arbitrary values read them. */
+:root {
+  --tile-garment: 8.75rem;
+  --tile-outfit: 12rem;
+  --tile-idea: 17rem;
+  --tile-candidate: 13rem;
+  --tile-card: 18rem;
+}
+
 /* The left rail's width, and what sits beside it: `left-rail` is the left
    edge of the content column (a bar fixed above the dock, the connectivity
    banner). Zero below lg and on a page without a dock (sign-in, the share

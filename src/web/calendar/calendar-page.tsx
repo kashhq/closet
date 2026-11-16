@@ -30,6 +30,7 @@ import { OccasionRow, OpenSlotRow } from './occasion-row';
 import { OPEN_PLAN_SHEET, PlanSheet, planSheetChoice } from './plan-sheet';
 import { dayAnchor, weekUrl } from './urls';
 import { AwayLink } from '../trips/away-link';
+import { WEEK_COLUMNS, WEEK_STRIP } from '../layout/columns';
 
 /**
  * GET /calendar: the week as an agenda (R6; docs/plans/2026-09-26-redesign.md,
@@ -107,7 +108,7 @@ export function CalendarPage(props: {
       </nav>
       <WeekStrip view={view} />
       <div
-        class={`lg:grid lg:grid-cols-7 lg:gap-2 lg:mt-3 ${WEEK_ROWS[view.weekOccasions.length]}`}
+        class={`${WEEK_COLUMNS} lg:mt-3 ${WEEK_ROWS[view.weekOccasions.length]}`}
       >
         {view.days.map((day) => (
           <DaySection
@@ -133,7 +134,7 @@ export function CalendarPage(props: {
  */
 function WeekStrip({ view }: { view: CalendarView }) {
   return (
-    <ol class="grid grid-cols-7 gap-1 my-2 text-center select-none lg:hidden">
+    <ol class={`${WEEK_STRIP} my-2 text-center select-none lg:hidden`}>
       {view.days.map((day) => (
         <li>
           <a

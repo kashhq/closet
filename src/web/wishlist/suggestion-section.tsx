@@ -15,6 +15,7 @@ import {
   reasonText,
   UndoForm,
 } from './suggestion-parts';
+import { THUMB_ROW_WIDE } from '../layout/columns';
 
 /** Where a suggestion stands, as its page says it (data-suggestion-state). */
 const STATE = {
@@ -251,7 +252,7 @@ function OtherOptions(props: {
   return (
     <div class="flex flex-col gap-2 border-t border-base-300 pt-3">
       <p class="text-sm font-medium">{t('muse.OTHER_OPTIONS')}</p>
-      <ul class="grid grid-cols-4 gap-2" data-other-options="">
+      <ul class={THUMB_ROW_WIDE} data-other-options="">
         {props.picks.map((pick) => (
           <li>
             <a

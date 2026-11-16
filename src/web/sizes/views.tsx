@@ -33,6 +33,7 @@ import {
   type BrandSizeField,
   LENGTH_INPUT_MAX,
 } from './validation';
+import { BRAND_SIZE_FIELDS, FIELD_GRID } from '../layout/columns';
 
 /**
  * Sizes (#24; plan section 16): the editor (Profile › Sizes) and the brand
@@ -229,7 +230,7 @@ function MeasurementsForm({ model }: { model: SizesPageModel }) {
     <PostForm action={SIZES_MEASUREMENTS_PATH} class="flex flex-col gap-3">
       {/* The unit the numbers are shown in, which is how they are read. */}
       <input type="hidden" name="unit" value={model.unit} />
-      <div class="grid grid-cols-2 gap-3">
+      <div class={FIELD_GRID}>
         {MEASUREMENTS.map((m) => {
           const id = `measurement-${m}`;
           // The unit sits inside the frame, so the frame takes the classes
@@ -280,7 +281,7 @@ function BrandForm(props: {
       action={id === undefined ? BRAND_SIZES_PATH : brandSizeUrl(id)}
       class={cardClass('inset', 'card-body p-3 gap-2')}
     >
-      <div class="grid grid-cols-[2fr_1fr] gap-2">
+      <div class={BRAND_SIZE_FIELDS}>
         <BrandInput
           id={`${prefix}-brand`}
           name="brand"
