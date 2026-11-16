@@ -21,6 +21,7 @@ import {
   Strip,
 } from './parts';
 import { recapUrl } from './urls';
+import { STAT_GRID } from '../layout/columns';
 
 export interface RecapPageModel {
   recap: YearRecap<SignablePhotoRef>;
@@ -257,7 +258,7 @@ function Summary(props: { model: RecapPageModel; appName: string }) {
   const { recap } = model;
   return (
     <InsightCard id="recap-summary" title={t('recap.NUMBERS')}>
-      <div class="grid grid-cols-3 gap-2 text-center">
+      <div class={`${STAT_GRID} text-center`}>
         {stats(recap).map((stat) => (
           <div class="rounded-box bg-base-200 p-2" data-stat={stat.key}>
             <p class="text-2xl font-bold">{stat.value}</p>

@@ -83,7 +83,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
 
   // #663: a layer over a top in the plan's cells never spills out of the
   // plinth: the month's 48 px cells and the week's rows at 390 px, the
-  // week's columns at 1280 px.
+  // week's columns and the month's desktop step (#1064) at 1280 px.
   const coat = await addPhotographedGarment(page, 'Fit coat', 'outerwear');
   // The top has no photo: its hanger placeholder must fit the cell too.
   const tee = await createGarment(page, 'Fit tee', 'tops');
@@ -98,12 +98,14 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/calendar/month?month=2030-10');
-  await expect(page.locator('[data-collage="cell"] img')).toHaveCount(1);
+  await expect(page.locator('[data-collage="month"] img')).toHaveCount(1);
   await expectCollagePiecesInsidePlinths(page);
   await page.goto('/calendar?week=2030-10-10');
   await expect(page.locator('[data-collage="cell"] img')).toHaveCount(1);
   await expectCollagePiecesInsidePlinths(page);
   await page.setViewportSize({ width: 1280, height: 900 });
+  await expectCollagePiecesInsidePlinths(page);
+  await page.goto('/calendar/month?month=2030-10');
   await expectCollagePiecesInsidePlinths(page);
 
   // #822: an agent's entry wears its token's name as a badge, and a long

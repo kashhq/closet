@@ -16,6 +16,7 @@ import {
   inspirationPiecePath,
   inspirationPiecesPath,
 } from './urls';
+import { DENSE_FIELD_GRID } from '../layout/columns';
 
 /**
  * A look's pieces on its page (#22b): what the owner reads in the look,
@@ -88,7 +89,7 @@ export function PieceList(props: {
           <div class="collapse-content">
             <PostForm
               action={inspirationPiecesPath(lookId)}
-              class="grid grid-cols-2 gap-x-3 gap-y-1"
+              class={DENSE_FIELD_GRID}
             >
               <PieceFields idPrefix="new-piece" piece={NEW_PIECE} />
               <button
@@ -123,7 +124,7 @@ function PieceCard(props: { lookId: number; piece: StoredPiece }) {
       <AutosaveForm
         action={inspirationPiecePath(lookId, piece.position)}
         native
-        class="grid grid-cols-2 gap-x-3 gap-y-1"
+        class={DENSE_FIELD_GRID}
       >
         <PieceFields idPrefix={idPrefix} piece={piece} />
       </AutosaveForm>

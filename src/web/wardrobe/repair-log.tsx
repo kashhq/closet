@@ -10,6 +10,7 @@ import { valueLabel } from './labels';
 import type { RepairEntry, RepairLog, RepairPanel } from './repairs';
 import { garmentUrl } from './urls';
 import { CARE_NOTE_MAX, PRICE_INPUT_MAX } from './garment-input';
+import { FIELD_GRID } from '../layout/columns';
 
 /**
  * The repair and alteration log's views (#23): the garment page's section
@@ -150,7 +151,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
             placeholder={t('care.REPAIR_NOTE_PLACEHOLDER')}
           />
         </FormField>
-        <div class="grid grid-cols-2 gap-3">
+        <div class={FIELD_GRID}>
           <FormField
             id="repair-day"
             label={t('care.REPAIR_DAY')}

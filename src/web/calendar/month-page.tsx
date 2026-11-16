@@ -92,6 +92,12 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
   );
 }
 
+/**
+ * A day's cell. From lg (#1064) the date, the chip, the worn dot and "+N"
+ * share one line over the collage (`lg:order-last`, a full-width line of
+ * its own) at the collage's `month` step, so six weeks fit the 900 px fold;
+ * the phone keeps them stacked.
+ */
 function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
   const [first] = day.entries;
   // The link's aria-label stands in for its content, so the chip is read as
@@ -102,7 +108,7 @@ function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
   return (
     <a
       href={dayUrl(day.date)}
-      class="flex flex-col items-center gap-0.5 min-h-16 p-0.5 lg:min-h-32 lg:p-1 rounded-field overflow-hidden hover:bg-base-200"
+      class="flex flex-col items-center gap-0.5 min-h-16 p-0.5 lg:flex-row lg:flex-wrap lg:content-start lg:gap-x-1 lg:min-h-27 rounded-field overflow-hidden hover:bg-base-200"
       aria-label={cellLabel(day)}
       aria-current={day.isToday ? 'date' : undefined}
       aria-describedby={weather ? weatherDayId(day.date) : undefined}
@@ -110,7 +116,7 @@ function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
       data-worn={worn ? '' : undefined}
     >
       <span
-        class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold lg:size-8 lg:text-sm ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
+        class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
       >
         {day.dayNum}
       </span>
@@ -142,8 +148,8 @@ function CellCollage({
   const drawn = bodyOf(first.pieces);
   const hidden = hiddenBlocking(entries, drawn);
   return (
-    <span class="relative w-full">
-      <OutfitCollage garments={drawn} size="cell" decorative />
+    <span class="relative w-full lg:order-last">
+      <OutfitCollage garments={drawn} size="month" decorative />
       {hidden && (
         <span class="absolute bottom-0 right-0" aria-hidden="true">
           <GarmentMark marks={[hidden]} dot />

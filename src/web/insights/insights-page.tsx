@@ -14,7 +14,7 @@ import type { SignablePhotoRef } from '../files/image-url';
 import { type StringKey, t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
-import { CARD_COLUMNS } from '../layout/columns';
+import { CARD_COLUMNS, STAT_GRID } from '../layout/columns';
 import { PageMain } from '../layout/page-main';
 import { Layout } from '../layout/layout';
 import { EmptyState, GarmentThumb } from '../layout/parts';
@@ -181,7 +181,7 @@ function WornLately({
 }) {
   return (
     <InsightCard id="insights-worn" title={t('insights.WORN_LATELY')}>
-      <div class="grid grid-cols-3 gap-2 text-center">
+      <div class={`${STAT_GRID} text-center`}>
         {insights.worn.map((share) => (
           <div class="rounded-box bg-base-200 p-2" data-window={share.days}>
             <p class="text-2xl font-bold" data-percent>

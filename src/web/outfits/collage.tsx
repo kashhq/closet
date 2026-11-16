@@ -22,8 +22,8 @@ import { isPieceToBuy } from './references';
  * phone screen above the dock. The redesign's one OutfitCollage
  * (docs/plans/2026-09-26-redesign.md, sections 3 and 5): the gallery's
  * Ideas cards, the outfit page and Today (`card`), the Saved grid
- * (`tile`), the garment page's "In N outfits" and the calendar (`cell`, a
- * `thumb` that grows at lg), and an outfit's row beside its name (`row`:
+ * (`tile`), the garment page's "In N outfits" (`thumb`), the calendar
+ * (`cell`, `month`: a `thumb` with a desktop step), and an outfit's row beside its name (`row`:
  * the pickers' SavedOutfitButton and a trip's outfits, #360).
  */
 
@@ -125,7 +125,12 @@ export function bodyOf<G extends CollagePieceView>(
  * phone screen holds whole, `tile` for the Saved grid's two columns (about
  * 170 px wide at 390 px: a 4:5 frame so the grid's rows line up, the
  * garments centred in it), `thumb` for a strip of small tiles (the garment
- * page's "In N outfits", about 96 px wide).
+ * page's "In N outfits", about 96 px wide). `cell` and `month` are the
+ * calendar's: `thumb` on a phone (a week row's 64 px, a month cell about
+ * 48 px wide), each with one desktop step at `lg` (#1064, the desktop
+ * layout's §3.6): the week grid's card about 150 px tall, so a
+ * three-occasion week fits the fold, and the month's about 80 px, so six
+ * weeks of 110 px cells do. Density is the size's, never a page's class.
  */
 const SIZES = {
   card: {
@@ -152,16 +157,23 @@ const SIZES = {
     feet: 'h-6',
     side: 'h-5',
   },
-  // The calendar's: `thumb` on a phone (a month cell about 48 px wide, a week
-  // row's 64 px), growing at lg with the month's cell (about 170 px) and the
-  // week grid's column (130 to 175 px, #467).
+  // The week grid's cards (#467) and a need's best outfits.
   cell: {
-    box: 'rounded-field p-1.5 gap-1 lg:p-3 lg:gap-2',
+    box: 'rounded-field p-1.5 gap-1 lg:p-2 lg:gap-1.5',
     column: '',
-    upper: 'h-8 lg:h-16',
-    lower: 'h-10 lg:h-20',
-    feet: 'h-6 lg:h-12',
-    side: 'h-5 lg:h-10',
+    upper: 'h-8 lg:h-10',
+    lower: 'h-10 lg:h-12',
+    feet: 'h-6 lg:h-8',
+    side: 'h-5 lg:h-7',
+  },
+  // The month's cells: the week's `cell` on a phone, smaller from lg.
+  month: {
+    box: 'rounded-field p-1.5 gap-1',
+    column: '',
+    upper: 'h-8 lg:h-5',
+    lower: 'h-10 lg:h-6',
+    feet: 'h-6 lg:h-4',
+    side: 'h-5 lg:h-4',
   },
 } as const;
 export type CollageSize = keyof typeof SIZES | 'row';
@@ -201,7 +213,7 @@ export function OutfitCollage(props: {
       viewerSet={props.viewerSet}
       decorative={props.decorative ?? false}
       labelled={size === 'card'}
-      words={size !== 'thumb' && size !== 'cell'}
+      words={size === 'card' || size === 'tile'}
     />
   );
   return (

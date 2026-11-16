@@ -5,7 +5,7 @@ import { unlocksText } from '../gallery/goes-with';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
-import { CANDIDATE_GRID, PAIR_GRID } from '../layout/columns';
+import { CANDIDATE_GRID, OPTION_ROW, PAIR_GRID } from '../layout/columns';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
 import { PageColumn, PageMain } from '../layout/page-main';
@@ -348,7 +348,7 @@ function GroupCard(props: {
           unlocks={shared}
         />
       </div>
-      <ul class="grid grid-cols-3 gap-2 lg:gap-3">
+      <ul class={OPTION_ROW}>
         {options.map((pick) => (
           <li>
             <a

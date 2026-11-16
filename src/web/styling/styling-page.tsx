@@ -42,6 +42,7 @@ import {
   type StylingState,
   stylingUrl,
 } from './urls';
+import { COMPOSER_COLUMNS, FIELD_GRID } from '../layout/columns';
 
 /**
  * GET /styling (#42; docs/plans/2026-09-26-redesign.md, "Styling"): the
@@ -226,10 +227,6 @@ export function StylingRows(props: {
     </div>
   );
 }
-
-/** The composer's frame from lg: the rows' column, then the aside's fixed one. */
-const COMPOSER_COLUMNS =
-  'contents lg:grid lg:grid-cols-[1fr_20rem] lg:gap-6 lg:pr-4';
 
 /**
  * The outfit as it stands and the way to keep it: the preview and the fit
@@ -814,7 +811,7 @@ function destinationSummary(
 function ScheduleFields(props: { day?: IsoDate; occasion?: Occasion }) {
   const occasion = props.occasion ?? DEFAULT_OCCASION;
   return (
-    <div class="grid grid-cols-2 gap-3">
+    <div class={FIELD_GRID}>
       <label class="flex flex-col gap-1">
         <span class="label-text">{t('ADD_TO_CALENDAR')}</span>
         <input

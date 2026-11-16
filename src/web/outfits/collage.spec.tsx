@@ -110,7 +110,7 @@ describe('OutfitCollage with two upper pieces', () => {
     { name: 'Tee', category: 'tops', photo: null },
   ];
 
-  it.each<CollageSize>(['thumb', 'cell', 'card', 'tile'])(
+  it.each<CollageSize>(['thumb', 'cell', 'month', 'card', 'tile'])(
     'lets both pieces shrink in a %s',
     async (size) => {
       const html = await renderToString(

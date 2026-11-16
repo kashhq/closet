@@ -34,6 +34,12 @@ const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
 
+// A grid's or a CSS columns' count as a class token, bare or behind a variant
+// (`lg:grid-cols-[...]`, `xl:columns-3`).
+const COLUMN_CLASS = '/(?:^|[\\s:])(?:grid-cols|columns)-/';
+const NAMED_COLUMNS =
+  "A grid's columns are named once in src/web/layout/columns.ts (#1064): use its step, or add a named one there.";
+
 // no-restricted-syntax entries every file obeys, then the HttpError copy
 // rule, which specs are exempt from (their fixtures carry arbitrary messages).
 const RESTRICTED_SYNTAX = [
@@ -90,6 +96,12 @@ const RESTRICTED_SYNTAX = [
     message: THEME_TOKENS_ONLY,
   },
 ];
+
+// Every file but columns.ts, which is where the counts live. Specs are
+// exempt, like the HttpError copy rule.
+const COLUMN_STEPS = ['Literal[value', 'TemplateElement[value.raw'].map(
+  (node) => ({ selector: `${node}=${COLUMN_CLASS}]`, message: NAMED_COLUMNS }),
+);
 
 const HTTP_ERROR_COPY_MESSAGE =
   "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).";
@@ -202,6 +214,7 @@ export default tseslint.config(
         'error',
         ...RESTRICTED_SYNTAX,
         ...HTTP_ERROR_COPY,
+        ...COLUMN_STEPS,
       ],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed
@@ -292,6 +305,16 @@ export default tseslint.config(
   {
     files: ['**/*.spec.{ts,tsx}'],
     rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
+  },
+  {
+    files: ['src/web/layout/columns.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...RESTRICTED_SYNTAX,
+        ...HTTP_ERROR_COPY,
+      ],
+    },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.
   {
