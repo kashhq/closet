@@ -1,5 +1,5 @@
 import { type GarmentRole, gsmToOz } from '../../wardrobe/properties';
-import { t, type StringKey, tKey, type Translated } from '../i18n';
+import { t, type CopyKey, tKey, type Translated } from '../i18n';
 
 /**
  * The words for the property values (src/wardrobe/properties.ts owns the
@@ -47,7 +47,7 @@ export function roleGroupLabel(role: GarmentRole): string {
   return t(`roles.${role}`);
 }
 
-const ROLE_LABELS: Record<GarmentRole, StringKey> = {
+const ROLE_LABELS: Record<GarmentRole, CopyKey> = {
   layer: 'styling.role.layer',
   'one-piece': 'styling.role.one-piece',
   top: 'styling.role.top',

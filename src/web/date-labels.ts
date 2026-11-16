@@ -1,5 +1,5 @@
 import type { Occasion } from '../wardrobe/occasions';
-import { t, type StringKey, type Translated } from './i18n';
+import { t, type CopyKey, type Translated } from './i18n';
 import {
   dateParts,
   dayOfWeek,
@@ -16,7 +16,7 @@ import {
  */
 
 /** Indexed by weekday, 0 = Sunday. */
-export const DAY_NAMES: StringKey[] = [
+export const DAY_NAMES: CopyKey[] = [
   'CALENDAR_DAY_SUN',
   'CALENDAR_DAY_MON',
   'CALENDAR_DAY_TUE',
@@ -26,7 +26,7 @@ export const DAY_NAMES: StringKey[] = [
   'CALENDAR_DAY_SAT',
 ];
 
-export const DAY_LETTERS: StringKey[] = [
+export const DAY_LETTERS: CopyKey[] = [
   'CALENDAR_CAL_SUN_LETTER',
   'CALENDAR_CAL_MON_LETTER',
   'CALENDAR_CAL_TUE_LETTER',
@@ -37,7 +37,7 @@ export const DAY_LETTERS: StringKey[] = [
 ];
 
 /** Indexed by weekday, 0 = Sunday: "Tue". */
-const DAY_SHORT_NAMES: StringKey[] = [
+const DAY_SHORT_NAMES: CopyKey[] = [
   'calendar.weekday.SUN',
   'calendar.weekday.MON',
   'calendar.weekday.TUE',
@@ -48,7 +48,7 @@ const DAY_SHORT_NAMES: StringKey[] = [
 ];
 
 /** Indexed by month - 1. */
-const MONTH_NAMES: StringKey[] = [
+const MONTH_NAMES: CopyKey[] = [
   'MONTH_JAN',
   'MONTH_FEB',
   'MONTH_MAR',
@@ -64,7 +64,7 @@ const MONTH_NAMES: StringKey[] = [
 ];
 
 /** Indexed by month - 1: the month page's title. */
-const MONTH_LONG_NAMES: StringKey[] = [
+const MONTH_LONG_NAMES: CopyKey[] = [
   'calendar.month.JAN',
   'calendar.month.FEB',
   'calendar.month.MAR',

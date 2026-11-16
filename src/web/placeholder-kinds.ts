@@ -187,8 +187,8 @@ export const PLACEHOLDER_KINDS = {
   'style.ALLOW_PAIR_LABEL': { pair: 'copy' },
   'gallery.FOR_DAY': { day: 'copy' },
   'gallery.WITH': { name: 'data' },
-  'gallery.FEELS': { range: 'copy' },
-  'gallery.FEELS_TYPICAL': { range: 'copy' },
+  'gallery.FEELS': { range: 'data' },
+  'gallery.FEELS_TYPICAL': { range: 'data' },
   'gallery.PICK_DAY': { weekday: 'copy' },
   'gallery.PAIR': { a: 'data', b: 'data' },
   'gallery.RESTED': { names: 'data' },
@@ -308,7 +308,7 @@ export const PLACEHOLDER_KINDS = {
   'trips.FORECAST_FROM': { day: 'copy', from: 'copy' },
   'trips.FORECAST_LATER': { day: 'copy', from: 'copy' },
   'trips.TYPICAL_NOTE': { years: 'data' },
-  'trips.TYPICAL_DAY': { range: 'copy', chance: 'data' },
+  'trips.TYPICAL_DAY': { range: 'data', chance: 'data' },
   'trips.PACKED_SUMMARY': { packed: 'data', garments: 'data', pieces: 'data' },
   'trips.NEED_ATTENTION': { count: 'data' },
   'trips.IN_OUTFITS': { count: 'data' },
@@ -348,46 +348,21 @@ export const PLACEHOLDER_KINDS = {
   Record<StringKey, Readonly<Record<string, 'copy' | 'data'>>>
 >;
 
-const DAY_NUMBER = 'a day number';
-const YEAR_NUMBER = 'a year number';
-const TEMPERATURE = 'a temperature';
-
 /**
- * A key whose template is only placeholders and punctuation (`{a} + {b}`)
- * says nothing itself, so a `data` placeholder in it lets `t()` wrap any
- * string into `Translated`. Each such data placeholder is listed here with
- * why it is data and not copy; `i18n.spec.ts` fails on one that is missing,
- * or listed without being such a placeholder.
+ * The keys whose text is only placeholders and punctuation (`{a} + {b}`) and
+ * whose placeholders are all data: they hold no catalogue copy, so `t()` for
+ * one returns a plain `string`, not `Translated` (src/web/i18n.ts), and a
+ * copy sink (an HttpError's message) refuses it by type. TypeScript cannot
+ * read a template out of lang.json, so this list is written; `i18n.spec.ts`
+ * derives it from the catalogue and PLACEHOLDER_KINDS and fails on a
+ * difference, so a new such key cannot ship returning `Translated`.
  */
-export const FORMAT_ONLY_DATA = {
-  CALENDAR_PLAN_DAY: { day: DAY_NUMBER },
-  QUANTITY_BADGE: { quantity: 'a count' },
-  'calendar.MONTH_TITLE': { year: YEAR_NUMBER },
-  'calendar.MORE': { count: 'a count' },
-  'calendar.SHORT_DAY': { day: DAY_NUMBER },
-  'calendar.SHORT_DAY_YEAR': { day: DAY_NUMBER, year: YEAR_NUMBER },
-  'calendar.WEEK_RANGE': { year: YEAR_NUMBER },
-  'care.REPAIR_DAY_VALUE': { year: YEAR_NUMBER },
-  'gallery.PAIR': {
-    a: "a garment's own name, or its category's label when unnamed: user data",
-    b: "a garment's own name, or its category's label when unnamed: user data",
-  },
-  'linkImport.REASON_LED': { reason: 'a machine reason code, shown as is' },
-  'mark.OUTFIT_LABEL': { name: "an outfit's name: user data" },
-  'mark.PIECE': { name: "a garment's name: user data" },
-  'refusal.form.fieldErrors': { field: "a form field's machine name" },
-  'sizes.BRAND_NOTE': {
-    brand: 'a brand the user typed',
-    note: "the user's own note on the brand (user data, not catalogue copy)",
-  },
-  'today.push.PLANNED': { outfit: "an outfit's name: user data" },
-  'weather.DAY_HIGH': { high: TEMPERATURE },
-  'weather.DAY_RANGE': { low: TEMPERATURE, high: TEMPERATURE },
-  'weather.RANGE': {
-    low: TEMPERATURE,
-    high: TEMPERATURE,
-    unit: "the user's temperature unit symbol",
-  },
-} as const satisfies Partial<
-  Record<StringKey, Readonly<Record<string, string>>>
->;
+export const DATA_ONLY_KEYS = [
+  'QUANTITY_BADGE',
+  'calendar.MORE',
+  'gallery.PAIR',
+  'sizes.BRAND_NOTE',
+  'weather.DAY_HIGH',
+  'weather.DAY_RANGE',
+  'weather.RANGE',
+] as const satisfies readonly StringKey[];

@@ -1,6 +1,6 @@
 import english from '../i18n/en/lang.json';
 import { escapeHtml } from './html';
-import { PLACEHOLDER_KINDS } from './placeholder-kinds';
+import { type DATA_ONLY_KEYS, PLACEHOLDER_KINDS } from './placeholder-kinds';
 
 /**
  * English strings for JSX views, typed to the keys of src/i18n/en/lang.json:
@@ -96,11 +96,26 @@ export function joinCopy(
   return parts.join(separator) as Translated;
 }
 
+/**
+ * What `t()` returns for a key: `Translated` copy, except for a key that
+ * holds no copy (DATA_ONLY_KEYS: `{a} + {b}`), whose text is user data and so
+ * a plain `string` that copy sinks refuse. A key type wider than one literal
+ * that includes such a key is `string` too, which fails closed.
+ */
+export type TextFor<K extends StringKey> = K extends DataOnlyKey
+  ? string
+  : Translated;
+
+type DataOnlyKey = (typeof DATA_ONLY_KEYS)[number];
+
+/** The keys that return `Translated`: what a table of copy keys is typed. */
+export type CopyKey = Exclude<StringKey, DataOnlyKey>;
+
 /** Plain text; JSX escapes it where it lands. */
 export function t<K extends StringKey>(
   key: K,
   ...params: ParamsFor<K>
-): Translated;
+): TextFor<K>;
 export function t(key: StringKey, params: StringParams = {}): Translated {
   return interpolate(key, params, (value) => value) as Translated;
 }
