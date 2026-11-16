@@ -3,7 +3,7 @@ import { PostForm } from '../form';
 import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
 import { AppBar, type AppBarProps } from '../layout/app-bar';
-import { LinkTabs } from '../layout/link-tabs';
+import type { LinkTabsProps } from '../layout/link-tabs';
 import { Sheet, sheetOpener } from '../layout/sheet';
 import {
   CameraIcon,
@@ -72,10 +72,11 @@ export interface WardrobeHeaderProps {
 }
 
 /**
- * The app bar of a Wardrobe tab, as `PageShell`'s `bar`. Nothing in it
- * varies but with the data (the switcher's wardrobes, what the requester
- * may do), so /wardrobe stays byte-stable as a stale-while-revalidate tab
- * root. Its ＋ opens `WardrobeAddSheet`, which the page renders beside it.
+ * The app bar of a Wardrobe tab, as `PageShell`'s `bar`, the tabs with it,
+ * so the four pages cannot draw them apart. Nothing in it varies but with
+ * the data (the switcher's wardrobes, what the requester may do), so
+ * /wardrobe stays byte-stable as a stale-while-revalidate tab root. Its ＋
+ * opens `WardrobeAddSheet`, which the page renders beside it.
  */
 export function wardrobeBar(
   props: WardrobeHeaderProps,
@@ -84,6 +85,7 @@ export function wardrobeBar(
   return {
     title: wardrobeTitle(props.sharedWardrobes, viewOwner),
     titleMenu: <SwitcherItems {...props} />,
+    tabs: wardrobeTabs(props.tab, viewOwner),
     actions: (
       <>
         <WardrobeMenu
@@ -443,34 +445,31 @@ const CAPSULE_ICON =
   'M6.429 9.75 2.25 12l4.179 2.25m0-4.5 5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0 4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0-5.571 3-5.571-3';
 
 /**
- * The Wardrobe's tabs, underlined: plain boosted links, so the dock keeps
- * its size (plan section 2). All carry `?ownerId=` in a shared wardrobe,
- * so a grantee moves between the grantor's closet, capsules and wishlist;
- * Laundry, the requester's own, is left out there.
+ * The Wardrobe's tabs (the bar's, through `wardrobeBar`): plain boosted
+ * links, so the dock keeps its size (plan section 2). All carry `?ownerId=`
+ * in a shared wardrobe, so a grantee moves between the grantor's closet,
+ * capsules and wishlist; Laundry, the requester's own, is left out there.
  */
-export function WardrobeTabs(props: {
-  active: WardrobeTab;
-  viewOwner: number | undefined;
-}) {
-  const { viewOwner } = props;
+function wardrobeTabs(
+  active: WardrobeTab,
+  viewOwner: number | undefined,
+): LinkTabsProps<WardrobeTab> {
   const tab = (name: WardrobeTab, label: string) => ({
     name,
     href: tabUrl(name, viewOwner),
     label,
   });
-  return (
-    <LinkTabs
-      active={props.active}
-      label={t('NAV_WARDROBE_VIEWS')}
-      id="wardrobe-tabs"
-      tabs={[
-        tab('closet', t('CLOSET')),
-        tab('capsules', t('CAPSULES')),
-        viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
-        tab('wishlist', t('wishlist.TAB')),
-      ]}
-    />
-  );
+  return {
+    active,
+    label: t('NAV_WARDROBE_VIEWS'),
+    id: 'wardrobe-tabs',
+    tabs: [
+      tab('closet', t('CLOSET')),
+      tab('capsules', t('CAPSULES')),
+      viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
+      tab('wishlist', t('wishlist.TAB')),
+    ],
+  };
 }
 
 function PlusIcon() {

@@ -57,7 +57,6 @@ import {
   wardrobeBar,
   type WardrobeHeaderProps,
   WardrobeMenu,
-  WardrobeTabs,
 } from './wardrobe-header';
 
 /**
@@ -240,11 +239,6 @@ export function WardrobePage(props: {
       title={t('WARDROBE')}
       bar={model.selecting ? taskBar(model) : wardrobeBar(header)}
       width="wide"
-      tabs={
-        !model.selecting && (
-          <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
-        )
-      }
       body={WARDROBE_BODY}
       overlays={!model.selecting && <WardrobeAddSheet {...header} />}
     >
@@ -840,7 +834,7 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
   return (
     <div
       id="scope-row"
-      class="group/scope sticky top-16 z-10 flex items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
+      class="group/scope sticky top-bar z-10 flex items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
     >
       {model.capsules.length > 0 && (
         <CapsuleScope

@@ -79,6 +79,141 @@ async function expectPhoneWidth(page: Page): Promise<void> {
   ).toBeLessThanOrEqual(390);
 }
 
+/**
+ * A section's tabs are the app bar's (#1061). At 390 they are the bar's
+ * second row, under the title, and the page starts below them. At 1440
+ * they sit inline after the title and hold still between sibling pages
+ * (they jumped with each page's width before), and Profile is the rail's
+ * foot, the bar's avatar hidden. Leaves the phone on the page it found.
+ */
+async function expectSectionTabs(page: Page): Promise<void> {
+  const start = page.url();
+  const sections = [
+    {
+      label: 'Calendar views',
+      paths: ['/calendar', '/calendar/month', '/trips'],
+    },
+    {
+      label: 'Wardrobe sections',
+      paths: ['/wardrobe', '/capsules', '/laundry', '/wardrobe/wishlist'],
+    },
+  ];
+  const layout = async (path: string, label: string) => {
+    await page.goto(path);
+    const bar = page.locator('.app-bar');
+    const tabs = bar.getByRole('navigation', { name: label });
+    const [barBox, title, row, content] = await Promise.all([
+      bar.boundingBox(),
+      bar.locator('h1').boundingBox(),
+      tabs.boundingBox(),
+      page.evaluate(
+        () =>
+          document
+            .querySelector('main')
+            ?.firstElementChild?.getBoundingClientRect().top ?? null,
+      ),
+    ]);
+    return { barBox: barBox!, title: title!, row: row!, content: content! };
+  };
+
+  const phone = await layout('/calendar', 'Calendar views');
+  expect(phone.row.y).toBeGreaterThanOrEqual(
+    phone.title.y + phone.title.height,
+  );
+  expect(phone.row.y + phone.row.height).toBeLessThanOrEqual(
+    phone.barBox.y + phone.barBox.height + 1,
+  );
+
+  // A tab focused from the keyboard shows its whole outline inside the
+  // row's scroller, which clips whatever it draws outside its box.
+  await page.keyboard.press('Tab');
+  const tabs = page.locator('.app-bar-tabs');
+  await tabs.getByRole('link').last().focus();
+  const ring = await page.evaluate(() => {
+    const scroller = document.querySelector('.app-bar-tabs');
+    const tab = scroller?.querySelector('a:focus-visible');
+    if (!scroller || !tab) return null;
+    const style = getComputedStyle(tab);
+    const grow =
+      Math.max(0, parseFloat(style.outlineWidth)) +
+      parseFloat(style.outlineOffset);
+    const box = tab.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    return {
+      top: box.top - grow - view.top,
+      bottom: view.bottom - (box.bottom + grow),
+    };
+  });
+  expect(ring?.top).toBeGreaterThanOrEqual(0);
+  expect(ring?.bottom).toBeGreaterThanOrEqual(0);
+
+  // 200% text with a long title and the freshness line showing (the bar's
+  // tallest content): the tab row stays inside the bar and the first visible
+  // content starts at or below its bottom.
+  for (const path of ['/trips', '/wardrobe']) {
+    await page.goto(path);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+      window.scrollTo(0, 0);
+      const h1 = document.querySelector('.app-bar h1');
+      if (h1) h1.textContent = 'A very long title '.repeat(8);
+      const fresh = document.querySelector('#freshness');
+      if (fresh) {
+        fresh.textContent = 'Updated 3 minutes ago';
+        fresh.classList.remove('hidden');
+      }
+    });
+    const clearance = await page.evaluate(() => {
+      const barBottom =
+        document.querySelector('header.app-bar')?.getBoundingClientRect()
+          .bottom ?? Infinity;
+      const row = document
+        .querySelector('.app-bar-tabs')
+        ?.getBoundingClientRect();
+      const content = Array.from(
+        document.querySelectorAll<HTMLElement>('main *'),
+      ).find((el) => {
+        const box = el.getBoundingClientRect();
+        return el.childElementCount === 0 && box.width > 0 && box.height > 0;
+      });
+      return {
+        tabsInside: (row?.bottom ?? Infinity) - barBottom,
+        content:
+          (content?.getBoundingClientRect().top ?? -Infinity) - barBottom,
+      };
+    });
+    expect(clearance.tabsInside).toBeLessThanOrEqual(1);
+    expect(clearance.content).toBeGreaterThanOrEqual(0);
+  }
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
+
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const { label, paths } of sections) {
+    // Where the row starts, never its width: the actions after it differ.
+    let first: { x: number; y: number; height: number } | undefined;
+    for (const path of paths) {
+      const { barBox, title, row } = await layout(path, label);
+      expect(row.x, path).toBeGreaterThanOrEqual(title.x + title.width);
+      expect(row.y, path).toBeGreaterThanOrEqual(barBox.y);
+      expect(row.y + row.height, path).toBeLessThanOrEqual(
+        barBox.y + barBox.height,
+      );
+      const place = { x: row.x, y: row.y, height: row.height };
+      first ??= place;
+      expect(place, path).toEqual(first);
+    }
+  }
+  await expect(page.locator('#avatar')).toBeHidden();
+  await expect(
+    page.locator('.dock').getByRole('link', { name: 'Profile' }),
+  ).toBeVisible();
+  await page.setViewportSize(viewport);
+  await page.goto(start);
+}
+
 test.describe('Trips', () => {
   test('a trip from the form to a packed bag', async ({
     page,
@@ -95,6 +230,7 @@ test.describe('Trips', () => {
     await page.goto('/calendar');
     await page.getByRole('link', { name: 'Trips' }).click();
     await expect(page).toHaveURL(/\/trips$/);
+    await expectSectionTabs(page);
     await page.getByRole('link', { name: 'New trip' }).first().click();
     await expectNoZoomingFields(page);
     await page.getByLabel('Name').fill('Austin conference');

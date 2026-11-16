@@ -77,12 +77,13 @@ test('register through the form, sign out from Profile, sign back in', async ({
   // A plain registration lands on Today (#661).
   await page.waitForURL((url) => url.pathname === '/' && url.search === '');
 
-  // The avatar opens Profile, whose sign-out signs out (#82).
+  // Profile (the avatar on a phone, the rail's link from lg: #82, #1061)
+  // holds the sign-out.
   await page.goto('/wardrobe');
   await expect(page.locator('#avatar')).toHaveText(
     email.charAt(0).toUpperCase(),
   );
-  await page.locator('#avatar').click();
+  await page.getByRole('link', { name: 'Profile', exact: true }).click();
   await page
     .locator('#sign-out')
     .getByRole('button', { name: 'Sign out' })

@@ -25,7 +25,6 @@ import {
   WardrobeAddSheet,
   wardrobeBar,
   type WardrobeHeaderProps,
-  WardrobeTabs,
 } from '../wardrobe/wardrobe-header';
 import {
   GROUPS_PAGE_SIZE,
@@ -106,7 +105,6 @@ export function InboxPage(props: { ctx: ViewContext; model: InboxModel }) {
       title={t('wishlist.TITLE')}
       bar={wardrobeBar(header)}
       width="wide"
-      tabs={<WardrobeTabs active="wishlist" viewOwner={viewOwner} />}
       body={{ gap: 8 }}
       overlays={
         <>
