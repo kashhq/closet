@@ -4,7 +4,7 @@ import type {
   FastifyRequest,
 } from 'fastify';
 import { buildMigrationTimes, lastMigrationAt } from '../../db/migrate';
-import { probeWritable, storageFix } from '../../storage-probe';
+import { probeWritable, storageFix, storageFlights } from '../../storage-probe';
 import { identityRefusal, STORAGE_MARKER_FIX } from '../files/storage-identity';
 import type { WebOptions } from '../plugin';
 import { enforceLimit, HEALTH_LIMIT } from '../security/rate-limit';
@@ -54,6 +54,7 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   const storage = createStorageCheck({
     directories: config.storageDirs,
     probe: probeWritable,
+    flights: storageFlights,
     fix: storageFix,
     identity: async () => {
       // The marker against the id claimed (and, in production, paired) at

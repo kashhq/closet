@@ -6,6 +6,8 @@ import {
 import { schemaState } from '../../db/migrate';
 import type { Logger } from '../../logger';
 import {
+  createDirectoryFlights,
+  type DirectoryFlights,
   type StorageFailure,
   STORAGE_PROBE_TIMEOUT_MS,
   type WriteProbe,
@@ -208,6 +210,8 @@ export interface StorageCheckDeps {
   /** Where the operator reads how to remount or re-adopt (STORAGE_MARKER_FIX). */
   identityFix: string;
   logger: Logger;
+  /** Shared with the boot's sweep (storageFlights) so one fs call per share is ever in flight. */
+  flights?: DirectoryFlights;
   ttlMs?: number;
   timeoutMs?: number;
   now?: () => number;
@@ -227,8 +231,9 @@ export interface StorageCheckDeps {
  * and concurrent callers await the same probe. Each directory's probe is
  * bounded by `timeoutMs` (code `TIMEOUT`: a stalled NFS share never answers),
  * which is under the TTL, so the cached verdict always settles. A timed-out
- * probe cannot be cancelled, so at most ONE is in flight per directory: while
- * it is pending, later windows report TIMEOUT at once and start nothing (each
+ * probe cannot be cancelled, so at most ONE fs operation is in flight per
+ * directory (`flights`, shared with the boot's leftover sweep): while one is
+ * pending, later windows report TIMEOUT at once and start nothing (each
  * abandoned fs call would hold one of libuv's four pool threads, and a few
  * stall every fs call and DNS lookup in the process); a new probe starts only
  * after the pending one settles. A problem is logged when it appears or
@@ -241,23 +246,18 @@ export function createStorageCheck({
   identity,
   identityFix,
   logger,
+  flights = createDirectoryFlights(),
   ttlMs = STORAGE_PROBE_TTL_MS,
   timeoutMs = STORAGE_PROBE_TIMEOUT_MS,
   now = Date.now,
 }: StorageCheckDeps): () => Promise<HealthCheck> {
   let cached: { at: number; verdict: Promise<HealthCheck> } | undefined;
   let reported = '';
-  const pending = new Map<string, Promise<WriteProbe>>();
   const bounded = (directory: string): Promise<WriteProbe> => {
-    if (pending.has(directory)) {
+    const started = flights.tryStart(directory, () => probe(directory));
+    if (!started) {
       return Promise.resolve({ writable: false, code: 'TIMEOUT' });
     }
-    const started = probe(directory);
-    const forget = (): void => {
-      pending.delete(directory);
-    };
-    pending.set(directory, started);
-    started.then(forget, forget);
     let timer: NodeJS.Timeout | undefined;
     const expired = new Promise<WriteProbe>((resolve) => {
       timer = setTimeout(
