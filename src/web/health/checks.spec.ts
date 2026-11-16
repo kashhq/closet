@@ -560,14 +560,12 @@ describe('the probe leftover sweep', () => {
     expect(calls.lists).toHaveLength(1);
   });
 
-  it('times out at the deadline, never early, while the list is held, and the next run retries the sweep', async () => {
+  it('times out at the deadline, never early, while the list is held, and the next run does not retry the sweep', async () => {
     vi.useFakeTimers();
     let fail: (error: Error) => void = () => undefined;
-    let hold = true;
-    const { fs, calls } = fakeFs([], () =>
-      hold
-        ? new Promise<string[]>((_, reject) => (fail = reject))
-        : Promise.resolve([]),
+    const { fs, calls } = fakeFs(
+      [],
+      () => new Promise<string[]>((_, reject) => (fail = reject)),
     );
     const check = createStorageCheck({
       directories: ['/sweep/held'],
@@ -585,30 +583,35 @@ describe('the probe leftover sweep', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(verdict).toMatchObject({ status: 'down', required: true });
 
-    // The held list fails once released: the sweep is not recorded as done.
-    hold = false;
     fail(Object.assign(new Error('x'), { code: 'EIO' }));
     await vi.advanceTimersByTimeAsync(0);
     expect(await check()).toEqual(up(true));
-    expect(calls.lists).toHaveLength(2);
+    expect(calls.lists).toHaveLength(1);
   });
 
-  it('retries the sweep on the next run after one that did not complete', async () => {
-    let fail = true;
+  it('attempts a failing list once, logs it once without the path, and never retries', async () => {
     const { fs, calls } = fakeFs([], () =>
-      fail
-        ? Promise.reject(Object.assign(new Error('x'), { code: 'EIO' }))
-        : Promise.resolve([]),
+      Promise.reject(Object.assign(new Error('x'), { code: 'EIO' })),
     );
-    expect(await probeWritable('/sweep/retry', { fs, log: logger })).toEqual({
-      writable: true,
-    });
-    expect(logs.records).toMatchObject([
-      { level: 'warn', directory: '/sweep/retry', code: 'EIO' },
-    ]);
-    fail = false;
-    await probeWritable('/sweep/retry', { fs });
-    await probeWritable('/sweep/retry', { fs });
-    expect(calls.lists).toHaveLength(2);
+    for (let run = 0; run < 3; run++) {
+      expect(await probeWritable('/sweep/retry', { fs, log: logger })).toEqual({
+        writable: true,
+      });
+    }
+    expect(calls.lists).toHaveLength(1);
+    expect(logs.records).toHaveLength(1);
+    expect(logs.records[0]).toMatchObject({ level: 'warn', code: 'EIO' });
+    expect(JSON.stringify(logs.records)).not.toContain('/sweep/retry');
+  });
+
+  it('never lists when the caller is the boot (sweep: false)', async () => {
+    const { fs, calls } = fakeFs(['.write-probe-1-3']);
+    expect(
+      await probeWritable('/sweep/boot', { fs, log: logger, sweep: false }),
+    ).toEqual({ writable: true });
+    expect(calls.lists).toEqual([]);
+    // A later readiness probe still performs the one sweep.
+    await probeWritable('/sweep/boot', { fs });
+    expect(calls.lists).toHaveLength(1);
   });
 });

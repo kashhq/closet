@@ -85,13 +85,16 @@ let probeCounter = 0;
  * single-flight (a separate sweep collided with the readiness probe, #1074,
  * #1075). Any such file is fair game: another live process's is only ever
  * mid-write, and removing it costs that probe nothing (its bytes go to the
- * unlinked inode, its own rm is `force`). The sweep is best effort and is
- * retried by the next probe until it has completed once; the write, not the
- * sweep, says whether the directory can be written.
+ * unlinked inode, its own rm is `force`). The sweep is best effort and
+ * attempted once per process per directory, whatever its outcome (a failing
+ * or stalled list is never retried: it would re-run, and re-log, every
+ * window); the write, not the sweep, says whether the directory can be
+ * written. The boot's check passes `sweep: false`: it must stay a bounded
+ * write, and only a readiness probe, which has a deadline, lists.
  */
 export type WriteProbe = { writable: true } | { writable: false; code: string };
 
-const sweptDirectories = new Set<string>();
+const sweepAttempted = new Set<string>();
 
 async function sweepLeftovers(
   directory: string,
@@ -99,6 +102,9 @@ async function sweepLeftovers(
   fs: ProbeFs,
   log: Logger | undefined,
 ): Promise<void> {
+  // Recorded before the list, so an attempt that stalls past the probe's
+  // deadline or fails is still the one attempt.
+  sweepAttempted.add(directory);
   try {
     const leftovers = (await fs.readdir(probeDirectory)).filter((name) =>
       name.startsWith(PROBE_FAMILY),
@@ -106,7 +112,6 @@ async function sweepLeftovers(
     for (const name of leftovers) {
       await fs.rm(join(probeDirectory, name), { force: true });
     }
-    sweptDirectories.add(directory);
     if (leftovers.length > 0) {
       log?.info(
         { directory, removed: leftovers.length },
@@ -114,8 +119,9 @@ async function sweepLeftovers(
       );
     }
   } catch (error) {
+    // Once per process, and no path: the storage check's log rules.
     log?.warn(
-      { directory, code: String((error as NodeJS.ErrnoException).code) },
+      { code: String((error as NodeJS.ErrnoException).code) },
       'Could not sweep probe leftovers',
     );
   }
@@ -123,14 +129,18 @@ async function sweepLeftovers(
 
 export async function probeWritable(
   directory: string,
-  { fs = nodeFs, log }: { fs?: ProbeFs; log?: Logger } = {},
+  {
+    fs = nodeFs,
+    log,
+    sweep = true,
+  }: { fs?: ProbeFs; log?: Logger; sweep?: boolean } = {},
 ): Promise<WriteProbe> {
   const probeDirectory = join(directory, PROBE_DIRECTORY);
   const probe = join(probeDirectory, `${PROBE_PREFIX}${++probeCounter}`);
   try {
     // Also makes `directory`, as its writers do.
     await fs.mkdir(probeDirectory, { recursive: true });
-    if (!sweptDirectories.has(directory)) {
+    if (sweep && !sweepAttempted.has(directory)) {
       await sweepLeftovers(directory, probeDirectory, fs, log);
     }
     // `wx`: never truncate or follow anything already at that name.
