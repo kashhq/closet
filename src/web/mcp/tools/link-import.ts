@@ -19,7 +19,7 @@ export function refusedForm(errors: FieldErrors<GarmentField>): HttpError {
   const messages = Object.entries(errors).map(([field, fieldErrors]) =>
     t('refusal.form.fieldErrors', {
       field,
-      errors: fieldErrors?.join(' ') ?? '',
+      errors: joinCopy(fieldErrors ?? [], ' '),
     }),
   );
   return new HttpError(400, joinCopy(messages, '; '));

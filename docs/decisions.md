@@ -1470,3 +1470,8 @@ Consequence: serializers (fast-json-stringify) still compile per boot: caching t
 **Why:** #1092 refused literals, templates and concatenations in an HttpError message with ESLint selectors, and the validator cache key with a deny-list; review kept finding another shape (conditionals, `??`, class expressions, `errors.HttpError`, grandchildren; a format function in ajv options).
 **Decision:** HttpError's message parameter is `Translated` (`src/web/i18n.ts`), which only `t()` and `joinCopy()` return, so every subclass and expression form fails the typecheck; the ESLint rule is gone and `errors.spec.tsx` holds the `@ts-expect-error` cases. `sharedValidators` throws on any non-JSON-plain `customOptions` value, naming its path.
 **Consequence:** a new message is a `lang.json` key (`FieldErrors` and the form readers carry `Translated` too); specs cast their fixtures `as Translated`.
+
+## 2026-11-16 — Translated is made only by t(), joinCopy() and errors.tsx (#1098)
+Why: #1097 typed HttpError's message as `Translated`, but `reasonLed(reason: string, message: string)` and `joinCopy` callers could still launder English through format-only keys (`linkImport.REASON_LED`, `refusal.form.fieldErrors`).
+Decision: a function returning `Translated` takes `Translated` for its text parts (`reasonLed`'s reason is a refusal word); the MCP form refusal joins its field messages with `joinCopy`. ESLint refuses `as Translated` outside `src/web/i18n.ts` and `src/web/errors.tsx`; specs are exempt (they forge copy to test the handler).
+Consequence: `t()` params stay `string`, so a format-only key can still be handed a raw string directly; a new helper wrapping one takes `Translated`.

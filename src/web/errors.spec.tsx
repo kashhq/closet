@@ -14,6 +14,7 @@ import {
 } from './errors';
 import * as errors from './errors';
 import { t, type Translated } from './i18n';
+import { reasonLed } from './wardrobe/link-import/import';
 import { renderPage } from './render';
 import type { ViewContext } from './view-context';
 
@@ -355,6 +356,17 @@ describe('createErrorHandler', () => {
 
 // #842: a query sent before the outage and answered late said the database
 // was back, so the next failure was captured as a second outage.
+describe('reasonLed', () => {
+  it('takes copy only, never English written in code (#1098)', () => {
+    const copy = t('linkImport.TITLE_ONLY_SEND_NAME');
+    expect(reasonLed('title-only', copy)).toBe(`title-only: ${copy}`);
+    // @ts-expect-error a raw string is not Translated
+    reasonLed('title-only', 'Try again');
+    // @ts-expect-error the reason is a refusal word, not free text
+    reasonLed('Try again', copy);
+  });
+});
+
 describe('DatabaseOutage', () => {
   it('ends only with an answer to something begun after the outage did', () => {
     const { logger, logs } = captureLogs();
