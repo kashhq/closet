@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { CutoutQueueState } from '../cutout/queue-state';
 import type { Db } from '../db/client';
+import type { StorageDirectory } from '../storage-probe';
 import { registerApi } from './api/plugin';
 import { createSessionHook } from './auth/require-session';
 import { RefusalSummaries } from './auth/refusal-summaries';
@@ -96,7 +97,7 @@ interface WebConfig {
    * DATA_PATH and MODELS_PATH: every directory the process writes at
    * runtime, which /health/ready's `storage` check probes (src/web/health).
    */
-  storageDirs: readonly string[];
+  storageDirs: readonly StorageDirectory[];
 }
 
 export interface WebOptions {
