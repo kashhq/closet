@@ -6,7 +6,7 @@ import {
   MAX_INPUT_PIXELS,
   type Photos,
 } from '../../files/photos';
-import { type StringKey, t, type Translated } from '../../i18n';
+import { type CopyKey, t, type Translated } from '../../i18n';
 import type { Logger } from '../../../logger';
 import type { RateLimitChecker } from '../../security/rate-limit';
 import {
@@ -95,7 +95,7 @@ export class LinkImportError extends Error {
  * inside the network must not tell the user where it points).
  */
 export const REFUSALS: Readonly<
-  Record<LinkImportRefusal, { message: StringKey; status: 400 | 502 }>
+  Record<LinkImportRefusal, { message: CopyKey; status: 400 | 502 }>
 > = {
   'no-link': { message: 'linkImport.NO_LINK', status: 400 },
   'invalid-url': { message: 'linkImport.INVALID_URL', status: 400 },

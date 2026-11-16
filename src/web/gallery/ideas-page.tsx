@@ -19,7 +19,7 @@ import {
   DayDestinationLine,
   destinationPickLabel,
 } from '../outfits/destination-views';
-import { OutfitTabs } from '../outfits/outfit-tabs';
+import { outfitTabs } from '../outfits/outfit-tabs';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import { brokenRuleLabels } from '../style/labels';
 import { tripUrl } from '../trips/urls';
@@ -83,16 +83,14 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
             ⤮ {t('gallery.SHUFFLE')}
           </a>
         ),
+        tabs: outfitTabs(
+          'ideas',
+          state.destination.kind === 'day' ? state.destination : undefined,
+        ),
       }}
       width="wide"
       body={{ gap: 3 }}
     >
-      <OutfitTabs
-        active="ideas"
-        destination={
-          state.destination.kind === 'day' ? state.destination : undefined
-        }
-      />
       <Scope model={model} />
       {cards.weather && <WeatherNote weather={cards.weather} />}
       <ChipList chips={adviceChips(cards.weather)} />

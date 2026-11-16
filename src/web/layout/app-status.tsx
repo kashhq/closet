@@ -41,7 +41,7 @@ export function AppStatus({ ctx }: { ctx: ViewContext }) {
     >
       {/* The banners stack under the app bar; the stack itself takes no
           taps, so an empty one never covers the page. */}
-      <div class="fixed top-16 left-rail right-0 z-[999] px-4 pt-2 flex flex-col gap-2 pointer-events-none">
+      <div class="fixed top-bar left-rail right-0 z-[999] px-4 pt-2 flex flex-col gap-2 pointer-events-none">
         <div
           id="connectivity-banner"
           role="status"

@@ -301,13 +301,27 @@
    (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, in rem like the rest),
    `--action-bar-h`: what focus scrolls clear of and what PageShell leaves
    below the page while one shows. A new fixed bar taller than that updates
-   it. */
+   it. `bar` is the bar alone: where a row sticks under it (`top-bar`). */
 :root {
-  --app-bar-h: 4rem;
+  --app-bar-row-h: 4rem;
+  --app-bar-h: var(--app-bar-row-h);
+  /* daisyUI's own tab height (`.tabs`), owned here so the bar's height can
+     count its tab row; --size-field grows on a coarse pointer (Touch
+     sizing). */
+  --app-bar-tabs-h: calc(var(--size-field) * 10);
   --action-bar-h: 3.5rem;
 }
 @theme inline {
+  --spacing-bar: var(--app-bar-h);
   --spacing-under-bar: calc(var(--app-bar-h) + 1rem);
+}
+/* The title block must fit --app-bar-row-h at any text size: two title lines
+   (3.125rem) or, while the freshness line shows (1rem, `#freshness` unhidden
+   by freshness.js), one title line and it. Both are rem and line-height
+   units, so the fixed bar height holds at 200% text with no measuring. */
+.app-bar-title:has(> #freshness:not(.hidden)) h1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 .app-bar {
   position: fixed;
@@ -316,6 +330,56 @@
   right: 0;
   height: var(--app-bar-h);
   z-index: 900;
+}
+
+/* A section's tabs are the bar's (AppBar `tabs`, #1061), so sibling pages
+   show them in one place whatever their width. Below lg they are the
+   header's second row: the title row keeps its 4rem, the tabs wrap under
+   it full width (DOM order puts them after the title, as from lg), and the
+   bar grows by their height through --app-bar-h, which every offset reads
+   (the page frame, the scroll padding, a sticky row's `top-bar`). The
+   active tab's underline sits on the bar's bottom border. They never wrap
+   to a third line: a row too long for the screen (large text) scrolls
+   sideways inside the bar. From lg they sit inline after the title, the
+   page's actions pushed to the end, on the one 4rem row. */
+.app-bar-tabs {
+  --tab-height: var(--app-bar-tabs-h);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
+}
+/* The tab scroller clips what it draws outside its box, so a focused tab's
+   ring is drawn inside the tab (#1105). */
+.app-bar-tabs .tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+@media (max-width: 1023.98px) {
+  :root:has(.app-bar-tabs) {
+    --app-bar-h: calc(var(--app-bar-row-h) + var(--app-bar-tabs-h));
+  }
+  .app-bar:has(> .app-bar-tabs) {
+    flex-wrap: wrap;
+    align-content: flex-start;
+    row-gap: 0;
+  }
+  /* Less the bar's 1px bottom border, as a one-row bar's content box is:
+     the title sits where it does on every other page. */
+  .app-bar:has(> .app-bar-tabs) > .app-bar-title {
+    min-height: calc(var(--app-bar-row-h) - 1px);
+  }
+  .app-bar-tabs {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+@media (min-width: 1024px) {
+  .app-bar:has(> .app-bar-tabs) > .app-bar-title {
+    flex: 0 1 auto;
+  }
+  .app-bar-tabs {
+    flex: 1 1 0%;
+  }
 }
 .dock {
   z-index: 900;
@@ -351,8 +415,7 @@ html {
    bar sticky above the dock (`data-end="bar"`, Styling's) leaves the dock's
    height alone. A `single` page's width is its `max-w-page-*` class; every
    other layout's frame is wide, set here, so its grid owns the columns. The body and
-   the aside carry the gutter (`data-gutter`), so section tabs between the
-   bar and them sit flush. Each layout is one grid here, from lg only: below
+   the aside carry the gutter (`data-gutter`). Each layout is one grid here, from lg only: below
    it every region stacks in DOM order, which is the desktop's left to
    right. Nothing but this file and page-shell.tsx names a region's place. */
 @layer components {
@@ -386,9 +449,6 @@ html {
       display: grid;
       align-items: start;
     }
-    .page-shell > .page-tabs {
-      grid-area: tabs;
-    }
     .page-shell > .page-body {
       grid-area: body;
       min-width: 0;
@@ -403,7 +463,6 @@ html {
        reading measure right. */
     .page-shell[data-layout="split"] {
       grid-template:
-        "tabs tabs" auto
         "aside body" auto / 5fr 7fr;
     }
     .page-shell[data-layout="split"] > .page-body,
@@ -413,14 +472,12 @@ html {
     /* Work and its result: the result beside it, right. */
     .page-shell[data-layout="panel"] {
       grid-template:
-        "tabs tabs" auto
         "body aside" auto / 1fr 20rem;
     }
     /* A filtered gallery: the filters left (§3.3 docks its sheet here). */
     .page-shell[data-layout="facets"],
     .page-shell[data-layout="index"] {
       grid-template:
-        "tabs tabs" auto
         "aside body" auto / 15rem 1fr;
     }
     .page-shell[data-layout="index"] > .page-aside {

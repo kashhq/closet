@@ -1,6 +1,6 @@
 import type { OutfitRule, RuleMatcher } from '../../wardrobe/outfit-rules';
 import type { BudgetBand, Style } from '../../wardrobe/style';
-import { t, tKey } from '../i18n';
+import { t, tKey, type Translated } from '../i18n';
 import { categoryLabel } from '../wardrobe/garment';
 import { valueLabel } from '../wardrobe/labels';
 import type { NamedGarment } from './queries';
@@ -71,7 +71,7 @@ export function matcherLabel(
 export function ruleSentence(
   rule: OutfitRule,
   garmentName: (id: number) => string,
-): string {
+): Translated {
   const a = matcherLabel(rule.a, garmentName);
   const b = matcherLabel(rule.b, garmentName);
   return rule.kind === 'never'

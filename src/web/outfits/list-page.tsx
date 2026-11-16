@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import { type DayChoice, plannedNote } from '../calendar/day-choice';
 import { shortDayLabel } from '../date-labels';
-import { t, type Translated } from '../i18n';
+import { t } from '../i18n';
 import { OUTFIT_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
@@ -11,7 +11,7 @@ import type { ViewContext } from '../view-context';
 import { collagePieces, OutfitCollage } from './collage';
 import { DayDestinationLine } from './destination-views';
 import type { DayDestination } from './destination';
-import { OutfitTabs } from './outfit-tabs';
+import { outfitTabs } from './outfit-tabs';
 import { AgentBadge } from '../agent-badge';
 import type { OutfitActivity, GarmentOutfit, SavedOutfit } from './queries';
 import type { OutfitCount } from '../../wardrobe/goes-with';
@@ -92,12 +92,12 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
             + {t('styling.NEW')}
           </a>
         ),
+        tabs: outfitTabs('saved', destination),
       }}
       width="wide"
       body={{ gap: 3 }}
       overlays={<DecisionToastView toast={model.toast} />}
     >
-      <OutfitTabs active="saved" destination={destination} />
       {model.picking && (
         <PickingHeader destination={model.picking.destination} />
       )}
@@ -326,11 +326,13 @@ function activityLine(
 ): string | undefined {
   if (!activity) return undefined;
   const parts = [
-    activity.nextPlanned &&
-      t('outfits.PLANNED_ON', { day: shortDayLabel(activity.nextPlanned) }),
-    activity.wornCount > 0 &&
-      t('outfits.WORN_TIMES', { count: activity.wornCount }),
-  ].filter((part): part is Translated => Boolean(part));
+    activity.nextPlanned
+      ? t('outfits.PLANNED_ON', { day: shortDayLabel(activity.nextPlanned) })
+      : undefined,
+    activity.wornCount > 0
+      ? t('outfits.WORN_TIMES', { count: activity.wornCount })
+      : undefined,
+  ].filter((part) => part !== undefined);
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 

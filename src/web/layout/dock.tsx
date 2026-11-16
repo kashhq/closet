@@ -1,6 +1,8 @@
 import type { Child } from 'hono/jsx';
-import { t } from '../i18n';
+import { PROFILE_PATH } from '../auth/urls';
+import { t, type Translated } from '../i18n';
 import type { ViewContext } from '../view-context';
+import { onProfile, ProfileAvatar } from './app-bar';
 import { HANGER_PATHS } from './parts';
 import { DOCK_TABS, type Section, SECTION_HOME, sectionOf } from './sections';
 
@@ -14,32 +16,55 @@ import { DOCK_TABS, type Section, SECTION_HOME, sectionOf } from './sections';
  * would bounce to the login page, so the one rule lives here and every
  * signed-out page (sign in, register, the 404) inherits it. Its z-index (above page content) and its
  * restyling as a left rail at lg (one markup, CSS only) are in main.css.
+ * The rail carries every place (docs/plans/2026-11-16-desktop-layout.md
+ * §3.1, owner decision 1), so from lg Profile is its last link, at its
+ * foot, and the app bar's avatar (a phone's way there) hides.
  */
 export function Dock({ ctx }: { ctx: ViewContext }) {
   if (!ctx.user) return null;
   const active = sectionOf(ctx.path);
+  const profile = onProfile(ctx.path);
   return (
     <nav class="dock" aria-label={t('NAV_MAIN')}>
       {DOCK_TABS.map((section) => (
         <DockLink
-          active={active}
-          section={section}
+          active={active === section}
+          href={SECTION_HOME[section]}
           label={TABS[section].label()}
         >
-          {TABS[section].icon}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="size-6"
+          >
+            {TABS[section].icon}
+          </svg>
         </DockLink>
       ))}
+      <DockLink
+        active={profile}
+        href={PROFILE_PATH}
+        label={t('PROFILE')}
+        class="hidden lg:flex mt-auto"
+      >
+        <ProfileAvatar email={ctx.user.email} current={profile} />
+      </DockLink>
     </nav>
   );
 }
 
 /** A section's name as the dock shows it (the error page's link home). */
-export function sectionLabel(section: Section): string {
+export function sectionLabel(section: Section): Translated {
   return TABS[section].label();
 }
 
 /** Each tab's label (read at render, from the catalog) and its icon's SVG paths. */
-const TABS: Readonly<Record<Section, { label: () => string; icon: Child }>> = {
+const TABS: Readonly<
+  Record<Section, { label: () => Translated; icon: Child }>
+> = {
   today: {
     label: () => t('today.TITLE'),
     // Heroicons' sun, outline.
@@ -90,30 +115,25 @@ const TABS: Readonly<Record<Section, { label: () => string; icon: Child }>> = {
 };
 
 function DockLink(props: {
-  /** The section of the page on screen, if any. */
-  active: Section | undefined;
-  section: Section;
+  /** The link leads to the page on screen's section (or Profile). */
+  active: boolean;
+  href: string;
   label: string;
-  /** The icon's SVG paths. */
+  /** Profile's: shown only as the rail, at its foot. */
+  class?: string;
+  /** The icon. */
   children: Child;
 }) {
-  const isActive = props.active === props.section;
+  const classes = [props.active && 'dock-active', props.class]
+    .filter(Boolean)
+    .join(' ');
   return (
     <a
-      class={isActive ? 'dock-active' : undefined}
-      aria-current={isActive ? 'page' : undefined}
-      href={SECTION_HOME[props.section]}
+      class={classes || undefined}
+      aria-current={props.active ? 'page' : undefined}
+      href={props.href}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        class="size-6"
-      >
-        {props.children}
-      </svg>
+      {props.children}
       <span class="dock-label">{props.label}</span>
     </a>
   );

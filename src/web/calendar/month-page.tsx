@@ -11,7 +11,7 @@ import {
 } from '../weather/views';
 import type { MonthDayView, MonthView } from './calendar-view';
 import { PageShell } from '../layout/page-shell';
-import { CalendarTabs } from './calendar-tabs';
+import { calendarTabs } from './calendar-tabs';
 import { DAY_LETTERS, dayLabel, monthLabel } from '../date-labels';
 import { dayUrl, monthUrl } from './urls';
 
@@ -34,10 +34,9 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
       ctx={ctx}
       name="month"
       title={t('CALENDAR_PAGE_TITLE')}
-      bar={{ title: t('CALENDAR') }}
+      bar={{ title: t('CALENDAR'), tabs: calendarTabs('month') }}
       width="wide"
     >
-      <CalendarTabs active="month" />
       <WeatherMonthLoader ctx={ctx} days={view.forecast} />
       <nav
         class="flex items-center justify-between gap-2 mb-2"

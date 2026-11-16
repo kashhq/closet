@@ -31,11 +31,11 @@ const WIDTH_CLASS: Readonly<Record<PageWidth, string>> = {
 /**
  * How far the body's content sits from the column's edges (main.css,
  * `.page-body[data-gutter]`):
- *  - `page` (the default): 1rem each side and below the bar or the tabs.
+ *  - `page` (the default): 1rem each side and below the bar.
  *  - `bleed`: 1rem below, none at the sides, for rows that reach the
  *    screen's edges and pad their own text (Styling's strips).
- *  - `flush`: none, for a first row that sits flush under the bar or the
- *    tabs (the Wardrobe's sticky scope row); the content pads itself.
+ *  - `flush`: none, for a first row that sits flush under the bar (the
+ *    Wardrobe's sticky scope row); the content pads itself.
  */
 export type PageGutter = 'page' | 'bleed' | 'flush';
 
@@ -128,11 +128,6 @@ export type PageShellProps = PageLayout & {
   bar: Omit<AppBarProps, 'ctx'>;
   body?: PageBodyFrame;
   /**
-   * The section's tabs, flush under the app bar and lined up with the
-   * column (the Wardrobe's). D3 (#1058) moves them into the bar.
-   */
-  tabs?: Child;
-  /**
    * The page ends on its own bar sticky above the dock (Styling's, #664):
    * it leaves only the dock's height below it, not the dock and a gutter.
    * Superseded by `actionBar` in D5 (#1058), which implies it; removed then.
@@ -179,7 +174,6 @@ export function PageShell(props: PageShellProps) {
         data-layout={layout}
         data-end={props.endsOnBar ? 'bar' : undefined}
       >
-        {props.tabs && <div class="page-tabs">{props.tabs}</div>}
         {ASIDE_FIRST[layout] && aside}
         <PageBody name={name} {...props.body}>
           {props.children}

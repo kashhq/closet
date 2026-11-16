@@ -15,7 +15,7 @@ import { OutboxPending, outboxRegion } from '../outbox';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from '../wardrobe/garment';
 import { LAUNDRY_PATH } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import { WardrobeHeader } from '../wardrobe/wardrobe-header';
 import type { LaundryItem } from './queries';
 
 /** The one-shot flag POST /laundry's redirect carries. */
@@ -54,41 +54,38 @@ export function LaundryPage(props: {
         sharedWardrobes={props.sharedWardrobes}
         canEdit
       />
-      <div class="pt-16">
-        <WardrobeTabs active="laundry" viewOwner={undefined} />
-        <main class="p-4 pb-40 w-full max-w-lg mx-auto">
-          {items.length === 0 ? (
-            <EmptyState message={t('wear.LAUNDRY_EMPTY')}>
-              <a href="/wardrobe" class="btn btn-sm" autofocus={landed}>
-                {t('WARDROBE')}
-              </a>
-            </EmptyState>
-          ) : (
-            <PostForm
-              action={LAUNDRY_PATH}
-              class="flex flex-col gap-6"
-              offlineQueue="wash"
-            >
-              {due.length > 0 && (
-                <LaundryGroup title={t('wear.LAUNDRY_DUE')} items={due} />
-              )}
-              {worn.length > 0 && (
-                <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
-              )}
-              <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex justify-end">
-                <button
-                  type="submit"
-                  id="laundry-mark-washed"
-                  class="btn btn-primary btn-sm"
-                  autofocus={landed}
-                >
-                  {t('wear.MARK_WASHED')}
-                </button>
-              </div>
-            </PostForm>
-          )}
-        </main>
-      </div>
+      <main class="p-4 pt-under-bar pb-40 w-full max-w-lg mx-auto">
+        {items.length === 0 ? (
+          <EmptyState message={t('wear.LAUNDRY_EMPTY')}>
+            <a href="/wardrobe" class="btn btn-sm" autofocus={landed}>
+              {t('WARDROBE')}
+            </a>
+          </EmptyState>
+        ) : (
+          <PostForm
+            action={LAUNDRY_PATH}
+            class="flex flex-col gap-6"
+            offlineQueue="wash"
+          >
+            {due.length > 0 && (
+              <LaundryGroup title={t('wear.LAUNDRY_DUE')} items={due} />
+            )}
+            {worn.length > 0 && (
+              <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
+            )}
+            <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex justify-end">
+              <button
+                type="submit"
+                id="laundry-mark-washed"
+                class="btn btn-primary btn-sm"
+                autofocus={landed}
+              >
+                {t('wear.MARK_WASHED')}
+              </button>
+            </div>
+          </PostForm>
+        )}
+      </main>
       {props.washed !== undefined && (
         <>
           <SavedToast

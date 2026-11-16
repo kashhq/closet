@@ -1,6 +1,6 @@
 import { Card } from '../card';
 import { tripPhase } from '../../wardrobe/packing';
-import { CalendarTabs } from '../calendar/calendar-tabs';
+import { calendarTabs } from '../calendar/calendar-tabs';
 import type { IsoDate } from '../../calendar-date';
 import { t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
@@ -39,9 +39,9 @@ export function TripsPage(props: {
             + {t('trips.NEW')}
           </a>
         }
+        tabs={calendarTabs('trips')}
       />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-3">
-        <CalendarTabs active="trips" />
+      <main class="p-4 pt-under-bar pb-24 w-full max-w-lg mx-auto flex flex-col gap-3">
         {trips.length === 0 ? (
           <EmptyState message={t('trips.EMPTY')}>
             <a href={`${TRIPS_PATH}/new`} class="btn btn-primary btn-sm">

@@ -43,3 +43,50 @@ describe('flat theme: shadow classes', () => {
     },
   );
 });
+
+// closet/no-forged-copy (scripts/lint/forged-copy.mjs, #1100) judges the type
+// an assertion makes, so each spelling below is one case. The file must be one
+// the project service knows and the rule covers (not i18n.ts, errors.tsx or a
+// spec); its text is replaced.
+describe('forged copy', () => {
+  const forged = async (body: string) => {
+    const [result] = await eslint.lintText(
+      `import * as i18n from './i18n';\nimport { t, type Translated } from './i18n';\n${body}\n`,
+      { filePath: resolve(root, 'src/web/date-labels.ts') },
+    );
+    return result.messages.filter((m) => m.ruleId === 'closet/no-forged-copy')
+      .length;
+  };
+
+  it.each([
+    "export const a = 'English' as Translated;",
+    "export const a = <Translated>'English';",
+    "export const a = 'English' as i18n.Translated;",
+    "type Copy = Translated;\nexport const a = 'English' as Copy;",
+    "export const a = 'English' as never;",
+    "export const a = 'English' as any;",
+    "export const a = 'English' as unknown as Translated;",
+    "export const a = 'English' as Translated | undefined;",
+    "export const a = ['English'] as Translated[];",
+    "export const a = { message: 'English' } as { message: Translated };",
+    'export const a = ((s: string) => s) as (s: string) => Translated;',
+    'export const a = new Map() as Map<string, Translated>;',
+    'export function as<T>(x: unknown): T {\n  return x as T;\n}',
+    'export function as<T extends string>(x: string): T {\n  return x as T;\n}',
+    'export function as<T>(x: unknown) {\n  return <T>x;\n}',
+    'export const a = (s: string): s is Translated => s.length > 0;',
+  ])('refuses %s', async (body) => {
+    expect(await forged(body)).toBe(1);
+  });
+
+  it.each([
+    "export const a = t('ABOUT_TITLE') as string;",
+    "export const a = [t('ABOUT_TITLE')] as const;",
+    "export const a = 'English' as unknown;",
+    "export const a = 'English' as const;",
+    "export const a = ['English'] as string[];",
+    "export const a = [t('ABOUT_TITLE'), 0].filter((s) => s !== 0);",
+  ])('lets %s through', async (body) => {
+    expect(await forged(body)).toBe(0);
+  });
+});

@@ -290,6 +290,18 @@ test.describe('desktop', () => {
       '/calendar/month?month=2026-08',
     );
   });
+
+  // Section tabs in the app bar (#1061): each section's sibling pages not
+  // shot above, so every tab row is seen in its one place, and Profile at
+  // the rail's foot.
+  test('demo: Theo, the section tabs at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '90-demo-capsules-desktop', '/capsules');
+    await shot(page, '91-demo-laundry-desktop', '/laundry');
+    await shot(page, '92-demo-ideas-desktop', '/outfits/ideas?seed=1');
+    await shot(page, '93-demo-trips-desktop', '/trips');
+    await shot(page, '94-demo-profile-desktop', '/auth/profile');
+  });
 });
 
 /**
