@@ -283,7 +283,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(notice).toBeVisible();
 
     // Signing out with the refusal unsynced asks before discarding it.
-    await page.locator('#avatar').click();
+    await page.getByRole('link', { name: 'Profile', exact: true }).click();
     await page
       .locator('#sign-out')
       .getByRole('button', { name: 'Sign out' })

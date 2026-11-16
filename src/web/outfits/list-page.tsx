@@ -11,7 +11,7 @@ import type { ViewContext } from '../view-context';
 import { collagePieces, OutfitCollage } from './collage';
 import { DayDestinationLine } from './destination-views';
 import type { DayDestination } from './destination';
-import { OutfitTabs } from './outfit-tabs';
+import { outfitTabs } from './outfit-tabs';
 import { AgentBadge } from '../agent-badge';
 import type { OutfitActivity, GarmentOutfit, SavedOutfit } from './queries';
 import type { OutfitCount } from '../../wardrobe/goes-with';
@@ -92,12 +92,12 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
             + {t('styling.NEW')}
           </a>
         ),
+        tabs: outfitTabs('saved', destination),
       }}
       width="wide"
       body={{ gap: 3 }}
       overlays={<DecisionToastView toast={model.toast} />}
     >
-      <OutfitTabs active="saved" destination={destination} />
       {model.picking && (
         <PickingHeader destination={model.picking.destination} />
       )}

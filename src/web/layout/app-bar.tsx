@@ -4,6 +4,7 @@ import { loginUrl, registerUrl } from '../auth/return-to';
 import { PROFILE_PATH } from '../auth/urls';
 import { t } from '../i18n';
 import type { ViewContext } from '../view-context';
+import { LinkTabs, type LinkTabsProps } from './link-tabs';
 import { BackLink } from './parts';
 
 export interface AppBarProps {
@@ -32,6 +33,14 @@ export interface AppBarProps {
   /** At most two of the page's own actions, before the avatar. */
   actions?: Child;
   /**
+   * The section's tabs (the Wardrobe's, the Calendar's, the Outfits page's),
+   * from the section's one builder, so every sibling page renders the same
+   * row in the same place: the header's second row below lg, inline after
+   * the title from it (`.app-bar-tabs`, main.css). A page's own sub-tabs
+   * stay in its body (`LinkTabs`).
+   */
+  tabs?: LinkTabsProps;
+  /**
    * Signed out: the page the "Login" or "Register" link comes back to after
    * signing in (the sign-in pages' own returnTo, the invite page; #661).
    */
@@ -41,16 +50,18 @@ export interface AppBarProps {
 /**
  * The app bar every page renders (docs/plans/2026-09-26-redesign.md, "The
  * app bar"): the page's own header, with its title, scope and actions, the
- * request spinner and the cached copy's age, and the avatar that opens
- * Profile. There is no drawer and no menu: everything the account needs is
- * on Profile.
+ * request spinner and the cached copy's age, the section's tabs, and the
+ * avatar that opens Profile (on a phone: from lg Profile is the rail's,
+ * dock.tsx). There is no drawer and no menu: everything the account needs
+ * is on Profile.
  *
  * Rendered into the body like the dock, so a boosted navigation, a history
  * restore and a cached tab root all carry the bar of the page they show.
  * The tab roots are stale-while-revalidate (page-cache.ts), so nothing here
  * may vary between two renders of the same page. Its position and z-index
  * (above page content, beside the dock) are in main.css. It is
- * `--app-bar-h` (4rem) tall, which PageShell leaves above every page.
+ * `--app-bar-h` tall (4rem, plus the tab row below lg on a tabbed page),
+ * which PageShell leaves above every page.
  */
 export function AppBar(props: AppBarProps) {
   const { ctx } = props;
@@ -60,7 +71,7 @@ export function AppBar(props: AppBarProps) {
       data-form-page={props.formPage ? '' : undefined}
     >
       {props.back && <BackLink href={props.back} historyBack />}
-      <div class="flex flex-col flex-1 min-w-0 px-1">
+      <div class="app-bar-title flex flex-col justify-center flex-1 min-w-0 px-1">
         <div class="flex items-center gap-2 min-w-0">
           {props.titleMenu ? (
             <TitleMenu title={props.title}>{props.titleMenu}</TitleMenu>
@@ -84,6 +95,9 @@ export function AppBar(props: AppBarProps) {
             so it never covers or moves the content. */}
         <span id="freshness" class="hidden truncate text-xs text-muted"></span>
       </div>
+      {/* After the title in the DOM, as it sits from lg; below lg main.css
+          moves it to the header's second row (order). */}
+      {props.tabs && <LinkTabs {...props.tabs} placement="bar" />}
       {props.scope && (
         <div class="flex items-center shrink-0">{props.scope}</div>
       )}
@@ -137,26 +151,17 @@ function TitleMenu(props: { title: Child; children: Child }) {
  */
 function Account({ ctx, returnTo }: { ctx: ViewContext; returnTo?: string }) {
   if (ctx.user) {
-    const onProfile =
-      ctx.path === PROFILE_PATH || ctx.path.startsWith(`${PROFILE_PATH}/`);
+    const current = onProfile(ctx.path);
+    // A phone's way to Profile; from lg it is the rail's foot (dock.tsx).
     return (
       <a
         href={PROFILE_PATH}
         id="avatar"
-        class="btn btn-ghost btn-circle shrink-0"
+        class="btn btn-ghost btn-circle shrink-0 lg:hidden"
         aria-label={t('PROFILE')}
-        aria-current={onProfile ? 'page' : undefined}
+        aria-current={current ? 'page' : undefined}
       >
-        {/* daisyUI centres the placeholder's child div. */}
-        <div class="avatar avatar-placeholder">
-          <div
-            class={`size-9 rounded-full ${onProfile ? 'bg-primary text-primary-content' : 'bg-base-300 text-base-content'}`}
-          >
-            <span class="text-base font-semibold" aria-hidden="true">
-              {ctx.user.email ? initial(ctx.user.email) : <PersonIcon />}
-            </span>
-          </div>
-        </div>
+        <ProfileAvatar email={ctx.user.email} current={current} />
       </a>
     );
   }
@@ -171,6 +176,34 @@ function Account({ ctx, returnTo }: { ctx: ViewContext; returnTo?: string }) {
     <a href={loginUrl(returnTo)} class="btn btn-ghost btn-sm shrink-0">
       {t('LOGIN')}
     </a>
+  );
+}
+
+/** The page on screen is Profile or one of its settings. */
+export function onProfile(path: string): boolean {
+  return path === PROFILE_PATH || path.startsWith(`${PROFILE_PATH}/`);
+}
+
+/**
+ * The account's avatar: the email's initial in a circle, in the primary
+ * colour on Profile's own pages. The app bar's link (a phone's) and the
+ * rail's Profile link (dock.tsx) draw this one.
+ */
+export function ProfileAvatar(props: {
+  email: string | null;
+  current: boolean;
+}) {
+  return (
+    // daisyUI centres the placeholder's child div.
+    <div class="avatar avatar-placeholder">
+      <div
+        class={`size-9 rounded-full ${props.current ? 'bg-primary text-primary-content' : 'bg-base-300 text-base-content'}`}
+      >
+        <span class="text-base font-semibold" aria-hidden="true">
+          {props.email ? initial(props.email) : <PersonIcon />}
+        </span>
+      </div>
+    </div>
   );
 }
 

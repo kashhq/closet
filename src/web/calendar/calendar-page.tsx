@@ -19,7 +19,7 @@ import {
 } from '../week-plan/views';
 import { dateParts, type IsoDate } from '../../calendar-date';
 import type { CalendarDayView, CalendarView } from './calendar-view';
-import { CalendarTabs } from './calendar-tabs';
+import { calendarTabs } from './calendar-tabs';
 import {
   DAY_LETTERS,
   dayLabel,
@@ -69,7 +69,7 @@ export function CalendarPage(props: {
       ctx={ctx}
       name="calendar"
       title={t('CALENDAR_PAGE_TITLE')}
-      bar={{ title: t('CALENDAR') }}
+      bar={{ title: t('CALENDAR'), tabs: calendarTabs('week') }}
       width="agenda"
       overlays={
         <>
@@ -78,7 +78,6 @@ export function CalendarPage(props: {
         </>
       }
     >
-      <CalendarTabs active="week" />
       <WeatherSlot ctx={ctx} days={{ from: first, to: last }} />
       {props.banner && (
         <PlannedWeekBanner banner={props.banner} shown={{ first, last }} />

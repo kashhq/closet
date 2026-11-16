@@ -3,7 +3,7 @@ import { t } from '../i18n';
 import { OUTFIT_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
-import { OutfitTabs } from '../outfits/outfit-tabs';
+import { outfitTabs } from '../outfits/outfit-tabs';
 import type { ViewContext } from '../view-context';
 import { linkHost, lookName } from './look-name';
 import type { InspirationSummary } from './queries';
@@ -35,11 +35,11 @@ export function InspirationListPage(props: {
             + {t('inspiration.ADD')}
           </a>
         ),
+        tabs: outfitTabs('inspiration'),
       }}
       width="wide"
       body={{ gap: 3 }}
     >
-      <OutfitTabs active="inspiration" />
       {looks.length === 0 ? (
         <EmptyState message={t('inspiration.EMPTY')}>
           <a href={NEW_INSPIRATION_PATH} class="btn btn-primary btn-sm">

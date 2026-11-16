@@ -86,8 +86,9 @@ export async function registerElsewhere(
  * the service worker sees, which drop its session caches.
  */
 export async function switchAccount(page: Page, email: string): Promise<void> {
-  // Signing out is Profile's, reached through the avatar (#82).
-  await page.locator('#avatar').click();
+  // Signing out is Profile's, reached through the avatar on a phone and
+  // the rail's Profile link from lg (#82, #1061): whichever shows.
+  await page.getByRole('link', { name: 'Profile', exact: true }).click();
   await page
     .locator('#sign-out')
     .getByRole('button', { name: 'Sign out' })

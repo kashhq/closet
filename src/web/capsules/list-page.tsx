@@ -5,7 +5,7 @@ import { EmptyState, PlinthImage } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { capsuleUrl, wardrobeUrl } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import { WardrobeHeader } from '../wardrobe/wardrobe-header';
 import type { CapsuleCard, StripGarment } from './queries';
 import { THUMB_ROW_WIDE } from '../layout/columns';
 
@@ -51,38 +51,35 @@ export function CapsulesPage(props: {
         canEdit={model.canEdit}
         newCapsule={model.isOwner}
       />
-      <div class="pt-16">
-        <WardrobeTabs active="capsules" viewOwner={viewOwner} />
-        <main class="px-4 pt-4 pb-24 w-full max-w-lg mx-auto">
-          <ul class="flex flex-col gap-6" id="capsule-list">
+      <main class="px-4 pt-under-bar pb-24 w-full max-w-lg mx-auto">
+        <ul class="flex flex-col gap-6" id="capsule-list">
+          <CapsuleEntry
+            href={wardrobeUrl(viewOwner)}
+            name={t('ALL_GARMENTS')}
+            count={model.closet.count}
+            strip={model.closet.strip}
+          />
+          {model.capsules.map((capsule) => (
             <CapsuleEntry
-              href={wardrobeUrl(viewOwner)}
-              name={t('ALL_GARMENTS')}
-              count={model.closet.count}
-              strip={model.closet.strip}
+              href={capsuleUrl(capsule.id, viewOwner)}
+              name={capsule.name}
+              count={capsule.count}
+              strip={capsule.strip}
             />
-            {model.capsules.map((capsule) => (
-              <CapsuleEntry
-                href={capsuleUrl(capsule.id, viewOwner)}
-                name={capsule.name}
-                count={capsule.count}
-                strip={capsule.strip}
-              />
-            ))}
-          </ul>
-          {model.capsules.length === 0 && (
-            <EmptyState
-              message={t(model.isOwner ? 'NO_CAPSULES' : 'NO_CAPSULES_SHARED')}
-            >
-              {model.isOwner && (
-                <a href="/capsules/new" class="btn btn-primary btn-sm">
-                  {t('ADD_FIRST_CAPSULE')}
-                </a>
-              )}
-            </EmptyState>
-          )}
-        </main>
-      </div>
+          ))}
+        </ul>
+        {model.capsules.length === 0 && (
+          <EmptyState
+            message={t(model.isOwner ? 'NO_CAPSULES' : 'NO_CAPSULES_SHARED')}
+          >
+            {model.isOwner && (
+              <a href="/capsules/new" class="btn btn-primary btn-sm">
+                {t('ADD_FIRST_CAPSULE')}
+              </a>
+            )}
+          </EmptyState>
+        )}
+      </main>
       <Dock ctx={ctx} />
     </Layout>
   );

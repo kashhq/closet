@@ -27,6 +27,13 @@ import { planEntry, takeSelfie } from './selfies';
 /** A `lang.KEY` that reached the HTML untranslated. */
 const RAW_I18N_KEY = /\blang\.[A-Z_]{3,}/;
 
+/** The sections' tab bars' names (their builders: `wardrobeBar`, `calendarTabs`, `outfitTabs`). */
+const SECTION_TAB_LABELS = [
+  text('NAV_WARDROBE_VIEWS'),
+  text('NAV_CALENDAR_VIEWS'),
+  text('NAV_OUTFIT_VIEWS'),
+];
+
 export const HX_FRAGMENT = { 'hx-request': 'true' };
 export const HX_BOOSTED = { 'hx-request': 'true', 'hx-boosted': 'true' };
 
@@ -370,6 +377,7 @@ export function expectAppBar(res: LightMyRequestResponse): void {
   expect(body.match(/<header class="app-bar\b/g)).toHaveLength(1);
   expect(body.match(/<h1\b/g)).toHaveLength(1);
   expect(body).not.toContain('drawer-toggle');
+  expectSectionTabsInBar(body);
   if (res.headers['x-page-account']) {
     expect(body.match(/<a href="\/auth\/profile" id="avatar"/g)).toHaveLength(
       1,
@@ -381,6 +389,26 @@ export function expectAppBar(res: LightMyRequestResponse): void {
       /(?:href|action)="\/auth\/(?:login|register)(?:\?returnTo=[^"]+)?"/,
     );
   }
+}
+
+const SECTION_TABS = new RegExp(
+  `<nav [^>]*aria-label="(?:${SECTION_TAB_LABELS.join('|')})"`,
+  'g',
+);
+
+/**
+ * A section's tabs are the bar's (#1061): drawn inside the header, never by
+ * the page, so sibling pages show them in one place.
+ */
+function expectSectionTabsInBar(body: string): void {
+  const header =
+    /<header class="app-bar\b[\s\S]*?<\/header>/.exec(body)?.[0] ?? '';
+  const count = (html: string, pattern: RegExp) =>
+    html.match(pattern)?.length ?? 0;
+  expect(count(body, SECTION_TABS)).toBe(count(header, SECTION_TABS));
+  expect(count(body, /\bapp-bar-tabs\b/g)).toBe(
+    count(header, /\bapp-bar-tabs\b/g),
+  );
 }
 
 /** The app bar's title, the page's h1, as text. */
