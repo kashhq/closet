@@ -1,5 +1,6 @@
 import english from '../i18n/en/lang.json';
 import { escapeHtml } from './html';
+import { PLACEHOLDER_KINDS } from './placeholder-kinds';
 
 /**
  * English strings for JSX views, typed to the keys of src/i18n/en/lang.json:
@@ -15,92 +16,42 @@ export type StringKey = Leaves<typeof english>;
 /** Values for `{name}` placeholders in the catalog's strings. */
 export type StringParams = Record<string, string | number>;
 
-/**
- * The kind of each placeholder in the keys that are only placeholders and
- * punctuation ("{reason}: {message}"), and in any other key one of whose
- * placeholders is copy. `t()` reads it (`ParamsFor`): a `copy` placeholder
- * takes `Translated`, so a format-only key cannot wrap English written in code
- * (#1100); a `data` one (a name, a count, a year, a machine word) any string or
- * number, like every placeholder of a key not listed. TypeScript widens a JSON
- * import's values to `string`, so the type cannot read placeholders from
- * lang.json; `i18n.spec.ts` holds this table to the catalogue instead: every
- * format-only key is listed, and every entry names exactly its placeholders.
- */
-export const PLACEHOLDER_KINDS = {
-  CALENDAR_PLAN_DAY: { weekday: 'copy', month: 'copy', day: 'data' },
-  QUANTITY_BADGE: { quantity: 'data' },
-  'calendar.MONTH_TITLE': { month: 'copy', year: 'data' },
-  'calendar.MORE': { count: 'data' },
-  'calendar.SHORT_DAY': { month: 'copy', day: 'data' },
-  'calendar.SHORT_DAY_YEAR': { month: 'copy', day: 'data', year: 'data' },
-  'calendar.WEEK_RANGE': { from: 'copy', to: 'copy', year: 'data' },
-  'calendar.WEEK_RANGE_YEARS': { from: 'copy', to: 'copy' },
-  'care.REPAIR_DAY_VALUE': { day: 'copy', year: 'data' },
-  // A garment's name, or its category's label when it has none.
-  'gallery.PAIR': { a: 'data', b: 'data' },
-  'inspiration.ADD_HINT_PIECE': { piece: 'copy' },
-  'inspiration.PIECE_NAME': { kind: 'copy', colors: 'copy' },
-  // The reason is a refusal word (LinkImportRefusal) a caller branches on.
-  'linkImport.REASON_LED': { reason: 'data', message: 'copy' },
-  'mark.OUTFIT_LABEL': { name: 'data', warnings: 'copy' },
-  'mark.PIECE': { name: 'data', marks: 'copy' },
-  'muse.round.BOTH': { outfits: 'copy', pieces: 'copy' },
-  // The field is the form's field name, a machine word.
-  'refusal.form.fieldErrors': { field: 'data', errors: 'copy' },
-  'sizes.BRAND_NOTE': { brand: 'data', note: 'data' },
-  'today.push.PLANNED': { occasion: 'copy', outfit: 'data' },
-  'trips.DATE_RANGE': { from: 'copy', to: 'copy' },
-  'weather.DAY_HIGH': { high: 'data' },
-  'weather.DAY_RANGE': { low: 'data', high: 'data' },
-  // The unit is a symbol (°C, UNIT_SYMBOLS), notation rather than words.
-  'weather.RANGE': { low: 'data', high: 'data', unit: 'data' },
-  'weekPlan.SLOT': { day: 'copy', occasion: 'copy' },
-} as const satisfies Partial<
-  Record<StringKey, Readonly<Record<string, 'copy' | 'data'>>>
->;
+type Kinds = typeof PLACEHOLDER_KINDS;
+type KindedKey = keyof Kinds;
+type Value<Kind> = Kind extends 'copy' ? Translated : string | number;
 
-type KindedKey = keyof typeof PLACEHOLDER_KINDS;
+/** One key's parameters: exactly its placeholders, each typed by its kind. */
+type KeyParams<K extends KindedKey> = {
+  [P in keyof Kinds[K]]: Value<Kinds[K][P]>;
+};
 
-/**
- * A key whose placeholders are all data: the type for a table of keys chosen
- * at runtime and then given parameters (`t(LINES[reason], { garment })`),
- * which `StringKey` refuses (see ParamsFor).
- */
-export type DataKey = Exclude<StringKey, KindedKey>;
-
-// Distributes over a union of keys, one object each, for ParamsFor to intersect.
-type KindedParams<K extends KindedKey> = K extends unknown
+/** The placeholders that are copy in any key of K (distributes over a union). */
+type CopyNames<K> = K extends KindedKey
   ? {
-      [P in keyof (typeof PLACEHOLDER_KINDS)[K]]: (typeof PLACEHOLDER_KINDS)[K][P] extends 'copy'
-        ? Translated
-        : string | number;
-    }
+      [P in keyof Kinds[K]]: Kinds[K][P] extends 'copy' ? P : never;
+    }[keyof Kinds[K]]
   : never;
 
-type Intersection<U> = (U extends unknown ? (u: U) => void : never) extends (
-  i: infer I,
-) => void
-  ? I
+type IsUnion<K, All = K> = K extends unknown
+  ? [All] extends [K]
+    ? false
+    : true
   : never;
 
 /**
- * `t()`'s parameters for a key. Fails closed when the key is not one literal:
- * a key type that may be several listed keys (a union, a variable typed
- * `StringKey`) takes what every one of them takes, so no placeholder that is
- * copy for one of them is data through the wider type. Such a key may still
- * go without parameters (`t(MONTH_NAMES[i])`): a listed key then throws on
- * its missing placeholder, which forges nothing.
+ * `t()`'s parameters for a key, from PLACEHOLDER_KINDS. One literal key takes
+ * exactly its placeholders; a key without any takes none that matter. A key
+ * type wider than one literal (a table of keys, a variable typed `StringKey`)
+ * fails closed: a placeholder that is copy in any key it may be takes
+ * `Translated`. It may still go without parameters: a key whose placeholder
+ * is missing throws at runtime, which forges nothing.
  */
-export type ParamsFor<K extends StringKey> = [Extract<K, KindedKey>] extends [
-  never,
-]
-  ? [params?: StringParams]
-  : [K] extends [KindedKey]
-    ? [params: Intersection<KindedParams<K>>]
-    : [
-        params?: Intersection<KindedParams<Extract<K, KindedKey>>> &
-          StringParams,
-      ];
+export type ParamsFor<K extends StringKey> =
+  true extends IsUnion<K>
+    ? [params?: { [P in CopyNames<K>]?: Translated } & StringParams]
+    : K extends KindedKey
+      ? [params: KeyParams<K>]
+      : [params?: StringParams];
 
 function flatten(node: object, prefix = ''): [string, string][] {
   return Object.entries(node).flatMap(([key, value]) =>

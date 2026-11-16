@@ -78,6 +78,7 @@ describe('t', () => {
   });
 
   it('throws on a missing parameter instead of rendering the placeholder', () => {
+    // @ts-expect-error the type requires it too (#1100); this is the runtime's guard
     expect(() => t('ABOUT_HEADING')).toThrow(/missing parameter \{appName\}/);
   });
 });

@@ -1,6 +1,6 @@
 import type { IsoDate } from '../../calendar-date';
 import { hourIn, todayIn } from '../../calendar-date';
-import { t, tKey } from '../i18n';
+import { t, tKey, type Translated } from '../i18n';
 import type { ViewContext } from '../view-context';
 import type { Condition } from '../../weather/forecast';
 import type { TemperatureUnit } from '../../weather/temperature';
@@ -142,7 +142,7 @@ export function ConditionIcon({ condition }: { condition: Condition }) {
 }
 
 /** "3 pm". */
-export function hourLabel(hour: number): string {
+export function hourLabel(hour: number): Translated {
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
   return hour < 12
     ? t('weather.HOUR_AM', { hour: twelve })

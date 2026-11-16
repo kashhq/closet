@@ -1,5 +1,5 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
-import { type StringKey, t, type Translated } from '../i18n';
+import { joinCopy, type StringKey, t, type Translated } from '../i18n';
 
 /**
  * Each mark's one look and one string: the badge variant, the dot (its fill,
@@ -78,7 +78,10 @@ export function GarmentMark(props: {
   const more = rest.length > 0 && (
     <span class="sr-only">
       {t('mark.MORE', {
-        marks: rest.map((mark) => markLabel(mark, props.wash)).join(', '),
+        marks: joinCopy(
+          rest.map((mark) => markLabel(mark, props.wash)),
+          ', ',
+        ),
       })}
     </span>
   );

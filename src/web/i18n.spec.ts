@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import english from '../i18n/en/lang.json';
-import { PLACEHOLDER_KINDS, type StringKey, t } from './i18n';
+import { type StringKey, t } from './i18n';
+import { PLACEHOLDER_KINDS } from './placeholder-kinds';
 
 function entries(node: object, prefix = ''): [string, string][] {
   return Object.entries(node).flatMap(([key, value]) =>
@@ -12,23 +13,39 @@ function entries(node: object, prefix = ''): [string, string][] {
 
 const CATALOGUE = new Map(entries(english));
 const placeholders = (template: string) =>
-  [...template.matchAll(/\{(\w+)\}/g)].map(([, name]) => name).sort();
-
-// A key whose text is only placeholders and punctuation: its output is all
-// parameters, so a copy placeholder there is the whole message.
-const formatOnly = [...CATALOGUE]
-  .filter(
-    ([, template]) =>
-      placeholders(template).length > 0 &&
-      !/\p{L}/u.test(template.replace(/\{\w+\}/g, '')),
-  )
-  .map(([key]) => key)
-  .sort();
+  [
+    ...new Set([...template.matchAll(/\{(\w+)\}/g)].map(([, name]) => name)),
+  ].sort();
+const KINDS: Readonly<Record<string, Readonly<Record<string, string>>>> =
+  PLACEHOLDER_KINDS;
 
 describe('PLACEHOLDER_KINDS (#1100)', () => {
-  it('classifies every format-only key in the catalogue', () => {
-    // The list is the spec's record of the classification: a new format-only
-    // key fails here until PLACEHOLDER_KINDS says which placeholders are copy.
+  it('names every placeholder of every key, and nothing else', () => {
+    // No default kind: a key added to lang.json fails here until its
+    // placeholders are classified copy or data.
+    const catalogue = Object.fromEntries(
+      [...CATALOGUE]
+        .map(([key, template]) => [key, placeholders(template)] as const)
+        .filter(([, names]) => names.length > 0),
+    );
+    const table = Object.fromEntries(
+      Object.entries(KINDS).map(([key, kinds]) => [
+        key,
+        Object.keys(kinds).sort(),
+      ]),
+    );
+    expect(table).toEqual(catalogue);
+  });
+
+  it('lists the format-only keys, whose output is all parameters', () => {
+    const formatOnly = [...CATALOGUE]
+      .filter(
+        ([, template]) =>
+          placeholders(template).length > 0 &&
+          !/\p{L}/u.test(template.replace(/\{\w+\}/g, '')),
+      )
+      .map(([key]) => key)
+      .sort();
     expect(formatOnly).toEqual([
       'CALENDAR_PLAN_DAY',
       'QUANTITY_BADGE',
@@ -55,18 +72,7 @@ describe('PLACEHOLDER_KINDS (#1100)', () => {
       'weather.RANGE',
       'weekPlan.SLOT',
     ]);
-    for (const key of formatOnly)
-      expect(PLACEHOLDER_KINDS).toHaveProperty([key]);
   });
-
-  it.each(Object.entries(PLACEHOLDER_KINDS))(
-    '%s names exactly its placeholders',
-    (key, kinds) => {
-      expect(Object.keys(kinds).sort()).toEqual(
-        placeholders(CATALOGUE.get(key)!),
-      );
-    },
-  );
 });
 
 describe('t() parameters (#1100)', () => {
@@ -81,7 +87,9 @@ describe('t() parameters (#1100)', () => {
     const raw: string = 'Required';
     // @ts-expect-error nor is a string variable
     t('refusal.form.fieldErrors', { field: 'name', errors: raw });
-    // @ts-expect-error a listed key's placeholders are required
+    // @ts-expect-error words around a copy placeholder do not make it data
+    t('style.RULE_BROKEN', { rule: 'Never boots with shorts' });
+    // @ts-expect-error a key's placeholders are required
     expect(() => t('muse.round.BOTH')).toThrow('missing parameter');
   });
 

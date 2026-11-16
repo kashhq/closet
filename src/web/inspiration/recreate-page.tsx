@@ -6,7 +6,7 @@ import type {
 import { PostForm } from '../form';
 import { inspirationPhotoUrl } from '../files/image-url';
 import type { RecreatePoolGarment } from '../gallery/queries';
-import { t } from '../i18n';
+import { joinCopy, t, type Translated } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
@@ -93,9 +93,12 @@ export function RecreatePage(props: {
             {recreation.unfixed.length > 0 && (
               <div role="status" class="alert alert-warning alert-soft text-sm">
                 {t('inspiration.UNFIXED', {
-                  pieces: recreation.unfixed
-                    .map((index) => pieceName(look.pieces[index]))
-                    .join(', '),
+                  pieces: joinCopy(
+                    recreation.unfixed.map((index) =>
+                      pieceName(look.pieces[index]),
+                    ),
+                    ', ',
+                  ),
                 })}
               </div>
             )}
@@ -171,7 +174,7 @@ function PieceMatches(props: {
 function PieceChoice(props: {
   lookId: number;
   piece: StoredPiece;
-  name: string;
+  name: Translated;
   matches: readonly PieceMatch<RecreatePoolGarment>[];
   repicked: boolean;
 }) {
@@ -203,7 +206,7 @@ function PieceChoice(props: {
  */
 function ChoiceStrip(props: {
   piece: StoredPiece;
-  name: string;
+  name: Translated;
   matches: readonly PieceMatch<RecreatePoolGarment>[];
   repicked: boolean;
 }) {

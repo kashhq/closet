@@ -18,7 +18,7 @@ import { garmentMarks } from '../../wardrobe/marks';
 import { PostForm } from '../form';
 import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
-import { type DataKey, type StringKey, t } from '../i18n';
+import { type StringKey, t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
@@ -1693,7 +1693,7 @@ function BulkToast(props: { outcome: BulkOutcome }) {
 /** Each verb's toast, for one garment and for `{count}` (never "1 garments"). */
 const BULK_TOASTS: Record<
   BulkOutcome['verb'] | 'setSkipped' | 'washSkipped',
-  { one: DataKey; many: DataKey }
+  { one: StringKey; many: StringKey }
 > = {
   set: { one: 'BULK_RESULT_ONE', many: 'BULK_RESULT' },
   setSkipped: { one: 'BULK_RESULT_ONE_SKIPPED', many: 'BULK_RESULT_SKIPPED' },
