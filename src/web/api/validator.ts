@@ -1,9 +1,9 @@
-import { AjvCompiler } from '@fastify/ajv-compiler';
 import type {
   FastifyInstance,
   FastifySchemaCompiler,
   RouteOptions,
 } from 'fastify';
+import { sharedValidators } from '../schema-validators';
 
 /**
  * The /api/v1 scope's validator compiler (apiPlugin): a JSON body is
@@ -25,7 +25,8 @@ import type {
  * branches still to try.
  *
  * Both are @fastify/ajv-compiler, the factory Fastify itself builds its
- * compiler with, with the root's options (app.ts sets none), so formats,
+ * compiler with (through sharedValidators, as the root's: one compile per
+ * schema per process), with the root's options (app.ts sets none), so formats,
  * `useDefaults` and `removeAdditional` stay as on every other route. Built
  * on the first route compiled, when the scope's shared schemas (Problem)
  * are all added; a request schema referring to one a child scope adds
@@ -34,19 +35,20 @@ import type {
 export function jsonApiValidator(
   scope: FastifyInstance,
 ): FastifySchemaCompiler<unknown> {
-  const build = AjvCompiler();
   let compilers: { body: Compile; other: Compile; query: Compile } | undefined;
   return (route) => {
     if (!compilers) {
       // Fastify types its schema bucket as unknown values; they are the
       // JSON schemas addSchema took, which is what the factory wants.
-      const shared = scope.getSchemas() as Parameters<typeof build>[0];
+      const shared = scope.getSchemas() as Parameters<
+        typeof sharedValidators
+      >[0];
       compilers = {
-        body: build(shared, {
+        body: sharedValidators(shared, {
           customOptions: { coerceTypes: false, removeAdditional: false },
         }),
-        other: build(shared, { customOptions: {} }),
-        query: build(shared, {
+        other: sharedValidators(shared, { customOptions: {} }),
+        query: sharedValidators(shared, {
           customOptions: { removeAdditional: false },
         }),
       };
@@ -67,7 +69,7 @@ export function jsonApiValidator(
   };
 }
 
-type Compile = ReturnType<ReturnType<typeof AjvCompiler>>;
+type Compile = ReturnType<typeof sharedValidators>;
 
 /**
  * apiPlugin's onRoute hook: a route that declares no querystring gets an

@@ -187,6 +187,8 @@ export const ROUTES: Route[] = [
     ok: 303,
     secret: garmentName,
     vias: BOTH,
+    // The twin's 200 is the fixture outfit's reuse: its garment set.
+    needs: ['outfitId'],
     request: (f, q) => ({
       method: 'POST',
       url: `/styling${q}`,

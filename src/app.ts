@@ -30,6 +30,7 @@ import {
 } from './web/auth/session';
 import { createSessionTokens } from './web/auth/tokens';
 import { createErrorHandler, DatabaseOutage, HttpError } from './web/errors';
+import { sharedValidators } from './web/schema-validators';
 import { configurePhotoUrls } from './web/files/image-url';
 import { configurePasswordHashing } from './web/auth/passwords';
 import type { HeicDecoderOptions } from './web/files/heic-decoder';
@@ -321,6 +322,11 @@ export async function createApp(
     });
 
   const app = Fastify({
+    // Fastify's own ajv factory, each compiled validator kept per process
+    // (one boot here; one per spec file in the integration tier, #724).
+    schemaController: {
+      compilersFactory: { buildValidator: sharedValidators },
+    },
     trustProxy,
     loggerInstance: logger.child({ logger: 'Fastify' }),
     // One line per request comes from the onResponse hook below.
