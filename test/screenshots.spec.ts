@@ -188,9 +188,7 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
   // slots (from today on), the first of those.
   await page.goto('/calendar?week=2026-09-27');
   await page.locator('[data-plan^="plan-2026-09-29-"]').first().click();
-  await expect(
-    page.locator('dialog[data-plan-sheet="2026-09-29"]'),
-  ).toBeVisible();
+  await expect(page.locator('#plan-sheet-2026-09-29')).toBeVisible();
   // The viewport alone: a full-page shot stitches the modal mid-page.
   await page.screenshot({
     path: `${DIR}/71-demo-calendar-plan-sheet.png`,
@@ -291,6 +289,72 @@ test.describe('desktop', () => {
       '89-demo-calendar-month-desktop',
       '/calendar/month?month=2026-08',
     );
+  });
+});
+
+/**
+ * Every sheet open, each from its own trigger (layout/sheet.tsx, #1062):
+ * on a phone every kind is the bottom sheet, from lg the kind places it
+ * (choice centred, form a right panel, menu under its trigger). Viewport
+ * shots: a full-page one stitches the modal mid-page. Nothing is posted,
+ * so Theo is as the seed left him.
+ */
+async function sheetShots(page: Page, suffix: string): Promise<void> {
+  const open = async (name: string, sheet: string) => {
+    await expect(page.locator(sheet)).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: `${DIR}/90-sheet-${name}${suffix}.png`,
+      animations: 'disabled',
+    });
+  };
+  await signInAs(page, 'demo');
+  await page.goto('/wardrobe');
+  await page.getByRole('button', { name: 'Filters' }).click();
+  await open('filters', '#filter-modal');
+  await page.goto('/wardrobe');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await open('add', '#add-sheet');
+  await page.goto('/wardrobe?select=1');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await open('bulk-actions', '#bulk-actions');
+  await page.goto('/wardrobe?select=1');
+  await page.getByRole('button', { name: 'Set…', exact: true }).click();
+  await open('bulk-set', '#bulk-dialog');
+  await openRawSelvedgeJeans(page);
+  await page.locator('#editMaskBtn').click();
+  await open('mask-editor', '#maskEditorDialog');
+  await page.reload();
+  await openPhotoSheet(page);
+  await open('garment-photo', '#garment-photo-sheet');
+  await page.reload();
+  const menu = await openGarmentMenu(page);
+  await menu.getByRole('button', { name: 'Archive', exact: true }).click();
+  await open('confirm', '#confirm-sheet');
+  await page.goto('/outfits');
+  await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await open('outfit-plan', '#outfit-plan-sheet');
+  await page.goto('/styling');
+  await lockTopRow(page);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await open('styling-save', '#styling-save');
+  await page.goto('/calendar?week=2026-09-27');
+  await page.locator('[data-plan^="plan-2026-09-29-"]').first().click();
+  await open('calendar-plan', '#plan-sheet-2026-09-29');
+}
+
+test.describe('sheets', () => {
+  test('demo: Theo, every sheet at 390', async ({ page }) => {
+    await sheetShots(page, '');
+  });
+
+  test.describe('desktop', () => {
+    test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+    test('demo: Theo, every sheet at 1440', async ({ page }) => {
+      await sheetShots(page, '-desktop');
+    });
   });
 });
 

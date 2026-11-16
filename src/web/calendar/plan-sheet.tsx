@@ -5,7 +5,7 @@ import {
 } from '../../wardrobe/occasions';
 import { IDEAS_PATH } from '../gallery/urls';
 import { t } from '../i18n';
-import { SheetBackdrop } from '../layout/parts';
+import { Sheet, sheetOpener } from '../layout/sheet';
 import { destinationTarget } from '../outfits/destination';
 import { SAVED_PATH } from '../outfits/urls';
 import { STYLING_PATH } from '../styling/urls';
@@ -22,92 +22,105 @@ import { dayLabel, occasionLabel } from '../date-labels';
  * checked radio. Static per day, so `/calendar` stays byte-stable.
  *
  * Opened by the day's open template slots (OpenSlotRow) or, on a day with
- * none, its "+ Plan" (all day):
+ * none, its "+ Plan" (all day): each carries `planSheetOpener`, whose
  * `data-plan` names the occasion's radio, which the one-line handler checks
- * before it opens the radio's dialog.
+ * before confirm-sheet.js opens the day's sheet.
  */
 
-export const OPEN_PLAN_SHEET =
-  "const choice = document.getElementById(this.dataset.plan); choice.checked = true; choice.closest('dialog').showModal()";
+const CHOOSE_OCCASION =
+  'document.getElementById(this.dataset.plan).checked = true';
+
+/** `day`'s sheet's id. */
+export function planSheetId(day: IsoDate): string {
+  return `plan-sheet-${day}`;
+}
+
+/** What a control opening `day`'s sheet on `occasion` carries. */
+export function planSheetOpener(day: IsoDate, occasion: Occasion) {
+  return {
+    ...sheetOpener(planSheetId(day)),
+    'data-plan': planSheetChoice(day, occasion),
+    onclick: CHOOSE_OCCASION,
+  } as const;
+}
 
 /** The radio of `occasion` in `day`'s sheet: what an opener's `data-plan` names. */
-export function planSheetChoice(day: IsoDate, occasion: Occasion): string {
+function planSheetChoice(day: IsoDate, occasion: Occasion): string {
   return `plan-${day}-${occasion}`;
 }
 
 export function PlanSheet({ day }: { day: IsoDate }) {
-  const titleId = `plan-sheet-${day}-title`;
+  const titleId = `${planSheetId(day)}-title`;
   return (
-    <dialog
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby={titleId}
-      data-plan-sheet={day}
+    <Sheet
+      id={planSheetId(day)}
+      kind="choice"
+      labelledBy={titleId}
+      gap={4}
+      dismiss="cancel"
     >
-      <div class="modal-box flex flex-col gap-4 pb-8">
-        <h2 id={titleId} class="font-semibold text-lg">
-          {t('calendar.PLAN_SHEET_TITLE', { day: dayLabel(day) })}
-        </h2>
-        {/* A GET into Ideas whose occasion is the user's radio choice, so
+      <h2 id={titleId} class="font-semibold text-lg">
+        {t('calendar.PLAN_SHEET_TITLE', { day: dayLabel(day) })}
+      </h2>
+      {/* A GET into Ideas whose occasion is the user's radio choice, so
             DestinationFields (which posts a decided destination) cannot
             carry it: the one form writing the destination's field names
             itself; the `for` value is still destinationTarget's. */}
-        <form method="get" action={IDEAS_PATH} class="flex flex-col gap-4">
-          <input
-            type="hidden"
-            name="for"
-            value={destinationTarget({
-              kind: 'day',
-              day,
-              occasion: DEFAULT_OCCASION,
-            })}
-          />
-          <fieldset>
-            <legend class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-              {t('CALENDAR_PLAN_OCCASION')}
-            </legend>
-            <div class="flex flex-wrap gap-2">
-              {OCCASIONS.map((occasion) => (
-                <input
-                  type="radio"
-                  name="occasion"
-                  value={occasion}
-                  id={planSheetChoice(day, occasion)}
-                  class="btn btn-sm rounded-full checked:btn-primary"
-                  aria-label={occasionLabel(occasion)}
-                  checked={occasion === DEFAULT_OCCASION}
-                />
-              ))}
-            </div>
-          </fieldset>
-          <div class="flex flex-col gap-2">
-            <button
-              type="submit"
-              formaction={IDEAS_PATH}
-              class="btn btn-primary"
-              data-plan-ideas=""
-            >
-              {t('gallery.PLAN_IDEAS')}
-            </button>
-            <button
-              type="submit"
-              formaction={SAVED_PATH}
-              class="btn btn-outline"
-              data-plan-saved=""
-            >
-              {t('calendar.PLAN_SAVED')}
-            </button>
-            <button
-              type="submit"
-              formaction={STYLING_PATH}
-              class="btn btn-outline"
-              data-plan-styling=""
-            >
-              {t('CALENDAR_PLAN_BUILD')}
-            </button>
+      <form method="get" action={IDEAS_PATH} class="flex flex-col gap-4">
+        <input
+          type="hidden"
+          name="for"
+          value={destinationTarget({
+            kind: 'day',
+            day,
+            occasion: DEFAULT_OCCASION,
+          })}
+        />
+        <fieldset>
+          <legend class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+            {t('CALENDAR_PLAN_OCCASION')}
+          </legend>
+          <div class="flex flex-wrap gap-2">
+            {OCCASIONS.map((occasion) => (
+              <input
+                type="radio"
+                name="occasion"
+                value={occasion}
+                id={planSheetChoice(day, occasion)}
+                class="btn btn-sm rounded-full checked:btn-primary"
+                aria-label={occasionLabel(occasion)}
+                checked={occasion === DEFAULT_OCCASION}
+              />
+            ))}
           </div>
-        </form>
-      </div>
-      <SheetBackdrop label={t('CANCEL')} />
-    </dialog>
+        </fieldset>
+        <div class="flex flex-col gap-2">
+          <button
+            type="submit"
+            formaction={IDEAS_PATH}
+            class="btn btn-primary"
+            data-plan-ideas=""
+          >
+            {t('gallery.PLAN_IDEAS')}
+          </button>
+          <button
+            type="submit"
+            formaction={SAVED_PATH}
+            class="btn btn-outline"
+            data-plan-saved=""
+          >
+            {t('calendar.PLAN_SAVED')}
+          </button>
+          <button
+            type="submit"
+            formaction={STYLING_PATH}
+            class="btn btn-outline"
+            data-plan-styling=""
+          >
+            {t('CALENDAR_PLAN_BUILD')}
+          </button>
+        </div>
+      </form>
+    </Sheet>
   );
 }

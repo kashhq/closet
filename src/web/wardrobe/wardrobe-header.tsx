@@ -4,12 +4,12 @@ import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
 import { AppBar, type AppBarProps } from '../layout/app-bar';
 import { LinkTabs } from '../layout/link-tabs';
+import { Sheet, sheetOpener } from '../layout/sheet';
 import {
   CameraIcon,
   PHOTO_ACCEPT,
   PhotoLibraryIcon,
   PREPARE_AND_SUBMIT_PHOTO,
-  SheetBackdrop,
 } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import { PermissionBadge } from '../sharing/pages';
@@ -97,8 +97,7 @@ export function wardrobeBar(
             type="button"
             class="btn btn-ghost btn-sm btn-circle"
             aria-label={t('add.TITLE')}
-            aria-haspopup="dialog"
-            onclick={OPEN_ADD_SHEET}
+            {...sheetOpener(ADD_SHEET_ID)}
           >
             <PlusIcon />
           </button>
@@ -255,9 +254,8 @@ export function WardrobeMenu(props: {
 
 const TO_WISHLIST = destinationParams({ to: 'wishlist' });
 
-/** The `onclick` of a control opening the add sheet: the header's ＋, Today's first-run button. */
-export const OPEN_ADD_SHEET =
-  "document.getElementById('add-sheet').showModal()";
+/** The add sheet's id: its openers are the header's ＋ and Today's first-run button (`sheetOpener`). */
+export const ADD_SHEET_ID = 'add-sheet';
 
 /**
  * The add sheet (plan: "+" in the Wardrobe header): a garment for the
@@ -308,38 +306,37 @@ export function AddSheet(props: {
     </AddGroup>
   );
   return (
-    <dialog
-      id="add-sheet"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="add-sheet-title"
+    <Sheet
+      id={ADD_SHEET_ID}
+      kind="menu"
+      labelledBy="add-sheet-title"
+      gap={4}
+      dismiss="close"
     >
-      <div class="modal-box group flex flex-col gap-4">
-        <h2 id="add-sheet-title" class="font-bold text-lg">
-          {t('add.TITLE')}
-        </h2>
-        {props.newCapsule && (
-          <AddGroup title={t('CAPSULES')}>
-            <AddItem href="/capsules/new" icon={CAPSULE_ICON}>
-              {t('NEW_CAPSULE')}
-            </AddItem>
-          </AddGroup>
-        )}
-        {props.canEdit &&
-          (props.tab === 'wishlist' ? (
-            <>
-              {wishlist}
-              {closet}
-            </>
-          ) : (
-            <>
-              {closet}
-              {wishlist}
-            </>
-          ))}
-        {props.canEdit && <PhotoForms viewOwner={viewOwner} />}
-      </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <h2 id="add-sheet-title" class="font-bold text-lg">
+        {t('add.TITLE')}
+      </h2>
+      {props.newCapsule && (
+        <AddGroup title={t('CAPSULES')}>
+          <AddItem href="/capsules/new" icon={CAPSULE_ICON}>
+            {t('NEW_CAPSULE')}
+          </AddItem>
+        </AddGroup>
+      )}
+      {props.canEdit &&
+        (props.tab === 'wishlist' ? (
+          <>
+            {wishlist}
+            {closet}
+          </>
+        ) : (
+          <>
+            {closet}
+            {wishlist}
+          </>
+        ))}
+      {props.canEdit && <PhotoForms viewOwner={viewOwner} />}
+    </Sheet>
   );
 }
 
@@ -405,7 +402,7 @@ function PhotoForms(props: { viewOwner: number | undefined }) {
       <PostForm id={photoFormId('camera')} action={action} multipart />
       <PostForm id={photoFormId('library')} action={action} multipart />
       <p
-        class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]:flex"
+        class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/sheet:flex"
         role="status"
       >
         <span class="loading loading-spinner loading-sm"></span>
