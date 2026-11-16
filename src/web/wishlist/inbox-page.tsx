@@ -6,9 +6,7 @@ import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { CANDIDATE_GRID, PAIR_GRID } from '../layout/columns';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageColumn, PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
 import { PostForm } from '../form';
 import type { BrandSizeLookup } from '../sizes/queries';
@@ -23,7 +21,12 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import {
+  WardrobeAddSheet,
+  wardrobeBar,
+  type WardrobeHeaderProps,
+  WardrobeTabs,
+} from '../wardrobe/wardrobe-header';
 import {
   GROUPS_PAGE_SIZE,
   type Inbox,
@@ -89,40 +92,44 @@ export function InboxPage(props: { ctx: ViewContext; model: InboxModel }) {
     inbox.own.length === 0 &&
     inbox.stillLooking.length === 0;
   const returnTo = wardrobeUrl(viewOwner, {}, WISHLIST_PATH);
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'wishlist',
+    viewOwner,
+    sharedWardrobes: inbox.sharedWardrobes,
+    canEdit,
+  };
   return (
-    <Layout ctx={ctx} title={t('wishlist.TITLE')}>
-      <WardrobeHeader
-        ctx={ctx}
-        tab="wishlist"
-        viewOwner={viewOwner}
-        sharedWardrobes={inbox.sharedWardrobes}
-        canEdit={canEdit}
-      />
-      <div class="pt-16">
-        <PageColumn width="wide">
-          <WardrobeTabs active="wishlist" viewOwner={viewOwner} />
-        </PageColumn>
-        <PageMain width="wide" class="flex flex-col gap-8 px-4 pt-4 pb-24">
-          {empty ? (
-            <EmptyState
-              message={t(canEdit ? 'wishlist.EMPTY' : 'wishlist.EMPTY_SHARED')}
-            >
-              {canEdit && <AddButtons viewOwner={viewOwner} />}
-            </EmptyState>
-          ) : (
-            <>
-              <ReadyToBuy model={model} />
-              <MusePicks model={model} />
-              <OwnWishlist model={model} />
-              <StillLooking model={model} returnTo={returnTo} />
-            </>
-          )}
-          <SetAside model={model} returnTo={returnTo} />
-        </PageMain>
-      </div>
-      <DecisionToastView toast={model.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      title={t('wishlist.TITLE')}
+      bar={wardrobeBar(header)}
+      width="wide"
+      tabs={<WardrobeTabs active="wishlist" viewOwner={viewOwner} />}
+      body={{ class: 'flex flex-col gap-8' }}
+      overlays={
+        <>
+          <WardrobeAddSheet {...header} />
+          <DecisionToastView toast={model.toast} />
+        </>
+      }
+    >
+      {empty ? (
+        <EmptyState
+          message={t(canEdit ? 'wishlist.EMPTY' : 'wishlist.EMPTY_SHARED')}
+        >
+          {canEdit && <AddButtons viewOwner={viewOwner} />}
+        </EmptyState>
+      ) : (
+        <>
+          <ReadyToBuy model={model} />
+          <MusePicks model={model} />
+          <OwnWishlist model={model} />
+          <StillLooking model={model} returnTo={returnTo} />
+        </>
+      )}
+      <SetAside model={model} returnTo={returnTo} />
+    </PageShell>
   );
 }
 

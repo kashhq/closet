@@ -251,7 +251,7 @@
   --spacing-dock: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Content widths (layout/page-main.tsx's `width`): `max-w-page-narrow` for
+/* Content widths (layout/page-shell.tsx's `width`): `max-w-page-narrow` for
    forms, reading and single-column lists, `max-w-page-wide` for galleries. */
 @theme {
   --container-page-narrow: 40rem;
@@ -275,13 +275,12 @@
    z-index 1, so any positioned z-10 in the page (the outfit card's calendar
    button) drew over it. The two bars never meet, so they share a level; a
    menu opening from the bar (a scope or ⋯ dropdown) draws over the content
-   from inside it. The toasts (z 999) sit above both. Pages leave the bar's
-   4rem with pt-20 (the bar and a 1rem gutter), or pt-16 when their first
-   row sits flush under it (the Wardrobe tabs). */
+   from inside it. The toasts (z 999) sit above both. */
 /* The app bar's height, once: the bar's own and what a bar sticky between it
-   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). It is
-   in rem, so it grows with the text size like the pages' pt-20 and the
-   two-line title clamp it holds (#1028): at 100% text nothing differs. */
+   and the dock (Styling's) subtracts from the viewport, and what PageShell
+   leaves above a page (`--app-bar-h`). It is in rem, so it grows with the
+   text size like the two-line title clamp it holds (#1028): at 100% text
+   nothing differs. */
 :root {
   --app-bar-h: 4rem;
 }
@@ -311,6 +310,87 @@ html {
 }
 :root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
   scroll-padding-bottom: calc(var(--spacing-dock) + 3.5rem + 0.5rem);
+}
+
+/* The page frame (layout/page-shell.tsx, #1059; docs/plans/
+   2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
+   app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
+   and the dock's below plus a 2rem gutter (only the gutter at the rail,
+   where --spacing-dock is 0); a page ending on a bar sticky above the dock
+   (`data-end="bar"`, Styling's) leaves the dock's height alone. The body and
+   the aside carry the gutter (`data-gutter`), so section tabs between the
+   bar and them sit flush. Each layout is one grid here, from lg only: below
+   it every region stacks in DOM order, which is the desktop's left to
+   right. Nothing but this file and page-shell.tsx names a region's place. */
+@layer components {
+  .page-shell {
+    padding-top: var(--app-bar-h);
+    padding-bottom: calc(var(--spacing-dock) + 2rem);
+  }
+  .page-shell[data-end="bar"] {
+    padding-bottom: max(var(--spacing-dock), 2rem);
+  }
+  .page-body,
+  .page-aside {
+    padding: 1rem 1rem 0;
+  }
+  .page-body[data-gutter="bleed"] {
+    padding-inline: 0;
+  }
+  .page-body[data-gutter="flush"] {
+    padding: 0;
+  }
+  /* On a phone the settings index is Profile itself. */
+  .page-shell[data-layout="index"] > .page-aside {
+    display: none;
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell:not([data-layout="single"]) {
+      display: grid;
+      align-items: start;
+    }
+    .page-shell > .page-tabs {
+      grid-area: tabs;
+    }
+    .page-shell > .page-body {
+      grid-area: body;
+      min-width: 0;
+    }
+    .page-shell > .page-aside {
+      grid-area: aside;
+      min-width: 0;
+      position: sticky;
+      top: var(--app-bar-h);
+    }
+    /* A subject and its facts: the photo or collage left, the facts at a
+       reading measure right. */
+    .page-shell[data-layout="split"] {
+      grid-template:
+        "tabs tabs" auto
+        "aside body" auto / 5fr 7fr;
+    }
+    .page-shell[data-layout="split"] > .page-body,
+    .page-shell[data-layout="index"] > .page-body {
+      max-width: var(--container-page-narrow);
+    }
+    /* Work and its result: the result beside it, right. */
+    .page-shell[data-layout="panel"] {
+      grid-template:
+        "tabs tabs" auto
+        "body aside" auto / 1fr 20rem;
+    }
+    /* A filtered gallery: the filters left (§3.3 docks its sheet here). */
+    .page-shell[data-layout="facets"],
+    .page-shell[data-layout="index"] {
+      grid-template:
+        "tabs tabs" auto
+        "aside body" auto / 15rem 1fr;
+    }
+    .page-shell[data-layout="index"] > .page-aside {
+      display: block;
+    }
+  }
 }
 
 /* Below the rail, the dock's labels give way when the text is too large for

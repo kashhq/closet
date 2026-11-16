@@ -3,11 +3,8 @@ import { PostForm } from '../form';
 import { type DayChoice, plannedNote } from '../calendar/day-choice';
 import { shortDayLabel } from '../date-labels';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
 import { OUTFIT_GRID } from '../layout/columns';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
 import { stylingUrl } from '../styling/urls';
 import type { ViewContext } from '../view-context';
@@ -85,34 +82,35 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
   const { ctx, model } = props;
   const destination = model.picking?.destination;
   return (
-    <Layout ctx={ctx} title={t('OUTFITS')}>
-      <AppBar
-        ctx={ctx}
-        title={t('OUTFITS')}
-        actions={
+    <PageShell
+      ctx={ctx}
+      title={t('OUTFITS')}
+      bar={{
+        title: t('OUTFITS'),
+        actions: (
           <a href={stylingUrl({ destination })} class="btn btn-primary btn-sm">
             + {t('styling.NEW')}
           </a>
-        }
+        ),
+      }}
+      width="wide"
+      body={{ class: 'flex flex-col gap-3' }}
+      overlays={<DecisionToastView toast={model.toast} />}
+    >
+      <OutfitTabs active="saved" destination={destination} />
+      {model.picking && (
+        <PickingHeader destination={model.picking.destination} />
+      )}
+      {!model.picking && <MuseSection {...model.muse} />}
+      {!model.picking && model.muse.outfits.length > 0 && (
+        <h2 class="font-semibold px-1 pt-2">{t('outfits.muse.YOURS')}</h2>
+      )}
+      <OutfitListTabs
+        list={model.list}
+        href={savedUrl(destination ?? { kind: 'none' })}
       />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-3">
-        <OutfitTabs active="saved" destination={destination} />
-        {model.picking && (
-          <PickingHeader destination={model.picking.destination} />
-        )}
-        {!model.picking && <MuseSection {...model.muse} />}
-        {!model.picking && model.muse.outfits.length > 0 && (
-          <h2 class="font-semibold px-1 pt-2">{t('outfits.muse.YOURS')}</h2>
-        )}
-        <OutfitListTabs
-          list={model.list}
-          href={savedUrl(destination ?? { kind: 'none' })}
-        />
-        <SavedGrid model={model} destination={destination} />
-      </PageMain>
-      <DecisionToastView toast={model.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+      <SavedGrid model={model} destination={destination} />
+    </PageShell>
   );
 }
 

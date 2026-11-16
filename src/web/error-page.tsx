@@ -1,8 +1,6 @@
 import { t } from './i18n';
-import { AppBar } from './layout/app-bar';
-import { Dock, sectionLabel } from './layout/dock';
-import { Layout } from './layout/layout';
-import { PageMain } from './layout/page-main';
+import { sectionLabel } from './layout/dock';
+import { PageShell } from './layout/page-shell';
 import { EmptyState } from './layout/parts';
 import { SECTION_HOME, sectionOf } from './layout/sections';
 import type { ViewContext } from './view-context';
@@ -57,31 +55,27 @@ export function ErrorPage(props: {
           }),
         };
   return (
-    <Layout ctx={props.ctx}>
-      <AppBar ctx={props.ctx} title={t(`errorPage.title.${kind}`)} />
-      <PageMain class="pb-20">
-        <EmptyState message={props.message}>
-          <div class="flex flex-wrap justify-center gap-2">
-            {props.retryHref !== undefined && kind === 'retry' && (
-              <a href={props.retryHref} class="btn btn-primary">
-                {t('errorPage.TRY_AGAIN')}
-              </a>
-            )}
-            <a href={home.href} class="btn btn-ghost" data-history-back="">
-              {t('BACK')}
+    <PageShell ctx={props.ctx} bar={{ title: t(`errorPage.title.${kind}`) }}>
+      <EmptyState message={props.message}>
+        <div class="flex flex-wrap justify-center gap-2">
+          {props.retryHref !== undefined && kind === 'retry' && (
+            <a href={props.retryHref} class="btn btn-primary">
+              {t('errorPage.TRY_AGAIN')}
             </a>
-            <a href={home.href} class="btn btn-outline">
-              {home.label}
-            </a>
-          </div>
-          {props.status >= 500 && (
-            <p class="text-xs text-muted select-all">
-              {t('REQUEST_ID')}: {props.requestId}
-            </p>
           )}
-        </EmptyState>
-      </PageMain>
-      <Dock ctx={props.ctx} />
-    </Layout>
+          <a href={home.href} class="btn btn-ghost" data-history-back="">
+            {t('BACK')}
+          </a>
+          <a href={home.href} class="btn btn-outline">
+            {home.label}
+          </a>
+        </div>
+        {props.status >= 500 && (
+          <p class="text-xs text-muted select-all">
+            {t('REQUEST_ID')}: {props.requestId}
+          </p>
+        )}
+      </EmptyState>
+    </PageShell>
   );
 }

@@ -20,12 +20,14 @@ import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
 import { GALLERY_GRID } from '../layout/columns';
 import { GarmentMark } from '../layout/garment-mark';
-import { PageColumn, PageMain } from '../layout/page-main';
+import {
+  PageBody,
+  type PageBodyFrame,
+  PageShell,
+  type PageShellProps,
+} from '../layout/page-shell';
 import {
   EmptyState,
   PlinthImage,
@@ -49,7 +51,13 @@ import {
   wardrobeUrl,
 } from './urls';
 import { BULK_PROPERTIES, type BulkProperty } from './grid-schemas';
-import { WardrobeHeader, WardrobeMenu, WardrobeTabs } from './wardrobe-header';
+import {
+  WardrobeAddSheet,
+  wardrobeBar,
+  type WardrobeHeaderProps,
+  WardrobeMenu,
+  WardrobeTabs,
+} from './wardrobe-header';
 
 /**
  * The grid's filters as the page echoes them into its links and forms. The
@@ -207,32 +215,39 @@ export function WardrobePage(props: {
   model: WardrobeModel;
 }) {
   const { ctx, model } = props;
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'closet',
+    viewOwner: model.viewOwner,
+    sharedWardrobes: model.sharedWardrobes,
+    canEdit: model.canEdit,
+    selectUrl: selectUrl(model),
+  };
   return (
-    <Layout ctx={ctx} title={t('WARDROBE')}>
-      {model.selecting ? (
-        <TaskBar ctx={ctx} model={model} />
-      ) : (
-        <WardrobeHeader
-          ctx={ctx}
-          tab="closet"
-          viewOwner={model.viewOwner}
-          sharedWardrobes={model.sharedWardrobes}
-          canEdit={model.canEdit}
-          selectUrl={selectUrl(model)}
-        />
-      )}
-      <div class="pt-16">
-        {!model.selecting && (
-          <PageColumn width="wide">
-            <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
-          </PageColumn>
-        )}
-        <WardrobeMain model={model} />
-      </div>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      title={t('WARDROBE')}
+      bar={model.selecting ? taskBar(model) : wardrobeBar(header)}
+      width="wide"
+      tabs={
+        !model.selecting && (
+          <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
+        )
+      }
+      body={WARDROBE_BODY}
+      overlays={!model.selecting && <WardrobeAddSheet {...header} />}
+    >
+      <WardrobeMain model={model} />
+    </PageShell>
   );
 }
+
+/**
+ * The swappable body's frame, the page's and the fragment's alike. Flush:
+ * the sticky scope row sits right under the tabs, edge to edge, and the
+ * grid pads itself.
+ */
+const WARDROBE_BODY: PageBodyFrame = { id: 'wardrobe-main', gutter: 'flush' };
 
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
@@ -248,7 +263,9 @@ export function WardrobeFragment({
 }) {
   return (
     <>
-      <WardrobeMain model={model} />
+      <PageBody {...WARDROBE_BODY}>
+        <WardrobeMain model={model} />
+      </PageBody>
       {!model.selecting && (
         <WardrobeMenu
           viewOwner={model.viewOwner}
@@ -275,41 +292,36 @@ function selectUrl(model: WardrobeModel): string | undefined {
  * Select mode's and the picker's bar: what the task is, and Cancel back
  * to where it began (the grid as filtered, or the picker's capsule).
  */
-function TaskBar(props: { ctx: ViewContext; model: WardrobeModel }) {
-  const { search, viewOwner, picking } = props.model;
+function taskBar(model: WardrobeModel): PageShellProps['bar'] {
+  const { search, viewOwner, picking } = model;
   const cancel = picking
     ? capsuleUrl(picking.capsuleId, viewOwner)
     : wardrobeUrl(viewOwner, searchParams(search));
-  return (
-    <AppBar
-      ctx={props.ctx}
-      title={
-        picking
-          ? t('PICK_GARMENTS_FOR', { name: picking.name })
-          : t('SELECT_GARMENTS')
-      }
-      actions={
-        <a href={cancel} class="btn btn-ghost btn-sm">
-          {t('CANCEL')}
-        </a>
-      }
-    />
-  );
+  return {
+    title: picking
+      ? t('PICK_GARMENTS_FOR', { name: picking.name })
+      : t('SELECT_GARMENTS'),
+    actions: (
+      <a href={cancel} class="btn btn-ghost btn-sm">
+        {t('CANCEL')}
+      </a>
+    ),
+  };
 }
 
 /**
- * The swappable part of the Closet tab: the sticky scope row (the capsule
- * scope, the active filters, search, the filter sheet and the count), the
- * slim prompts, the first page of the grid and the filter modal; in select
- * mode the checkbox grid and its bar. GET /wardrobe answers htmx fragment
- * requests with this element (WardrobeFragment), so filtering and searching
- * never re-render the app bar, the tabs and the dock, and always start
- * again from the first page.
+ * The swappable part of the Closet tab, inside the body (`#wardrobe-main`):
+ * the sticky scope row (the capsule scope, the active filters, search, the
+ * filter sheet and the count), the slim prompts, the first page of the
+ * grid and the filter modal; in select mode the checkbox grid and its bar.
+ * GET /wardrobe answers htmx fragment requests with the body alone
+ * (WardrobeFragment), so filtering and searching never re-render the app
+ * bar, the tabs and the dock, and always start again from the first page.
  */
 function WardrobeMain({ model }: { model: WardrobeModel }) {
   const { viewOwner, selecting } = model;
   return (
-    <PageMain id="wardrobe-main" width="wide" class="pb-24">
+    <>
       {!selecting && <ScopeRow model={model} />}
       <div class="px-4 pt-3">
         {!selecting && <Prompts model={model} />}
@@ -326,7 +338,7 @@ function WardrobeMain({ model }: { model: WardrobeModel }) {
       )}
       {model.selecting && !model.picking && <BulkActions model={model} />}
       {model.bulkOutcome && <BulkToast outcome={model.bulkOutcome} />}
-    </PageMain>
+    </>
   );
 }
 

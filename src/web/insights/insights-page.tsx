@@ -12,11 +12,8 @@ import type { IsoDate } from '../../calendar-date';
 import { relativeDay } from '../date-labels';
 import type { SignablePhotoRef } from '../files/image-url';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
 import { CARD_COLUMNS } from '../layout/columns';
-import { PageMain } from '../layout/page-main';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, GarmentThumb } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { categoryLabel, priceLabel } from '../wardrobe/garment';
@@ -63,29 +60,31 @@ export function InsightsPage(props: {
   const { ctx, model } = props;
   const { insights } = model;
   return (
-    <Layout ctx={ctx} title={t('insights.TITLE')}>
-      <AppBar ctx={ctx} title={t('insights.TITLE')} back="/wardrobe" />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-4">
-        <p class="text-sm text-muted">{t('insights.INTRO')}</p>
-        <a
-          href={RECAP_PATH}
-          class="btn btn-outline btn-sm self-start"
-          id="insights-recap"
-        >
-          {t('recap.TITLE')}
-        </a>
-        {insights.closet.garments === 0 ? (
-          <EmptyState message={t('insights.EMPTY')}>
-            <a href="/wardrobe/new" class="btn btn-primary btn-sm">
-              + {t('NEW_GARMENT')}
-            </a>
-          </EmptyState>
-        ) : (
-          <Figures model={model} />
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      title={t('insights.TITLE')}
+      bar={{ title: t('insights.TITLE'), back: '/wardrobe' }}
+      width="wide"
+      body={{ class: 'flex flex-col gap-4' }}
+    >
+      <p class="text-sm text-muted">{t('insights.INTRO')}</p>
+      <a
+        href={RECAP_PATH}
+        class="btn btn-outline btn-sm self-start"
+        id="insights-recap"
+      >
+        {t('recap.TITLE')}
+      </a>
+      {insights.closet.garments === 0 ? (
+        <EmptyState message={t('insights.EMPTY')}>
+          <a href="/wardrobe/new" class="btn btn-primary btn-sm">
+            + {t('NEW_GARMENT')}
+          </a>
+        </EmptyState>
+      ) : (
+        <Figures model={model} />
+      )}
+    </PageShell>
   );
 }
 
@@ -212,21 +211,21 @@ export function UnwornPage(props: {
 }) {
   const { ctx, model } = props;
   return (
-    <Layout ctx={ctx} title={t(UNWORN_KEY)}>
-      <AppBar
-        ctx={ctx}
-        title={t(UNWORN_KEY)}
-        back={insightsUrl(model.insights.unworn.days)}
+    <PageShell
+      ctx={ctx}
+      title={t(UNWORN_KEY)}
+      bar={{
+        title: t(UNWORN_KEY),
+        back: insightsUrl(model.insights.unworn.days),
+      }}
+      body={{ class: 'flex flex-col gap-4' }}
+    >
+      <Unworn
+        unworn={model.insights.unworn}
+        today={model.today}
+        windowUrl={unwornListUrl}
       />
-      <PageMain class="p-4 pt-20 pb-24 flex flex-col gap-4">
-        <Unworn
-          unworn={model.insights.unworn}
-          today={model.today}
-          windowUrl={unwornListUrl}
-        />
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+    </PageShell>
   );
 }
 

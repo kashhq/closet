@@ -18,11 +18,8 @@ import type { GoesWithCloset } from '../gallery/ideas';
 import type { AvoidedPartner } from '../gallery/queries';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
 import { GarmentMark } from '../layout/garment-mark';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import {
   CameraIcon,
   GarmentSilhouette,
@@ -179,62 +176,63 @@ export function GarmentPage(props: {
   const { garment } = model;
   const title = garment.name ?? categoryLabel(garment.category);
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar
-        ctx={ctx}
-        title={title}
-        back={backUrl(garment, model.viewOwner)}
-        actions={<GarmentMenu ctx={ctx} model={model} />}
-      />
-      <PageMain class="flex flex-col gap-6 px-4 pt-20 pb-24">
-        <div id="garment-photo-slot">
-          <GarmentPhotoView
-            garment={garment}
-            viewOwner={model.viewOwner}
-            canEdit={model.canEdit}
-          />
-        </div>
-        <Summary model={model} />
-        {model.canEdit && (
-          <PublicSharePanel
-            siteUrl={ctx.siteUrl}
-            share={publicShareOf(model)}
-          />
-        )}
-        {model.suggestion && (
-          <SuggestionSection
-            garment={garment}
-            suggestion={model.suggestion}
-            isOwner={model.canDelete}
-            canEdit={model.canEdit}
-            viewOwner={model.viewOwner}
-          />
-        )}
-        <Replacement model={model} />
-        {/* A wishlist item is not in the closet: it has no condition, wears,
+    <PageShell
+      ctx={ctx}
+      title={title}
+      bar={{
+        title,
+        back: backUrl(garment, model.viewOwner),
+        actions: <GarmentMenu ctx={ctx} model={model} />,
+      }}
+      body={{ class: 'flex flex-col gap-6' }}
+      overlays={
+        <>
+          <PhotoTools model={model} />
+          <Toasts model={model} />
+        </>
+      }
+    >
+      <div id="garment-photo-slot">
+        <GarmentPhotoView
+          garment={garment}
+          viewOwner={model.viewOwner}
+          canEdit={model.canEdit}
+        />
+      </div>
+      <Summary model={model} />
+      {model.canEdit && (
+        <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(model)} />
+      )}
+      {model.suggestion && (
+        <SuggestionSection
+          garment={garment}
+          suggestion={model.suggestion}
+          isOwner={model.canDelete}
+          canEdit={model.canEdit}
+          viewOwner={model.viewOwner}
+        />
+      )}
+      <Replacement model={model} />
+      {/* A wishlist item is not in the closet: it has no condition, wears,
             capsules or outfits until "Bought it" (the route reads none);
             what it has is how it would go with the closet. */}
-        <GoesWithSection goesWith={model.goesWith} />
-        {garment.status !== 'wishlist' && (
-          <GarmentCapsules
-            garmentId={garment.id}
-            capsules={model.capsules}
-            viewOwner={model.viewOwner}
-            canEdit={model.canEdit}
-          />
-        )}
-        {model.outfits && <GarmentOutfitsStrip outfits={model.outfits} />}
-        <AvoidedPartners
+      <GoesWithSection goesWith={model.goesWith} />
+      {garment.status !== 'wishlist' && (
+        <GarmentCapsules
           garmentId={garment.id}
-          partners={model.styling.avoided}
+          capsules={model.capsules}
+          viewOwner={model.viewOwner}
+          canEdit={model.canEdit}
         />
-        <GarmentDetails garment={garment} />
-        <Care model={model} />
-      </PageMain>
-      <PhotoTools model={model} />
-      <Toasts model={model} />
-      <Dock ctx={ctx} />
-    </Layout>
+      )}
+      {model.outfits && <GarmentOutfitsStrip outfits={model.outfits} />}
+      <AvoidedPartners
+        garmentId={garment.id}
+        partners={model.styling.avoided}
+      />
+      <GarmentDetails garment={garment} />
+      <Care model={model} />
+    </PageShell>
   );
 }
 

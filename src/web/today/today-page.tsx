@@ -15,12 +15,9 @@ import type { PoolGarment } from '../gallery/queries';
 import { ideasUrl } from '../gallery/urls';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
-import { AppBar } from '../layout/app-bar';
 import { AwayLink } from '../trips/away-link';
-import { Dock } from '../layout/dock';
 import { PAIR_GRID } from '../layout/columns';
-import { PageMain } from '../layout/page-main';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import type { NeedsToDecide } from '../wishlist/inbox';
@@ -79,67 +76,73 @@ export function TodayPage(props: {
     ? props.wore
     : undefined;
   return (
-    <Layout ctx={ctx} title={t('today.TITLE')}>
-      <AppBar ctx={ctx} title={dayLabel(model.today)} />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-4">
-        {firstRun && <FirstRunCard stage={firstRun} />}
-        {model.weather && firstRun !== 'empty' && (
-          <UserWeatherLine
-            weather={model.weather}
-            timeZone={props.timeZone}
-            now={props.now}
-          />
-        )}
-        {model.away.map((trip) => (
-          <AwayLink trip={trip} class="self-start" />
-        ))}
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t('today.OFFLINE')}
-        </p>
-        <MuseCard round={model.round} needs={model.needs} />
-        {model.rows.length > 0 && (
-          <div class={PAIR_GRID}>
-            {model.rows.map((row) =>
-              row.kind === 'planned' ? (
-                <PlannedRowView row={row} today={model.today} wore={wore} />
-              ) : (
-                <IdeasRowView row={row} today={model.today} />
-              ),
-            )}
-          </div>
-        )}
-        <SnapStripsInit />
-        {!firstRun && (
-          <div class="flex flex-wrap items-center gap-2">
-            <a
-              href={`/calendar/plan?for=day:${model.today}`}
-              class="btn btn-ghost btn-sm"
-            >
-              + {t('today.PLAN_ANOTHER')}
-            </a>
-            {/* The week ahead (#16): lands on the calendar with what it planned. */}
-            <PlanWeekForm small />
-          </div>
-        )}
-      </PageMain>
-      {firstRun && (
-        <AddSheet
-          tab="closet"
-          viewOwner={undefined}
-          canEdit
-          newCapsule={false}
+    <PageShell
+      ctx={ctx}
+      title={t('today.TITLE')}
+      bar={{ title: dayLabel(model.today) }}
+      width="wide"
+      body={{ class: 'flex flex-col gap-4' }}
+      overlays={
+        <>
+          {firstRun && (
+            <AddSheet
+              tab="closet"
+              viewOwner={undefined}
+              canEdit
+              newCapsule={false}
+            />
+          )}
+          {wore !== undefined && (
+            <SavedToast id="wore-toast" text={t('wear.status.WORN')} />
+          )}
+          <StripFlags names={[WORE_FLAG]} />
+        </>
+      }
+    >
+      {firstRun && <FirstRunCard stage={firstRun} />}
+      {model.weather && firstRun !== 'empty' && (
+        <UserWeatherLine
+          weather={model.weather}
+          timeZone={props.timeZone}
+          now={props.now}
         />
       )}
-      {wore !== undefined && (
-        <SavedToast id="wore-toast" text={t('wear.status.WORN')} />
+      {model.away.map((trip) => (
+        <AwayLink trip={trip} class="self-start" />
+      ))}
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t('today.OFFLINE')}
+      </p>
+      <MuseCard round={model.round} needs={model.needs} />
+      {model.rows.length > 0 && (
+        <div class={PAIR_GRID}>
+          {model.rows.map((row) =>
+            row.kind === 'planned' ? (
+              <PlannedRowView row={row} today={model.today} wore={wore} />
+            ) : (
+              <IdeasRowView row={row} today={model.today} />
+            ),
+          )}
+        </div>
       )}
-      <StripFlags names={[WORE_FLAG]} />
-      <Dock ctx={ctx} />
-    </Layout>
+      <SnapStripsInit />
+      {!firstRun && (
+        <div class="flex flex-wrap items-center gap-2">
+          <a
+            href={`/calendar/plan?for=day:${model.today}`}
+            class="btn btn-ghost btn-sm"
+          >
+            + {t('today.PLAN_ANOTHER')}
+          </a>
+          {/* The week ahead (#16): lands on the calendar with what it planned. */}
+          <PlanWeekForm small />
+        </div>
+      )}
+    </PageShell>
   );
 }
 

@@ -10,8 +10,9 @@ import { AppStatus } from './app-status';
 import { ConfirmSheet } from './confirm-sheet';
 
 /**
- * The document shell of every page. The pages render the app bar and dock
- * themselves (the error page and every current page do).
+ * The document shell of every page. `PageShell` renders it with the app
+ * bar, the page's `<main>` and the dock inside; the pages not on the shell
+ * yet (`rawMainRoutes`, test/integration/pages.ts) render those themselves.
  *
  * English only: `lang`, `og:locale` and the default description are fixed.
  */

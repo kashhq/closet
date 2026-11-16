@@ -406,7 +406,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(res.headers.vary).toContain('HX-Request');
       expect(res.body).not.toContain('<html');
       expect(res.body).not.toContain('<nav');
-      expect(res.body.trimStart()).toMatch(/^<main id="wardrobe-main"/);
+      expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-main"/);
       expect(res.body).toContain('Fragment shirt');
       expect(res.body).toContain('id="filter-modal"');
     });

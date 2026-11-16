@@ -288,6 +288,57 @@ export function pageRoutes(f: PageFixture, inviteToken: string): PageRoute[] {
   ];
 }
 
+/**
+ * The `pageRoutes` still drawn on a hand-written `<main>`; every other page
+ * is framed by `PageShell` (#1059). Shrink-only: slice D2 of the desktop
+ * plan (#1058) moves these onto the shell and deletes the list.
+ */
+export function rawMainRoutes(f: PageFixture, inviteToken: string): string[] {
+  return [
+    '/wardrobe/tag',
+    '/wardrobe/new/from-link?to=wishlist',
+    '/capsules',
+    `/capsules/${f.capsuleId}`,
+    `/outfits/${f.outfitId}`,
+    '/calendar/plan?for=day:2030-10-09&occasion=evening',
+    '/trips',
+    `/trips/${f.tripId}`,
+    `/trips/${f.tripId}/outfits/new`,
+    `/trips/${f.tripId}/outfits/new?day=2030-10-09&occasion=evening`,
+    '/wardrobe/recap',
+    '/wardrobe/recap?year=2025',
+    '/auth/profile',
+    '/auth/profile/style',
+    '/auth/profile/sizes',
+    '/auth/update-email',
+    '/auth/delete-account',
+    '/auth/change-password',
+    '/auth/sign-out-everywhere',
+    '/auth/tokens',
+    '/auth/logout',
+    '/about',
+    '/offline.html',
+    '/auth/login',
+    '/auth/register',
+    `/wardrobe-share/invite/${inviteToken}`,
+    `/share?shareableId=${f.garmentShareableId}&type=garment`,
+    `/share?shareableId=${f.outfitShareableId}&type=outfit`,
+  ];
+}
+
+/**
+ * One page frame (#1059): a page framed by `PageShell` has exactly one
+ * `.page-shell`, and it is the page's only `<main>`. Returns whether the
+ * page is on the shell, for the route table to hold against
+ * `rawMainRoutes`.
+ */
+export function expectPageShell(res: LightMyRequestResponse): boolean {
+  const shells = res.body.match(/<main class="page-shell\b/g)?.length ?? 0;
+  expect(shells).toBeLessThanOrEqual(1);
+  if (shells === 1) expect(res.body.match(/<main\b/g)).toHaveLength(1);
+  return shells === 1;
+}
+
 /** The app bar marks exactly the pages `pageRoutes` lists as form pages. */
 export function expectFormPageFlag(
   route: PageRoute,
@@ -341,6 +392,7 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectOneStatusRegion(res);
   expectNoScriptNavigation(res);
   expectAppBar(res);
+  expectPageShell(res);
   // _hyperscript left the app (2026-09-26): an `_=` attribute would do
   // nothing at all.
   expect(res.body).not.toMatch(/\s_="/);

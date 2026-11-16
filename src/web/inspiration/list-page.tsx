@@ -1,10 +1,7 @@
 import { inspirationPhotoUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
 import { OUTFIT_GRID } from '../layout/columns';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
 import { OutfitTabs } from '../outfits/outfit-tabs';
 import type { ViewContext } from '../view-context';
@@ -28,45 +25,46 @@ export function InspirationListPage(props: {
 }) {
   const { ctx, looks } = props;
   return (
-    <Layout ctx={ctx} title={t('OUTFITS')}>
-      <AppBar
-        ctx={ctx}
-        title={t('OUTFITS')}
-        actions={
+    <PageShell
+      ctx={ctx}
+      title={t('OUTFITS')}
+      bar={{
+        title: t('OUTFITS'),
+        actions: (
           <a href={NEW_INSPIRATION_PATH} class="btn btn-primary btn-sm">
             + {t('inspiration.ADD')}
           </a>
-        }
-      />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-3">
-        <OutfitTabs active="inspiration" />
-        {looks.length === 0 ? (
-          <EmptyState message={t('inspiration.EMPTY')}>
-            <a href={NEW_INSPIRATION_PATH} class="btn btn-primary btn-sm">
-              {t('inspiration.ADD_FIRST')}
-            </a>
-          </EmptyState>
-        ) : (
-          <ul id="inspiration-looks" class={OUTFIT_GRID}>
-            {looks.map((look, index) => (
-              <li>
-                <a
-                  href={inspirationUrl(look.id)}
-                  class="flex flex-col gap-1.5"
-                  data-inspiration-id={look.id}
-                >
-                  <LookTile look={look} eager={index < EAGER_TILES} />
-                  <span class="text-sm font-medium truncate px-0.5">
-                    {lookName(look)}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+        ),
+      }}
+      width="wide"
+      body={{ class: 'flex flex-col gap-3' }}
+    >
+      <OutfitTabs active="inspiration" />
+      {looks.length === 0 ? (
+        <EmptyState message={t('inspiration.EMPTY')}>
+          <a href={NEW_INSPIRATION_PATH} class="btn btn-primary btn-sm">
+            {t('inspiration.ADD_FIRST')}
+          </a>
+        </EmptyState>
+      ) : (
+        <ul id="inspiration-looks" class={OUTFIT_GRID}>
+          {looks.map((look, index) => (
+            <li>
+              <a
+                href={inspirationUrl(look.id)}
+                class="flex flex-col gap-1.5"
+                data-inspiration-id={look.id}
+              >
+                <LookTile look={look} eager={index < EAGER_TILES} />
+                <span class="text-sm font-medium truncate px-0.5">
+                  {lookName(look)}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </PageShell>
   );
 }
 

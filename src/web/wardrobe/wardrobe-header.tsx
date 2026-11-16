@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
-import { AppBar } from '../layout/app-bar';
+import { AppBar, type AppBarProps } from '../layout/app-bar';
 import { LinkTabs } from '../layout/link-tabs';
 import {
   CameraIcon,
@@ -72,50 +72,69 @@ export interface WardrobeHeaderProps {
 }
 
 /**
- * The app bar of a Wardrobe tab. Nothing in it varies but with the data
- * (the switcher's wardrobes, what the requester may do), so /wardrobe
- * stays byte-stable as a stale-while-revalidate tab root. The add sheet
- * is a dialog beside the bar, opened by its ＋.
+ * The app bar of a Wardrobe tab, as `PageShell`'s `bar`. Nothing in it
+ * varies but with the data (the switcher's wardrobes, what the requester
+ * may do), so /wardrobe stays byte-stable as a stale-while-revalidate tab
+ * root. Its ＋ opens `WardrobeAddSheet`, which the page renders beside it.
  */
-export function WardrobeHeader(props: WardrobeHeaderProps) {
+export function wardrobeBar(
+  props: WardrobeHeaderProps,
+): Omit<AppBarProps, 'ctx'> {
   const { ctx, viewOwner, canEdit } = props;
-  const canAdd = canEdit || props.newCapsule === true;
-  return (
-    <>
-      <AppBar
-        ctx={ctx}
-        title={wardrobeTitle(props.sharedWardrobes, viewOwner)}
-        titleMenu={<SwitcherItems {...props} />}
-        actions={
-          <>
-            <WardrobeMenu
-              viewOwner={viewOwner}
-              canEdit={canEdit}
-              selectUrl={props.selectUrl}
-              orders={ctx.orderReview}
-            />
-            {canAdd && (
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-circle"
-                aria-label={t('add.TITLE')}
-                aria-haspopup="dialog"
-                onclick={OPEN_ADD_SHEET}
-              >
-                <PlusIcon />
-              </button>
-            )}
-          </>
-        }
-      />
-      {canAdd && (
-        <AddSheet
-          tab={props.tab}
+  return {
+    title: wardrobeTitle(props.sharedWardrobes, viewOwner),
+    titleMenu: <SwitcherItems {...props} />,
+    actions: (
+      <>
+        <WardrobeMenu
           viewOwner={viewOwner}
           canEdit={canEdit}
-          newCapsule={props.newCapsule === true}
+          selectUrl={props.selectUrl}
+          orders={ctx.orderReview}
         />
-      )}
+        {canAddIn(props) && (
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-circle"
+            aria-label={t('add.TITLE')}
+            aria-haspopup="dialog"
+            onclick={OPEN_ADD_SHEET}
+          >
+            <PlusIcon />
+          </button>
+        )}
+      </>
+    ),
+  };
+}
+
+/** The ＋'s add sheet, where the requester may add; nothing otherwise. */
+export function WardrobeAddSheet(props: WardrobeHeaderProps) {
+  if (!canAddIn(props)) return null;
+  return (
+    <AddSheet
+      tab={props.tab}
+      viewOwner={props.viewOwner}
+      canEdit={props.canEdit}
+      newCapsule={props.newCapsule === true}
+    />
+  );
+}
+
+function canAddIn(props: WardrobeHeaderProps): boolean {
+  return props.canEdit || props.newCapsule === true;
+}
+
+/**
+ * The bar and its add sheet together, for the Wardrobe tabs not yet on
+ * `PageShell` (Capsules and Laundry; D2 of the desktop plan moves them and
+ * deletes this).
+ */
+export function WardrobeHeader(props: WardrobeHeaderProps) {
+  return (
+    <>
+      <AppBar ctx={props.ctx} {...wardrobeBar(props)} />
+      <WardrobeAddSheet {...props} />
     </>
   );
 }

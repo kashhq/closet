@@ -132,7 +132,7 @@ describe('wardrobe grid', () => {
     const named = ids.filter((id) => id !== notesOnly);
     const res = await get('/wardrobe?keyword=garment', HX_FRAGMENT);
     expect(res.headers.vary).toContain('HX-Request');
-    expect(res.body.trimStart()).toMatch(/^<main id="wardrobe-main"/);
+    expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-main"/);
     expect(tileIds(res.html)).toEqual(named.slice(0, GRID_PAGE_SIZE));
     expect(sentinelUrl(res.html)).toBe(
       `/wardrobe/tiles?keyword=garment&before=${named[GRID_PAGE_SIZE - 1]}`,
