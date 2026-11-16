@@ -158,6 +158,7 @@ export type WithoutNulls<T> = {
  * as `""`.
  */
 export function withoutNulls<T extends object>(value: T): WithoutNulls<T> {
+  // eslint-disable-next-line closet/no-forged-copy -- the same object, minus its nulls: T is a row type, never copy
   return Object.fromEntries(
     Object.entries(value).filter(([, field]) => field !== null),
   ) as WithoutNulls<T>;
@@ -391,5 +392,6 @@ export function project<
   for (const [field, value] of Object.entries(owned)) {
     if (!(field in answer)) answer[field] = value;
   }
+  // eslint-disable-next-line closet/no-forged-copy -- the answer's own fields picked back out of T, a row type, never copy
   return answer as Pick<T, Extract<FieldsAs<P, 'keep'>, keyof T>> & Own;
 }

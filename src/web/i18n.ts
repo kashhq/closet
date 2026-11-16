@@ -1,5 +1,6 @@
 import english from '../i18n/en/lang.json';
 import { escapeHtml } from './html';
+import { PLACEHOLDER_KINDS } from './placeholder-kinds';
 
 /**
  * English strings for JSX views, typed to the keys of src/i18n/en/lang.json:
@@ -14,6 +15,43 @@ type Leaves<T> = {
 export type StringKey = Leaves<typeof english>;
 /** Values for `{name}` placeholders in the catalog's strings. */
 export type StringParams = Record<string, string | number>;
+
+type Kinds = typeof PLACEHOLDER_KINDS;
+type KindedKey = keyof Kinds;
+type Value<Kind> = Kind extends 'copy' ? Translated : string | number;
+
+/** One key's parameters: exactly its placeholders, each typed by its kind. */
+type KeyParams<K extends KindedKey> = {
+  [P in keyof Kinds[K]]: Value<Kinds[K][P]>;
+};
+
+/** The placeholders that are copy in any key of K (distributes over a union). */
+type CopyNames<K> = K extends KindedKey
+  ? {
+      [P in keyof Kinds[K]]: Kinds[K][P] extends 'copy' ? P : never;
+    }[keyof Kinds[K]]
+  : never;
+
+type IsUnion<K, All = K> = K extends unknown
+  ? [All] extends [K]
+    ? false
+    : true
+  : never;
+
+/**
+ * `t()`'s parameters for a key, from PLACEHOLDER_KINDS. One literal key takes
+ * exactly its placeholders; a key without any takes none that matter. A key
+ * type wider than one literal (a table of keys, a variable typed `StringKey`)
+ * fails closed: a placeholder that is copy in any key it may be takes
+ * `Translated`. It may still go without parameters: a key whose placeholder
+ * is missing throws at runtime, which forges nothing.
+ */
+export type ParamsFor<K extends StringKey> =
+  true extends IsUnion<K>
+    ? [params?: { [P in CopyNames<K>]?: Translated } & StringParams]
+    : K extends KindedKey
+      ? [params: KeyParams<K>]
+      : [params?: StringParams];
 
 function flatten(node: object, prefix = ''): [string, string][] {
   return Object.entries(node).flatMap(([key, value]) =>
@@ -59,6 +97,10 @@ export function joinCopy(
 }
 
 /** Plain text; JSX escapes it where it lands. */
+export function t<K extends StringKey>(
+  key: K,
+  ...params: ParamsFor<K>
+): Translated;
 export function t(key: StringKey, params: StringParams = {}): Translated {
   return interpolate(key, params, (value) => value) as Translated;
 }
@@ -101,8 +143,8 @@ export function tHtml(key: StringKey, params: StringParams = {}): string {
  * so a miss here is a missing catalog string, a bug to surface, not data to
  * render raw.
  */
-export function tKey(key: string): string {
+export function tKey(key: string): Translated {
   const template = STRINGS.get(key);
   if (template === undefined) throw new Error(`No string for key '${key}'`);
-  return template;
+  return template as Translated;
 }

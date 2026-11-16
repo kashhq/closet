@@ -1,6 +1,6 @@
 import { garmentMarks } from '../../wardrobe/marks';
 import type { GarmentRole } from '../../wardrobe/properties';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { GarmentMark } from '../layout/garment-mark';
 import { GarmentPicture } from '../layout/parts';
@@ -150,7 +150,7 @@ export function StylingRowView(props: {
  * snapshot (innerHTML) keeps, so a row restored by Back is still frozen and
  * still reads locked, and makes the neighbours inert or not.
  */
-function LockToggle(props: { locked: boolean; label: string }) {
+function LockToggle(props: { locked: boolean; label: Translated }) {
   return (
     // daisyUI's swap: the label is the control (its input has no box), so
     // it shows the keyboard focus its checkbox has.

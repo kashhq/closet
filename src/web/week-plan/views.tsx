@@ -9,7 +9,7 @@ import type { IsoDate } from '../../calendar-date';
 import { PostForm } from '../form';
 import { DAY_NAMES, dayLabel, occasionLabel } from '../date-labels';
 import { dayAnchor, dayUrl } from '../calendar/urls';
-import { t } from '../i18n';
+import { joinCopy, t, type Translated } from '../i18n';
 import { SavedToast, StripFlags } from '../layout/parts';
 import { SettingsPage } from '../layout/settings-page';
 import { profileSection } from '../auth/urls';
@@ -49,8 +49,8 @@ export function PlanWeekForm(props: { class?: string; small?: boolean }) {
   );
 }
 
-function slotText(slot: Slot): string {
-  return `${dayLabel(slot.day)} · ${occasionLabel(slot.occasion)}`;
+function slotText(slot: Slot): Translated {
+  return joinCopy([dayLabel(slot.day), occasionLabel(slot.occasion)], ' · ');
 }
 
 function plannedHeading(banner: PlannedBanner): string {
@@ -121,14 +121,17 @@ export function PlannedWeekBanner({
       {banner.stillEmpty.length > 0 && (
         <p class="text-sm" data-still-empty>
           {t('weekPlan.STILL_EMPTY', {
-            slots: banner.stillEmpty.map(slotText).join(', '),
+            slots: joinCopy(banner.stillEmpty.map(slotText), ', '),
           })}
         </p>
       )}
       {banner.away.length > 0 && (
         <p class="text-sm" data-away-skipped>
           {t('weekPlan.AWAY_SKIPPED', {
-            days: banner.away.map((day) => dayLabel(day)).join(', '),
+            days: joinCopy(
+              banner.away.map((day) => dayLabel(day)),
+              ', ',
+            ),
           })}
         </p>
       )}

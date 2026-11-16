@@ -28,6 +28,7 @@ export function checklistBody<Field extends string>(
 ) {
   const ids: CheckedIds = Type.Optional(Type.Array(RowId, { maxItems }));
   // A computed key widens to `string`; this names it back.
+  // eslint-disable-next-line closet/no-forged-copy -- Field names a property of the schema, never copy
   const properties = { [checked]: ids, shown: ids } as Record<
     Field | 'shown',
     CheckedIds

@@ -7,7 +7,7 @@ import {
 } from '../../weather/temperature';
 import { PostForm } from '../form';
 import { dayLabel, shortDayLabel } from '../date-labels';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { type PlaceAnswer } from '../weather/place-input';
 import { PlaceResults, postedPick } from '../weather/place-picker';
 import {
@@ -114,7 +114,11 @@ export function TripWeather(props: {
 }
 
 /** "12–18 °C" from Celsius, in the person's unit. */
-function rangeLabel(low: number, high: number, unit: TemperatureUnit): string {
+function rangeLabel(
+  low: number,
+  high: number,
+  unit: TemperatureUnit,
+): Translated {
   return t('weather.RANGE', {
     low: displayTemperature(low, unit),
     high: displayTemperature(high, unit),

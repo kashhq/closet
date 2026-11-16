@@ -1,6 +1,6 @@
 import { Card } from '../card';
 import type { OutfitCount } from '../../wardrobe/goes-with';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { OutfitCollage } from '../outfits/collage';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import { categoryLabel } from '../wardrobe/garment';
@@ -21,7 +21,7 @@ import { type GoesWithCloset, ideaName, type NearDuplicate } from './ideas';
 const GOES_WITH_ID = 'goes-with';
 
 /** "Makes 12 outfits with your closet", or the card's shorter "Unlocks 12 outfits". */
-function countText(count: OutfitCount, card: boolean): string {
+function countText(count: OutfitCount, card: boolean): Translated {
   const { outfits, capped } = count;
   if (outfits === 0)
     return t(card ? 'goesWith.CARD_NONE' : 'goesWith.COUNT_NONE');
@@ -36,7 +36,7 @@ function countText(count: OutfitCount, card: boolean): string {
 }
 
 /** A card's "Unlocks 12 outfits": the Muse inbox and a need's options. */
-export function unlocksText(count: OutfitCount): string {
+export function unlocksText(count: OutfitCount): Translated {
   return countText(count, true);
 }
 

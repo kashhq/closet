@@ -20,7 +20,7 @@ import { dayOfWeek, hourIn, type IsoDate, todayIn } from '../../calendar-date';
 import { DAY_NAMES, occasionLabel } from '../date-labels';
 import { ideaName } from '../gallery/ideas';
 import type { WeekPoolGarment } from '../gallery/queries';
-import { t, type StringKey } from '../i18n';
+import { t, type StringKey, type Translated } from '../i18n';
 import { awayTripsSql, tripsOn } from '../trips/away';
 import type { PushPayload } from '../push/payload';
 import type { PushSender, SendReport } from '../push/sender';
@@ -743,7 +743,7 @@ const UNWEARABLE_LINES: Readonly<Record<Unwearable['reason'], StringKey>> = {
 };
 
 /** "Thursday", or "Thursday evening" for an occasion around the day's outfit. */
-export function slotLabel(slot: Slot): string {
+export function slotLabel(slot: Slot): Translated {
   const day = t(DAY_NAMES[dayOfWeek(slot.day)]);
   return DAY_OCCASIONS.includes(slot.occasion)
     ? day

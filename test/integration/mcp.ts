@@ -152,5 +152,6 @@ export async function tool<T = Record<string, unknown>>(
 ): Promise<T> {
   const answer = await callTool(t, token, name, args);
   expect(answer.isError, JSON.stringify(answer.value)).toBe(false);
+  // eslint-disable-next-line closet/no-forged-copy -- a test names the shape of a tool's parsed JSON; it ships nowhere
   return answer.value as T;
 }
