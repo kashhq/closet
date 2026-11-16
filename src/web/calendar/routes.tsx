@@ -474,7 +474,7 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       });
       if (outcome === 'future') {
         throw replayRefused(reply, 'future', {
-          message: 'A planned day cannot be marked worn yet',
+          message: t('refusal.day.plannedNotWorn'),
           logDetail: `calendar entry ${id}'s day is ahead`,
         });
       }

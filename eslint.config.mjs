@@ -34,8 +34,7 @@ const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
 
-// no-restricted-syntax entries every file obeys, then the HttpError copy
-// rule, which specs are exempt from (their fixtures carry arbitrary messages).
+// no-restricted-syntax entries every file obeys.
 const RESTRICTED_SYNTAX = [
   {
     selector:
@@ -89,31 +88,6 @@ const RESTRICTED_SYNTAX = [
     selector: `JSXAttribute[name.name='style'] TemplateElement[value.raw=${INLINE_COLOUR}]`,
     message: THEME_TOKENS_ONLY,
   },
-];
-
-const HTTP_ERROR_COPY_MESSAGE =
-  "An HttpError's message is copy: t('refusal.*') from src/i18n/en/lang.json, not a literal (#734).";
-const HTTP_ERROR_COPY = [
-  // An HttpError's message is shown to the person (or the agent), so it
-  // is copy: a `t('refusal.*')` key in src/i18n/en/lang.json (#734),
-  // never English written in code: a literal, a template or a concatenation
-  // (`t(...)` and variables pass). Omit it for the status text. Covers
-  // `new HttpError(...)`, `new ns.HttpError(...)` and `super(...)` in a
-  // direct subclass.
-  ...['Literal', 'TemplateLiteral', 'BinaryExpression'].flatMap((type) => [
-    {
-      selector: `NewExpression[callee.name='HttpError'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-    {
-      selector: `NewExpression[callee.type='MemberExpression'][callee.property.name='HttpError'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-    {
-      selector: `ClassDeclaration[superClass.name='HttpError'] CallExpression[callee.type='Super'][arguments.1.type='${type}']`,
-      message: HTTP_ERROR_COPY_MESSAGE,
-    },
-  ]),
 ];
 
 const HONO_RAW_HTML_PATHS = [
@@ -201,7 +175,6 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         ...RESTRICTED_SYNTAX,
-        ...HTTP_ERROR_COPY,
       ],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed

@@ -163,15 +163,17 @@ function sameProductRefusal(same: SuggestedProduct): HttpError {
   return new HttpError(
     409,
     same.dismissed
-      ? `The owner set this product aside (garment ${same.id}, ${same.dismissedReason ?? 'with a note'}): never propose it again`
-      : `This product is suggested already (garment ${same.id})`,
+      ? t('refusal.need.productSetAside', {
+          id: same.id,
+          reason: same.dismissedReason ?? t('refusal.need.withANote'),
+        })
+      : t('refusal.need.productSuggested', { id: same.id }),
   );
 }
 
 /** A need full of open options: suggest_garment's refusal before and in the write. */
-const FULL = `That need has ${MAX_OPTIONS_PER_GROUP} open options already`;
-const DECIDED =
-  'That need is decided (chosen, bought or set aside): list_suggestions shows the open ones';
+const full = () => t('refusal.need.full', { max: MAX_OPTIONS_PER_GROUP });
+const decided = () => t('refusal.need.decided');
 
 /**
  * A new pick's refusals before its product is fetched (suggestionRoom:
@@ -187,8 +189,8 @@ export async function checkSuggestionRoom(
 ): Promise<void> {
   const room = await suggestionRoom(db, actor.userId, groupId, url);
   if (room.group === 'missing') throw new NotFound('need');
-  if (room.group === 'closed') throw new HttpError(409, DECIDED);
-  if (room.group === 'full') throw new HttpError(409, FULL);
+  if (room.group === 'closed') throw new HttpError(409, decided());
+  if (room.group === 'full') throw new HttpError(409, full());
   if (room.same) throw sameProductRefusal(room.same);
 }
 
@@ -214,8 +216,8 @@ export async function markSuggestedPick(
     url,
   );
   if (typeof marked === 'object') throw sameProductRefusal(marked.same);
-  if (marked === 'full') throw new HttpError(409, FULL);
-  if (marked === 'refused') throw new HttpError(409, DECIDED);
+  if (marked === 'full') throw new HttpError(409, full());
+  if (marked === 'refused') throw new HttpError(409, decided());
 }
 
 /** The line `garment.suggested`, once the garment's transaction (markSuggestedPick) has committed. */

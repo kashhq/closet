@@ -8,7 +8,7 @@ import type { GarmentStatus } from '../../wardrobe/status';
 import { ownerTransaction } from '../auth/queries';
 import type { FieldErrors } from '../auth/validation';
 import { type IsoDate, parseIsoDate } from '../../calendar-date';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { RowId } from '../schemas';
 import { CARE_NOTE_MAX, PRICE_INPUT_MAX, readPrice } from './garment-input';
 
@@ -149,7 +149,7 @@ function repairFormValues(body: RepairBody): RepairFormValues {
 function readRepairDay(
   typed: string,
   today: IsoDate,
-): { day: IsoDate } | { error: string } {
+): { day: IsoDate } | { error: Translated } {
   if (!typed) return { error: t('validation.REPAIR_DAY_REQUIRED') };
   const day = parseIsoDate(typed);
   if (day === undefined) return { error: t('validation.INVALID_DATE') };

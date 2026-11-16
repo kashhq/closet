@@ -6,7 +6,7 @@ import type {
 import { PostForm } from '../form';
 import { inspirationPhotoUrl } from '../files/image-url';
 import type { RecreatePoolGarment } from '../gallery/queries';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
@@ -310,6 +310,6 @@ function agreementText(agrees: Agreement): string {
     agrees.color === 'exact' && t('inspiration.AGREES_COLOR'),
     agrees.color === 'close' && t('inspiration.AGREES_CLOSE_COLOR'),
     agrees.pattern && t('inspiration.AGREES_PATTERN'),
-  ].filter((part): part is string => typeof part === 'string');
+  ].filter((part): part is Translated => typeof part === 'string');
   return parts.length > 0 ? parts.join(' · ') : t('inspiration.AGREES_ROLE');
 }

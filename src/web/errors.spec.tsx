@@ -12,7 +12,8 @@ import {
   HttpError,
   REQUEST_FAILED_EVENT,
 } from './errors';
-import { t } from './i18n';
+import * as errors from './errors';
+import { t, type Translated } from './i18n';
 import { renderPage } from './render';
 import type { ViewContext } from './view-context';
 
@@ -74,7 +75,7 @@ describe('createErrorHandler', () => {
       throw new HttpError(404);
     });
     app.get('/busy', () => {
-      throw new HttpError(503, 'Try again in a moment.', {
+      throw new HttpError(503, 'Try again in a moment.' as Translated, {
         logDetail: 'owner 7',
       });
     });
@@ -97,7 +98,7 @@ describe('createErrorHandler', () => {
       throw new Error('connection refused at 10.0.0.5');
     });
     app.get('/curly', () => {
-      throw new HttpError(409, 'Undo “Wore today” first…');
+      throw new HttpError(409, 'Undo “Wore today” first…' as Translated);
     });
     // A multipart part over the size limit fails inside the handler.
     app.get('/too-large', () => {
@@ -373,3 +374,50 @@ describe('DatabaseOutage', () => {
     expect(outage.failure()).toBe(true);
   });
 });
+
+// An HttpError's message is `t()` copy (#734), enforced by the type: every
+// line below must fail the typecheck (an unused @ts-expect-error is itself an
+// error), whatever the form of the English or of the subclass. Never called:
+// it exists for the compiler.
+export function httpErrorMessagesAreCopy(
+  flag: boolean,
+  maybe: string | undefined,
+) {
+  // @ts-expect-error a literal
+  new HttpError(404, 'Gone');
+  // @ts-expect-error a conditional
+  new HttpError(404, flag ? 'Gone' : 'Missing');
+  // @ts-expect-error a fallback
+  new HttpError(404, maybe ?? 'Gone');
+  // @ts-expect-error a template
+  new HttpError(404, `Gone ${flag}`);
+  // @ts-expect-error a concatenation
+  new HttpError(404, 'Gone ' + flag);
+  // @ts-expect-error a variable holding English
+  new HttpError(404, maybe);
+
+  const Expression = class extends HttpError {
+    constructor() {
+      // @ts-expect-error a class expression's super()
+      super(404, 'Gone');
+    }
+  };
+  class Member extends errors.HttpError {
+    constructor() {
+      // @ts-expect-error a member-expression superclass
+      super(404, 'Gone');
+    }
+  }
+  class Child extends HttpError {
+    constructor(message: Translated) {
+      super(404, message);
+    }
+  }
+  class Grandchild extends Child {
+    constructor() {
+      // @ts-expect-error a grandchild passes through its parent's parameter
+      super('Gone');
+    }
+  }
+  return [Expression, Member, Grandchild];
+}

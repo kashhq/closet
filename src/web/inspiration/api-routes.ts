@@ -10,6 +10,7 @@ import {
 import type { ApiOptions } from '../api/plugin';
 import { idCursor, readIdCursor } from '../api/resource';
 import { HttpError } from '../errors';
+import { t } from '../i18n';
 import { servePrivatePhoto } from '../files/private-photo';
 import { OutfitPicked, toOutfitPicked } from '../gallery/idea-resource';
 import { enforceLimit, LINK_IMPORT_LIMIT } from '../security/rate-limit';
@@ -254,7 +255,7 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { id } = request.params;
       const { title, note } = request.body;
       if (title === undefined && note === undefined) {
-        const message = 'Send a title, a note or both';
+        const message = t('refusal.inspiration.titleOrNote');
         throw new HttpError(400, message, {
           validation: [{ path: 'body', message }],
         });

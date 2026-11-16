@@ -16,6 +16,7 @@ import {
   withoutNulls,
 } from '../api/resource';
 import { HttpError } from '../errors';
+import { t } from '../i18n';
 import { apiInspirationPhotoUrl, type PrivatePhoto } from '../files/image-url';
 import { IdeaGarment, toIdeaGarment } from '../gallery/idea-resource';
 import { RowId } from '../schemas';
@@ -409,7 +410,11 @@ type LookPieceInput = Static<typeof LookPieceInput>;
 export function readLookPiece(input: LookPieceInput, pointer: string): Piece {
   const type = input.type ?? null;
   if (type !== null && !typesOfRole(input.role).includes(type)) {
-    const message = `"${type}" is not a type of ${input.role} (${typesOfRole(input.role).join(', ')})`;
+    const message = t('refusal.inspiration.roleType', {
+      type,
+      role: input.role,
+      types: typesOfRole(input.role).join(', '),
+    });
     throw new HttpError(400, message, {
       validation: [{ path: `${pointer}/type`, message }],
     });
