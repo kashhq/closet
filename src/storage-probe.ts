@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Logger } from './logger';
 
 /**
  * The bytes a probe writes: enough that a full disk or an exhausted quota
@@ -8,6 +9,12 @@ import { join } from 'node:path';
  * file would still be created.
  */
 export const PROBE_BYTES = 4096;
+
+/**
+ * The bound on one directory's probe, as the database's: under the
+ * readiness TTL (src/web/health/checks.ts). The boot's sweep gets the same.
+ */
+export const STORAGE_PROBE_TIMEOUT_MS = 3_000;
 
 /** The filesystem calls a probe makes; the unit specs inject failing ones. */
 export interface ProbeFs {
@@ -99,8 +106,8 @@ export type ProbeSweep =
 /**
  * Removes the probe files dead processes left in `directory` (a write that
  * hung until its container stopped), the pid-named ones of builds before
- * #857 included. Run once per boot (main.ts), before its first probe, so a
- * listing's cost is paid there and never inside the readiness bound. Any
+ * #857 included. Run once per boot (sweepLeftoversInBackground), so a
+ * listing's cost is never paid inside the readiness bound. Any
  * `.write-probe-` file is fair game: another live process's is only ever
  * mid-write, and removing it costs that probe nothing (its bytes go to the
  * unlinked inode, its own rm is `force`). Never rejects: the probe, not the
@@ -125,6 +132,54 @@ export async function sweepProbeLeftovers(
       ? { swept: true, removed: 0 }
       : { swept: false, code };
   }
+}
+
+/**
+ * Sweeps each distinct directory's leftovers without ever delaying the
+ * caller: a readdir on a stalled share never settles, and the boot must
+ * still listen (readiness reports that share as `storage` down, #688). Each
+ * directory is bounded by STORAGE_PROBE_TIMEOUT_MS and logs one line for its
+ * outcome (a timeout cannot cancel the readdir; it just stops being waited
+ * on). Called by main.ts after serve() is listening; the returned promise
+ * never rejects and exists for the specs.
+ */
+export function sweepLeftoversInBackground(
+  directories: readonly string[],
+  log: Logger,
+  {
+    fs = nodeFs,
+    timeoutMs = STORAGE_PROBE_TIMEOUT_MS,
+  }: { fs?: SweepFs; timeoutMs?: number } = {},
+): Promise<void> {
+  const one = async (directory: string): Promise<void> => {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), timeoutMs);
+      timer.unref();
+    });
+    const sweep = await Promise.race([
+      sweepProbeLeftovers(directory, fs),
+      timedOut,
+    ]);
+    clearTimeout(timer);
+    if (sweep === 'timeout') {
+      log.warn(
+        { directory, timeout_ms: timeoutMs },
+        'Probe leftover sweep timed out; the share is not answering',
+      );
+    } else if (!sweep.swept) {
+      log.warn(
+        { directory, code: sweep.code },
+        'Could not sweep probe leftovers',
+      );
+    } else if (sweep.removed > 0) {
+      log.info(
+        { directory, removed: sweep.removed },
+        'Removed probe leftovers',
+      );
+    }
+  };
+  return Promise.all([...new Set(directories)].map(one)).then(() => undefined);
 }
 
 export interface StorageFailure {

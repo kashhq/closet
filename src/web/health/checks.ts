@@ -5,7 +5,11 @@ import {
 } from '../../cutout/queue-state';
 import { schemaState } from '../../db/migrate';
 import type { Logger } from '../../logger';
-import type { StorageFailure, WriteProbe } from '../../storage-probe';
+import {
+  type StorageFailure,
+  STORAGE_PROBE_TIMEOUT_MS,
+  type WriteProbe,
+} from '../../storage-probe';
 
 /**
  * The /health/ready contract (~/.claude/conventions/observability.md,
@@ -188,9 +192,6 @@ export function checkOrderMailOwner(missing: boolean): HealthCheck {
 
 /** How long a storage verdict is reused: a probe writes to disk (and NFS). */
 const STORAGE_PROBE_TTL_MS = 5_000;
-
-/** The bound on one directory's probe, as the database's: under the TTL. */
-const STORAGE_PROBE_TIMEOUT_MS = 3_000;
 
 export interface StorageCheckDeps {
   /** DATA_PATH and MODELS_PATH, as the process sees them. */

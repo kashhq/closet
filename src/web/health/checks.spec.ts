@@ -17,6 +17,7 @@ import {
   probeWritable,
   type ProbeFs,
   type SweepFs,
+  sweepLeftoversInBackground,
   sweepProbeLeftovers,
   type WriteProbe,
 } from '../../storage-probe';
@@ -492,5 +493,57 @@ describe('sweepProbeLeftovers', () => {
         rm: failing('EACCES'),
       }),
     ).toEqual({ swept: false, code: 'EACCES' });
+  });
+});
+
+describe('sweepLeftoversInBackground', () => {
+  const { logger, logs } = captureLogs();
+  afterEach(() => {
+    vi.useRealTimers();
+    logs.clear();
+  });
+
+  it('returns at once whatever the share does, and logs the timeout once at the probe bound', async () => {
+    vi.useFakeTimers();
+    const fs: SweepFs = {
+      readdir: () => new Promise<string[]>(() => undefined),
+      rm: () => Promise.resolve(),
+    };
+    let done = false;
+    // Never awaited, as main.ts runs it after listen: the call itself is synchronous.
+    const sweep = sweepLeftoversInBackground(
+      ['/app/data', '/app/models', '/app/data'],
+      logger,
+      { fs },
+    ).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(done).toBe(false);
+    expect(logs.messages('warn')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    await sweep;
+    expect(logs.records.filter((r) => r.level === 'warn')).toMatchObject([
+      { directory: '/app/data', timeout_ms: 3_000 },
+      { directory: '/app/models', timeout_ms: 3_000 },
+    ]);
+  });
+
+  it('logs what it removed and why it could not', async () => {
+    await sweepLeftoversInBackground(['/app/data'], logger, {
+      fs: {
+        readdir: () => Promise.resolve(['.write-probe-1-3', 'a.webp']),
+        rm: () => Promise.resolve(),
+      },
+    });
+    await sweepLeftoversInBackground(['/app/models'], logger, {
+      fs: {
+        readdir: () =>
+          Promise.reject(Object.assign(new Error('x'), { code: 'EIO' })),
+        rm: () => Promise.resolve(),
+      },
+    });
+    expect(logs.records).toMatchObject([
+      { level: 'info', directory: '/app/data', removed: 1 },
+      { level: 'warn', directory: '/app/models', code: 'EIO' },
+    ]);
   });
 });
