@@ -18,7 +18,7 @@ import {
 } from '../offline-writes';
 import { sessionUserId } from './auth/require-session';
 import { HttpError } from './errors';
-import { t } from './i18n';
+import { t, type Translated } from './i18n';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -53,7 +53,7 @@ declare module 'fastify' {
 const QUEUED_HEADER = REPLAY_HEADER.toLowerCase();
 const IDEMPOTENCY_HEADER = 'idempotency-key';
 
-function refusalMessage(refusal: ReplayRefusal): string {
+function refusalMessage(refusal: ReplayRefusal): Translated {
   switch (refusal) {
     case 'too-old':
       return t('refusal.replay.tooOld');
@@ -88,7 +88,7 @@ export function answerReplay(
 export function replayRefused(
   reply: FastifyReply,
   reason: ReplayRefusal,
-  options: { message?: string; logDetail?: string } = {},
+  options: { message?: Translated; logDetail?: string } = {},
 ): HttpError {
   reply.header(OUTCOME_HEADER, reason);
   return new HttpError(409, options.message ?? refusalMessage(reason), {

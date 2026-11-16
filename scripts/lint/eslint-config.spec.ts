@@ -43,35 +43,3 @@ describe('flat theme: shadow classes', () => {
     },
   );
 });
-
-describe('HttpError message is copy', () => {
-  it.each([
-    ["new HttpError(404, 'Gone')", 'a literal'],
-    ['new HttpError(404, `Gone ${x}`)', 'a template'],
-    ["new HttpError(404, 'Gone ' + x)", 'a concatenation'],
-    ["new errors.HttpError(404, 'Gone')", 'a namespaced class'],
-    [
-      "class Gone extends HttpError { constructor() { super(404, 'Gone'); } }",
-      'a subclass super call',
-    ],
-    [
-      "class Gone extends HttpError { constructor() { super(404, 'Gone ' + x); } }",
-      'a subclass concatenation',
-    ],
-  ])('refuses %s (%s)', async (code) => {
-    const messages = await lint(code);
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain("An HttpError's message is copy");
-  });
-
-  it.each([
-    "new HttpError(404, t('refusal.GONE'))",
-    'new HttpError(404, message)',
-    'new HttpError(404)',
-    "new errors.HttpError(404, t('refusal.GONE'))",
-    "class Gone extends HttpError { constructor() { super(404, t('refusal.GONE')); } }",
-    "class Other extends Error { constructor() { super('Gone', 'x'); } }",
-  ])('lets %s through', async (code) => {
-    expect(await lint(code)).toEqual([]);
-  });
-});

@@ -8,6 +8,41 @@ type Validate = ReturnType<ReturnType<Build>>;
 const factory = AjvCompiler();
 const compiled = new Map<string, Validate>();
 
+/** Throws on the first value JSON.stringify would drop or flatten, naming where. */
+function assertJsonPlain(value: unknown, path: string): void {
+  if (value === null) return;
+  switch (typeof value) {
+    case 'string':
+    case 'boolean':
+      return;
+    case 'number':
+      if (Number.isFinite(value)) return;
+      break;
+    case 'object': {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) =>
+          assertJsonPlain(item, `${path}[${index}]`),
+        );
+        return;
+      }
+      const prototype = Object.getPrototypeOf(value);
+      if (prototype === Object.prototype || prototype === null) {
+        for (const [key, item] of Object.entries(value)) {
+          assertJsonPlain(item, `${path}.${key}`);
+        }
+        return;
+      }
+      break;
+    }
+    case 'undefined':
+      // JSON omits it, and ajv reads an absent option and an undefined one alike.
+      return;
+  }
+  throw new TypeError(
+    `sharedValidators keys on JSON: ${path} is not JSON-plain (a function, RegExp, class instance or symbol cannot be part of the key)`,
+  );
+}
+
 /**
  * Fastify's validator factory (@fastify/ajv-compiler, the one it builds by
  * default) with every compiled validator kept for the process, keyed by
@@ -20,10 +55,13 @@ const compiled = new Map<string, Validate>();
  * `validate.errors` per call and Fastify reads it at once, as concurrent
  * requests on one app already do.
  *
- * The key cannot hold what JSON cannot (ajv `plugins`, `onCreate`: functions),
- * so they are refused rather than ignored: a validator compiled without a
- * plugin an app asked for would be handed back silently (#1083). No app sets
- * them; one that needs them takes its own factory.
+ * The key cannot hold what JSON cannot: `plugins` and `onCreate` are refused,
+ * and so is any value inside `customOptions` that is not JSON-plain (a
+ * function, RegExp, class instance, symbol: ajv `formats`, `keywords`,
+ * `code`, `logger`), naming its path. JSON.stringify would drop them from
+ * the key, handing an app a validator compiled without what it asked for
+ * (#1083, #1093). Every option that builds is therefore in the key. No app
+ * sets them; one that needs them takes its own factory.
  *
  * Used by createApp (the root's compiler, `schemaController`) and
  * jsonApiValidator (the /api/v1 scope's three, src/web/api/validator.ts).
@@ -34,6 +72,7 @@ export const sharedValidators: Build = (externalSchemas, options) => {
       'sharedValidators keys on the shared schemas and customOptions only: ajv plugins and onCreate are not supported',
     );
   }
+  assertJsonPlain(options?.customOptions, 'customOptions');
   const compile = factory(externalSchemas, options);
   const scope = JSON.stringify([externalSchemas, options?.customOptions]);
   return (definition) => {

@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { PUSH_ENDPOINT_FIELD } from '../push/settings';
 import { passwordProblems } from './passwords';
 
@@ -80,7 +80,7 @@ export type DeleteAccountBody = Static<typeof Credentials>;
 
 /** Messages per form field; a field without problems has no entry. */
 export type FieldErrors<Field extends string> = Partial<
-  Record<Field, string[]>
+  Record<Field, Translated[]>
 >;
 
 export function hasErrors(errors: FieldErrors<string>): boolean {
@@ -91,16 +91,16 @@ export function hasErrors(errors: FieldErrors<string>): boolean {
 // is a login name here, never mailed.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function emailErrors(email: string): string[] {
+function emailErrors(email: string): Translated[] {
   return EMAIL_SHAPE.test(email.trim()) ? [] : [t('validation.IS_EMAIL')];
 }
 
-function newPasswordErrors(password: string): string[] {
+function newPasswordErrors(password: string): Translated[] {
   return passwordProblems(password).map((key) => t(key));
 }
 
 function only<Field extends string>(
-  entries: [Field, string[]][],
+  entries: [Field, Translated[]][],
 ): FieldErrors<Field> {
   const errors: FieldErrors<Field> = {};
   for (const [field, messages] of entries) {
