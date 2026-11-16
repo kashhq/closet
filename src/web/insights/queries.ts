@@ -48,7 +48,7 @@ import { type GarmentScope, inScope } from '../wardrobe/status';
  * everything owned now or once (a recap looks back, and a garment archived
  * since was still worn that year).
  */
-export interface InsightsWindow {
+interface InsightsWindow {
   from: IsoDate;
   to: IsoDate;
   scope: Exclude<GarmentScope, 'wishlist'>;
@@ -158,7 +158,7 @@ async function wornPairs(
  * Concurrent, so one round trip after the session's; they share no rows,
  * so they could be one statement (#169).
  */
-export async function readInsightRows(
+async function readInsightRows(
   db: Db,
   ownerId: number,
   window: InsightsWindow,

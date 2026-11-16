@@ -60,7 +60,7 @@ export function apiResponses<Success extends Record<number, TSchema>>(
  * (apiResponses). The drift test (scripts/api-spec.spec.ts)
  * checks the generated spec the same way.
  */
-export function contractGaps(route: Pick<RouteOptions, 'schema'>): string[] {
+function contractGaps(route: Pick<RouteOptions, 'schema'>): string[] {
   const { schema } = route;
   const gaps: string[] = [];
   if (!schema?.operationId) gaps.push('operationId');

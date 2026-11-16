@@ -69,7 +69,7 @@ function reminderTime(
 ): number | null {
   if (on === undefined) return null;
   if (minute === undefined || !isReminderChoice(kind, minute)) {
-    throw new HttpError(400, `body/${kind} must be one of the reminder times`);
+    throw new HttpError(400, t('refusal.form.reminderTime', { kind }));
   }
   return minute;
 }

@@ -112,7 +112,7 @@ export function rememberShareReadAhead(
  * credential from one a person made on a page. Never a request Surface: the
  * request gates (same-origin, bearer) must not grow a `cli` case.
  */
-export type ActorSurface = Surface | 'cli';
+type ActorSurface = Surface | 'cli';
 
 export interface Actor {
   userId: number;

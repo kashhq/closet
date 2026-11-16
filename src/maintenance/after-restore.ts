@@ -19,7 +19,7 @@ import { revokeAllPushDevices } from './revoke-push';
  * anyway: releasing frees the photo now, and a running server's own live
  * job keeps its lease.
  */
-export const DEAD_LEASE_MS = 2 * CUTOUT_TIMEOUT_MS;
+const DEAD_LEASE_MS = 2 * CUTOUT_TIMEOUT_MS;
 
 export interface AfterRestoreDeps {
   db: Db;
@@ -30,7 +30,7 @@ export interface AfterRestoreDeps {
 }
 
 /** A garment whose photo's original reconciliation did not find. */
-export interface MissingOriginalGarment {
+interface MissingOriginalGarment {
   garmentId: number;
   name: string | null;
   ownerId: number;

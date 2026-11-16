@@ -483,7 +483,7 @@ export function expectAutosaveControls(res: LightMyRequestResponse): void {
  * (expectFragment): a swap that brought one would replace it, and a region
  * inserted with its message is not reliably read.
  */
-export function expectOneStatusRegion(res: LightMyRequestResponse): void {
+function expectOneStatusRegion(res: LightMyRequestResponse): void {
   const regions = res.body.match(/<div\b[^>]*\bid="toast-host"[^>]*>/g);
   expect(regions).toHaveLength(1);
   expect(regions![0]).toContain('role="status"');

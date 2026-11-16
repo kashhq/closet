@@ -67,7 +67,7 @@ export interface JmapStub {
   close(): Promise<void>;
 }
 
-export type BodyFailure = number | 'shape' | 'method';
+type BodyFailure = number | 'shape' | 'method';
 
 const TEST_INTERNET: DestinationPolicy = {
   allowsAddress: (address) => address === STUB_IP || isPublicAddress(address),

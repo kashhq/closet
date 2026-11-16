@@ -41,7 +41,7 @@ export interface NextBuild {
   close(): Promise<void>;
 }
 
-export interface WarmAnswer {
+interface WarmAnswer {
   url: string;
   fragment: boolean;
   status: number;

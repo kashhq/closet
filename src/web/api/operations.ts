@@ -466,7 +466,7 @@ export type Stamped = 'outfit' | 'calendarEntry' | 'tripOutfit' | 'garment';
  * that writes no stamp, and a `none` tool that writes one), why it stamps
  * nothing, or Muse's round, whose provenance is its own (mcp-muse.spec.ts).
  */
-export type Attribution =
+type Attribution =
   | { readonly stamps: readonly Stamped[] }
   | { readonly none: string }
   | { readonly museRound: true };

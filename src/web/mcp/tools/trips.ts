@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { NORMAL_YEARS } from '../../../weather/normals';
 import { todayIn } from '../../../calendar-date';
@@ -288,7 +289,7 @@ export const tripTools = [
     idempotent: true,
     async run({ tripId, outfitId, garmentIds, date, occasion, name }, ctx) {
       if ((outfitId === undefined) === (garmentIds === undefined)) {
-        throw new HttpError(400, 'Give either outfitId or garmentIds');
+        throw new HttpError(400, t('refusal.trip.outfitOrGarments'));
       }
       const planned = await planOnTrip(ctx, {
         tripId,

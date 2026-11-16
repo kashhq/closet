@@ -83,7 +83,7 @@ const SPEC_BODY = JSON.stringify(spec);
  * A feature's API routes live beside its pages (`src/web/<feature>/
  * api-routes.ts`) and register here.
  */
-export const apiPlugin: FastifyPluginAsyncTypebox<ApiOptions> = async (
+const apiPlugin: FastifyPluginAsyncTypebox<ApiOptions> = async (
   app,
   options,
 ) => {

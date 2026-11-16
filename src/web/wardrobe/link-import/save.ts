@@ -25,6 +25,8 @@ import {
   type LinkImportDeps,
   LinkImportError,
   REFUSALS,
+  reasonLed,
+  reasonLedMessage,
 } from './import';
 import type { ExtractionConfidence } from './extract';
 import { importedForm } from './prefill';
@@ -106,10 +108,10 @@ export async function saveGarmentFromLink(
     logger.warn(
       `Link import by user ${userId} (${surface}) refused (${error.reason})`,
     );
-    const refusal = REFUSALS[error.reason];
+    const { status } = REFUSALS[error.reason];
     throw new HttpError(
-      refusal.status < 500 ? refusal.status : 422,
-      `${error.reason}: ${t(refusal.message)}`,
+      status < 500 ? status : 422,
+      reasonLedMessage(error.reason),
     );
   }
   if (unreadWithoutName(imported, overrides)) {
@@ -120,7 +122,7 @@ export async function saveGarmentFromLink(
       `Link import by user ${userId} (${surface}) read only a title: nothing saved without a name`,
     );
     const message = t('linkImport.TITLE_ONLY_SEND_NAME');
-    throw new HttpError(422, `title-only: ${message}`, {
+    throw new HttpError(422, reasonLed('title-only', message), {
       validation: [{ path: 'body/name', message }],
     });
   }

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { type Static, Type } from '@sinclair/typebox';
@@ -200,7 +201,7 @@ function postedStates(query: RowsInput): RowState[] {
   const garmentIds = query.garmentId ?? [];
   const locks = query.lock ?? [];
   if (garmentIds.length !== roles.length || locks.length !== roles.length) {
-    throw new HttpError(400, 'Each row needs a role, a garment id and a lock');
+    throw new HttpError(400, t('refusal.styling.rows'));
   }
   return roles.map((role, i) => ({
     role,
@@ -967,7 +968,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ) {
     const garmentIds = chosenIds(body.garmentId);
     if (garmentIds.length === 0) {
-      throw new HttpError(400, 'Choose at least one garment to save');
+      throw new HttpError(400, t('refusal.styling.nothingChosen'));
     }
     const name = body.name?.trim() || undefined;
     const destination = postedDestination(body);
@@ -983,10 +984,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     }
     if (body.picks === '1') {
       if (destination.kind !== 'none') {
-        throw new HttpError(
-          400,
-          'Include picks saves an outfit, never one for a day or a trip',
-        );
+        throw new HttpError(400, t('refusal.styling.picksNeedNoDestination'));
       }
       return saveWithPicks(reply, actor, { garmentIds, name, schedule });
     }
@@ -1116,10 +1114,7 @@ export const stylingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       destination.kind === 'trip' ||
       (destination.kind === 'day' && destination.replace !== undefined)
     ) {
-      throw new HttpError(
-        400,
-        'A saved outfit changes in place: plan it on a day only',
-      );
+      throw new HttpError(400, t('refusal.styling.editInPlace'));
     }
     const plan =
       destination.kind === 'day'

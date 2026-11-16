@@ -52,7 +52,7 @@ export async function saveRecreation(
   posted: readonly PostedChoice[],
 ): Promise<SavedRecreation> {
   if (new Set(posted.map((c) => c.position)).size !== posted.length) {
-    throw new HttpError(400, 'A piece chosen twice', {
+    throw new HttpError(400, t('refusal.inspiration.pieceTwice'), {
       logDetail: `inspiration ${id}: a position posted twice`,
     });
   }

@@ -55,8 +55,7 @@ export interface KeywordToken {
  * follows the database's locale (ASCII only under C), so "café" folded to
  * "caf" there and "café" here, and never matched. Letters in any script stay.
  */
-export const FOLDED_PUNCTUATION =
-  '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~‘’‚“”„–—…·•';
+const FOLDED_PUNCTUATION = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~‘’‚“”„–—…·•';
 const FOLDED = new Set(FOLDED_PUNCTUATION);
 
 /**

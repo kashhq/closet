@@ -86,7 +86,7 @@ export interface Page {
 }
 
 /** One request as the site saw it. */
-export interface SiteRequest {
+interface SiteRequest {
   /** The path, query included. */
   path: string;
   /** Host, or h2's `:authority`. */

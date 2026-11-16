@@ -261,7 +261,7 @@ const SHARED_STAMPS = OWN_STAMPS.filter((stamp) => FEED[stamp.resource].shared);
  * moved it once; #716 the week template (whose full sync also gave every
  * cached style profile its rules).
  */
-export const FEED_COVERAGE = [...SYNC_ROOTS, ...SYNC_STAMPS].reduce(
+const FEED_COVERAGE = [...SYNC_ROOTS, ...SYNC_STAMPS].reduce(
   (bits, _resource, index) => bits | (1 << index),
   0,
 );
