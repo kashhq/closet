@@ -1,4 +1,11 @@
-import { chmod, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -202,8 +209,9 @@ describe('createStorageCheck', () => {
     root = await mkdtemp(join(tmpdir(), 'closet-storage-'));
     writable = join(root, 'data');
     readOnly = join(root, 'models');
-    // Created by the probe, as its writers would.
-    await probeWritable(readOnly);
+    // A mount that exists but cannot be written, so the probe's own
+    // subdirectory cannot be made.
+    await mkdir(readOnly);
     await chmod(readOnly, 0o555);
   });
   afterAll(async () => {
@@ -228,7 +236,7 @@ describe('createStorageCheck', () => {
 
   it('is up when every directory can be written, created if missing, and leaves nothing behind', async () => {
     expect(await check([writable])).toEqual(up(true));
-    expect(await readdir(writable)).toEqual([]);
+    expect(await readdir(join(writable, '.closet-probe'))).toEqual([]);
   });
 
   // Root writes through mode bits: the read-only case means nothing there.
@@ -303,9 +311,9 @@ describe('createStorageCheck', () => {
     const enospc = (): never => {
       throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
     };
-    /** A probe file under /app/data: a random id and a counter. */
+    /** A probe file under /app/data/.closet-probe: a random id and a counter. */
     const PROBE_FILE =
-      /\/app\/data\/\.write-probe-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(\d+)$/;
+      /\/app\/data\/\.closet-probe\/\.write-probe-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(\d+)$/;
 
     // #857: the pid is 1 in most containers, so two on one share would
     // mint the same names and one's `wx` would meet the other's file.
@@ -330,14 +338,16 @@ describe('createStorageCheck', () => {
     it('gives concurrent probes of one directory their own files and leaves every other file alone', async () => {
       const dir = join(root, 'shared');
       await probeWritable(dir);
-      await writeFile(join(dir, '.write-probe-1-1'), 'a dead process');
+      const probes = join(dir, '.closet-probe');
+      await writeFile(join(probes, '.write-probe-1-1'), 'a dead process');
       const results = await Promise.all([
         probeWritable(dir),
         probeWritable(dir),
         probeWritable(dir),
       ]);
       expect(results).toEqual(Array(3).fill({ writable: true }));
-      expect(await readdir(dir)).toEqual(['.write-probe-1-1']);
+      expect(await readdir(probes)).toEqual(['.write-probe-1-1']);
+      expect(await readdir(dir)).toEqual(['.closet-probe']);
     });
 
     // #855, #856: no listing (O(1) on a large share), and only its own file
@@ -361,7 +371,7 @@ describe('createStorageCheck', () => {
       expect(await probeWritable('/app/data', fs)).toEqual({ writable: true });
       expect(calls).toHaveLength(3);
       const [, write, unlink] = calls;
-      expect(calls[0]).toBe('mkdir /app/data');
+      expect(calls[0]).toBe('mkdir /app/data/.closet-probe');
       expect(write).toMatch(PROBE_FILE);
       expect(unlink).toBe(write?.replace(/^write/, 'rm'));
     });
@@ -457,14 +467,17 @@ describe('sweepProbeLeftovers', () => {
 
   it('removes every probe file, whoever wrote it, and nothing else', async () => {
     const removed: string[] = [];
+    const listed: string[] = [];
     const fs: SweepFs = {
-      readdir: () =>
-        Promise.resolve([
+      readdir: (directory) => {
+        listed.push(directory);
+        return Promise.resolve([
           '.write-probe-1-3',
           '.write-probe-7b0c2f4e-0d3a-4c5e-9f1a-2b3c4d5e6f70-1',
           '.closet-storage',
           'a1b2.webp',
-        ]),
+        ]);
+      },
       rm: (path) => {
         removed.push(path);
         return Promise.resolve();
@@ -474,9 +487,11 @@ describe('sweepProbeLeftovers', () => {
       swept: true,
       removed: 2,
     });
+    // Never the share itself (#901).
+    expect(listed).toEqual(['/app/data/.closet-probe']);
     expect(removed).toEqual([
-      '/app/data/.write-probe-1-3',
-      '/app/data/.write-probe-7b0c2f4e-0d3a-4c5e-9f1a-2b3c4d5e6f70-1',
+      '/app/data/.closet-probe/.write-probe-1-3',
+      '/app/data/.closet-probe/.write-probe-7b0c2f4e-0d3a-4c5e-9f1a-2b3c4d5e6f70-1',
     ]);
   });
 

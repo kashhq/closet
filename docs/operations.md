@@ -96,10 +96,10 @@ The boot migrates (Changing the schema in `AGENTS.md`), and drizzle records each
 
 The image runs as `node`, **uid/gid 1000** (the Dockerfile's `USER`), never root. It writes exactly two directories, both host mounts in production, and a mount keeps the host's ownership, so both must be writable by uid 1000 on the host:
 
-| In the container              | What writes it                          |
-| ----------------------------- | --------------------------------------- |
-| `/app/data` (`DATA_PATH`)     | photos, `.incoming/`, `.closet-storage`, `.trash/` (reconciliation's quarantine) |
-| `/app/models` (`MODELS_PATH`) | the model's download at first boot      |
+| In the container              | What writes it                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `/app/data` (`DATA_PATH`)     | photos, `.incoming/`, `.closet-storage`, `.closet-probe/` (the storage check's probe files), `.trash/` (reconciliation's quarantine) |
+| `/app/models` (`MODELS_PATH`) | the model's download at first boot, `.closet-probe/`                                                                                 |
 
 The opt-in `LOG_FILE` is not a third path the image owns: it must point into a mount you provide that uid 1000 can write (never under `DATA_PATH`). It never creates a directory; one that is missing or unwritable ends in a single `error` line on stdout and a file-less run, the console log unaffected.
 

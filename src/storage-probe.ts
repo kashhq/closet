@@ -35,6 +35,16 @@ export interface SweepFs {
 
 const nodeFs: ProbeFs & SweepFs = { mkdir, writeFile, rm, readdir };
 
+/**
+ * Where a share's probe files live, so the boot's sweep lists this small
+ * directory and never the share (#901: a readdir of a large NFS share is the
+ * cost the probes avoid). A dot-directory beside `.incoming` and `.trash`:
+ * PhotoStorage.list() skips directories and reconciliation only reads
+ * through it, so neither sees it; it sits inside the mount the image
+ * already chowns (docs/operations.md#permissions).
+ */
+export const PROBE_DIRECTORY = '.closet-probe';
+
 /** Every probe file's name starts so, whichever process wrote it. */
 const PROBE_FAMILY = '.write-probe-';
 /**
@@ -61,8 +71,9 @@ let probeCounter = 0;
  *
  * The directory is created when missing, as its writers do (PhotoStorage's
  * prepare, CutoutModel's download), so "not writable" means exactly what
- * the first upload or download would hit. The probe file is a dotfile:
- * reconciliation and the /file routes only ever see stored photo names.
+ * the first upload or download would hit. The probe file lives in
+ * PROBE_DIRECTORY: reconciliation and the /file routes only ever see stored
+ * photo names.
  *
  * O(1) in the directory's size (#855): a mkdir, one named write and its
  * unlink, never a listing, which on a large NFS share could outlast the
@@ -81,9 +92,11 @@ export async function probeWritable(
   directory: string,
   fs: ProbeFs = nodeFs,
 ): Promise<WriteProbe> {
-  const probe = join(directory, `${PROBE_PREFIX}${++probeCounter}`);
+  const probeDirectory = join(directory, PROBE_DIRECTORY);
+  const probe = join(probeDirectory, `${PROBE_PREFIX}${++probeCounter}`);
   try {
-    await fs.mkdir(directory, { recursive: true });
+    // Also makes `directory`, as its writers do.
+    await fs.mkdir(probeDirectory, { recursive: true });
     // `wx`: never truncate or follow anything already at that name.
     await fs.writeFile(probe, new Uint8Array(PROBE_BYTES), { flag: 'wx' });
     await fs.rm(probe, { force: true });
@@ -104,9 +117,11 @@ export type ProbeSweep =
   | { swept: false; code: string };
 
 /**
- * Removes the probe files dead processes left in `directory` (a write that
- * hung until its container stopped), the pid-named ones of builds before
- * #857 included. Run once per boot (sweepLeftoversInBackground), so a
+ * Removes the probe files dead processes left in `directory`'s
+ * PROBE_DIRECTORY (a write that hung until its container stopped); it lists
+ * only that directory, which holds a few probe files, never the share. Files
+ * builds before this left in the share's root are not swept (that would be
+ * the listing this avoids); they are harmless dotfiles. Run once per boot (sweepLeftoversInBackground), so a
  * listing's cost is never paid inside the readiness bound. Any
  * `.write-probe-` file is fair game: another live process's is only ever
  * mid-write, and removing it costs that probe nothing (its bytes go to the
@@ -117,17 +132,18 @@ export async function sweepProbeLeftovers(
   directory: string,
   fs: SweepFs = nodeFs,
 ): Promise<ProbeSweep> {
+  const probeDirectory = join(directory, PROBE_DIRECTORY);
   try {
-    const leftovers = (await fs.readdir(directory)).filter((name) =>
+    const leftovers = (await fs.readdir(probeDirectory)).filter((name) =>
       name.startsWith(PROBE_FAMILY),
     );
     for (const name of leftovers) {
-      await fs.rm(join(directory, name), { force: true });
+      await fs.rm(join(probeDirectory, name), { force: true });
     }
     return { swept: true, removed: leftovers.length };
   } catch (error) {
     const code = String((error as NodeJS.ErrnoException).code);
-    // A directory not made yet holds no leftovers; the probe makes it.
+    // No probe directory yet holds no leftovers; the probe makes it.
     return code === 'ENOENT'
       ? { swept: true, removed: 0 }
       : { swept: false, code };
