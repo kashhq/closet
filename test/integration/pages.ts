@@ -288,6 +288,18 @@ export function pageRoutes(f: PageFixture, inviteToken: string): PageRoute[] {
   ];
 }
 
+/**
+ * One page frame (#1059): a page framed by `PageShell` has exactly one
+ * `.page-shell`, and it is the page's only `<main>`. Which pages are framed
+ * is guards.conf's `@page-main` (a `<main>` outside page-shell.tsx is debt
+ * with a `known` line), not a list here.
+ */
+export function expectPageShell(res: LightMyRequestResponse): void {
+  const shells = res.body.match(/<main class="page-shell\b/g)?.length ?? 0;
+  expect(shells).toBeLessThanOrEqual(1);
+  if (shells === 1) expect(res.body.match(/<main\b/g)).toHaveLength(1);
+}
+
 /** The app bar marks exactly the pages `pageRoutes` lists as form pages. */
 export function expectFormPageFlag(
   route: PageRoute,
@@ -341,6 +353,7 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectOneStatusRegion(res);
   expectNoScriptNavigation(res);
   expectAppBar(res);
+  expectPageShell(res);
   // _hyperscript left the app (2026-09-26): an `_=` attribute would do
   // nothing at all.
   expect(res.body).not.toMatch(/\s_="/);

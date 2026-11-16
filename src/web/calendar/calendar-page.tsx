@@ -6,11 +6,8 @@ import {
 import { AlreadySavedToast } from '../gallery/already-saved';
 import type { AlreadySaved } from '../gallery/urls';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
 import { DayHeading } from '../layout/day-heading';
-import { Dock } from '../layout/dock';
-import { PageMain } from '../layout/page-main';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { SelfieView } from '../selfies/views';
 import type { ViewContext } from '../view-context';
 import { WeatherDaySlot, WeatherSlot } from '../weather/views';
@@ -67,60 +64,66 @@ export function CalendarPage(props: {
   const first = view.days[0].date;
   const last = view.days[view.days.length - 1].date;
   return (
-    <Layout ctx={ctx} title={t('CALENDAR_PAGE_TITLE')}>
-      <AppBar ctx={ctx} title={t('CALENDAR')} />
-      <PageMain width="agenda" class="p-4 pt-20 pb-24">
-        <CalendarTabs active="week" />
-        <WeatherSlot ctx={ctx} days={{ from: first, to: last }} />
-        {props.banner && (
-          <PlannedWeekBanner banner={props.banner} shown={{ first, last }} />
-        )}
-        {props.canDress && <PlanWeekForm class="mb-3" small />}
-        <nav
-          class="flex items-center justify-between gap-2"
-          aria-label={t('calendar.WEEK_NAV')}
+    <PageShell
+      ctx={ctx}
+      name="calendar"
+      title={t('CALENDAR_PAGE_TITLE')}
+      bar={{ title: t('CALENDAR') }}
+      width="agenda"
+      overlays={
+        <>
+          <AlreadySavedToast kind={props.alreadySaved} />
+          <UndoneToast removed={props.undone} />
+        </>
+      }
+    >
+      <CalendarTabs active="week" />
+      <WeatherSlot ctx={ctx} days={{ from: first, to: last }} />
+      {props.banner && (
+        <PlannedWeekBanner banner={props.banner} shown={{ first, last }} />
+      )}
+      {props.canDress && <PlanWeekForm class="mb-3" small />}
+      <nav
+        class="flex items-center justify-between gap-2"
+        aria-label={t('calendar.WEEK_NAV')}
+      >
+        <a
+          href={weekUrl(view.prevWeek)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.PREV_WEEK')}
         >
-          <a
-            href={weekUrl(view.prevWeek)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.PREV_WEEK')}
-          >
-            ‹
-          </a>
-          <p class="font-semibold" data-week={first}>
-            {weekRangeLabel(first, last)}
-          </p>
-          <a
-            href={weekUrl(view.nextWeek)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.NEXT_WEEK')}
-          >
-            ›
-          </a>
-        </nav>
-        <WeekStrip view={view} />
-        <div
-          class={`lg:grid lg:grid-cols-7 lg:gap-2 lg:mt-3 ${WEEK_ROWS[view.weekOccasions.length]}`}
+          ‹
+        </a>
+        <p class="font-semibold" data-week={first}>
+          {weekRangeLabel(first, last)}
+        </p>
+        <a
+          href={weekUrl(view.nextWeek)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.NEXT_WEEK')}
         >
-          {view.days.map((day) => (
-            <DaySection
-              ctx={ctx}
-              day={day}
-              occasions={view.weekOccasions}
-              canDress={props.canDress}
-            />
-          ))}
-        </div>
-        {/* Outside the day blocks: each is a form of its own, and the
-            specs read a day's block for its entries alone. */}
+          ›
+        </a>
+      </nav>
+      <WeekStrip view={view} />
+      <div
+        class={`lg:grid lg:grid-cols-7 lg:gap-2 lg:mt-3 ${WEEK_ROWS[view.weekOccasions.length]}`}
+      >
         {view.days.map((day) => (
-          <PlanSheet day={day.date} />
+          <DaySection
+            ctx={ctx}
+            day={day}
+            occasions={view.weekOccasions}
+            canDress={props.canDress}
+          />
         ))}
-      </PageMain>
-      <AlreadySavedToast kind={props.alreadySaved} />
-      <UndoneToast removed={props.undone} />
-      <Dock ctx={ctx} />
-    </Layout>
+      </div>
+      {/* Outside the day blocks: each is a form of its own, and the
+            specs read a day's block for its entries alone. */}
+      {view.days.map((day) => (
+        <PlanSheet day={day.date} />
+      ))}
+    </PageShell>
   );
 }
 
@@ -221,7 +224,7 @@ function DaySection({
   return (
     <section
       id={dayAnchor(day.date)}
-      class="scroll-mt-20 py-3 border-t border-base-300 lg:grid lg:grid-rows-subgrid lg:row-span-full lg:content-start lg:p-1 lg:border-t-0 lg:rounded-box lg:target:ring-2 lg:target:ring-primary"
+      class="scroll-mt-under-bar py-3 border-t border-base-300 lg:grid lg:grid-rows-subgrid lg:row-span-full lg:content-start lg:p-1 lg:border-t-0 lg:rounded-box lg:target:ring-2 lg:target:ring-primary"
       data-day={day.date}
       aria-labelledby={`${dayAnchor(day.date)}-title`}
     >

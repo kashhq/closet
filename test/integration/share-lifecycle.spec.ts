@@ -236,7 +236,7 @@ describe('wardrobe share lifecycle', () => {
       headers: { cookie: grantee.cookie, 'hx-request': 'true' },
     });
     expect(swapped.statusCode).toBe(200);
-    expect(swapped.body).toMatch(/^<main id="wardrobe-main"/);
+    expect(swapped.body).toMatch(/^<div id="wardrobe-body"/);
     expect(swapped.body).toContain(
       `/wardrobe/${garmentId}?ownerId=${owner.id}`,
     );

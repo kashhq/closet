@@ -60,7 +60,7 @@ export function OutfitRulesSection({ model }: { model: OutfitRulesModel }) {
   return (
     <section
       id={OUTFIT_RULES_SECTION_ID}
-      class="flex flex-col gap-3 mt-8 scroll-mt-20"
+      class="flex flex-col gap-3 mt-8 scroll-mt-under-bar"
       aria-labelledby="outfit-rules-heading"
     >
       <h2 id="outfit-rules-heading" class="text-lg font-semibold">

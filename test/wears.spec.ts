@@ -146,7 +146,7 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
     .boundingBox();
   expect(firstTile!.y).toBeLessThanOrEqual(CHROME_BEFORE_GRID_PX);
   await page
-    .locator('#wardrobe-main')
+    .locator('#wardrobe-body')
     .getByRole('link', { name: '1 to wash' })
     .click();
   await expect(
@@ -225,7 +225,7 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   // not-found page: the boosted tap's error page, swapped in.
   await page.goto('/wardrobe');
   const tile = page
-    .locator('#wardrobe-main')
+    .locator('#wardrobe-body')
     .getByRole('link', { name: /Oxford/ });
   await expect(tile).toBeVisible();
   const deleted = await page.request.delete(`/wardrobe/${oxford}`, {

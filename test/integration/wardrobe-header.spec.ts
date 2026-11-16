@@ -128,7 +128,7 @@ describe('the Wardrobe header and tabs', () => {
 
   it('gives a filtered grid’s fragment the ⋯ menu out of band, so Select keeps the new filters', async () => {
     const html = await get('/wardrobe?category=bottoms', undefined, true);
-    expect(html).toMatch(/^<main id="wardrobe-main"/);
+    expect(html).toMatch(/^<div id="wardrobe-body"/);
     const menu = menuOf(html)!;
     expect(menu).toContain('hx-swap-oob="true"');
     expect(menu).toContain('href="/wardrobe?category=bottoms&select=1"');
@@ -152,7 +152,7 @@ describe('the Wardrobe header and tabs', () => {
       viewer,
       true,
     );
-    expect(html).toMatch(/^<main id="wardrobe-main"/);
+    expect(html).toMatch(/^<div id="wardrobe-body"/);
     const menu = menuOf(html)!;
     expect(menu).toContain('hx-swap-oob="true"');
     expect(menu).not.toContain('select=1');
