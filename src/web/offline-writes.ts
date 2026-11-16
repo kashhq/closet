@@ -143,11 +143,6 @@ export function postedInstant(
   return instantOnDay(requestTap(request, posted, timeZone), day);
 }
 
-/** A wash's log words for its instant: `at <ISO>`, or that it is not known. */
-export function instantNote(at: Date | null): string {
-  return at ? `at ${at.toISOString()}` : 'at an unknown time';
-}
-
 /**
  * The API's day check (wears' api-routes.ts): the same window and words as
  * requestedDay, for a day every API wear and wash sends, but a plain 409
