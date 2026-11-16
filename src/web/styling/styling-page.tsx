@@ -12,7 +12,8 @@ import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
 import { PageShell } from '../layout/page-shell';
-import { BackLink, EmptyState, SheetBackdrop } from '../layout/parts';
+import { BackLink, EmptyState } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import {
   DestinationFields,
   destinationQuery,
@@ -703,7 +704,7 @@ function ActionBar({ model }: { model: StylingModel }) {
         <button
           type="button"
           class="btn btn-primary flex-1 lg:flex-none group-not-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
-          onclick="document.getElementById('styling-save').showModal()"
+          {...sheetOpener(SAVE_SHEET_ID)}
         >
           {t(model.outfit ? SAVE_CHANGES_KEY : 'SAVE')}
         </button>
@@ -721,6 +722,8 @@ function saveLabel(model: StylingModel): string {
     : destinationPickLabel(destination);
 }
 
+const SAVE_SHEET_ID = 'styling-save';
+
 /**
  * The Save sheet: the name (the outfit's own when changing one; blank names
  * it for its garments), then where it goes. With `?for=` that is decided
@@ -730,58 +733,51 @@ function saveLabel(model: StylingModel): string {
 function SaveSheet({ model }: { model: StylingModel }) {
   const { destination } = model;
   return (
-    <dialog
-      id="styling-save"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="styling-save-title"
+    <Sheet
+      id={SAVE_SHEET_ID}
+      kind="choice"
+      labelledBy="styling-save-title"
+      gap={3}
+      dismiss="cancel"
     >
-      <div class="modal-box flex flex-col gap-3 pb-8">
-        <h2 id="styling-save-title" class="font-bold text-lg">
-          {t(model.outfit ? SAVE_CHANGES_KEY : 'styling.SAVE_TITLE')}
-        </h2>
-        <label class="flex flex-col gap-1">
-          <span class="label-text">{t('NAME')}</span>
-          <input
-            type="text"
-            name="name"
-            form="styling-form"
-            class="input input-bordered w-full"
-            value={model.refusal?.draft.name ?? model.outfit?.name ?? ''}
-            maxlength={OUTFIT_NAME_MAX}
-            placeholder={t('styling.NAME_PLACEHOLDER')}
-          />
-        </label>
-        {destination.kind === 'none' ? (
-          <ScheduleFields
-            day={model.refusal?.draft.scheduleDate}
-            occasion={model.refusal?.draft.scheduleOccasion}
-          />
-        ) : (
-          <p class="text-sm" data-styling-save-for="">
-            {destinationSummary(model, destination)}
-          </p>
-        )}
-        <div class="modal-action mt-2">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-          <button
-            type="submit"
-            form="styling-form"
-            class="btn btn-primary"
-            data-needs-network=""
-            data-styling-save=""
-          >
-            {saveLabel(model)}
-          </button>
-        </div>
+      <h2 id="styling-save-title" class="font-bold text-lg">
+        {t(model.outfit ? SAVE_CHANGES_KEY : 'styling.SAVE_TITLE')}
+      </h2>
+      <label class="flex flex-col gap-1">
+        <span class="label-text">{t('NAME')}</span>
+        <input
+          type="text"
+          name="name"
+          form="styling-form"
+          class="input input-bordered w-full"
+          value={model.refusal?.draft.name ?? model.outfit?.name ?? ''}
+          maxlength={OUTFIT_NAME_MAX}
+          placeholder={t('styling.NAME_PLACEHOLDER')}
+        />
+      </label>
+      {destination.kind === 'none' ? (
+        <ScheduleFields
+          day={model.refusal?.draft.scheduleDate}
+          occasion={model.refusal?.draft.scheduleOccasion}
+        />
+      ) : (
+        <p class="text-sm" data-styling-save-for="">
+          {destinationSummary(model, destination)}
+        </p>
+      )}
+      <div class="modal-action mt-2">
+        <SheetCancel />
+        <button
+          type="submit"
+          form="styling-form"
+          class="btn btn-primary"
+          data-needs-network=""
+          data-styling-save=""
+        >
+          {saveLabel(model)}
+        </button>
       </div>
-      <SheetBackdrop label={t('CANCEL')} />
-    </dialog>
+    </Sheet>
   );
 }
 

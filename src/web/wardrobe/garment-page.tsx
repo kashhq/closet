@@ -30,6 +30,7 @@ import {
   SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { GarmentOutfitsStrip } from '../outfits/garment-outfits';
 import type { GarmentOutfits } from '../outfits/queries';
 import {
@@ -131,8 +132,8 @@ type GarmentPhoto = NonNullable<GarmentDetail['photo']>;
 
 const PHOTO_SHEET_ID = 'garment-photo-sheet';
 
-/** Opens the photo sheet (the ⋯ menu's Photo, the empty hero's button). */
-const OPEN_PHOTO_SHEET = `this.closest('details')?.removeAttribute('open'); document.getElementById('${PHOTO_SHEET_ID}').showModal()`;
+/** The ⋯ menu's Photo closes the menu as the sheet opens over it. */
+const CLOSE_MENU = "this.closest('details').removeAttribute('open')";
 
 /**
  * Opens the photo sheet as the page loads, after a rotate (?photoRotated=1),
@@ -521,7 +522,11 @@ function GarmentMenu({
         )}
         {model.canEdit && (
           <li>
-            <button type="button" onclick={OPEN_PHOTO_SHEET}>
+            <button
+              type="button"
+              {...sheetOpener(PHOTO_SHEET_ID)}
+              onclick={CLOSE_MENU}
+            >
               {photoActionLabel(garment)}
             </button>
           </li>
@@ -689,7 +694,7 @@ export function GarmentPhotoView(props: {
           <button
             type="button"
             class="btn btn-outline btn-sm"
-            onclick={OPEN_PHOTO_SHEET}
+            {...sheetOpener(PHOTO_SHEET_ID)}
           >
             <CameraIcon class="size-4" />
             {t('garment.ADD_PHOTO')}
@@ -1040,48 +1045,41 @@ function PhotoSheet(props: {
 }) {
   const action = garmentUrl(props.garment.id, props.viewOwner, '/photo');
   return (
-    <dialog
+    <Sheet
       id={PHOTO_SHEET_ID}
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="garment-photo-sheet-title"
+      kind="form"
+      labelledBy="garment-photo-sheet-title"
+      gap={3}
+      dismiss="close"
     >
-      <div class="modal-box flex flex-col gap-3 pb-8">
-        <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
-          {photoActionLabel(props.garment)}
-        </h2>
-        <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
-        <div class="group/upload flex flex-col gap-3">
-          <PhotoSource action={action} source="camera" />
-          <PhotoSource action={action} source="library" />
-          <p
-            class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
-            role="status"
-          >
-            <span class="loading loading-spinner loading-sm"></span>
-            {t('garment.PHOTO_UPLOADING')}
-          </p>
-        </div>
-        {props.garment.photo && (
-          <RotateButtons
-            action={garmentUrl(
-              props.garment.id,
-              props.viewOwner,
-              '/photo/rotate',
-            )}
-          />
-        )}
-        <div class="modal-action mt-0">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-        </div>
+      <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
+        {photoActionLabel(props.garment)}
+      </h2>
+      <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
+      <div class="group/upload flex flex-col gap-3">
+        <PhotoSource action={action} source="camera" />
+        <PhotoSource action={action} source="library" />
+        <p
+          class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
+          role="status"
+        >
+          <span class="loading loading-spinner loading-sm"></span>
+          {t('garment.PHOTO_UPLOADING')}
+        </p>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      {props.garment.photo && (
+        <RotateButtons
+          action={garmentUrl(
+            props.garment.id,
+            props.viewOwner,
+            '/photo/rotate',
+          )}
+        />
+      )}
+      <div class="modal-action mt-0">
+        <SheetCancel />
+      </div>
+    </Sheet>
   );
 }
 

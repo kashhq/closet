@@ -19,12 +19,13 @@ import { AwayLink } from '../trips/away-link';
 import { PAIR_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
+import { sheetOpener } from '../layout/sheet';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import type { NeedsToDecide } from '../wishlist/inbox';
 import { roundReviewPath, roundWhat } from '../wishlist/round-text';
 import type { MuseRound } from '../wishlist/rounds';
 import { WISHLIST_PATH } from '../wardrobe/urls';
-import { AddSheet, OPEN_ADD_SHEET } from '../wardrobe/wardrobe-header';
+import { ADD_SHEET_ID, AddSheet } from '../wardrobe/wardrobe-header';
 import { EntrySelfie } from '../selfies/views';
 import { WornControl } from '../wears/worn-control';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
@@ -177,8 +178,7 @@ function FirstRunCard({ stage }: { stage: FirstRun }) {
       <button
         type="button"
         class="btn btn-primary"
-        aria-haspopup="dialog"
-        onclick={OPEN_ADD_SHEET}
+        {...sheetOpener(ADD_SHEET_ID)}
         data-first-run-add=""
       >
         {t(empty ? 'today.firstRun.ADD_FIRST' : 'today.firstRun.ADD_MORE')}

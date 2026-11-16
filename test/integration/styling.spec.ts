@@ -339,7 +339,7 @@ describe('Styling', () => {
         expect(html.indexOf('id="styling-form"')).toBeLessThan(at);
         expect(html.match(/data-styling-shuffle/g)).toHaveLength(1);
         expect(aside).toContain('data-styling-shuffle');
-        expect(aside).toContain("getElementById('styling-save').showModal()");
+        expect(aside).toContain('data-sheet-open="styling-save"');
         expect(aside).not.toContain('<dialog');
         // The toggle is named by its visible (sr-only) text, never an
         // aria-label that would replace what the summary holds.

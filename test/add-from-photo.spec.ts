@@ -179,8 +179,9 @@ async function checkSelectMode(page: Page) {
 }
 
 /**
- * The filter sheet (#674): blue shirts in five taps, and by keyboard one
- * choice cleared alone. Run at the end of the scenario above (the closet
+ * The filter sheet (#674): blue shirts in five taps, by keyboard one
+ * choice cleared alone, and the keyboard kept inside the open sheet until
+ * Escape hands it back to Filters (#1062). Run at the end of the scenario above (the closet
  * already holds its camera shirt, a custom category), not as a scenario of
  * its own.
  */
@@ -238,4 +239,22 @@ async function checkFilterSheet(page: Page) {
   // The type alone is cleared: both blue tops stay, the red one is out.
   await expect(tiles).toHaveCount(2);
   await expect(page.locator('#wardrobe-grid')).not.toContainText('Red shirt');
+
+  // A sheet keeps the keyboard (layout/sheet.tsx, #1062): Tab cycles inside
+  // it however far it goes, Escape closes it and focus is back on the
+  // control that opened it (confirm-sheet.js's openSheet).
+  const opener = page.getByRole('button', { name: 'Filters', exact: true });
+  await opener.click();
+  await expect(sheet).toBeVisible();
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.closest('#filter-modal') !== null,
+      ),
+    ).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(opener).toBeFocused();
 }

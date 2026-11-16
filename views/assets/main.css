@@ -450,6 +450,37 @@ html {
   }
 }
 
+/* A `menu` sheet hangs under the control that opened it from lg
+   (layout/sheet.tsx, #1062; docs/plans/2026-11-16-desktop-layout.md §3.3):
+   confirm-sheet.js marks the open sheet's trigger `data-sheet-anchor`, and
+   the box is placed below it, its end edge on the trigger's, flipping above
+   when there is no room. Fixed, not absolute: an anchor outside the dialog
+   is valid only for a box whose containing block is the viewport, and
+   `place-self: normal` lets the anchor, not the modal's grid, align it.
+   Where anchor positioning is missing the sheet stays centred (its
+   `lg:modal-middle`), as it does when a script opened it without a trigger.
+   In utilities: daisyUI's layers rank above components, and this overrides
+   its modal box. */
+@layer utilities {
+  @supports (anchor-name: --sheet-trigger) {
+    @media (min-width: 1024px) {
+      [data-sheet-anchor] {
+        anchor-name: --sheet-trigger;
+      }
+      :root:has([data-sheet-anchor]) .modal[data-sheet="menu"] > .modal-box {
+        position: fixed;
+        place-self: normal;
+        position-anchor: --sheet-trigger;
+        position-area: block-end span-inline-start;
+        position-try-fallbacks: flip-block;
+        margin-block: 0.5rem;
+        width: 20rem;
+        max-height: calc(100dvh - var(--app-bar-h) - 1rem);
+      }
+    }
+  }
+}
+
 /* Sheets and menus appear without sliding or fading for someone who asked
    the system for less motion. */
 @media (prefers-reduced-motion: reduce) {

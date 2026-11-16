@@ -8,7 +8,7 @@ import { stylingUrl } from '../styling/urls';
 import type { IsoDate } from '../../calendar-date';
 import type { CalendarEntry, EntryView } from './calendar-view';
 import { occasionLabel } from '../date-labels';
-import { OPEN_PLAN_SHEET, planSheetChoice } from './plan-sheet';
+import { planSheetOpener } from './plan-sheet';
 import { removalAsksFirst } from './removal';
 import { dayUrl, planPageUrl } from './urls';
 
@@ -112,9 +112,8 @@ export function OpenSlotRow(props: { day: IsoDate; occasion: Occasion }) {
     <button
       type="button"
       class="flex items-center gap-3 w-full py-2 text-start lg:flex-col lg:items-start lg:gap-1 lg:p-2 lg:rounded-box lg:border lg:border-dashed lg:border-base-300 lg:hover:bg-base-200"
-      data-plan={planSheetChoice(day, occasion)}
+      {...planSheetOpener(day, occasion)}
       data-open-slot={occasion}
-      onclick={OPEN_PLAN_SHEET}
     >
       <span class="w-16 h-12 shrink-0 rounded-field border border-dashed border-base-300 lg:hidden"></span>
       <OccasionLabel occasion={occasion} />
