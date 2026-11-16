@@ -1,6 +1,6 @@
 # Desktop layout: a first-class desktop beside the phone
 
-Status: **proposed**, for the owner to approve before anything is built. It builds on the desktop epic
+Status: **approved** by the owner on 2026-11-16, with every recommendation (section 7). It builds on the desktop epic
 (#307: the left rail, `PageMain` widths, `columns.ts`) and the approved
 [desktop Styling and Calendar plan](2026-11-12-desktop-styling-and-calendar.md) (#467, #468). It
 changes neither decision. It names the layout system those slices started, so the remaining pages
@@ -494,21 +494,16 @@ with each slice: one 1440 shot per surface touched (`test/screenshots.spec.ts`, 
 the action bar) and a `docs/decisions.md` entry in the same change. A per-page `lg:` count and the
 two guards are what keep the abstractions from eroding. The screenshots are for people.
 
-## 7. Open questions for the owner
+## 7. Decisions (owner, 2026-11-16)
 
-1. **Profile in the rail at desktop**, with the app bar's avatar hidden from `lg`? _Recommended: yes._
-   Places in the rail, page actions in the bar. The phone keeps the avatar.
-2. **Styling's rows at desktop:** keep the centred strips (approved in #468) with the smaller tile
-   (recommended), or choose by click at `lg`: a start-aligned row where a click rings the choice
-   and scrolling is free? Choosing by click removes the 330 px start spacer per row, but it is a
-   second choosing mechanism beside the swipe, which #468 decided against. _Recommended: keep the
-   strips; revisit after D15's screenshots._
-3. **Wardrobe filters docked permanently at desktop** (recommended), or a right side panel opened by
-   the same button? Docked costs 15rem of grid, one column at 1440, and makes filtering one click.
-4. **A labelled sidebar at `xl`** instead of the 5rem rail? _Recommended: no._ Five labelled icons fit
-   the rail, and the photos use the width better.
-5. **Keyboard shortcuts:** only `/` for search (recommended), or a small set (`n` new garment, `s`
-   Styling)? Single letters collide with screen-reader browse keys, and a mouse user gains little.
-6. **One breakpoint plus auto-fill density** (recommended), or a separate `xl` layout for 1440+
-   screens? Auto-fill already gives 1440 two more columns than 1024 without a third layout to
-   test.
+The owner approved the proposal with every recommendation as written.
+
+1. **Profile is in the rail on desktop**, and the app bar's avatar is hidden from `lg`. Places
+   live in the rail, page actions in the bar. The phone keeps the avatar.
+2. **Styling keeps the centred strips** (#468) with the `small` tile from `lg`. There is no
+   choose-by-click row. Revisit after D15's screenshots.
+3. **The Wardrobe filters are docked permanently on desktop** as the `facets` column, not a panel
+   opened by a button.
+4. **No labelled sidebar at `xl`.** The 5rem rail stays, and the photos get the width.
+5. **One keyboard shortcut:** `/` focuses search (the Wardrobe; Ideas' filter). Nothing else.
+6. **One breakpoint (`lg`) plus auto-fill density.** There is no separate `xl` layout.
