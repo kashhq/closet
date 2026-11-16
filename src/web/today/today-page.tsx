@@ -78,10 +78,11 @@ export function TodayPage(props: {
   return (
     <PageShell
       ctx={ctx}
+      name="today"
       title={t('today.TITLE')}
       bar={{ title: dayLabel(model.today) }}
       width="wide"
-      body={{ class: 'flex flex-col gap-4' }}
+      body={{ gap: 4 }}
       overlays={
         <>
           {firstRun && (

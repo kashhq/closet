@@ -1,6 +1,6 @@
 /**
  * The column steps of a wide page, named once beside the width tokens
- * (`page-main.tsx`) so a gallery never copies `grid-cols-*`. Responsive from
+ * (`page-shell.tsx`) so a gallery never copies `grid-cols-*`. Responsive from
  * one markup: CSS breakpoints only, the phone layout is the unprefixed class.
  * Whole class names, so Tailwind finds them.
  *

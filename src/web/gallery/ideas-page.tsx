@@ -74,6 +74,7 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
   return (
     <PageShell
       ctx={ctx}
+      name="ideas"
       title={t('gallery.TITLE')}
       bar={{
         title: t('OUTFITS'),
@@ -84,7 +85,7 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
         ),
       }}
       width="wide"
-      body={{ class: 'flex flex-col gap-3' }}
+      body={{ gap: 3 }}
     >
       <OutfitTabs
         active="ideas"

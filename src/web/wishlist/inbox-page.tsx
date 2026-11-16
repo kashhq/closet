@@ -102,11 +102,12 @@ export function InboxPage(props: { ctx: ViewContext; model: InboxModel }) {
   return (
     <PageShell
       ctx={ctx}
+      name="wishlist"
       title={t('wishlist.TITLE')}
       bar={wardrobeBar(header)}
       width="wide"
       tabs={<WardrobeTabs active="wishlist" viewOwner={viewOwner} />}
-      body={{ class: 'flex flex-col gap-8' }}
+      body={{ gap: 8 }}
       overlays={
         <>
           <WardrobeAddSheet {...header} />

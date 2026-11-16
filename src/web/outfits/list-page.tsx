@@ -84,7 +84,7 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
   return (
     <PageShell
       ctx={ctx}
-      title={t('OUTFITS')}
+      name="outfits"
       bar={{
         title: t('OUTFITS'),
         actions: (
@@ -94,7 +94,7 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
         ),
       }}
       width="wide"
-      body={{ class: 'flex flex-col gap-3' }}
+      body={{ gap: 3 }}
       overlays={<DecisionToastView toast={model.toast} />}
     >
       <OutfitTabs active="saved" destination={destination} />

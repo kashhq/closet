@@ -101,13 +101,13 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
   return (
     <PageShell
       ctx={ctx}
-      title={need.name}
+      name="need"
       bar={{
         title: need.name,
         back: wardrobeUrl(model.viewOwner, {}, WISHLIST_PATH),
       }}
       width="wide"
-      body={{ class: 'flex flex-col gap-5' }}
+      body={{ gap: 5 }}
       overlays={<DecisionToastView toast={model.toast} />}
     >
       <header class="flex flex-col gap-2">

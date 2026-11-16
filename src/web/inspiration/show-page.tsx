@@ -50,9 +50,9 @@ export function InspirationPage(props: {
   return (
     <PageShell
       ctx={ctx}
-      title={name}
+      name="look"
       bar={{ title: name, back: INSPIRATION_PATH }}
-      body={{ class: 'flex flex-col gap-4' }}
+      body={{ gap: 4 }}
     >
       {unread && <UnreadNote reason={unread} />}
       {look.photo ? (
@@ -126,7 +126,7 @@ export function InspirationPage(props: {
       </AutosaveForm>
       <section
         id={LOOK_PIECES_ID}
-        class="flex flex-col gap-3 scroll-mt-20"
+        class="flex flex-col gap-3 scroll-mt-under-bar"
         aria-labelledby="look-pieces-title"
       >
         <div>

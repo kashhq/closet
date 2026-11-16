@@ -128,7 +128,7 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
   return (
     <PageShell
       ctx={ctx}
-      title={t('styling.TITLE')}
+      name="styling"
       bar={{
         title: t('styling.TITLE'),
         back: model.state.returnTo,
@@ -145,7 +145,7 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
       }}
       width="wide"
       // The strips reach the screen's edges; the header pads its own text.
-      body={{ gutter: 'bleed', class: 'flex flex-col gap-3' }}
+      body={{ gutter: 'bleed', gap: 3 }}
       // The composer's bar is sticky in the flow (StylingAside).
       endsOnBar
       overlays={
@@ -248,7 +248,7 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
   return (
     <div
       data-styling-bar=""
-      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-20 lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
+      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-under-bar lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
     >
       {/* A tap opens the strip into the whole outfit (CSS off `open`, the
           PREVIEW_* classes). The open panel scrolls inside the space between

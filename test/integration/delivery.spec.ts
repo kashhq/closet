@@ -24,7 +24,7 @@ import {
 /**
  * How the app shell reaches the installed PWA: cache headers on static roots,
  * the heartbeat, versioned asset URLs in the layout, and the wardrobe
- * fragment path that htmx filtering swaps into #wardrobe-main.
+ * fragment path that htmx filtering swaps into #wardrobe-body.
  */
 // What the image's build bakes in (Dockerfile ARG -> ENV): the heartbeat and
 // the asset keys name it.
@@ -396,7 +396,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       await createGarment(t, { name: 'Fragment shirt' });
     });
 
-    it('returns only #wardrobe-main to an htmx request', async () => {
+    it('returns only #wardrobe-body to an htmx request', async () => {
       const res = await t.inject({
         method: 'GET',
         url: '/wardrobe?keyword=Fragment',
@@ -406,7 +406,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(res.headers.vary).toContain('HX-Request');
       expect(res.body).not.toContain('<html');
       expect(res.body).not.toContain('<nav');
-      expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-main"/);
+      expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-body"/);
       expect(res.body).toContain('Fragment shirt');
       expect(res.body).toContain('id="filter-modal"');
     });
@@ -420,14 +420,14 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers.vary).toContain('HX-Boosted');
       expect(res.body).toContain('<html');
-      expect(res.body).toContain('id="wardrobe-main"');
+      expect(res.body).toContain('id="wardrobe-body"');
     });
 
     it('renders the same partial inside the full page', async () => {
       const res = await t.inject({ method: 'GET', url: '/wardrobe' });
-      expect(res.body).toContain('id="wardrobe-main"');
+      expect(res.body).toContain('id="wardrobe-body"');
       expect(res.body).toMatch(
-        /<form[^>]*hx-get="\/wardrobe"[^>]*hx-target="#wardrobe-main"/,
+        /<form[^>]*hx-get="\/wardrobe"[^>]*hx-target="#wardrobe-body"/,
       );
     });
   });

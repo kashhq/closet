@@ -251,8 +251,10 @@
   --spacing-dock: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Content widths (layout/page-shell.tsx's `width`): `max-w-page-narrow` for
-   forms, reading and single-column lists, `max-w-page-wide` for galleries. */
+/* Content widths (layout/page-shell.tsx's `width`, a `single` page's):
+   `max-w-page-narrow` for forms, reading and single-column lists,
+   `max-w-page-wide` for galleries. Every other layout's frame is wide (the
+   page frame below). */
 @theme {
   --container-page-narrow: 40rem;
   --container-page-wide: 80rem;
@@ -280,9 +282,19 @@
    and the dock (Styling's) subtracts from the viewport, and what PageShell
    leaves above a page (`--app-bar-h`). It is in rem, so it grows with the
    text size like the two-line title clamp it holds (#1028): at 100% text
-   nothing differs. */
+   nothing differs. `under-bar` is the bar and a 1rem gutter: where a
+   sticky column stops (`top-under-bar`) and an anchor lands
+   (`scroll-mt-under-bar`). The height of an action bar fixed above the dock
+   (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, in rem like the rest),
+   `--action-bar-h`: what focus scrolls clear of and what PageShell leaves
+   below the page while one shows. A new fixed bar taller than that updates
+   it. */
 :root {
   --app-bar-h: 4rem;
+  --action-bar-h: 3.5rem;
+}
+@theme inline {
+  --spacing-under-bar: calc(var(--app-bar-h) + 1rem);
 }
 .app-bar {
   position: fixed;
@@ -300,8 +312,10 @@
    focused control is scrolled into view clear of the app bar and, where the
    dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
    the rail, and on a page without one), and of an action bar fixed above it
-   (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, which grows with the
-   text like the rest in rem; the sticky bar in Styling's flow needs none). */
+   (`--action-bar-h`; the sticky bar in Styling's flow needs none). The same
+   selector makes the page frame (below) leave the action bar's height under
+   the page's end, so its last row is never under the bar (the Wardrobe's
+   select mode). */
 html {
   scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
 }
@@ -309,15 +323,21 @@ html {
   scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
 }
 :root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
-  scroll-padding-bottom: calc(var(--spacing-dock) + 3.5rem + 0.5rem);
+  scroll-padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 0.5rem);
+  & .page-shell {
+    padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 2rem);
+  }
 }
 
 /* The page frame (layout/page-shell.tsx, #1059; docs/plans/
    2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
    app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
    and the dock's below plus a 2rem gutter (only the gutter at the rail,
-   where --spacing-dock is 0); a page ending on a bar sticky above the dock
-   (`data-end="bar"`, Styling's) leaves the dock's height alone. The body and
+   where --spacing-dock is 0), and the action bar's height too while one is
+   fixed above the dock (the scroll-padding rule above); a page ending on a
+   bar sticky above the dock (`data-end="bar"`, Styling's) leaves the dock's
+   height alone. A `single` page's width is its `max-w-page-*` class; every
+   other layout's frame is wide, set here, so its grid owns the columns. The body and
    the aside carry the gutter (`data-gutter`), so section tabs between the
    bar and them sit flush. Each layout is one grid here, from lg only: below
    it every region stacks in DOM order, which is the desktop's left to
@@ -329,6 +349,9 @@ html {
   }
   .page-shell[data-end="bar"] {
     padding-bottom: max(var(--spacing-dock), 2rem);
+  }
+  .page-shell:not([data-layout="single"]) {
+    max-width: var(--container-page-wide);
   }
   .page-body,
   .page-aside {

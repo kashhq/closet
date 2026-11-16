@@ -178,13 +178,13 @@ export function GarmentPage(props: {
   return (
     <PageShell
       ctx={ctx}
-      title={title}
+      name="garment"
       bar={{
         title,
         back: backUrl(garment, model.viewOwner),
         actions: <GarmentMenu ctx={ctx} model={model} />,
       }}
-      body={{ class: 'flex flex-col gap-6' }}
+      body={{ gap: 6 }}
       overlays={
         <>
           <PhotoTools model={model} />

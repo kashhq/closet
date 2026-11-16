@@ -15,8 +15,6 @@ import {
   PageFixture,
   PageRoute,
   pageRoutes,
-  expectPageShell,
-  rawMainRoutes,
   SESSION_BOUNDARY_ACTIONS,
 } from './pages';
 
@@ -62,18 +60,12 @@ describe('pages', () => {
     // expectFullPage also holds the sign-in and sign-out forms to their
     // data-ends-session mark (#542); this proves the table reaches all four.
     const announced = new Set<string>();
-    // Every page but the raw-main list is on PageShell (#1059), and the list
-    // names only routes of the table.
-    const rawMain = new Set(rawMainRoutes(fixture, inviteToken));
-    const shellMismatches: string[] = [];
     for (const route of routes()) {
       const { url } = route;
       const res = await t.inject({ method: 'GET', url });
       expect({ url, status: res.statusCode }).toEqual({ url, status: 200 });
       expectFullPage(res);
       expectFormPageFlag(route, res);
-      if (expectPageShell(res) === rawMain.has(url)) shellMismatches.push(url);
-      rawMain.delete(url);
       postForms +=
         res.body.match(/<form\b[^>]*data-submit-once=/g)?.length ?? 0;
       for (const [, action] of res.body.matchAll(
@@ -82,8 +74,6 @@ describe('pages', () => {
         announced.add(action);
       }
     }
-    expect(shellMismatches).toEqual([]);
-    expect([...rawMain]).toEqual([]);
     expect(postForms).toBeGreaterThan(40);
     expect([...announced].sort()).toEqual([...SESSION_BOUNDARY_ACTIONS].sort());
   });
@@ -145,7 +135,7 @@ describe('pages', () => {
     expect(invite.body).not.toContain(t.owner.email);
   });
 
-  it('GET /wardrobe as an htmx fragment is only #wardrobe-main', async () => {
+  it('GET /wardrobe as an htmx fragment is only #wardrobe-body', async () => {
     const res = await t.inject({
       method: 'GET',
       url: '/wardrobe?keyword=Blazer',

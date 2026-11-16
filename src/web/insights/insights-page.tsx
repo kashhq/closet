@@ -62,10 +62,10 @@ export function InsightsPage(props: {
   return (
     <PageShell
       ctx={ctx}
-      title={t('insights.TITLE')}
+      name="insights"
       bar={{ title: t('insights.TITLE'), back: '/wardrobe' }}
       width="wide"
-      body={{ class: 'flex flex-col gap-4' }}
+      body={{ gap: 4 }}
     >
       <p class="text-sm text-muted">{t('insights.INTRO')}</p>
       <a
@@ -213,12 +213,12 @@ export function UnwornPage(props: {
   return (
     <PageShell
       ctx={ctx}
-      title={t(UNWORN_KEY)}
+      name="unworn"
       bar={{
         title: t(UNWORN_KEY),
         back: insightsUrl(model.insights.unworn.days),
       }}
-      body={{ class: 'flex flex-col gap-4' }}
+      body={{ gap: 4 }}
     >
       <Unworn
         unworn={model.insights.unworn}

@@ -204,7 +204,7 @@ function listedCapsule(capsules: CapsuleRef[], id: number): CapsuleRef {
 /**
  * What GET /wardrobe's answer renders around its tiles (GridContext):
  * browsing, all of it the requester may see, the app bar's switcher only
- * on a full page (a fragment swaps #wardrobe-main and the ⋯ menu). The
+ * on a full page (a fragment swaps #wardrobe-body and the ⋯ menu). The
  * picker reads only the capsules (to refuse another wardrobe's `?pick=` and
  * to name it); select mode the count ("Select all N") and the capsules
  * (its "Add to capsule", and a foreign `?capsule=`).
@@ -252,7 +252,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   // Filtering and searching are navigation state: malformed values fall
   // back or are dropped, except a colour outside the built-in set (400,
   // GridQuery) and a capsule that is not the wardrobe's (404). An htmx
-  // fragment request (the scope row, the filter modal) gets #wardrobe-main
+  // fragment request (the scope row, the filter modal) gets #wardrobe-body
   // and the ⋯ menu out of band; the first page only, always. `?pick=` (owner and MANAGE) is the
   // capsule picker: select mode with the capsule's members checked.
   app.get(

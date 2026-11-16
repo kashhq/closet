@@ -32,6 +32,7 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
   return (
     <PageShell
       ctx={ctx}
+      name="month"
       title={t('CALENDAR_PAGE_TITLE')}
       bar={{ title: t('CALENDAR') }}
       width="wide"

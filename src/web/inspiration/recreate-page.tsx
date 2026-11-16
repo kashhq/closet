@@ -56,9 +56,10 @@ export function RecreatePage(props: {
   return (
     <PageShell
       ctx={ctx}
+      name="recreate"
       title={t('inspiration.RECREATE_TITLE', { title: name })}
       bar={{ title: t('inspiration.RECREATE'), back: inspirationUrl(look.id) }}
-      body={{ class: 'flex flex-col gap-4' }}
+      body={{ gap: 4 }}
     >
       {look.photo && (
         <img
@@ -153,7 +154,7 @@ function PieceMatches(props: {
       data-recreate-piece={piece.position}
       data-missing={matches.length === 0 && !wishlisted(piece) ? '' : undefined}
     >
-      <h2 id={headingId} class="font-medium scroll-mt-20">
+      <h2 id={headingId} class="font-medium scroll-mt-under-bar">
         {name}
       </h2>
       <PieceChoice {...props} name={name} />

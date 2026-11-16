@@ -27,7 +27,7 @@ export function InspirationListPage(props: {
   return (
     <PageShell
       ctx={ctx}
-      title={t('OUTFITS')}
+      name="inspiration"
       bar={{
         title: t('OUTFITS'),
         actions: (
@@ -37,7 +37,7 @@ export function InspirationListPage(props: {
         ),
       }}
       width="wide"
-      body={{ class: 'flex flex-col gap-3' }}
+      body={{ gap: 3 }}
     >
       <OutfitTabs active="inspiration" />
       {looks.length === 0 ? (

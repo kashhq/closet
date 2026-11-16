@@ -66,6 +66,7 @@ export function CalendarPage(props: {
   return (
     <PageShell
       ctx={ctx}
+      name="calendar"
       title={t('CALENDAR_PAGE_TITLE')}
       bar={{ title: t('CALENDAR') }}
       width="agenda"
@@ -223,7 +224,7 @@ function DaySection({
   return (
     <section
       id={dayAnchor(day.date)}
-      class="scroll-mt-20 py-3 border-t border-base-300 lg:grid lg:grid-rows-subgrid lg:row-span-full lg:content-start lg:p-1 lg:border-t-0 lg:rounded-box lg:target:ring-2 lg:target:ring-primary"
+      class="scroll-mt-under-bar py-3 border-t border-base-300 lg:grid lg:grid-rows-subgrid lg:row-span-full lg:content-start lg:p-1 lg:border-t-0 lg:rounded-box lg:target:ring-2 lg:target:ring-primary"
       data-day={day.date}
       aria-labelledby={`${dayAnchor(day.date)}-title`}
     >

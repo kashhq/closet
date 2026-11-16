@@ -7,8 +7,10 @@ import { CancelLink } from './parts';
 /**
  * The frame of an add or edit page that is one native post (#411): the
  * garment, capsule and trip forms, "Bought it" and the share confirmation.
- * A preset of `PageShell` (narrow, `single`). The app bar marks it a `formPage`, the fields post through one
- * `PostForm`, and Cancel (back past the form) sits beside the submit.
+ * A preset of `PageShell` (`single`, narrow: a form is one reading column
+ * at every width). The app bar marks it a `formPage`, the fields post
+ * through one `PostForm`, and Cancel (back past the form) sits beside the
+ * submit.
  *
  * Disabled offline: the form like every PostForm, and the edit page's
  * Delete, an `hx-delete` outside it, by its own `data-needs-network`. A copy
@@ -41,7 +43,13 @@ export function FormPage(props: {
 }) {
   const { ctx, title, back, remove } = props;
   return (
-    <PageShell ctx={ctx} title={title} bar={{ title, back, formPage: true }}>
+    <PageShell
+      ctx={ctx}
+      name="form"
+      layout="single"
+      width="narrow"
+      bar={{ title, back, formPage: true }}
+    >
       {props.intro}
       <PostForm
         action={props.action}

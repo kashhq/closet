@@ -55,7 +55,11 @@ export function ErrorPage(props: {
           }),
         };
   return (
-    <PageShell ctx={props.ctx} bar={{ title: t(`errorPage.title.${kind}`) }}>
+    <PageShell
+      ctx={props.ctx}
+      name="error"
+      bar={{ title: t(`errorPage.title.${kind}`) }}
+    >
       <EmptyState message={props.message}>
         <div class="flex flex-wrap justify-center gap-2">
           {props.retryHref !== undefined && kind === 'retry' && (
