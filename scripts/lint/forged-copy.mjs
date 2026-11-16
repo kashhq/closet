@@ -9,7 +9,11 @@ import ts from 'typescript';
 
 const I18N = resolve(import.meta.dirname, '../../src/web/i18n.ts');
 
-/** `Translated` as the program declares it, once per program. */
+/**
+ * `Translated` as the program declares it, once per program; null when the program does not
+ * include i18n.ts (the service worker's project, a default-project file), where nothing can
+ * name the brand and only any, never and type parameters are judged.
+ */
 const brands = new WeakMap();
 function brandOf(program, checker) {
   if (!brands.has(program)) {
@@ -18,10 +22,10 @@ function brandOf(program, checker) {
     const symbol =
       module &&
       checker.getExportsOfModule(module).find((s) => s.name === 'Translated');
-    if (!symbol) {
-      throw new Error(`no-forged-copy: ${I18N} no longer exports Translated`);
-    }
-    brands.set(program, checker.getDeclaredTypeOfSymbol(symbol));
+    brands.set(
+      program,
+      symbol ? checker.getDeclaredTypeOfSymbol(symbol) : null,
+    );
   }
   return brands.get(program);
 }
@@ -49,7 +53,7 @@ const UNTYPED = ts.TypeFlags.Any | ts.TypeFlags.Never;
  * Whether a value of `type` could hand out copy that `t()` never made. any and never go anywhere,
  * Translated included, so they forge as the assertion's own type (`x as never`). Inside a type they
  * are not judged: the library's own defaults hold any (`AsyncIterable<T, TReturn = any>`), and
- * refusing them would refuse every iterable.
+ * refusing them would refuse every iterable. A type parameter is judged by its constraint (below).
  */
 function forges(program, checker, brand, type) {
   return (
@@ -58,11 +62,43 @@ function forges(program, checker, brand, type) {
   );
 }
 
-function carriesBrand(program, checker, brand, type, seen) {
+/**
+ * `x as T` is whatever the caller instantiates T with, Translated included, unless T's constraint
+ * rules the brand out (`T extends TSchema`). No constraint, unknown, any, or one the brand fits
+ * (string, {}) forges; so does one that itself carries the brand (`T extends Translated[]`).
+ */
+function typeParameterForges(checker, brand, type, inner) {
+  const constraint = checker.getBaseConstraintOfType(type);
+  if (
+    !constraint ||
+    constraint.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)
+  ) {
+    return true;
+  }
+  return (
+    (brand !== null && checker.isTypeAssignableTo(brand, constraint)) ||
+    inner(constraint)
+  );
+}
+
+function carriesBrand(program, checker, brand, type, seen, inMember = false) {
   if (seen.has(type) || type.flags & UNTYPED) return false;
   seen.add(type);
-  if (checker.isTypeAssignableTo(type, brand)) return true;
-  const inner = (part) => carriesBrand(program, checker, brand, part, seen);
+  if (type.flags & ts.TypeFlags.TypeParameter) {
+    // Only the assertion's own type (or its elements) is the caller's to choose: a member of some
+    // other type, such as a library's generic method, names its own parameters.
+    return (
+      !inMember &&
+      typeParameterForges(checker, brand, type, (part) =>
+        carriesBrand(program, checker, brand, part, seen),
+      )
+    );
+  }
+  if (brand && checker.isTypeAssignableTo(type, brand)) return true;
+  const inner = (part) =>
+    carriesBrand(program, checker, brand, part, seen, inMember);
+  const member = (part) =>
+    carriesBrand(program, checker, brand, part, seen, true);
   if (type.isUnionOrIntersection() && type.types.some(inner)) return true;
   const typeArguments = [
     ...(type.aliasTypeArguments ?? []),
@@ -80,14 +116,14 @@ function carriesBrand(program, checker, brand, type, seen) {
     ...type.getConstructSignatures(),
   ];
   return (
-    checker.getIndexInfosOfType(type).some((info) => inner(info.type)) ||
-    type.getProperties().some((p) => inner(checker.getTypeOfSymbol(p))) ||
+    checker.getIndexInfosOfType(type).some((info) => member(info.type)) ||
+    type.getProperties().some((p) => member(checker.getTypeOfSymbol(p))) ||
     signatures.some(
       (signature) =>
-        inner(signature.getReturnType()) ||
+        member(signature.getReturnType()) ||
         signature
           .getParameters()
-          .some((p) => inner(checker.getTypeOfSymbol(p))),
+          .some((p) => member(checker.getTypeOfSymbol(p))),
     )
   );
 }

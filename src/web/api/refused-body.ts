@@ -13,6 +13,7 @@ export function refusedBody<Field extends string>(
   errors: FieldErrors<Field>,
   pointerOf: Record<Field, string>,
 ): HttpError {
+  // eslint-disable-next-line closet/no-forged-copy -- the keys of a Record<Field, ...> are Fields, which name form fields, never copy
   const validation = (Object.keys(errors) as Field[]).flatMap((field) =>
     (errors[field] ?? []).map((message) => ({
       path: `body${pointerOf[field]}`,

@@ -49,9 +49,8 @@ export interface AppBarProps {
  * restore and a cached tab root all carry the bar of the page they show.
  * The tab roots are stale-while-revalidate (page-cache.ts), so nothing here
  * may vary between two renders of the same page. Its position and z-index
- * (above page content, beside the dock) are in main.css. It is 4rem
- * tall: a page leaves `pt-20` (the bar and the page's 1rem gutter), or
- * `pt-16` when its first row sits flush under it (the Wardrobe tabs).
+ * (above page content, beside the dock) are in main.css. It is
+ * `--app-bar-h` (4rem) tall, which PageShell leaves above every page.
  */
 export function AppBar(props: AppBarProps) {
   const { ctx } = props;

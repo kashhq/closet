@@ -8,10 +8,7 @@ import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { BackLink, EmptyState } from '../layout/parts';
 import { OutfitCollage } from '../outfits/collage';
 import {
@@ -75,58 +72,60 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
   const { state, cards } = model;
   const shuffle = ideasUrl({ ...state, seed: shuffledSeed(state.seed) });
   return (
-    <Layout ctx={ctx} title={t('gallery.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('OUTFITS')}
-        actions={
+    <PageShell
+      ctx={ctx}
+      name="ideas"
+      title={t('gallery.TITLE')}
+      bar={{
+        title: t('OUTFITS'),
+        actions: (
           <a href={shuffle} class="btn btn-ghost btn-sm" data-shuffle="">
             ⤮ {t('gallery.SHUFFLE')}
           </a>
+        ),
+      }}
+      width="wide"
+      body={{ gap: 3 }}
+    >
+      <OutfitTabs
+        active="ideas"
+        destination={
+          state.destination.kind === 'day' ? state.destination : undefined
         }
       />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-3">
-        <OutfitTabs
-          active="ideas"
-          destination={
-            state.destination.kind === 'day' ? state.destination : undefined
-          }
-        />
-        <Scope model={model} />
-        {cards.weather && <WeatherNote weather={cards.weather} />}
-        <ChipList chips={adviceChips(cards.weather)} />
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t('gallery.OFFLINE')}
-        </p>
-        {cards.ideas.length > 0 ? (
-          <>
-            <SnapStrip
-              size="page"
-              label={t('gallery.STRIP_LABEL')}
-              listbox={false}
-              tapThrough
-              frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
-              class="pb-2"
-              attributes={{ id: 'idea-strip' }}
-            >
-              <IdeaCards model={cards} />
-            </SnapStrip>
-            <SnapStripsInit />
-          </>
-        ) : (
-          <EmptyState message={emptyMessage(model)}>
-            <a href="/wardrobe" class="btn btn-primary btn-sm">
-              {t('gallery.EMPTY_ACTION')}
-            </a>
-          </EmptyState>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+      <Scope model={model} />
+      {cards.weather && <WeatherNote weather={cards.weather} />}
+      <ChipList chips={adviceChips(cards.weather)} />
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t('gallery.OFFLINE')}
+      </p>
+      {cards.ideas.length > 0 ? (
+        <>
+          <SnapStrip
+            size="page"
+            label={t('gallery.STRIP_LABEL')}
+            listbox={false}
+            tapThrough
+            frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
+            class="pb-2"
+            attributes={{ id: 'idea-strip' }}
+          >
+            <IdeaCards model={cards} />
+          </SnapStrip>
+          <SnapStripsInit />
+        </>
+      ) : (
+        <EmptyState message={emptyMessage(model)}>
+          <a href="/wardrobe" class="btn btn-primary btn-sm">
+            {t('gallery.EMPTY_ACTION')}
+          </a>
+        </EmptyState>
+      )}
+    </PageShell>
   );
 }
 

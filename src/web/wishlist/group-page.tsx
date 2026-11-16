@@ -5,10 +5,7 @@ import type { ClosetGarment } from '../gallery/queries';
 import { ideaName } from '../gallery/ideas';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { OutfitCollage } from '../outfits/collage';
 import { BrandSizeNote } from '../sizes/views';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
@@ -34,6 +31,7 @@ import {
   reasonText,
   UndoForm,
 } from './suggestion-parts';
+import { THUMB_ROW } from '../layout/columns';
 
 export interface NeedPageModel {
   detail: NeedDetail;
@@ -102,83 +100,84 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
   // The same count on every option decides nothing: said once, in the facts.
   const shared = sharedUnlocks(shown, model.detail.judged);
   return (
-    <Layout ctx={ctx} title={need.name}>
-      <AppBar
-        ctx={ctx}
-        title={need.name}
-        back={wardrobeUrl(model.viewOwner, {}, WISHLIST_PATH)}
-      />
-      <PageMain width="wide" class="flex flex-col gap-5 px-4 pt-20 pb-24">
-        <header class="flex flex-col gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <FromAgent agent={need.agent} />
-            <NeedState model={model} chosen={chosen} />
-          </div>
-          <NeedFacts
-            budget={need.budget}
-            options={options.length}
-            unlocks={shared}
+    <PageShell
+      ctx={ctx}
+      name="need"
+      bar={{
+        title: need.name,
+        back: wardrobeUrl(model.viewOwner, {}, WISHLIST_PATH),
+      }}
+      width="wide"
+      body={{ gap: 5 }}
+      overlays={<DecisionToastView toast={model.toast} />}
+    >
+      <header class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <FromAgent agent={need.agent} />
+          <NeedState model={model} chosen={chosen} />
+        </div>
+        <NeedFacts
+          budget={need.budget}
+          options={options.length}
+          unlocks={shared}
+        />
+        {need.note && (
+          <details class="text-sm">
+            <summary class="link link-hover text-muted">
+              {t('muse.WHY', { agent: museName(need.agent) })}
+            </summary>
+            <p class="pt-1 whitespace-pre-line" data-need-note="">
+              {need.note}
+            </p>
+          </details>
+        )}
+      </header>
+      {shown.length > 0 && (
+        <>
+          <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
+          <SnapStrip
+            size="options"
+            label={t('muse.OPTIONS_LABEL', { need: need.name })}
+            listbox={false}
+            tapThrough
+            class="pb-2"
+            attributes={{ 'data-need-options': '' }}
+          >
+            {shown.map((pick, index) => (
+              <OptionCard
+                model={model}
+                pick={pick}
+                chosen={pick === chosen}
+                selected={
+                  model.option === undefined
+                    ? index === 0
+                    : pick.id === model.option
+                }
+                self={self}
+                showUnlocks={!shared}
+              />
+            ))}
+          </SnapStrip>
+          <SnapStripsInit />
+        </>
+      )}
+      {need.status === 'open' && options.length === 0 && (
+        <p class="text-sm text-muted" data-no-options="">
+          {t('muse.NO_OPTIONS_LEFT')}
+        </p>
+      )}
+      <SetAsidePicks model={model} picks={setAside} self={self} />
+      {model.isOwner && need.status === 'open' && (
+        <footer class="flex flex-wrap items-start gap-2 border-t border-base-300 pt-4">
+          <BoughtDifferent needId={need.id} />
+          <NotForMe
+            action={needUrl(need.id, undefined, '/dismiss')}
+            returnTo={self}
+            label={t('muse.NOT_THIS_NEED')}
           />
-          {need.note && (
-            <details class="text-sm">
-              <summary class="link link-hover text-muted">
-                {t('muse.WHY', { agent: museName(need.agent) })}
-              </summary>
-              <p class="pt-1 whitespace-pre-line" data-need-note="">
-                {need.note}
-              </p>
-            </details>
-          )}
-        </header>
-        {shown.length > 0 && (
-          <>
-            <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
-            <SnapStrip
-              size="options"
-              label={t('muse.OPTIONS_LABEL', { need: need.name })}
-              listbox={false}
-              tapThrough
-              class="pb-2"
-              attributes={{ 'data-need-options': '' }}
-            >
-              {shown.map((pick, index) => (
-                <OptionCard
-                  model={model}
-                  pick={pick}
-                  chosen={pick === chosen}
-                  selected={
-                    model.option === undefined
-                      ? index === 0
-                      : pick.id === model.option
-                  }
-                  self={self}
-                  showUnlocks={!shared}
-                />
-              ))}
-            </SnapStrip>
-            <SnapStripsInit />
-          </>
-        )}
-        {need.status === 'open' && options.length === 0 && (
-          <p class="text-sm text-muted" data-no-options="">
-            {t('muse.NO_OPTIONS_LEFT')}
-          </p>
-        )}
-        <SetAsidePicks model={model} picks={setAside} self={self} />
-        {model.isOwner && need.status === 'open' && (
-          <footer class="flex flex-wrap items-start gap-2 border-t border-base-300 pt-4">
-            <BoughtDifferent needId={need.id} />
-            <NotForMe
-              action={needUrl(need.id, undefined, '/dismiss')}
-              returnTo={self}
-              label={t('muse.NOT_THIS_NEED')}
-            />
-          </footer>
-        )}
-      </PageMain>
-      <DecisionToastView toast={model.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+        </footer>
+      )}
+    </PageShell>
   );
 }
 
@@ -384,7 +383,7 @@ function BestOutfitRows(props: {
   return (
     <div class="flex flex-col gap-1 pt-1">
       <p class="text-xs text-muted">{t('muse.BEST_LABEL')}</p>
-      <ul class="grid grid-cols-3 gap-2" data-best-outfits="">
+      <ul class={THUMB_ROW} data-best-outfits="">
         {props.best.best.map((idea) => (
           <li title={ideaName(idea.garments)}>
             <OutfitCollage

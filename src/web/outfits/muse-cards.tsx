@@ -7,7 +7,7 @@ import { enlargeLabel, PhotoSet, viewerTrigger } from '../files/photo-viewer';
 import { unlocksText } from '../gallery/goes-with';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
-import { MUSE_GRID } from '../layout/columns';
+import { MUSE_GRID, MUSE_PIECES } from '../layout/columns';
 import { GarmentMark, markLabel } from '../layout/garment-mark';
 import { HangerIcon } from '../layout/parts';
 import { stylingUrl } from '../styling/urls';
@@ -80,8 +80,6 @@ function primaryOf(item: MuseOutfit): Primary {
   return { kind: toBuy ? 'love' : 'save' };
 }
 
-const PIECE_GRID = 'grid grid-cols-4 gap-1.5';
-
 function MuseCard(props: {
   item: MuseOutfit;
   unlocks: ReadonlyMap<number, OutfitCount>;
@@ -135,7 +133,7 @@ function MuseCard(props: {
           piece.photo ? [{ photo: piece.photo, alt: pieceName(piece) }] : [],
         )}
       />
-      <ul class={PIECE_GRID}>
+      <ul class={MUSE_PIECES}>
         {item.pieces.map((piece) => (
           <PieceTile
             piece={piece}

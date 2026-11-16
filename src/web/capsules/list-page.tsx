@@ -7,6 +7,7 @@ import type { ViewContext } from '../view-context';
 import { capsuleUrl, wardrobeUrl } from '../wardrobe/urls';
 import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
 import type { CapsuleCard, StripGarment } from './queries';
+import { THUMB_ROW_WIDE } from '../layout/columns';
 
 export interface CapsulesModel {
   /** The closet (inCloset): the first and permanent capsule. */
@@ -107,7 +108,7 @@ function CapsuleEntry(props: {
           </span>
         </div>
         {props.strip.length > 0 && (
-          <div class="grid grid-cols-4 gap-2">
+          <div class={THUMB_ROW_WIDE}>
             {props.strip.map((garment) => (
               <PlinthImage
                 photo={garment.photo}

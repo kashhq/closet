@@ -1,17 +1,16 @@
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import type { ViewContext } from '../view-context';
-import { AppBar } from './app-bar';
-import { Dock } from './dock';
-import { Layout } from './layout';
-import { PageMain } from './page-main';
+import { PageShell } from './page-shell';
 import { CancelLink } from './parts';
 
 /**
  * The frame of an add or edit page that is one native post (#411): the
  * garment, capsule and trip forms, "Bought it" and the share confirmation.
- * The app bar marks it a `formPage`, the fields post through one
- * `PostForm`, and Cancel (back past the form) sits beside the submit.
+ * A preset of `PageShell` (`single`, narrow: a form is one reading column
+ * at every width). The app bar marks it a `formPage`, the fields post
+ * through one `PostForm`, and Cancel (back past the form) sits beside the
+ * submit.
  *
  * Disabled offline: the form like every PostForm, and the edit page's
  * Delete, an `hx-delete` outside it, by its own `data-needs-network`. A copy
@@ -44,41 +43,43 @@ export function FormPage(props: {
 }) {
   const { ctx, title, back, remove } = props;
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar ctx={ctx} title={title} back={back} formPage />
-      <PageMain class="p-4 pt-20 pb-24">
-        {props.intro}
-        <PostForm
-          action={props.action}
-          multipart={props.multipart}
-          class="flex flex-col gap-4"
-        >
-          {props.children}
-          <div class="flex gap-2 mt-2">
-            <CancelLink href={back} class="flex-1" />
-            <button
-              type="submit"
-              class="btn btn-primary flex-1"
-              disabled={props.submitDisabled}
-            >
-              {props.submitLabel}
-            </button>
-          </div>
-        </PostForm>
-        {props.after}
-        {remove && (
+    <PageShell
+      ctx={ctx}
+      name="form"
+      layout="single"
+      width="narrow"
+      bar={{ title, back, formPage: true }}
+    >
+      {props.intro}
+      <PostForm
+        action={props.action}
+        multipart={props.multipart}
+        class="flex flex-col gap-4"
+      >
+        {props.children}
+        <div class="flex gap-2 mt-2">
+          <CancelLink href={back} class="flex-1" />
           <button
-            type="button"
-            class="btn btn-error btn-outline btn-sm w-full mt-8"
-            hx-delete={remove.url}
-            hx-confirm={remove.confirm}
-            data-needs-network=""
+            type="submit"
+            class="btn btn-primary flex-1"
+            disabled={props.submitDisabled}
           >
-            {remove.label}
+            {props.submitLabel}
           </button>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+        </div>
+      </PostForm>
+      {props.after}
+      {remove && (
+        <button
+          type="button"
+          class="btn btn-error btn-outline btn-sm w-full mt-8"
+          hx-delete={remove.url}
+          hx-confirm={remove.confirm}
+          data-needs-network=""
+        >
+          {remove.label}
+        </button>
+      )}
+    </PageShell>
   );
 }

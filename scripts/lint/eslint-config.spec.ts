@@ -71,6 +71,9 @@ describe('forged copy', () => {
     "export const a = { message: 'English' } as { message: Translated };",
     'export const a = ((s: string) => s) as (s: string) => Translated;',
     'export const a = new Map() as Map<string, Translated>;',
+    'export function as<T>(x: unknown): T {\n  return x as T;\n}',
+    'export function as<T extends string>(x: string): T {\n  return x as T;\n}',
+    'export function as<T>(x: unknown) {\n  return <T>x;\n}',
     'export const a = (s: string): s is Translated => s.length > 0;',
   ])('refuses %s', async (body) => {
     expect(await forged(body)).toBe(1);
@@ -80,6 +83,7 @@ describe('forged copy', () => {
     "export const a = t('ABOUT_TITLE') as string;",
     "export const a = [t('ABOUT_TITLE')] as const;",
     "export const a = 'English' as unknown;",
+    "export const a = 'English' as const;",
     "export const a = ['English'] as string[];",
     "export const a = [t('ABOUT_TITLE'), 0].filter((s) => s !== 0);",
   ])('lets %s through', async (body) => {

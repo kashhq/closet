@@ -347,3 +347,47 @@ export const PLACEHOLDER_KINDS = {
 } as const satisfies Partial<
   Record<StringKey, Readonly<Record<string, 'copy' | 'data'>>>
 >;
+
+const DAY_NUMBER = 'a day number';
+const YEAR_NUMBER = 'a year number';
+const TEMPERATURE = 'a temperature';
+
+/**
+ * A key whose template is only placeholders and punctuation (`{a} + {b}`)
+ * says nothing itself, so a `data` placeholder in it lets `t()` wrap any
+ * string into `Translated`. Each such data placeholder is listed here with
+ * why it is data and not copy; `i18n.spec.ts` fails on one that is missing,
+ * or listed without being such a placeholder.
+ */
+export const FORMAT_ONLY_DATA = {
+  CALENDAR_PLAN_DAY: { day: DAY_NUMBER },
+  QUANTITY_BADGE: { quantity: 'a count' },
+  'calendar.MONTH_TITLE': { year: YEAR_NUMBER },
+  'calendar.MORE': { count: 'a count' },
+  'calendar.SHORT_DAY': { day: DAY_NUMBER },
+  'calendar.SHORT_DAY_YEAR': { day: DAY_NUMBER, year: YEAR_NUMBER },
+  'calendar.WEEK_RANGE': { year: YEAR_NUMBER },
+  'care.REPAIR_DAY_VALUE': { year: YEAR_NUMBER },
+  'gallery.PAIR': {
+    a: "a garment's own name, or its category's label when unnamed: user data",
+    b: "a garment's own name, or its category's label when unnamed: user data",
+  },
+  'linkImport.REASON_LED': { reason: 'a machine reason code, shown as is' },
+  'mark.OUTFIT_LABEL': { name: "an outfit's name: user data" },
+  'mark.PIECE': { name: "a garment's name: user data" },
+  'refusal.form.fieldErrors': { field: "a form field's machine name" },
+  'sizes.BRAND_NOTE': {
+    brand: 'a brand the user typed',
+    note: "the user's own note on the brand (user data, not catalogue copy)",
+  },
+  'today.push.PLANNED': { outfit: "an outfit's name: user data" },
+  'weather.DAY_HIGH': { high: TEMPERATURE },
+  'weather.DAY_RANGE': { low: TEMPERATURE, high: TEMPERATURE },
+  'weather.RANGE': {
+    low: TEMPERATURE,
+    high: TEMPERATURE,
+    unit: "the user's temperature unit symbol",
+  },
+} as const satisfies Partial<
+  Record<StringKey, Readonly<Record<string, string>>>
+>;

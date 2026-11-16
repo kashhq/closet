@@ -124,6 +124,7 @@ export function http<P = undefined>(step: HttpStep<P>): Step {
     target: step.target ?? step.route,
     route: template,
     async measure(fixture) {
+      // eslint-disable-next-line closet/no-forged-copy -- an unconstrained P, never user-facing copy
       const prepared = (await step.prepare?.(fixture)) as P;
       const options = fixture.injectOptions(step.request(fixture, prepared));
       const started = performance.now();
@@ -162,6 +163,7 @@ export function job<P = undefined>(step: JobStep<P>): Step {
   return {
     ...step,
     async measure(fixture) {
+      // eslint-disable-next-line closet/no-forged-copy -- an unconstrained P, never user-facing copy
       const prepared = (await step.prepare?.(fixture)) as P;
       const started = performance.now();
       const { statements } = await recordStatements(() =>

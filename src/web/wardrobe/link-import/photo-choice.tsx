@@ -3,6 +3,7 @@ import { pendingPhotoRef } from '../../files/queries';
 import { t } from '../../i18n';
 import { LINK_PHOTO_PATH, wardrobeUrl } from '../urls';
 import type { PhotoChoice } from './import';
+import { THUMB_ROW } from '../../layout/columns';
 
 /**
  * What a new garment form with a pending photo (from a link, or an upload)
@@ -123,7 +124,7 @@ function PhotoChoices(props: {
       <span class="label">
         <span class="label-text">{t('linkImport.CHOOSE_PHOTO')}</span>
       </span>
-      <div id={CHOICES_ID} class="grid grid-cols-3 gap-2">
+      <div id={CHOICES_ID} class={THUMB_ROW}>
         {props.choices.map((choice, index) => (
           <button
             type="button"

@@ -1,8 +1,6 @@
 import { ideasUrl } from '../gallery/urls';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, SavedToast, StripFlags } from '../layout/parts';
 import { stylingUrl } from '../styling/urls';
 import type { ViewContext } from '../view-context';
@@ -51,62 +49,67 @@ export function CapsulePage(props: {
   const { capsule, viewOwner } = model;
   const search = { ...EMPTY_SEARCH, capsule: String(capsule.id) };
   return (
-    <Layout ctx={ctx} title={capsule.name}>
-      <AppBar
-        ctx={ctx}
-        title={capsule.name}
-        back={capsuleUrl(undefined, viewOwner)}
-        actions={
-          model.isOwner && (
-            <a
-              href={capsuleUrl(capsule.id, viewOwner, '/edit')}
-              class="btn btn-ghost btn-sm"
-            >
-              {t('EDIT_CAPSULE')}
-            </a>
-          )
-        }
-      />
-      <main class="p-4 pt-20 pb-24">
-        {capsule.notes && (
-          <p class="text-sm whitespace-pre-line text-base-content/70 mb-2 px-2">
-            {capsule.notes}
-          </p>
-        )}
-        <p class="text-sm text-muted mb-4 px-2">{garmentCount(model.count)}</p>
-        <CapsuleActions model={model} />
-        {model.page.tiles.length === 0 ? (
-          <EmptyState message={t('CAPSULE_EMPTY')}>
-            {model.canEdit && (
-              <a href={pickerUrl(model)} class="btn btn-primary btn-sm">
-                {t('CHOOSE_GARMENTS')}
-              </a>
-            )}
-          </EmptyState>
-        ) : (
-          <GarmentGrid id="capsule-grid">
-            <GarmentTiles
-              page={model.page}
-              search={search}
-              viewOwner={viewOwner}
-              selecting={false}
-              firstPage
+    <PageShell
+      ctx={ctx}
+      name="capsule"
+      width="wide"
+      bar={{
+        title: capsule.name,
+        back: capsuleUrl(undefined, viewOwner),
+        actions: model.isOwner && (
+          <a
+            href={capsuleUrl(capsule.id, viewOwner, '/edit')}
+            class="btn btn-ghost btn-sm"
+          >
+            {t('EDIT_CAPSULE')}
+          </a>
+        ),
+      }}
+      overlays={
+        <>
+          {model.created && (
+            <SavedToast
+              id="capsule-created-toast"
+              text={t('CAPSULE_CREATED')}
             />
-          </GarmentGrid>
-        )}
-      </main>
-      {model.created && (
-        <SavedToast id="capsule-created-toast" text={t('CAPSULE_CREATED')} />
+          )}
+          {model.saved && (
+            <SavedToast
+              id="capsule-saved-toast"
+              text={t('CAPSULE_MEMBERS_SAVED', model.saved)}
+            />
+          )}
+          <StripFlags names={CAPSULE_PAGE_FLAGS} />
+        </>
+      }
+    >
+      {capsule.notes && (
+        <p class="text-sm whitespace-pre-line text-base-content/70 mb-2 px-2">
+          {capsule.notes}
+        </p>
       )}
-      {model.saved && (
-        <SavedToast
-          id="capsule-saved-toast"
-          text={t('CAPSULE_MEMBERS_SAVED', model.saved)}
-        />
+      <p class="text-sm text-muted mb-4 px-2">{garmentCount(model.count)}</p>
+      <CapsuleActions model={model} />
+      {model.page.tiles.length === 0 ? (
+        <EmptyState message={t('CAPSULE_EMPTY')}>
+          {model.canEdit && (
+            <a href={pickerUrl(model)} class="btn btn-primary btn-sm">
+              {t('CHOOSE_GARMENTS')}
+            </a>
+          )}
+        </EmptyState>
+      ) : (
+        <GarmentGrid id="capsule-grid">
+          <GarmentTiles
+            page={model.page}
+            search={search}
+            viewOwner={viewOwner}
+            selecting={false}
+            firstPage
+          />
+        </GarmentGrid>
       )}
-      <StripFlags names={CAPSULE_PAGE_FLAGS} />
-      <Dock ctx={ctx} />
-    </Layout>
+    </PageShell>
   );
 }
 

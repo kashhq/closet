@@ -110,7 +110,7 @@ interface Build {
 
 // The build, not src/: the audit measures what the image ships.
 async function loadBuild(): Promise<Build> {
-  const load = <T>(path: string) => import(join(DIST, path)) as Promise<T>;
+  const load = <T>(path: string): Promise<T> => import(join(DIST, path));
   return {
     app: await load('app.js'),
     buildInfo: await load('build-info.js'),

@@ -271,6 +271,27 @@ test.describe('desktop', () => {
     );
     await shot(page, '82b-demo-styling-shuffled-desktop');
   });
+
+  // Density (#1064): the galleries auto-fill from lg, and the calendar's
+  // collages take their desktop step, so a month fits the 900 px fold.
+  test('demo: Theo, the grids and the calendar at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '83-demo-wardrobe-desktop', '/wardrobe');
+    await shot(page, '84-demo-outfits-desktop', '/outfits');
+    await shot(page, '85-demo-inspiration-desktop', '/inspiration');
+    await shot(page, '86-demo-wishlist-desktop', '/wardrobe/wishlist');
+    await shot(page, '87-demo-insights-desktop', '/wardrobe/insights');
+    await shot(
+      page,
+      '88-demo-calendar-three-outfits-desktop',
+      '/calendar?week=2026-08-09',
+    );
+    await shot(
+      page,
+      '89-demo-calendar-month-desktop',
+      '/calendar/month?month=2026-08',
+    );
+  });
 });
 
 test('demo: Theo, capsules', async ({ page }) => {

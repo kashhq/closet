@@ -38,6 +38,12 @@ const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
 
+// A grid's or a CSS columns' count as a class token, bare or behind a variant
+// (`lg:grid-cols-[...]`, `xl:columns-3`).
+const COLUMN_CLASS = '/(?:^|[\\s:])(?:grid-cols|columns)-/';
+const NAMED_COLUMNS =
+  "A grid's columns are named once in src/web/layout/columns.ts (#1064): use its step, or add a named one there.";
+
 // no-restricted-syntax entries every file obeys.
 const RESTRICTED_SYNTAX = [
   {
@@ -93,6 +99,12 @@ const RESTRICTED_SYNTAX = [
     message: THEME_TOKENS_ONLY,
   },
 ];
+
+// Every file but columns.ts, which is where the counts live. Specs are
+// exempt, like the HttpError copy rule.
+const COLUMN_STEPS = ['Literal[value', 'TemplateElement[value.raw'].map(
+  (node) => ({ selector: `${node}=${COLUMN_CLASS}]`, message: NAMED_COLUMNS }),
+);
 
 const HONO_RAW_HTML_PATHS = [
   {
@@ -177,7 +189,7 @@ export default tseslint.config(
       // APP_TIMEZONE (src/calendar-date.ts; t.today() in the
       // integration specs, householdToday() in Playwright's). A UTC date is
       // tomorrow every evening in New York: main went red at 00:01 UTC.
-      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...COLUMN_STEPS],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed
       // per use; see AGENTS.md, Web layer). hono's `raw()` would be a second,
@@ -275,6 +287,14 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: { sonarjs },
     rules: sonarjsRules,
+  },
+  {
+    files: ['**/*.spec.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
+  },
+  {
+    files: ['src/web/layout/columns.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.
   {
