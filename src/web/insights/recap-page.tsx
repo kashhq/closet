@@ -13,7 +13,13 @@ import { EmptyState, GarmentThumb } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { priceLabel } from '../wardrobe/garment';
 import { garmentUrl } from '../wardrobe/urls';
-import { Card, GarmentList, garmentName, perWearLine, Strip } from './parts';
+import {
+  InsightCard,
+  GarmentList,
+  garmentName,
+  perWearLine,
+  Strip,
+} from './parts';
 import { recapUrl } from './urls';
 
 export interface RecapPageModel {
@@ -151,16 +157,16 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
   return (
     <>
       <Summary model={model} appName={props.appName} />
-      <Card id="recap-most-worn" title={t('recap.MOST_WORN')}>
+      <InsightCard id="recap-most-worn" title={t('recap.MOST_WORN')}>
         <GarmentList
           rows={recap.mostWorn.map((garment) => ({
             garment,
             detail: yearWears(garment),
           }))}
         />
-      </Card>
+      </InsightCard>
       {additions.count > 0 && (
-        <Card id="recap-additions" title={t('recap.ADDITIONS')}>
+        <InsightCard id="recap-additions" title={t('recap.ADDITIONS')}>
           <GarmentList
             rows={additions.garments.map((garment) => ({
               garment,
@@ -181,10 +187,10 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               })}
             </p>
           )}
-        </Card>
+        </InsightCard>
       )}
       {recap.bestValue.length > 0 && (
-        <Card id="recap-best-value" title={t('recap.BEST_VALUE')}>
+        <InsightCard id="recap-best-value" title={t('recap.BEST_VALUE')}>
           <p class="text-xs text-muted">
             {t('recap.BEST_VALUE_NOTE', {
               date: shortDayLabel(recap.period.to),
@@ -196,10 +202,10 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               detail: perWearLine(entry),
             }))}
           />
-        </Card>
+        </InsightCard>
       )}
       {recap.colours.length > 0 && (
-        <Card id="recap-colours" title={t('recap.COLOURS')}>
+        <InsightCard id="recap-colours" title={t('recap.COLOURS')}>
           <Strip
             name="worn"
             title={t('insights.COLOURS_WORN')}
@@ -218,10 +224,10 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               </li>
             ))}
           </ul>
-        </Card>
+        </InsightCard>
       )}
       {recap.pair && (
-        <Card id="recap-pair" title={t('recap.PAIR')}>
+        <InsightCard id="recap-pair" title={t('recap.PAIR')}>
           <div
             class="flex items-center gap-2"
             data-pair={`${recap.pair.a.id}-${recap.pair.b.id}`}
@@ -239,7 +245,7 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               </span>
             </span>
           </div>
-        </Card>
+        </InsightCard>
       )}
     </>
   );
@@ -250,7 +256,7 @@ function Summary(props: { model: RecapPageModel; appName: string }) {
   const { model } = props;
   const { recap } = model;
   return (
-    <Card id="recap-summary" title={t('recap.NUMBERS')}>
+    <InsightCard id="recap-summary" title={t('recap.NUMBERS')}>
       <div class="grid grid-cols-3 gap-2 text-center">
         {stats(recap).map((stat) => (
           <div class="rounded-box bg-base-200 p-2" data-stat={stat.key}>
@@ -260,7 +266,7 @@ function Summary(props: { model: RecapPageModel; appName: string }) {
         ))}
       </div>
       <Export recap={recap} appName={props.appName} />
-    </Card>
+    </InsightCard>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import { todayIn } from '../../calendar-date';
 import { t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
@@ -154,111 +155,105 @@ export function TokensPage(props: TokensPageProps) {
         {props.notice && <TokenAlert notice={props.notice} />}
 
         {created && (
-          <div class="card bg-base-100 shadow-sm mb-6" id="new-token">
-            <div class="card-body gap-3">
-              <h2 class="card-title text-lg">{created.name}</h2>
-              <p class="text-sm text-warning">{t('agentAccess.SHOWN_ONCE')}</p>
-              <CopyableText
-                value={created.token}
-                size="sm"
-                label={t('agentAccess.COPY')}
-              />
-              <p class="text-sm">{t('agentAccess.CONNECT')}</p>
-              <CopyableText
-                value={connectCommand(ctx.siteUrl, created.token)}
-                size="xs"
-                label={t('agentAccess.COPY')}
-              />
-            </div>
-          </div>
+          <Card variant="content" class="mb-6" bodyClass="gap-3" id="new-token">
+            <h2 class="card-title text-lg">{created.name}</h2>
+            <p class="text-sm text-warning">{t('agentAccess.SHOWN_ONCE')}</p>
+            <CopyableText
+              value={created.token}
+              size="sm"
+              label={t('agentAccess.COPY')}
+            />
+            <p class="text-sm">{t('agentAccess.CONNECT')}</p>
+            <CopyableText
+              value={connectCommand(ctx.siteUrl, created.token)}
+              size="xs"
+              label={t('agentAccess.COPY')}
+            />
+          </Card>
         )}
 
-        <div class="card bg-base-100 shadow-sm mb-6">
-          <div class="card-body">
-            <h2 class="card-title text-lg">{t('agentAccess.NEW')}</h2>
-            <p class="text-sm text-base-content/70">
-              {t('agentAccess.PASSWORD_WHY')}
-            </p>
-            <PostForm action="/auth/tokens" class="flex flex-col gap-2">
-              <UsernameTwin email={ctx.user?.email} />
-              <label class="flex flex-col gap-1">
-                <span class="text-sm">{t('agentAccess.NAME')}</span>
-                <input
-                  type="text"
-                  name="name"
-                  class="input input-bordered input-sm w-full"
-                  placeholder={t('agentAccess.NAME_PLACEHOLDER')}
-                  value={props.form?.name}
-                  maxlength={TOKEN_NAME_MAX}
-                  autocomplete="off"
-                  required
-                />
-              </label>
-              <ScopeFields scope={props.form?.scope} />
-              <Field
-                id="currentPassword"
-                label={t('CURRENT_PASSWORD')}
-                type="password"
-                autocomplete="current-password"
-                errors={
-                  props.form?.passwordError
-                    ? [props.form.passwordError]
-                    : undefined
-                }
+        <Card variant="content" class="mb-6" bodyClass="">
+          <h2 class="card-title text-lg">{t('agentAccess.NEW')}</h2>
+          <p class="text-sm text-base-content/70">
+            {t('agentAccess.PASSWORD_WHY')}
+          </p>
+          <PostForm action="/auth/tokens" class="flex flex-col gap-2">
+            <UsernameTwin email={ctx.user?.email} />
+            <label class="flex flex-col gap-1">
+              <span class="text-sm">{t('agentAccess.NAME')}</span>
+              <input
+                type="text"
+                name="name"
+                class="input input-bordered input-sm w-full"
+                placeholder={t('agentAccess.NAME_PLACEHOLDER')}
+                value={props.form?.name}
+                maxlength={TOKEN_NAME_MAX}
+                autocomplete="off"
+                required
               />
-              <button type="submit" class="btn btn-primary btn-sm self-start">
-                {t('agentAccess.CREATE')}
-              </button>
-            </PostForm>
-          </div>
-        </div>
+            </label>
+            <ScopeFields scope={props.form?.scope} />
+            <Field
+              id="currentPassword"
+              label={t('CURRENT_PASSWORD')}
+              type="password"
+              autocomplete="current-password"
+              errors={
+                props.form?.passwordError
+                  ? [props.form.passwordError]
+                  : undefined
+              }
+            />
+            <button type="submit" class="btn btn-primary btn-sm self-start">
+              {t('agentAccess.CREATE')}
+            </button>
+          </PostForm>
+        </Card>
 
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title text-lg">{t('agentAccess.YOUR_TOKENS')}</h2>
-            {tokens.length === 0 ? (
-              <p class="text-sm text-muted">{t('agentAccess.NONE')}</p>
-            ) : (
-              <ul class="divide-y divide-base-200">
-                {tokens.map((token) => (
-                  <li class="py-3 flex items-center justify-between gap-2">
-                    <div class="flex flex-col gap-1 min-w-0">
-                      <span class="font-medium truncate">{token.name}</span>
-                      <span class="text-xs" data-scope>
-                        {scopeText(token)}
-                      </span>
-                      <span class="text-xs text-muted">
-                        <code>{token.prefix}…</code>{' '}
-                        {t('agentAccess.CREATED_ON', {
-                          day: day(token.createdAt),
-                        })}
-                        {' · '}
-                        {token.lastUsedAt
-                          ? t('agentAccess.LAST_USED', {
-                              day: day(token.lastUsedAt),
-                            })
-                          : t('agentAccess.NEVER_USED')}
-                      </span>
-                    </div>
-                    <PostForm
-                      action={`/auth/tokens/${token.id}/revoke`}
-                      confirm={t('agentAccess.REVOKE_CONFIRM', {
-                        name: token.name,
+        <Card variant="content" bodyClass="">
+          <h2 class="card-title text-lg">{t('agentAccess.YOUR_TOKENS')}</h2>
+          {tokens.length === 0 ? (
+            <p class="text-sm text-muted">{t('agentAccess.NONE')}</p>
+          ) : (
+            <ul class="divide-y divide-base-200">
+              {tokens.map((token) => (
+                <li class="py-3 flex items-center justify-between gap-2">
+                  <div class="flex flex-col gap-1 min-w-0">
+                    <span class="font-medium truncate">{token.name}</span>
+                    <span class="text-xs" data-scope>
+                      {scopeText(token)}
+                    </span>
+                    <span class="text-xs text-muted">
+                      <code>{token.prefix}…</code>{' '}
+                      {t('agentAccess.CREATED_ON', {
+                        day: day(token.createdAt),
                       })}
+                      {' · '}
+                      {token.lastUsedAt
+                        ? t('agentAccess.LAST_USED', {
+                            day: day(token.lastUsedAt),
+                          })
+                        : t('agentAccess.NEVER_USED')}
+                    </span>
+                  </div>
+                  <PostForm
+                    action={`/auth/tokens/${token.id}/revoke`}
+                    confirm={t('agentAccess.REVOKE_CONFIRM', {
+                      name: token.name,
+                    })}
+                  >
+                    <button
+                      type="submit"
+                      class="btn btn-ghost btn-xs text-error"
                     >
-                      <button
-                        type="submit"
-                        class="btn btn-ghost btn-xs text-error"
-                      >
-                        {t('agentAccess.REVOKE')}
-                      </button>
-                    </PostForm>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+                      {t('agentAccess.REVOKE')}
+                    </button>
+                  </PostForm>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </main>
     </Layout>
   );

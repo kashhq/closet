@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Idea } from '../../wardrobe/generator';
 import type { ActivewearGap, Occasion } from '../../wardrobe/occasions';
 import { displayTemperature } from '../../weather/temperature';
@@ -319,104 +320,96 @@ function IdeaCard(props: {
     idea.garments.slice(i + 1).map((b) => [a, b] as const),
   );
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
       {...snapItem({
         value: ideaKey,
         selected,
         size: 'page',
         listbox: false,
-        class: 'card bg-base-100 shadow-sm',
       })}
       data-idea={ideaKey}
     >
-      <div class="card-body p-3 gap-3">
-        <OutfitCollage garments={idea.garments} eager={props.eager} />
-        <h2 class="font-semibold text-sm line-clamp-2">{name}</h2>
-        <Reasons idea={idea} weather={model.weather} />
-        {/* One row: the pick, and "Not this" opening upward over the
+      <OutfitCollage garments={idea.garments} eager={props.eager} />
+      <h2 class="font-semibold text-sm line-clamp-2">{name}</h2>
+      <Reasons idea={idea} weather={model.weather} />
+      {/* One row: the pick, and "Not this" opening upward over the
             collage, so a whole card fits a phone screen above the dock. */}
-        <div class="flex items-start gap-2">
-          <PostForm action="/outfits/ideas/pick" class="flex-1">
-            {idea.garments.map((g) => (
-              <input type="hidden" name="garmentId" value={String(g.id)} />
-            ))}
-            <StateFields state={model.state} />
-            <button type="submit" class="btn btn-primary w-full">
-              {pickLabel(destination)}
-            </button>
-          </PostForm>
-          <details class="dropdown dropdown-top dropdown-end">
-            <summary class="btn btn-ghost">{t('gallery.NOT_THIS')}</summary>
-            <div class="dropdown-content bg-base-100 rounded-box shadow-md z-20 w-72 p-3 mb-1 flex flex-col gap-2">
-              <div class="flex flex-wrap gap-2">
-                {model.weather && (
-                  <PostForm action="/outfits/ideas/feedback" class="contents">
-                    <StateFields state={model.state} />
-                    <button
-                      type="submit"
-                      name="feeling"
-                      value="too-warm"
-                      class="btn btn-outline btn-xs"
-                    >
-                      {t('gallery.TOO_WARM')}
-                    </button>
-                    <button
-                      type="submit"
-                      name="feeling"
-                      value="too-cold"
-                      class="btn btn-outline btn-xs"
-                    >
-                      {t('gallery.TOO_COLD')}
-                    </button>
-                  </PostForm>
-                )}
-                {/* A dismissal only: nothing is stored. */}
-                <button
-                  type="button"
-                  class="btn btn-outline btn-xs"
-                  onclick="this.closest('[data-idea]').remove()"
-                >
-                  {t('gallery.NOT_TODAY')}
-                </button>
-              </div>
-              <p class="text-xs text-muted">{t('gallery.CLASHES_PROMPT')}</p>
-              <div class="flex flex-wrap gap-2">
-                {pairs.map(([a, b]) => (
-                  // htmx removes the card on success; without script the
-                  // same form posts natively and comes back to the gallery.
-                  <form
-                    method="post"
-                    action="/outfits/ideas/avoid"
-                    hx-post="/outfits/ideas/avoid"
-                    hx-target="closest [data-idea]"
-                    hx-swap="delete"
-                    data-needs-network=""
+      <div class="flex items-start gap-2">
+        <PostForm action="/outfits/ideas/pick" class="flex-1">
+          {idea.garments.map((g) => (
+            <input type="hidden" name="garmentId" value={String(g.id)} />
+          ))}
+          <StateFields state={model.state} />
+          <button type="submit" class="btn btn-primary w-full">
+            {pickLabel(destination)}
+          </button>
+        </PostForm>
+        <details class="dropdown dropdown-top dropdown-end">
+          <summary class="btn btn-ghost">{t('gallery.NOT_THIS')}</summary>
+          <div class="dropdown-content bg-base-100 rounded-box shadow-md z-20 w-72 p-3 mb-1 flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2">
+              {model.weather && (
+                <PostForm action="/outfits/ideas/feedback" class="contents">
+                  <StateFields state={model.state} />
+                  <button
+                    type="submit"
+                    name="feeling"
+                    value="too-warm"
+                    class="btn btn-outline btn-xs"
                   >
-                    <input
-                      type="hidden"
-                      name="garmentId"
-                      value={String(a.id)}
-                    />
-                    <input
-                      type="hidden"
-                      name="garmentId"
-                      value={String(b.id)}
-                    />
-                    <StateFields state={model.state} />
-                    <button type="submit" class="btn btn-outline btn-xs">
-                      {t('gallery.PAIR', {
-                        a: a.name ?? categoryLabel(a.category),
-                        b: b.name ?? categoryLabel(b.category),
-                      })}
-                    </button>
-                  </form>
-                ))}
-              </div>
+                    {t('gallery.TOO_WARM')}
+                  </button>
+                  <button
+                    type="submit"
+                    name="feeling"
+                    value="too-cold"
+                    class="btn btn-outline btn-xs"
+                  >
+                    {t('gallery.TOO_COLD')}
+                  </button>
+                </PostForm>
+              )}
+              {/* A dismissal only: nothing is stored. */}
+              <button
+                type="button"
+                class="btn btn-outline btn-xs"
+                onclick="this.closest('[data-idea]').remove()"
+              >
+                {t('gallery.NOT_TODAY')}
+              </button>
             </div>
-          </details>
-        </div>
+            <p class="text-xs text-muted">{t('gallery.CLASHES_PROMPT')}</p>
+            <div class="flex flex-wrap gap-2">
+              {pairs.map(([a, b]) => (
+                // htmx removes the card on success; without script the
+                // same form posts natively and comes back to the gallery.
+                <form
+                  method="post"
+                  action="/outfits/ideas/avoid"
+                  hx-post="/outfits/ideas/avoid"
+                  hx-target="closest [data-idea]"
+                  hx-swap="delete"
+                  data-needs-network=""
+                >
+                  <input type="hidden" name="garmentId" value={String(a.id)} />
+                  <input type="hidden" name="garmentId" value={String(b.id)} />
+                  <StateFields state={model.state} />
+                  <button type="submit" class="btn btn-outline btn-xs">
+                    {t('gallery.PAIR', {
+                      a: a.name ?? categoryLabel(a.category),
+                      b: b.name ?? categoryLabel(b.category),
+                    })}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        </details>
       </div>
-    </article>
+    </Card>
   );
 }
 
