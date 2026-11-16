@@ -127,10 +127,10 @@ export function bodyOf<G extends CollagePieceView>(
  * garments centred in it), `thumb` for a strip of small tiles (the garment
  * page's "In N outfits", about 96 px wide). `cell` and `month` are the
  * calendar's: `thumb` on a phone (a week row's 64 px, a month cell about
- * 48 px wide), each with one desktop step at `lg` (#1064, the desktop
+ * 48 px wide), `cell` with one desktop step at `lg` (#1064, the desktop
  * layout's §3.6): the week grid's card about 150 px tall, so a
- * three-occasion week fits the fold, and the month's about 80 px, so six
- * weeks of 110 px cells do. Density is the size's, never a page's class.
+ * three-occasion week fits the fold; `month` has none, so a desktop piece is
+ * never smaller than the phone's. Density is the size's, never a page's class.
  */
 const SIZES = {
   card: {
@@ -166,14 +166,16 @@ const SIZES = {
     feet: 'h-6 lg:h-8',
     side: 'h-5 lg:h-7',
   },
-  // The month's cells: the week's `cell` on a phone, smaller from lg.
+  // The month's cells: the phone's thumb, and no desktop step shrinks it: a
+  // piece is never drawn smaller than the phone draws it (legibility over
+  // fitting the month on one screen).
   month: {
     box: 'rounded-field p-1.5 gap-1',
     column: '',
-    upper: 'h-8 lg:h-5',
-    lower: 'h-10 lg:h-6',
-    feet: 'h-6 lg:h-4',
-    side: 'h-5 lg:h-4',
+    upper: 'h-8',
+    lower: 'h-10',
+    feet: 'h-6',
+    side: 'h-5',
   },
 } as const;
 export type CollageSize = keyof typeof SIZES | 'row';
@@ -213,7 +215,7 @@ export function OutfitCollage(props: {
       viewerSet={props.viewerSet}
       decorative={props.decorative ?? false}
       labelled={size === 'card'}
-      words={size === 'card' || size === 'tile'}
+      words={size !== 'thumb' && size !== 'cell' && size !== 'month'}
     />
   );
   return (

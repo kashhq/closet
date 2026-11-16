@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { AppBar } from '../layout/app-bar';
 import { Dock } from '../layout/dock';
 import { Layout } from '../layout/layout';
+import { PageMain } from '../layout/page-main';
 import { EmptyState, SavedToast, StripFlags } from '../layout/parts';
 import { stylingUrl } from '../styling/urls';
 import type { ViewContext } from '../view-context';
@@ -67,7 +68,7 @@ export function CapsulePage(props: {
           )
         }
       />
-      <main class="p-4 pt-20 pb-24">
+      <PageMain width="wide" class="p-4 pt-20 pb-24">
         {capsule.notes && (
           <p class="text-sm whitespace-pre-line text-base-content/70 mb-2 px-2">
             {capsule.notes}
@@ -94,7 +95,7 @@ export function CapsulePage(props: {
             />
           </GarmentGrid>
         )}
-      </main>
+      </PageMain>
       {model.created && (
         <SavedToast id="capsule-created-toast" text={t('CAPSULE_CREATED')} />
       )}

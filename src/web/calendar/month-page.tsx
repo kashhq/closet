@@ -95,8 +95,8 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
 /**
  * A day's cell. From lg (#1064) the date, the chip, the worn dot and "+N"
  * share one line over the collage (`lg:order-last`, a full-width line of
- * its own) at the collage's `month` step, so six weeks fit the 900 px fold;
- * the phone keeps them stacked.
+ * its own) at the collage's `month` step (the phone's piece size); the phone keeps
+ * them stacked.
  */
 function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
   const [first] = day.entries;
