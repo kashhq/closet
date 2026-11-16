@@ -538,7 +538,10 @@ export async function createApp(
       vapid,
       orderMailOwnerId: orderMail?.ownerId,
       release: build.release,
-      storageDirs: [config.DATA_PATH, config.MODELS_PATH],
+      storageDirs: [
+        { key: 'DATA_PATH', path: config.DATA_PATH },
+        { key: 'MODELS_PATH', path: config.MODELS_PATH },
+      ],
     },
     logger: web,
     db,

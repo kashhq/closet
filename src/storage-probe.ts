@@ -28,6 +28,22 @@ export interface ProbeFs {
   readdir: (directory: string) => Promise<string[]>;
 }
 
+/**
+ * A directory the process writes at runtime, with the config key that names
+ * it: the key is what logs say, never the path (the storage check's rule:
+ * only the code, never the path, reaches the log).
+ */
+export interface StorageDirectory {
+  key: 'DATA_PATH' | 'MODELS_PATH';
+  path: string;
+}
+
+/** Where a probe's one-time sweep reports, and the key it names the directory by. */
+export interface SweepLog {
+  logger: Logger;
+  label: StorageDirectory['key'];
+}
+
 const nodeFs: ProbeFs = { mkdir, writeFile, rm, readdir };
 
 /**
@@ -100,7 +116,7 @@ async function sweepLeftovers(
   directory: string,
   probeDirectory: string,
   fs: ProbeFs,
-  log: Logger | undefined,
+  log: SweepLog | undefined,
 ): Promise<void> {
   // Recorded before the list, so an attempt that stalls past the probe's
   // deadline or fails is still the one attempt.
@@ -113,15 +129,18 @@ async function sweepLeftovers(
       await fs.rm(join(probeDirectory, name), { force: true });
     }
     if (leftovers.length > 0) {
-      log?.info(
-        { directory, removed: leftovers.length },
+      log?.logger.info(
+        { directory: log.label, removed: leftovers.length },
         'Removed probe leftovers',
       );
     }
   } catch (error) {
-    // Once per process, and no path: the storage check's log rules.
-    log?.warn(
-      { code: String((error as NodeJS.ErrnoException).code) },
+    // Once per process, and the config key, never the path: the storage check's log rules.
+    log?.logger.warn(
+      {
+        directory: log.label,
+        code: String((error as NodeJS.ErrnoException).code),
+      },
       'Could not sweep probe leftovers',
     );
   }
@@ -133,7 +152,7 @@ export async function probeWritable(
     fs = nodeFs,
     log,
     sweep = true,
-  }: { fs?: ProbeFs; log?: Logger; sweep?: boolean } = {},
+  }: { fs?: ProbeFs; log?: SweepLog; sweep?: boolean } = {},
 ): Promise<WriteProbe> {
   const probeDirectory = join(directory, PROBE_DIRECTORY);
   const probe = join(probeDirectory, `${PROBE_PREFIX}${++probeCounter}`);

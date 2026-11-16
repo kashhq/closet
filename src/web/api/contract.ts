@@ -2,6 +2,7 @@ import { type TSchema, Type } from '@sinclair/typebox';
 import type { RouteOptions } from 'fastify';
 import { Problem, PROBLEM_CONTENT_TYPE } from '../problem';
 import { isOperationId } from './operations';
+import { assertUnambiguousUnions } from './resource';
 
 declare module 'fastify' {
   // What an /api/v1 route declares for its OpenAPI operation (#190): the
@@ -49,6 +50,10 @@ export function apiResponses<Success extends Record<number, TSchema>>(
   '4xx': typeof PROBLEM_RESPONSE;
   '5xx': typeof PROBLEM_RESPONSE;
 } {
+  // At route definition, so a union `asResource` cannot shape stops the boot.
+  Object.values<TSchema>(success).forEach((schema) =>
+    assertUnambiguousUnions(schema),
+  );
   return { ...success, '4xx': PROBLEM_RESPONSE, '5xx': PROBLEM_RESPONSE };
 }
 

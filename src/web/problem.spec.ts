@@ -8,6 +8,7 @@ import {
   HttpError,
   OwnerLockTimeout,
 } from './errors';
+import type { Translated } from './i18n';
 import { Forbidden, NotFound } from './refusals';
 import { assignSurface } from './surface';
 
@@ -36,7 +37,10 @@ beforeEach(async () => {
     ),
   );
   app.setNotFoundHandler((request) => {
-    throw new HttpError(404, `Cannot ${request.method} ${request.url}`);
+    throw new HttpError(
+      404,
+      `Cannot ${request.method} ${request.url}` as Translated,
+    );
   });
   app.get('/api/v1/garment', () => {
     throw new NotFound('garment', { logDetail: 'garment 41 of owner 7' });

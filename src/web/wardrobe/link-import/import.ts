@@ -6,7 +6,7 @@ import {
   MAX_INPUT_PIXELS,
   type Photos,
 } from '../../files/photos';
-import { type StringKey, t } from '../../i18n';
+import { type StringKey, t, type Translated } from '../../i18n';
 import type { Logger } from '../../../logger';
 import type { RateLimitChecker } from '../../security/rate-limit';
 import {
@@ -69,11 +69,11 @@ export type LinkImportRefusal =
  * What an API or agent caller is told of a refusal: the reason leads (a
  * machine-readable word to branch on), then the copy.
  */
-export function reasonLed(reason: string, message: string): string {
-  return `${reason}: ${message}`;
+export function reasonLed(reason: string, message: string): Translated {
+  return t('linkImport.REASON_LED', { reason, message });
 }
 
-export function reasonLedMessage(reason: LinkImportRefusal): string {
+export function reasonLedMessage(reason: LinkImportRefusal): Translated {
   return reasonLed(reason, t(REFUSALS[reason].message));
 }
 

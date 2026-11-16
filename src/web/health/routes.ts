@@ -53,7 +53,8 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   const limit = app.createRateLimit(HEALTH_LIMIT);
   const storage = createStorageCheck({
     directories: config.storageDirs,
-    probe: (directory) => probeWritable(directory, { log }),
+    probe: ({ key, path }) =>
+      probeWritable(path, { log: { logger: log, label: key } }),
     fix: storageFix,
     identity: async () => {
       // The marker against the id claimed (and, in production, paired) at

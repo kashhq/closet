@@ -380,14 +380,19 @@
       "withANote": "with a note",
       "chosen": "The owner chose an option for that need (id {id}): it is decided",
       "open": "A need of that name is open already (id {id}): add options to it",
-      "setAside": "The owner set that need aside (id {id}, {reason}): never propose it again"
+      "setAside": "The owner set that need aside (id {id}, {reason}): never propose it again",
+      "decided": "That need is decided (chosen, bought or set aside): list_suggestions shows the open ones",
+      "full": "That need has {max} open options already",
+      "productSetAside": "The owner set this product aside (garment {id}, {reason}): never propose it again",
+      "productSuggested": "This product is suggested already (garment {id})"
     },
     "form": {
       "reminderTime": "body/{kind} must be one of the reminder times",
       "outfitRows": "Each outfit row needs a category and a garment id (empty for none)",
       "forNotADayOrTrip": "body/for must be a real day or trip",
       "replaceNeedsDay": "body/replace needs a day",
-      "notAGarmentId": "Not a garment id"
+      "notAGarmentId": "Not a garment id",
+      "fieldErrors": "{field}: {errors}"
     },
     "day": {
       "plannedNotWorn": "A planned day cannot be marked worn yet",
@@ -401,6 +406,8 @@
       "titleTooLong": "The title is too long",
       "clientIdNotUuid": "The clientId is not a uuid",
       "choiceRows": "Each piece needs a position and a choice",
+      "titleOrNote": "Send a title, a note or both",
+      "roleType": "\"{type}\" is not a type of {role} ({types})",
       "pieceType": "pieces[{index}].type: \"{type}\" is not a type of {role} ({types})"
     },
     "styling": {
@@ -857,6 +864,7 @@
   "PRICE_PLACEHOLDER": "e.g. 49.90",
   "VIEW_PRODUCT": "View product",
   "linkImport": {
+    "REASON_LED": "{reason}: {message}",
     "ADD_FROM_LINK": "Add from a link",
     "TITLE": "Add from a link",
     "INTRO": "Paste the link to the product page, or to a photo of it. The form opens filled in with what the page says; nothing is saved until you save the form.",

@@ -1,4 +1,5 @@
 import { HttpError } from '../../errors';
+import { joinCopy, t } from '../../i18n';
 import type { FieldErrors } from '../../auth/validation';
 import type { GarmentField } from '../../wardrobe/garment-input';
 import {
@@ -15,10 +16,13 @@ import { originOf, type ToolContext } from '../tool';
  * the messages the form would show under it. Also update_garment's.
  */
 export function refusedForm(errors: FieldErrors<GarmentField>): HttpError {
-  const messages = Object.entries(errors).map(
-    ([field, fieldErrors]) => `${field}: ${fieldErrors?.join(' ')}`,
+  const messages = Object.entries(errors).map(([field, fieldErrors]) =>
+    t('refusal.form.fieldErrors', {
+      field,
+      errors: fieldErrors?.join(' ') ?? '',
+    }),
   );
-  return new HttpError(400, messages.join('; '));
+  return new HttpError(400, joinCopy(messages, '; '));
 }
 
 /**

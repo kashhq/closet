@@ -9,8 +9,7 @@ RuleTester.it = it;
 RuleTester.itOnly = it.only;
 
 // The rules resolve specifiers on disk, so the cases name real files under src/web.
-// Vitest runs from the repo root.
-const web = (path: string) => resolve('src/web', path);
+const web = (path: string) => resolve(__dirname, '../../src/web', path);
 const tester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });

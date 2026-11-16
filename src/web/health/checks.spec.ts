@@ -23,6 +23,7 @@ import {
   storageFix,
   probeWritable,
   type ProbeFs,
+  type StorageDirectory,
   type WriteProbe,
 } from '../../storage-probe';
 import {
@@ -195,6 +196,12 @@ describe('storageFix', () => {
   });
 });
 
+const data = (path: string): StorageDirectory => ({ key: 'DATA_PATH', path });
+const models = (path: string): StorageDirectory => ({
+  key: 'MODELS_PATH',
+  path,
+});
+
 describe('createStorageCheck', () => {
   const { logger, logs } = captureLogs();
   let root: string;
@@ -217,13 +224,13 @@ describe('createStorageCheck', () => {
 
   const IDENTITY_FIX = 'see docs/operations.md#photo-storage-marker';
   const check = (
-    directories: string[],
+    directories: StorageDirectory[],
     identity: () => Promise<string | undefined> = () =>
       Promise.resolve(undefined),
   ) =>
     createStorageCheck({
       directories,
-      probe: probeWritable,
+      probe: ({ path }) => probeWritable(path),
       fix: storageFix,
       identity,
       identityFix: IDENTITY_FIX,
@@ -231,7 +238,7 @@ describe('createStorageCheck', () => {
     })();
 
   it('is up when every directory can be written, created if missing, and leaves nothing behind', async () => {
-    expect(await check([writable])).toEqual(up(true));
+    expect(await check([data(writable)])).toEqual(up(true));
     expect(await readdir(join(writable, '.closet-probe'))).toEqual([]);
   });
 
@@ -242,13 +249,13 @@ describe('createStorageCheck', () => {
       logs.clear();
       const uid = process.getuid?.();
       const gid = process.getgid?.();
-      expect(await check([writable, readOnly])).toEqual({
+      expect(await check([data(writable), models(readOnly)])).toEqual({
         status: 'down',
         required: true,
         fix: `chown -R ${uid}:${gid} the host directory mounted at ${readOnly}; docs/operations.md#permissions`,
       });
       expect(logs.messages('warn')).toEqual([
-        `Readiness: ${readOnly} is not writable by this process (EACCES)`,
+        `Readiness: MODELS_PATH is not writable by this process (EACCES)`,
       ]);
     },
   );
@@ -256,16 +263,16 @@ describe('createStorageCheck', () => {
   // #650: an unmounted share is a writable, empty mountpoint.
   it('is down with the marker pointer when DATA_PATH is not the claimed storage', async () => {
     logs.clear();
-    expect(await check([writable], () => Promise.resolve('no marker'))).toEqual(
-      { status: 'down', required: true, fix: IDENTITY_FIX },
-    );
+    expect(
+      await check([data(writable)], () => Promise.resolve('no marker')),
+    ).toEqual({ status: 'down', required: true, fix: IDENTITY_FIX });
     expect(logs.messages('warn')).toEqual(['Readiness: no marker']);
   });
 
   it('is down, never a rejection, when the marker check itself fails', async () => {
     logs.clear();
     expect(
-      await check([writable], () => Promise.reject(new Error('EIO'))),
+      await check([data(writable)], () => Promise.reject(new Error('EIO'))),
     ).toEqual({ status: 'down', required: true, fix: IDENTITY_FIX });
     expect(logs.messages('warn')).toEqual([
       'Readiness: the storage marker check failed',
@@ -277,7 +284,7 @@ describe('createStorageCheck', () => {
     let probes = 0;
     let clock = 0;
     const storage = createStorageCheck({
-      directories: ['/app/data', '/app/models'],
+      directories: [data('/app/data'), models('/app/models')],
       probe: (): Promise<WriteProbe> => {
         probes += 1;
         return Promise.resolve({ writable: true });
@@ -402,8 +409,8 @@ describe('createStorageCheck', () => {
 
       logs.clear();
       const storage = createStorageCheck({
-        directories: ['/app/data'],
-        probe: (directory) => probeWritable(directory, { fs }),
+        directories: [data('/app/data')],
+        probe: ({ path }) => probeWritable(path, { fs }),
         fix: storageFix,
         identity: () => Promise.resolve(undefined),
         identityFix: IDENTITY_FIX,
@@ -411,7 +418,7 @@ describe('createStorageCheck', () => {
       });
       expect(await storage()).toMatchObject({ status: 'down', required: true });
       expect(logs.messages('warn')).toEqual([
-        'Readiness: /app/data is not writable by this process (ENOSPC)',
+        'Readiness: DATA_PATH is not writable by this process (ENOSPC)',
       ]);
     });
 
@@ -421,7 +428,7 @@ describe('createStorageCheck', () => {
       let probes = 0;
       let release: (() => void) | undefined;
       const storage = createStorageCheck({
-        directories: ['/app/data'],
+        directories: [data('/app/data')],
         probe: (): Promise<WriteProbe> => {
           probes += 1;
           return probes === 1
@@ -459,7 +466,7 @@ describe('createStorageCheck', () => {
       }
       expect(probes).toBe(1);
       expect(logs.messages('warn')).toEqual([
-        'Readiness: /app/data is not writable by this process (TIMEOUT)',
+        'Readiness: DATA_PATH is not writable by this process (TIMEOUT)',
       ]);
 
       release?.();
@@ -474,7 +481,7 @@ describe('createStorageCheck', () => {
       let release: (() => void) | undefined;
       const storage = () =>
         createStorageCheck({
-          directories: ['/app/data'],
+          directories: [data('/app/data')],
           probe: (): Promise<WriteProbe> => {
             probes += 1;
             return new Promise<WriteProbe>((resolve) => {
@@ -540,7 +547,12 @@ describe('the probe leftover sweep', () => {
       '.closet-storage',
       'a1b2.webp',
     ]);
-    expect(await probeWritable('/sweep/first', { fs, log: logger })).toEqual({
+    expect(
+      await probeWritable('/sweep/first', {
+        fs,
+        log: { logger, label: 'DATA_PATH' },
+      }),
+    ).toEqual({
       writable: true,
     });
     // Only the small probe directory, never the share (#901).
@@ -552,8 +564,9 @@ describe('the probe leftover sweep', () => {
       calls.removed.filter((path) => path.includes('7b0c2f4e')),
     ).toHaveLength(1);
     expect(logs.records).toMatchObject([
-      { level: 'info', directory: '/sweep/first', removed: 2 },
+      { level: 'info', directory: 'DATA_PATH', removed: 2 },
     ]);
+    expect(JSON.stringify(logs.records)).not.toContain('/sweep/first');
 
     await probeWritable('/sweep/first', { fs });
     await probeWritable('/sweep/first', { fs });
@@ -568,8 +581,8 @@ describe('the probe leftover sweep', () => {
       () => new Promise<string[]>((_, reject) => (fail = reject)),
     );
     const check = createStorageCheck({
-      directories: ['/sweep/held'],
-      probe: (directory) => probeWritable(directory, { fs }),
+      directories: [data('/sweep/held')],
+      probe: ({ path }) => probeWritable(path, { fs }),
       fix: storageFix,
       identity: () => Promise.resolve(undefined),
       identityFix: 'see marker',
@@ -594,21 +607,30 @@ describe('the probe leftover sweep', () => {
       Promise.reject(Object.assign(new Error('x'), { code: 'EIO' })),
     );
     for (let run = 0; run < 3; run++) {
-      expect(await probeWritable('/sweep/retry', { fs, log: logger })).toEqual({
+      expect(
+        await probeWritable('/sweep/retry', {
+          fs,
+          log: { logger, label: 'DATA_PATH' },
+        }),
+      ).toEqual({
         writable: true,
       });
     }
     expect(calls.lists).toHaveLength(1);
     expect(logs.records).toHaveLength(1);
-    expect(logs.records[0]).toMatchObject({ level: 'warn', code: 'EIO' });
+    expect(logs.records[0]).toMatchObject({
+      level: 'warn',
+      directory: 'DATA_PATH',
+      code: 'EIO',
+    });
     expect(JSON.stringify(logs.records)).not.toContain('/sweep/retry');
   });
 
   it('never lists when the caller is the boot (sweep: false)', async () => {
     const { fs, calls } = fakeFs(['.write-probe-1-3']);
-    expect(
-      await probeWritable('/sweep/boot', { fs, log: logger, sweep: false }),
-    ).toEqual({ writable: true });
+    expect(await probeWritable('/sweep/boot', { fs, sweep: false })).toEqual({
+      writable: true,
+    });
     expect(calls.lists).toEqual([]);
     // A later readiness probe still performs the one sweep.
     await probeWritable('/sweep/boot', { fs });

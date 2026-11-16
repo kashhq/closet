@@ -41,14 +41,19 @@ function isLabel(text: string): boolean {
   return !/[.!?:;,](\s|$)/.test(stripped(text));
 }
 
-function withoutNames(text: string): string {
-  return PROPER_NOUNS.reduce((rest, name) => rest.replaceAll(name, ''), text);
+// A name becomes one lowercase word, not nothing: dropping it would promote
+// the next word to first position, which the check skips ('Muse Picks').
+function namesAsWords(text: string): string {
+  return PROPER_NOUNS.reduce(
+    (rest, name) => rest.replaceAll(name, 'name'),
+    text,
+  );
 }
 
 /** Words after the first that start uppercase and are not acronyms or names. */
 function titleCasedWords(text: string): string[] {
   const words =
-    withoutNames(stripped(text)).match(/[A-Za-z][A-Za-z’'-]*/g) ?? [];
+    namesAsWords(stripped(text)).match(/[A-Za-z][A-Za-z’'-]*/g) ?? [];
   return words
     .slice(1)
     .filter((word) => /^[A-Z]/.test(word) && word !== word.toUpperCase());
@@ -88,6 +93,9 @@ describe('the copy speaks in one voice (#729)', () => {
     expect(titleCasedWords('Connect Claude Code')).toEqual([]);
     expect(titleCasedWords('Weather Settings')).toEqual(['Settings']);
     expect(titleCasedWords('Open Weather')).toEqual(['Weather']);
+    expect(titleCasedWords('Muse Picks')).toEqual(['Picks']);
+    expect(titleCasedWords('Styling Tips')).toEqual(['Tips']);
+    expect(titleCasedWords('Ask Muse')).toEqual([]);
     expect(isLabel('Tap Save. Then wait')).toBe(false);
   });
 });

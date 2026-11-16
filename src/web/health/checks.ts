@@ -6,6 +6,7 @@ import {
 import { schemaState } from '../../db/migrate';
 import type { Logger } from '../../logger';
 import {
+  type StorageDirectory,
   type StorageFailure,
   STORAGE_PROBE_TIMEOUT_MS,
   type WriteProbe,
@@ -195,9 +196,9 @@ const STORAGE_PROBE_TTL_MS = 5_000;
 
 export interface StorageCheckDeps {
   /** DATA_PATH and MODELS_PATH, as the process sees them. */
-  directories: readonly string[];
+  directories: readonly StorageDirectory[];
   /** probeWritable (src/storage-probe.ts); the specs pass it too, on tmp dirs. */
-  probe: (directory: string) => Promise<WriteProbe>;
+  probe: (directory: StorageDirectory) => Promise<WriteProbe>;
   /** storageFix (src/storage-probe.ts): the operator's step for each failure code. */
   fix: (failures: readonly StorageFailure[]) => string;
   /**
@@ -250,13 +251,13 @@ export function createStorageCheck({
   let cached: { at: number; verdict: Promise<HealthCheck> } | undefined;
   let reported = '';
   const inFlight = new Map<string, Promise<WriteProbe>>();
-  const bounded = (directory: string): Promise<WriteProbe> => {
-    let started = inFlight.get(directory);
+  const bounded = (directory: StorageDirectory): Promise<WriteProbe> => {
+    let started = inFlight.get(directory.path);
     if (!started) {
       const own = (async () => probe(directory))().finally(() =>
-        inFlight.delete(directory),
+        inFlight.delete(directory.path),
       );
-      inFlight.set(directory, own);
+      inFlight.set(directory.path, own);
       started = own;
     }
     let timer: NodeJS.Timeout | undefined;
@@ -270,7 +271,10 @@ export function createStorageCheck({
   };
   const run = async (): Promise<HealthCheck> => {
     // One probe per distinct directory (DATA_PATH may equal MODELS_PATH).
-    const distinct = [...new Set(directories)];
+    const distinct = directories.filter(
+      (directory, i) =>
+        directories.findIndex((d) => d.path === directory.path) === i,
+    );
     const [probed, problem] = await Promise.all([
       Promise.all(distinct.map(bounded)),
       // identityProblem never rejects for the disk's sake; anything else
@@ -284,7 +288,8 @@ export function createStorageCheck({
       }),
     ]);
     const results = directories.map(
-      (directory) => probed[distinct.indexOf(directory)],
+      (directory) =>
+        probed[distinct.findIndex((d) => d.path === directory.path)],
     );
     const messages: string[] = [];
     const unwritable: StorageFailure[] = [];
@@ -292,9 +297,9 @@ export function createStorageCheck({
       const result = results[i];
       if (result.writable) return;
       messages.push(
-        `Readiness: ${directory} is not writable by this process (${result.code})`,
+        `Readiness: ${directory.key} is not writable by this process (${result.code})`,
       );
-      unwritable.push({ directory, code: result.code });
+      unwritable.push({ directory: directory.path, code: result.code });
     });
     if (problem) messages.push(`Readiness: ${problem}`);
     const state = messages.join('\n');
