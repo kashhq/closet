@@ -315,6 +315,14 @@
   --spacing-bar: var(--app-bar-h);
   --spacing-under-bar: calc(var(--app-bar-h) + 1rem);
 }
+/* The title block must fit --app-bar-row-h at any text size: two title lines
+   (3.125rem) or, while the freshness line shows (1rem, `#freshness` unhidden
+   by freshness.js), one title line and it. Both are rem and line-height
+   units, so the fixed bar height holds at 200% text with no measuring. */
+.app-bar-title:has(> #freshness:not(.hidden)) h1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
 .app-bar {
   position: fixed;
   top: 0;
@@ -339,6 +347,12 @@
   flex-wrap: nowrap;
   overflow-x: auto;
   min-width: 0;
+}
+/* The tab scroller clips what it draws outside its box, so a focused tab's
+   ring is drawn inside the tab (#1105). */
+.app-bar-tabs .tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 @media (max-width: 1023.98px) {
   :root:has(.app-bar-tabs) {

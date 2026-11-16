@@ -123,9 +123,71 @@ async function expectSectionTabs(page: Page): Promise<void> {
   expect(phone.row.y + phone.row.height).toBeLessThanOrEqual(
     phone.barBox.y + phone.barBox.height + 1,
   );
-  expect(phone.content).toBeGreaterThanOrEqual(
-    phone.barBox.y + phone.barBox.height,
-  );
+
+  // A tab focused from the keyboard shows its whole outline inside the
+  // row's scroller, which clips whatever it draws outside its box.
+  await page.keyboard.press('Tab');
+  const tabs = page.locator('.app-bar-tabs');
+  await tabs.getByRole('link').last().focus();
+  const ring = await page.evaluate(() => {
+    const scroller = document.querySelector('.app-bar-tabs');
+    const tab = scroller?.querySelector('a:focus-visible');
+    if (!scroller || !tab) return null;
+    const style = getComputedStyle(tab);
+    const grow =
+      Math.max(0, parseFloat(style.outlineWidth)) +
+      parseFloat(style.outlineOffset);
+    const box = tab.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    return {
+      top: box.top - grow - view.top,
+      bottom: view.bottom - (box.bottom + grow),
+    };
+  });
+  expect(ring?.top).toBeGreaterThanOrEqual(0);
+  expect(ring?.bottom).toBeGreaterThanOrEqual(0);
+
+  // 200% text with a long title and the freshness line showing (the bar's
+  // tallest content): the tab row stays inside the bar and the first visible
+  // content starts at or below its bottom.
+  for (const path of ['/trips', '/wardrobe']) {
+    await page.goto(path);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+      window.scrollTo(0, 0);
+      const h1 = document.querySelector('.app-bar h1');
+      if (h1) h1.textContent = 'A very long title '.repeat(8);
+      const fresh = document.querySelector('#freshness');
+      if (fresh) {
+        fresh.textContent = 'Updated 3 minutes ago';
+        fresh.classList.remove('hidden');
+      }
+    });
+    const clearance = await page.evaluate(() => {
+      const barBottom =
+        document.querySelector('header.app-bar')?.getBoundingClientRect()
+          .bottom ?? Infinity;
+      const row = document
+        .querySelector('.app-bar-tabs')
+        ?.getBoundingClientRect();
+      const content = Array.from(
+        document.querySelectorAll<HTMLElement>('main *'),
+      ).find((el) => {
+        const box = el.getBoundingClientRect();
+        return el.childElementCount === 0 && box.width > 0 && box.height > 0;
+      });
+      return {
+        tabsInside: (row?.bottom ?? Infinity) - barBottom,
+        content:
+          (content?.getBoundingClientRect().top ?? -Infinity) - barBottom,
+      };
+    });
+    expect(clearance.tabsInside).toBeLessThanOrEqual(1);
+    expect(clearance.content).toBeGreaterThanOrEqual(0);
+  }
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
 
   const viewport = page.viewportSize()!;
   await page.setViewportSize({ width: 1440, height: 900 });
