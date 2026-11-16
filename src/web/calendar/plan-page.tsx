@@ -1,8 +1,6 @@
 import { type Occasion, OCCASIONS } from '../../wardrobe/occasions';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { ideasUrl } from '../gallery/urls';
 import type { GarmentOutfit } from '../outfits/queries';
 import type { OutfitList } from '../outfits/outfit-list';
@@ -60,44 +58,45 @@ export function PlanPage(props: { ctx: ViewContext; model: PlanModel }) {
   const ideas = ideasUrl({ destination });
   const title = changing ? t('changeEntry.TITLE') : t('CALENDAR_PLAN_TITLE');
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar ctx={ctx} title={title} back={dayUrl(model.day)} />
-      <main class="p-4 pt-20 pb-24 w-full sm:max-w-lg sm:mx-auto flex flex-col gap-5">
-        <PlanHeading model={model} changing={changing} />
-        {!changing && <OccasionChips day={model.day} chosen={model.occasion} />}
+    <PageShell
+      ctx={ctx}
+      name="plan"
+      bar={{ title, back: dayUrl(model.day) }}
+      body={{ gap: 5 }}
+    >
+      <PlanHeading model={model} changing={changing} />
+      {!changing && <OccasionChips day={model.day} chosen={model.occasion} />}
 
-        <div class="flex flex-col gap-2">
-          <a href={ideas} class="btn btn-primary w-full" data-plan-ideas="">
-            {t('gallery.PLAN_IDEAS')}
-          </a>
-          <a href={build} class="btn btn-outline w-full" data-plan-styling="">
-            + {t('CALENDAR_PLAN_BUILD')}
-          </a>
-        </div>
+      <div class="flex flex-col gap-2">
+        <a href={ideas} class="btn btn-primary w-full" data-plan-ideas="">
+          {t('gallery.PLAN_IDEAS')}
+        </a>
+        <a href={build} class="btn btn-outline w-full" data-plan-styling="">
+          + {t('CALENDAR_PLAN_BUILD')}
+        </a>
+      </div>
 
-        <SavedOutfitPicker
-          heading={t('CALENDAR_PLAN_SAVED')}
-          action="/calendar"
-          list={model.list}
-          href={planPageUrl(destination)}
-          outfits={model.outfits}
-          noteOf={(outfit) => plannedNote(model, outfit.id)}
-          more={moreUrl(destination, model.list, model.next)}
-        >
-          <input type="hidden" name="date" value={model.day} />
-          <input type="hidden" name="occasion" value={model.occasion} />
-          <input type="hidden" name="week" value={model.day} />
-          {changing && (
-            <input
-              type="hidden"
-              name="replace"
-              value={String(changing.entryId)}
-            />
-          )}
-        </SavedOutfitPicker>
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      <SavedOutfitPicker
+        heading={t('CALENDAR_PLAN_SAVED')}
+        action="/calendar"
+        list={model.list}
+        href={planPageUrl(destination)}
+        outfits={model.outfits}
+        noteOf={(outfit) => plannedNote(model, outfit.id)}
+        more={moreUrl(destination, model.list, model.next)}
+      >
+        <input type="hidden" name="date" value={model.day} />
+        <input type="hidden" name="occasion" value={model.occasion} />
+        <input type="hidden" name="week" value={model.day} />
+        {changing && (
+          <input
+            type="hidden"
+            name="replace"
+            value={String(changing.entryId)}
+          />
+        )}
+      </SavedOutfitPicker>
+    </PageShell>
   );
 }
 

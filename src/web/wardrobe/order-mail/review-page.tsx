@@ -2,9 +2,7 @@ import { Card } from '../../card';
 import { PostForm } from '../../form';
 import { shortDayLabel } from '../../date-labels';
 import { t } from '../../i18n';
-import { AppBar } from '../../layout/app-bar';
-import { Dock } from '../../layout/dock';
-import { Layout } from '../../layout/layout';
+import { PageShell } from '../../layout/page-shell';
 import { EmptyState } from '../../layout/parts';
 import type { ViewContext } from '../../view-context';
 import { priceLabel } from '../garment';
@@ -24,26 +22,27 @@ export function OrderReviewPage(props: {
 }) {
   const { ctx, items } = props;
   return (
-    <Layout ctx={ctx} title={t('orders.TITLE')}>
-      <AppBar ctx={ctx} title={t('orders.TITLE')} back="/wardrobe" />
-      <main class="p-4 pt-20 pb-24 sm:max-w-lg sm:mx-auto flex flex-col gap-4">
-        <p class="text-sm text-muted">{t('orders.INTRO')}</p>
-        {items.length === 0 ? (
-          <EmptyState message={t('orders.EMPTY')}>
-            <a href="/wardrobe" class="btn btn-outline btn-sm">
-              {t('orders.BACK_TO_CLOSET')}
-            </a>
-          </EmptyState>
-        ) : (
-          <ul class="flex flex-col gap-3" id="order-items">
-            {items.map((item) => (
-              <OrderItemCard item={item} />
-            ))}
-          </ul>
-        )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="orders"
+      bar={{ title: t('orders.TITLE'), back: '/wardrobe' }}
+      body={{ gap: 4 }}
+    >
+      <p class="text-sm text-muted">{t('orders.INTRO')}</p>
+      {items.length === 0 ? (
+        <EmptyState message={t('orders.EMPTY')}>
+          <a href="/wardrobe" class="btn btn-outline btn-sm">
+            {t('orders.BACK_TO_CLOSET')}
+          </a>
+        </EmptyState>
+      ) : (
+        <ul class="flex flex-col gap-3" id="order-items">
+          {items.map((item) => (
+            <OrderItemCard item={item} />
+          ))}
+        </ul>
+      )}
+    </PageShell>
   );
 }
 

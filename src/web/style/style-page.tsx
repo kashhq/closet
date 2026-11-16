@@ -6,9 +6,7 @@ import { profileSection, STYLE_SECTION_ID } from '../auth/urls';
 import { occasionLabel } from '../date-labels';
 import { ChipGroup } from '../form-field';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { WEEK_SETTINGS_PATH } from '../week-plan/urls';
@@ -60,89 +58,92 @@ export function StyleProfilePage(props: {
   const { ctx, model } = props;
   const { values } = model;
   return (
-    <Layout ctx={ctx} title={t('style.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('style.TITLE')}
-        back={profileSection(STYLE_SECTION_ID)}
-        formPage
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        <p class="text-sm text-muted mb-4">{t('style.INTRO')}</p>
-        {model.home && <HomeCity name={model.home.name} />}
-        <PostForm action={STYLE_PROFILE_PATH} class="flex flex-col gap-5">
-          <ChipGroup label={t('style.STYLES')}>
-            {STYLES.map((style) => (
-              <input
-                type="checkbox"
-                name="styles"
-                value={style}
-                class="btn btn-sm rounded-full"
-                aria-label={styleLabel(style)}
-                checked={values.styles?.includes(style)}
-              />
-            ))}
-          </ChipGroup>
-          <ChipGroup label={t('style.BUDGET')} hint={t('style.BUDGET_HINT')}>
+    <PageShell
+      ctx={ctx}
+      name="style"
+      bar={{
+        title: t('style.TITLE'),
+        back: profileSection(STYLE_SECTION_ID),
+        formPage: true,
+      }}
+      overlays={
+        <>
+          {model.saved && (
+            <SavedToast id="style-toast" text={t(SAVED_TOASTS[model.saved])} />
+          )}
+          <StripFlags names={[STYLE_SAVED_FLAG]} />
+        </>
+      }
+    >
+      <p class="text-sm text-muted mb-4">{t('style.INTRO')}</p>
+      {model.home && <HomeCity name={model.home.name} />}
+      <PostForm action={STYLE_PROFILE_PATH} class="flex flex-col gap-5">
+        <ChipGroup label={t('style.STYLES')}>
+          {STYLES.map((style) => (
+            <input
+              type="checkbox"
+              name="styles"
+              value={style}
+              class="btn btn-sm rounded-full"
+              aria-label={styleLabel(style)}
+              checked={values.styles?.includes(style)}
+            />
+          ))}
+        </ChipGroup>
+        <ChipGroup label={t('style.BUDGET')} hint={t('style.BUDGET_HINT')}>
+          <input
+            type="radio"
+            name="budget"
+            value=""
+            class="btn btn-sm btn-ghost rounded-full"
+            aria-label={t('NOT_SET')}
+            checked={!values.budget}
+          />
+          {BUDGET_BANDS.map((band) => (
             <input
               type="radio"
               name="budget"
-              value=""
-              class="btn btn-sm btn-ghost rounded-full"
-              aria-label={t('NOT_SET')}
-              checked={!values.budget}
+              value={band}
+              class="btn btn-sm rounded-full"
+              aria-label={budgetLabel(band)}
+              checked={values.budget === band}
             />
-            {BUDGET_BANDS.map((band) => (
-              <input
-                type="radio"
-                name="budget"
-                value={band}
-                class="btn btn-sm rounded-full"
-                aria-label={budgetLabel(band)}
-                checked={values.budget === band}
-              />
-            ))}
-          </ChipGroup>
-          <ChipGroup label={t('style.PALETTE')}>
-            {GARMENT_COLORS.map((color) => (
-              <input
-                type="checkbox"
-                name="palette"
-                value={color}
-                class="btn btn-sm rounded-full"
-                aria-label={color}
-                checked={values.palette?.includes(color)}
-              />
-            ))}
-          </ChipGroup>
-          <WeekRhythm rhythm={model.rhythm} />
-          <div class="flex flex-col">
-            <label class="label" for="style-notes">
-              <span class="label-text">{t('NOTES')}</span>
-            </label>
-            <textarea
-              id="style-notes"
-              name="notes"
-              class="textarea textarea-bordered w-full"
-              rows={3}
-              maxlength={STYLE_NOTES_MAX}
-              placeholder={t('style.NOTES_PLACEHOLDER')}
-            >
-              {values.notes ?? ''}
-            </textarea>
-          </div>
-          <button type="submit" class="btn btn-primary">
-            {t('SAVE')}
-          </button>
-        </PostForm>
-        <OutfitRulesSection model={model.rules} />
-      </main>
-      {model.saved && (
-        <SavedToast id="style-toast" text={t(SAVED_TOASTS[model.saved])} />
-      )}
-      <StripFlags names={[STYLE_SAVED_FLAG]} />
-      <Dock ctx={ctx} />
-    </Layout>
+          ))}
+        </ChipGroup>
+        <ChipGroup label={t('style.PALETTE')}>
+          {GARMENT_COLORS.map((color) => (
+            <input
+              type="checkbox"
+              name="palette"
+              value={color}
+              class="btn btn-sm rounded-full"
+              aria-label={color}
+              checked={values.palette?.includes(color)}
+            />
+          ))}
+        </ChipGroup>
+        <WeekRhythm rhythm={model.rhythm} />
+        <div class="flex flex-col">
+          <label class="label" for="style-notes">
+            <span class="label-text">{t('NOTES')}</span>
+          </label>
+          <textarea
+            id="style-notes"
+            name="notes"
+            class="textarea textarea-bordered w-full"
+            rows={3}
+            maxlength={STYLE_NOTES_MAX}
+            placeholder={t('style.NOTES_PLACEHOLDER')}
+          >
+            {values.notes ?? ''}
+          </textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          {t('SAVE')}
+        </button>
+      </PostForm>
+      <OutfitRulesSection model={model.rules} />
+    </PageShell>
   );
 }
 

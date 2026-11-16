@@ -8,9 +8,7 @@ import type { AlreadySaved } from '../gallery/urls';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
 import { AgentBadge } from '../agent-badge';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { GarmentThumb } from '../layout/parts';
 import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { EntrySelfie, SelfieView } from '../selfies/views';
@@ -82,74 +80,73 @@ export function OutfitPage(props: {
     toBuy.length === 0 &&
     (!outfit.proposal || outfit.proposal.reaction === 'loved');
   return (
-    <Layout ctx={ctx} title={name}>
-      <AppBar
-        ctx={ctx}
-        title={name}
-        back="/outfits"
-        actions={<OutfitMenu ctx={ctx} outfit={outfit} />}
-      />
-      <main class="flex flex-col gap-6 px-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        {outfit.proposal && (
-          <ProposalBlock
-            outfitId={outfit.id}
-            proposal={outfit.proposal}
-            complete={toBuy.length === 0}
-          />
-        )}
-        {outfit.agent && (
-          <p class="px-1">
-            <AgentBadge
-              agent={outfit.agent}
-              byMuse={outfit.proposal !== null}
-            />
-          </p>
-        )}
-        {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
-        {outfit.garments.length > 0 ? (
-          <OutfitCollage garments={pieces} eager />
-        ) : (
-          <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
-        )}
-        {toBuy.length > 0 && <ToBuySection pieces={toBuy} />}
-        <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(outfit)} />
-        <div class="flex gap-2">
-          {mayBePlanned && (
-            <button
-              type="button"
-              class="btn btn-primary flex-1"
-              {...sheetOpener(PLAN_SHEET_ID)}
-              data-outfit-plan=""
-            >
-              {t('outfits.PLAN')}
-            </button>
-          )}
-          <a
-            href={stylingUrl({
-              outfitId: outfit.id,
-              // Its pieces to buy on their strips, to swap one for another (#335).
-              picks: toBuy.length > 0,
-              returnTo: outfitUrl(outfit.id),
-            })}
-            class="btn btn-outline flex-1"
-            data-outfit-edit=""
+    <PageShell
+      ctx={ctx}
+      name="outfit"
+      bar={{
+        title: name,
+        back: '/outfits',
+        actions: <OutfitMenu ctx={ctx} outfit={outfit} />,
+      }}
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {mayBePlanned && <PlanSheet outfitId={outfit.id} />}
+          <AlreadySavedToast kind={props.alreadySaved} />
+          <DecisionToastView toast={props.toast} />
+        </>
+      }
+    >
+      {outfit.proposal && (
+        <ProposalBlock
+          outfitId={outfit.id}
+          proposal={outfit.proposal}
+          complete={toBuy.length === 0}
+        />
+      )}
+      {outfit.agent && (
+        <p class="px-1">
+          <AgentBadge agent={outfit.agent} byMuse={outfit.proposal !== null} />
+        </p>
+      )}
+      {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
+      {outfit.garments.length > 0 ? (
+        <OutfitCollage garments={pieces} eager />
+      ) : (
+        <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
+      )}
+      {toBuy.length > 0 && <ToBuySection pieces={toBuy} />}
+      <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(outfit)} />
+      <div class="flex gap-2">
+        {mayBePlanned && (
+          <button
+            type="button"
+            class="btn btn-primary flex-1"
+            {...sheetOpener(PLAN_SHEET_ID)}
+            data-outfit-plan=""
           >
-            {t('outfits.EDIT')}
-          </a>
-        </div>
-        {entries.planned.length > 0 && (
-          <PlannedList planned={entries.planned} />
+            {t('outfits.PLAN')}
+          </button>
         )}
-        {entries.worn.length > 0 && (
-          <WornStrip outfitId={outfit.id} worn={entries.worn} />
-        )}
-        {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
-      </main>
-      {mayBePlanned && <PlanSheet outfitId={outfit.id} />}
-      <AlreadySavedToast kind={props.alreadySaved} />
-      <DecisionToastView toast={props.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+        <a
+          href={stylingUrl({
+            outfitId: outfit.id,
+            // Its pieces to buy on their strips, to swap one for another (#335).
+            picks: toBuy.length > 0,
+            returnTo: outfitUrl(outfit.id),
+          })}
+          class="btn btn-outline flex-1"
+          data-outfit-edit=""
+        >
+          {t('outfits.EDIT')}
+        </a>
+      </div>
+      {entries.planned.length > 0 && <PlannedList planned={entries.planned} />}
+      {entries.worn.length > 0 && (
+        <WornStrip outfitId={outfit.id} worn={entries.worn} />
+      )}
+      {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
+    </PageShell>
   );
 }
 
