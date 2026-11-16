@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
 import { parseStoredName } from './image-variant';
@@ -33,7 +34,9 @@ const ADOPT_MIN_COVERAGE = 0.9;
  * while uploads landed where the remount hides them. So the directory
  * carries a marker (STORAGE_MARKER), written only when this process can
  * prove the directory is the right one:
- *   - the `file` table is empty: a first boot, nothing to lose;
+ *   - the `file` table is empty: a first boot, nothing to lose (beside a
+ *     database already paired, new storage with an id of its own, or
+ *     refused where the pairing is enforced: #850);
  *   - the directory holds the sets of at least ADOPT_MIN_COVERAGE of the
  *     rows: an existing share from before the marker, adopted.
  * Anything else unmarked is the unmounted share or the wrong directory, and
@@ -62,21 +65,15 @@ export async function claimStorage(
   if (read.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: read.code });
   }
-  let paired = await pairedInstallId(db);
-  const marker =
+  const pairedAtStart = await pairedInstallId(db);
+  const { marker, paired } =
     read.state === 'present'
-      ? read.marker
-      : await markUnmarked(storage, db, paired, logger);
-  if (paired === undefined) {
-    await pairInstallOnce(db, marker.installId);
-    // Read back: a process claiming beside this one may have paired first.
-    paired = await pairedInstallId(db);
-    if (paired === marker.installId) {
-      logger.info(
-        `Photo storage ${marker.installId} paired with this database`,
-      );
-    }
-  }
+      ? {
+          marker: read.marker,
+          paired:
+            pairedAtStart ?? (await pair(db, read.marker.installId, logger)),
+        }
+      : await markUnmarked(storage, db, pairedAtStart, pairing, logger);
   if (paired !== marker.installId) {
     const mismatch = `photo storage ${marker.installId}: this database belongs to install ${paired}`;
     if (pairing === 'enforced') {
@@ -90,14 +87,37 @@ export async function claimStorage(
   return marker;
 }
 
-// An unmarked DATA_PATH: marked when #650's rules prove it is ours, with the
-// database's install id once it has one.
+// Pairs an unpaired database with `installId`, answering the id it is paired
+// with: a process claiming beside this one may have paired first.
+async function pair(
+  db: Db,
+  installId: string,
+  logger: Logger,
+): Promise<string> {
+  const paired = await pairInstallOnce(db, installId);
+  if (paired === installId) {
+    logger.info(`Photo storage ${installId} paired with this database`);
+  }
+  return paired;
+}
+
+// An unmarked DATA_PATH: marked when #650's rules prove it is ours. Every
+// crash point must heal at the next boot, so an unpaired database is paired
+// only after the marker exists (a marker beside an unpaired database is
+// adopted: claimStorage), never before it: a pairing whose marker write
+// failed would leave a database whose next boot over that directory, with
+// no photo rows, refuses forever (#850's rule). A pairing that loses to
+// another claim (another DATA_PATH on this database) withdraws the marker
+// this claim wrote and marks as beside a paired database; a marker linked
+// first by a process booting on this directory is that process's, and both
+// pair with it (#851).
 async function markUnmarked(
   storage: PhotoStorage,
   db: Db,
-  paired: string | undefined,
+  pairedAtStart: string | undefined,
+  pairing: InstallPairing,
   logger: Logger,
-): Promise<StorageMarker> {
+): Promise<{ marker: StorageMarker; paired: string }> {
   const rows = await photoRowNames(db);
   const covered = rows.length === 0 ? 0 : await coveredRows(storage, rows);
   if (rows.length > 0 && covered < rows.length * ADOPT_MIN_COVERAGE) {
@@ -106,22 +126,106 @@ async function markUnmarked(
     );
     throw new StorageIdentityError({ kind: 'absent' });
   }
-  // Ours, or the marker a process booting beside this one linked first.
-  const created = await storage.createMarker(paired);
+  const proof: RowProof =
+    rows.length === 0 ? undefined : { covered, rows: rows.length };
+  let paired = pairedAtStart;
+  if (paired === undefined) {
+    const marked = await markThenPair(storage, db, proof, logger);
+    if ('marker' in marked) return marked;
+    paired = marked.lostTo;
+  }
+  const installId =
+    proof === undefined
+      ? newStorageBesidePaired(paired, pairing, logger)
+      : paired;
+  const marker = await createMarker(storage, installId);
+  if (marker.installId === installId) {
+    logMarked(logger, marker, proof, true);
+  }
+  return { marker, paired };
+}
+
+type RowProof = { covered: number; rows: number } | undefined;
+
+// An unpaired database: the marker first, with an id of its own, then the
+// pairing with whichever marker is on disk now. Answers `lostTo` when
+// another claim paired the database meanwhile, with this claim's marker
+// withdrawn: the caller marks as beside that pairing.
+async function markThenPair(
+  storage: PhotoStorage,
+  db: Db,
+  proof: RowProof,
+  logger: Logger,
+): Promise<{ marker: StorageMarker; paired: string } | { lostTo: string }> {
+  const ownId = randomUUID();
+  const marker = await createMarker(storage, ownId);
+  const paired = await pair(db, marker.installId, logger);
+  const ours = marker.installId === ownId;
+  // Another process's marker: claimStorage's comparison decides.
+  if (!ours) return { marker, paired };
+  if (paired === ownId) {
+    logMarked(logger, marker, proof, false);
+    return { marker, paired };
+  }
+  logger.warn(
+    `Photo storage ${ownId}: this database was paired with install ${paired} meanwhile; withdrawing the marker`,
+  );
+  await storage.withdrawMarker(marker);
+  return { lostTo: paired };
+}
+
+// Ours, or the marker a process booting beside this one linked first.
+async function createMarker(
+  storage: PhotoStorage,
+  installId: string,
+): Promise<StorageMarker> {
+  const created = await storage.createMarker(installId);
   if (created.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: created.code });
   }
-  const { marker } = created;
-  if (rows.length === 0) {
-    logger.info(
-      `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`,
+  return created.marker;
+}
+
+function logMarked(
+  logger: Logger,
+  marker: StorageMarker,
+  proof: RowProof,
+  besidePaired: boolean,
+): void {
+  if (proof) {
+    logger.warn(
+      `Photo storage ${marker.installId}: adopted an unmarked directory holding the photos of ${proof.covered} of ${proof.rows} rows`,
     );
   } else {
-    logger.warn(
-      `Photo storage ${marker.installId}: adopted an unmarked directory holding the photos of ${covered} of ${rows.length} rows`,
+    logger.info(
+      besidePaired
+        ? `Photo storage ${marker.installId}: marked as new storage (no photo rows)`
+        : `Photo storage ${marker.installId}: marked (no photo rows yet: a first boot)`,
     );
   }
-  return marker;
+}
+
+// An unmarked DATA_PATH with no photo rows beside a database already paired
+// with a share (#850). Coverage is what proves a directory is the paired
+// share (a restore re-adopting as itself); an empty table proves only that
+// nothing is lost, and a bare mountpoint is exactly that. Given the paired
+// id, it would pass for the real share once that is mounted over it, and
+// the uploads made meanwhile would vanish unseen. So it is never given that
+// id: production refuses it, as an unmounted share; elsewhere (worktrees on
+// one database) it is new storage with an id of its own, which the claim
+// then warns about, and a remount reads as foreign.
+function newStorageBesidePaired(
+  paired: string,
+  pairing: InstallPairing,
+  logger: Logger,
+): string {
+  if (pairing === 'enforced') {
+    logger.warn(
+      `Refusing an unmarked DATA_PATH with no photo rows: this database belongs to photo storage ${paired}`,
+    );
+    throw new StorageIdentityError({ kind: 'absent' });
+  }
+  return randomUUID();
 }
 
 /**

@@ -103,6 +103,32 @@ export interface TrashedSet {
   files: string[];
 }
 
+/** What a restore that went live could not remove from `.trash`. */
+export interface TrashLeftover {
+  /** Under `.trash`: `<day>/<entry>/<file>`, or a directory's. */
+  path: string;
+  error: unknown;
+}
+
+/**
+ * A restore that never went live: the link (or stamp) `cause` failed and
+ * the links made were taken back, except `stranded`, live names that could
+ * not be unlinked (each the trash file itself, so a retry adopts it).
+ */
+export class RestoreFailed extends Error {
+  constructor(
+    cause: unknown,
+    readonly stranded: readonly string[],
+  ) {
+    // The code only: an fs error's message carries its paths.
+    super(
+      `Restore from the trash failed (${String((cause as NodeJS.ErrnoException).code)})`,
+      { cause },
+    );
+    this.name = 'RestoreFailed';
+  }
+}
+
 /**
  * The photo bytes: a flat directory (DATA_PATH).
  * Knows nothing about photos; Photos (photos.ts) names, transcodes and
@@ -206,6 +232,21 @@ export class PhotoStorage {
     } finally {
       await this.storageFs.remove(tempPath);
     }
+  }
+
+  /**
+   * Removes the marker only while it is `marker` (same id, same timestamp):
+   * claimStorage's own, written by a claim whose pairing then lost to
+   * another install's. Answers whether it did; another's is never removed.
+   */
+  async withdrawMarker(marker: StorageMarker): Promise<boolean> {
+    const read = await this.readMarker();
+    const ours =
+      read.state === 'present' &&
+      read.marker.installId === marker.installId &&
+      read.marker.createdAt === marker.createdAt;
+    if (ours) await this.storageFs.remove(this.pathOf(STORAGE_MARKER));
+    return ours;
   }
 
   /**
@@ -389,36 +430,94 @@ export class PhotoStorage {
    * entries by a quarantine that failed mid-set) back into DATA_PATH, where
    * list() finds them, whole or not at all: every file is linked first (a
    * link fails with EEXIST rather than replace a live file), and the trash
-   * lets go only once all are; a failed link unlinks the ones made and
-   * rethrows, leaving storage and the trash as they were. Every restored
-   * file's mtime becomes `now`, so reconciliation's day-old grace starts
-   * at the restore rather than at the upload. Emptied directories go.
+   * lets go only once all are. A failed link unlinks the ones this call
+   * made and throws RestoreFailed, naming any it could not unlink. Every
+   * restored file's mtime becomes `now`, so reconciliation's day-old grace
+   * starts at the restore rather than at the upload.
+   *
+   * Once every file is live the restore has happened, so letting go of the
+   * trash (its names, then emptied directories) is best effort: what stays
+   * is answered as `leftInTrash`, never a rejection (#841). A live name
+   * that already is its trash file (the same inode: an earlier restore
+   * linked it, then could not let go) counts as restored, so running the
+   * restore again finishes the job.
    */
-  async restore(sets: readonly TrashedSet[], now: Date): Promise<void> {
+  async restore(
+    sets: readonly TrashedSet[],
+    now: Date,
+  ): Promise<{ leftInTrash: TrashLeftover[] }> {
     const moves = sets.flatMap((set) =>
       set.files.map((file) => ({
         from: path.join(this.trashEntryPath(set), path.basename(file)),
         to: this.pathOf(file),
       })),
     );
+    // Only names this call made: one live before it is never taken back.
     const linked: string[] = [];
     try {
       for (const { from, to } of moves) {
-        await this.storageFs.link(from, to);
-        linked.push(to);
+        if (await this.linkBack(from, to)) linked.push(to);
       }
-      for (const to of linked) await fs.promises.utimes(to, now, now);
+      for (const { to } of moves) await fs.promises.utimes(to, now, now);
     } catch (error) {
       // Each is a second name of a file the trash still holds.
-      for (const to of linked) await this.storageFs.remove(to);
+      const stranded: string[] = [];
+      for (const to of linked) {
+        await this.storageFs
+          .remove(to)
+          .catch(() => stranded.push(path.basename(to)));
+      }
+      throw new RestoreFailed(error, stranded);
+    }
+    const leftInTrash: TrashLeftover[] = [];
+    const letGo = (where: string, work: Promise<void>) =>
+      work.catch((error: unknown) => {
+        leftInTrash.push({ path: this.trashRelative(where), error });
+      });
+    for (const { from } of moves) {
+      await letGo(from, this.storageFs.remove(from));
+    }
+    for (const set of sets) {
+      const entry = this.trashEntryPath(set);
+      await letGo(entry, removeIfEmpty(entry));
+      // Other sets quarantined that day stay.
+      await letGo(path.dirname(entry), removeIfEmpty(path.dirname(entry)));
+    }
+    return { leftInTrash };
+  }
+
+  /**
+   * The names of `sets`' files whose live name in DATA_PATH is the trash
+   * file itself (a hard link a restore made): restored already, never a
+   * live set the restore would land on.
+   */
+  async liveFromTrash(sets: readonly TrashedSet[]): Promise<Set<string>> {
+    const live = new Set<string>();
+    for (const set of sets) {
+      for (const file of set.files) {
+        const from = path.join(this.trashEntryPath(set), path.basename(file));
+        if (await sameFile(from, this.pathOf(file))) live.add(file);
+      }
+    }
+    return live;
+  }
+
+  // Links a trash file back, answering whether this call made the name:
+  // false when it already is that file (restored before).
+  private async linkBack(from: string, to: string): Promise<boolean> {
+    try {
+      await this.storageFs.link(from, to);
+      return true;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST' && (await sameFile(from, to))) return false;
       throw error;
     }
-    for (const { from } of moves) await this.storageFs.remove(from);
-    for (const set of sets) {
-      await removeIfEmpty(this.trashEntryPath(set));
-      // Other sets quarantined that day stay.
-      await removeIfEmpty(path.dirname(this.trashEntryPath(set)));
-    }
+  }
+
+  // `<day>/<entry>[/<file>]`: what an operator finds under .trash.
+  private trashRelative(where: string): string {
+    return path.relative(path.join(this.directory, TRASH_DIR), where);
   }
 
   private trashEntryPath(set: TrashedSet): string {
@@ -436,6 +535,22 @@ export class PhotoStorage {
   private pathOf(fileName: string): string {
     return path.join(this.directory, path.basename(fileName));
   }
+}
+
+// Whether two paths name one file (a hard link); false when either is gone.
+async function sameFile(a: string, b: string): Promise<boolean> {
+  const stat = (file: string) =>
+    fs.promises.stat(file).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    });
+  const [first, second] = await Promise.all([stat(a), stat(b)]);
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.dev === second.dev &&
+    first.ino === second.ino
+  );
 }
 
 // The subdirectories of `directory`; none when it does not exist.

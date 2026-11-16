@@ -10,7 +10,11 @@ import {
   reportBootFailure,
 } from './metrics/error-tracker';
 import { serve } from './server';
-import { probeWritable, storageFix } from './storage-probe';
+import {
+  probeWritable,
+  storageFix,
+  sweepLeftoversInBackground,
+} from './storage-probe';
 import {
   identityRefusal,
   StorageIdentityError,
@@ -67,6 +71,13 @@ async function main(): Promise<void> {
     process.on('uncaughtException', (error, origin) => {
       void onCrash(error, origin);
     });
+    // After listen, never awaited: a stalled share must not hold the boot
+    // (#1048). The probes never list a directory, so a dead predecessor's
+    // probe files go here, once (#855).
+    void sweepLeftoversInBackground(
+      [config.DATA_PATH, config.MODELS_PATH],
+      logger,
+    );
   } catch (error) {
     // An unmounted photo share (createPhotos' claim), an image older than
     // the database's schema or a ConfigError found at boot is a refusal

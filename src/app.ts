@@ -246,7 +246,7 @@ export async function createApp(
   // first time the database answers again.
   const outage = new DatabaseOutage(dbLogger);
   const db = createDb(database, dbLogger, {
-    onAnswer: () => outage.recovered(),
+    onAnswer: (startedAt) => outage.recovered(startedAt),
   });
   // Both can refuse the boot before any onClose hook exists, so a refusal
   // ends the pool here: the owner lookup failing (an unanswering database),
