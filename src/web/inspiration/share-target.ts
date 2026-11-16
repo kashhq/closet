@@ -78,7 +78,7 @@ export interface ShareStashStorage {
   delete(name: string): Promise<boolean>;
 }
 
-export type ShareOutcome =
+type ShareOutcome =
   /** A photo, kept for the confirmation page. */
   | 'stashed'
   /** A photo past SHARE_PHOTO_MAX_BYTES (or a body past SHARE_BODY_MAX_BYTES), not kept. */

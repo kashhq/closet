@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from '../errors';
 
@@ -18,7 +19,7 @@ export function readBeaconBodies(app: FastifyInstance, maxBytes: number): void {
       try {
         parsed(null, JSON.parse(body as string));
       } catch {
-        parsed(new HttpError(400, 'Body is not JSON'), undefined);
+        parsed(new HttpError(400, t('refusal.request.unreadable')), undefined);
       }
     },
   );

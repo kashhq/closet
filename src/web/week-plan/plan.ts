@@ -92,7 +92,7 @@ export const NO_FORECAST: WeekForecast = { days: new Map(), offset: 0 };
  * the rest, and reads `{}` only for a user the batch left out (a failed
  * or overrun refresh) or when the morning reminder runs it.
  */
-export async function weekForecast(
+async function weekForecast(
   deps: { db: Db; weather: WeatherService | undefined },
   userId: number,
   now: Date,

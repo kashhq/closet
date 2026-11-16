@@ -68,7 +68,7 @@ import type { WriteOrigin } from '../write-origin';
  */
 
 /** Another's trip or no trip: one refusal for both (ids reveal nothing). */
-export function tripNotFound(): NotFound {
+function tripNotFound(): NotFound {
   return new NotFound('trip');
 }
 

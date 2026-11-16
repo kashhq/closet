@@ -13,7 +13,7 @@ import {
  * nightly run deletes it: long enough to notice, after a database restore,
  * that garments added since the dump have lost their photos.
  */
-export const TRASH_RETENTION_DAYS = 30;
+const TRASH_RETENTION_DAYS = 30;
 
 /**
  * Deletes the day directories of `.trash` older than TRASH_RETENTION_DAYS

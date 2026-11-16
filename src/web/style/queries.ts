@@ -194,7 +194,7 @@ function namedGarmentSql() {
  * it with the profile in one statement. A side's garment cascades with it,
  * so every garment a rule names is there.
  */
-export function outfitRuleListSql(ownerId: number): SQL<ListedOutfitRule[]> {
+function outfitRuleListSql(ownerId: number): SQL<ListedOutfitRule[]> {
   return sql<ListedOutfitRule[]>`(
     select coalesce(json_agg(json_build_object(
       'id', ${outfitRule.id},

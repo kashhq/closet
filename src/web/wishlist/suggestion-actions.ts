@@ -252,20 +252,17 @@ export async function createNeed(
     return created.id;
   }
   if (created.reason === 'chosen') {
-    throw new HttpError(
-      409,
-      `The owner chose an option for that need (id ${created.id}): it is decided`,
-    );
+    throw new HttpError(409, t('refusal.need.chosen', { id: created.id }));
   }
   if (created.reason === 'open') {
-    throw new HttpError(
-      409,
-      `A need of that name is open already (id ${created.id}): add options to it`,
-    );
+    throw new HttpError(409, t('refusal.need.open', { id: created.id }));
   }
   throw new HttpError(
     409,
-    `The owner set that need aside (id ${created.id}, ${created.dismissedReason ?? 'with a note'}): never propose it again`,
+    t('refusal.need.setAside', {
+      id: created.id,
+      reason: created.dismissedReason ?? t('refusal.need.withANote'),
+    }),
   );
 }
 

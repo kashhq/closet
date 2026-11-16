@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -61,14 +62,11 @@ const SummaryQuery = Type.Object({
 function summaryDays(from: IsoDate | undefined, to: IsoDate | undefined) {
   if (from === undefined && to === undefined) return [];
   if (from === undefined || to === undefined) {
-    throw new HttpError(400, 'Give both from and to, or neither');
+    throw new HttpError(400, t('refusal.weather.rangePair'));
   }
   const span = daysBetween(from, to) + 1;
   if (span < 1 || span > MAX_SUMMARY_DAYS) {
-    throw new HttpError(
-      400,
-      `Ask for 1 to ${MAX_SUMMARY_DAYS} days, from before to`,
-    );
+    throw new HttpError(400, t('api.DAY_RANGE', { max: MAX_SUMMARY_DAYS }));
   }
   return Array.from({ length: span }, (_, i) => addDays(from, i));
 }

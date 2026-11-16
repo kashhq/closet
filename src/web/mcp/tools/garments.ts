@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { buffer } from 'node:stream/consumers';
 import { QUANTITY_MAX } from '../../../wardrobe/availability';
 import * as z from 'zod';
@@ -568,10 +569,7 @@ export const garmentTools = [
       // it; addGarmentFromLink saves into the wardrobe authorized here.
       const access = await wardrobeFor(ctx, args.ownerId, 'manage');
       if (!(await ctx.allowLinkImport())) {
-        throw new HttpError(
-          429,
-          'Too many link imports: try again in a minute',
-        );
+        throw new HttpError(429, t('refusal.rateLimit.linkImport'));
       }
       const saved = await addGarmentFromLink(ctx, access, args);
       const garment = await garmentIn(ctx.db, access, saved.id);

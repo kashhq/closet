@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { selectScalars } from '../../../db/select-scalars';
 import type { OutfitCount } from '../../../wardrobe/goes-with';
@@ -279,10 +280,7 @@ export const suggestionTools = [
       const actor = actorOf(ctx);
       await checkSuggestionRoom(ctx.db, actor, args.groupId, args.url);
       if (!(await ctx.allowLinkImport())) {
-        throw new HttpError(
-          429,
-          'Too many link imports: try again in a minute',
-        );
+        throw new HttpError(429, t('refusal.rateLimit.linkImport'));
       }
       const provenance = {
         tokenId: ctx.tokenId,

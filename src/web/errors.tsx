@@ -129,7 +129,7 @@ const DATABASE_RETRY_SECONDS = 5;
  * (src-sw.ts, ServerFirstPages). `logDetail` names the driver's code (an
  * errno, a SQLSTATE) or the error's class, never its message.
  */
-export class DatabaseUnavailable extends HttpError {
+class DatabaseUnavailable extends HttpError {
   constructor(cause: unknown) {
     super(503, t('DATABASE_UNAVAILABLE'), {
       logDetail: `database unavailable: ${driverError(cause)?.code ?? (cause instanceof Error ? cause.name : typeof cause)}`,
@@ -146,7 +146,7 @@ export class DatabaseUnavailable extends HttpError {
  * event and no outage (DatabaseOutage), so a burst of load never reads as
  * the database down.
  */
-export class DatabasePoolBusy extends HttpError {
+class DatabasePoolBusy extends HttpError {
   constructor() {
     super(503, t('SERVER_BUSY'), {
       logDetail: 'every database connection busy',
@@ -210,7 +210,7 @@ export interface ErrorBody {
   request_id: string;
 }
 
-export function errorBody(
+function errorBody(
   request: FastifyRequest,
   statusCode: number,
   message: string,
@@ -383,7 +383,7 @@ export function describeError(error: unknown): ErrorAnswer {
  * status says what kind of problem it is, so `title` is the status text.
  * A 500 carries no detail: what failed is in the log, under `requestId`.
  */
-export function problemOf(
+function problemOf(
   request: Pick<FastifyRequest, 'id'>,
   answer: ProblemAnswer,
 ): Problem {
@@ -425,13 +425,13 @@ export function sendProblem(
 export const REQUEST_FAILED_EVENT = 'closet:request-failed';
 
 /** The event's detail: what the toast says, and the id a report quotes. */
-export interface RequestFailure {
+interface RequestFailure {
   message: string;
   requestId: string;
 }
 
 /** The `HX-Trigger` header naming a failure (ASCII-escaped: hxTrigger). */
-export function failureTrigger(failure: RequestFailure): string {
+function failureTrigger(failure: RequestFailure): string {
   return hxTrigger(REQUEST_FAILED_EVENT, failure);
 }
 

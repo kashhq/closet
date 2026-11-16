@@ -25,7 +25,7 @@ import {
  * An existing share holds nearly all of them; a mountpoint with a night's
  * strays holds next to none.
  */
-export const ADOPT_MIN_COVERAGE = 0.9;
+const ADOPT_MIN_COVERAGE = 0.9;
 
 /**
  * Whether DATA_PATH is the household's photo storage (#650). Contents

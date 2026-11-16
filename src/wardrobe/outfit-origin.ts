@@ -30,7 +30,3 @@ export const ONE_OFF_ORIGINS = [
   'idea',
   'planner',
 ] as const satisfies readonly OutfitOrigin[];
-
-export function isKept(origin: OutfitOrigin): boolean {
-  return (KEPT_ORIGINS as readonly OutfitOrigin[]).includes(origin);
-}

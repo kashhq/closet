@@ -99,7 +99,7 @@ export async function countAgainst(
 }
 
 /** enforceLimit's refusal, logged naming `who`. */
-export function limitReached(
+function limitReached(
   request: FastifyRequest,
   { ttlInSeconds }: { ttlInSeconds: number },
   { logger, who }: { logger: Logger; who: string },

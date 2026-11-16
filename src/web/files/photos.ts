@@ -1376,7 +1376,7 @@ function refuseNonImage(source: ImageSource): void {
   // https://github.com/fastify/fastify-multipart/issues/497
   // An unconsumed multipart stream hangs the request: drain, then refuse.
   source.stream.resume();
-  throw new HttpError(400, 'Wrong filetype');
+  throw new HttpError(400, t('refusal.upload.wrongType'));
 }
 
 // sharp reports limitInputPixels only through its message ("Input image
@@ -1388,7 +1388,7 @@ function exceedsPixelLimit(cause: unknown): boolean {
 
 /** Bytes sharp or the HEIC decoder could not read: the client's error, a 400. */
 function unreadableImage(): HttpError {
-  return new HttpError(400, 'Unreadable image');
+  return new HttpError(400, t('refusal.upload.unreadable'));
 }
 
 /** A failed decode's 400: over sharp's pixel limit, else unreadable. */

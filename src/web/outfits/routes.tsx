@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { type Static, Type } from '@sinclair/typebox';
@@ -164,10 +165,7 @@ function outfitInput(body: OutfitForm): Omit<OutfitInput, 'origin' | 'madeBy'> {
   const categories = body.category ?? [];
   const garmentIds = body.garmentId ?? [];
   if (categories.length !== garmentIds.length) {
-    throw new HttpError(
-      400,
-      'Each outfit row needs a category and a garment id (empty for none)',
-    );
+    throw new HttpError(400, t('refusal.form.outfitRows'));
   }
   return {
     name: outfitText(body.name),

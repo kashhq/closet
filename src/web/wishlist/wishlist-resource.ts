@@ -71,7 +71,7 @@ function toUnlocks(count: OutfitCount): Static<typeof UnlocksResource> {
   return { outfits: count.outfits, capped: count.capped };
 }
 
-export const WishlistGarment = Type.Object(
+const WishlistGarment = Type.Object(
   {
     id: Type.Integer(),
     name: Type.Optional(Type.String()),
@@ -153,7 +153,7 @@ function toOwnItem(item: OwnItem): WishlistGarment {
   };
 }
 
-export const NeedResource = Type.Object(
+const NeedResource = Type.Object(
   {
     id: Type.Integer(),
     name: Type.String(),

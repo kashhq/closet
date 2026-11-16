@@ -12,11 +12,14 @@ import { idCursor, readIdCursor } from '../api/resource';
 import { HttpError } from '../errors';
 import { servePrivatePhoto } from '../files/private-photo';
 import { OutfitPicked, toOutfitPicked } from '../gallery/idea-resource';
-import { t } from '../i18n';
 import { enforceLimit, LINK_IMPORT_LIMIT } from '../security/rate-limit';
 import { actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
-import { LinkImportError, REFUSALS } from '../wardrobe/link-import/import';
+import {
+  LinkImportError,
+  REFUSALS,
+  reasonLedMessage,
+} from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX, linkIn } from '../wardrobe/link-import/link-text';
 import {
   Look,
@@ -546,7 +549,7 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
 
 /** A link the paste never fetches: the 400 naming the field, its reason leading the detail. */
 function refusedLink(reason: keyof typeof REFUSALS): HttpError {
-  const message = `${reason}: ${t(REFUSALS[reason].message)}`;
+  const message = reasonLedMessage(reason);
   return new HttpError(REFUSALS[reason].status, message, {
     validation: [{ path: 'body/url', message }],
   });

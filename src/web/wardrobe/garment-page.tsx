@@ -641,7 +641,7 @@ export function pollCount(raw: string | undefined): number {
  * far have waited POLL_CAP_SECONDS while `modelUnavailable` (the queue is
  * waiting-for-model): the fragment then stops polling.
  */
-export function cutoutPollDelay(
+function cutoutPollDelay(
   poll: number,
   modelUnavailable: boolean,
 ): number | undefined {

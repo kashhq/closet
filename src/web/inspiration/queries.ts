@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
 import type { IsoDate } from '../../calendar-date';
 import { initialCutoutState } from '../../cutout/state';
@@ -602,7 +603,10 @@ export function setInspirationPieces(
   pieces: readonly LookPiece[],
 ): Promise<PiecesSet> {
   if (pieces.length > INSPIRATION_MAX_PIECES) {
-    throw new HttpError(400, `At most ${INSPIRATION_MAX_PIECES} pieces`);
+    throw new HttpError(
+      400,
+      t('refusal.inspiration.tooManyPieces', { max: INSPIRATION_MAX_PIECES }),
+    );
   }
   return db.transaction(async (tx) => {
     await lockOwnLook(tx, id, ownerId);

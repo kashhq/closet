@@ -6,7 +6,7 @@ import {
   MAX_INPUT_PIXELS,
   type Photos,
 } from '../../files/photos';
-import type { StringKey } from '../../i18n';
+import { type StringKey, t } from '../../i18n';
 import type { Logger } from '../../../logger';
 import type { RateLimitChecker } from '../../security/rate-limit';
 import {
@@ -64,6 +64,18 @@ export type LinkImportRefusal =
   | 'no-link'
   /** Fetched as an image, but not one Photos can decode (or too many pixels). */
   | 'unreadable-image';
+
+/**
+ * What an API or agent caller is told of a refusal: the reason leads (a
+ * machine-readable word to branch on), then the copy.
+ */
+export function reasonLed(reason: string, message: string): string {
+  return `${reason}: ${message}`;
+}
+
+export function reasonLedMessage(reason: LinkImportRefusal): string {
+  return reasonLed(reason, t(REFUSALS[reason].message));
+}
 
 /** A refusal of the link import's (REFUSALS says what the user is told). */
 export class LinkImportError extends Error {

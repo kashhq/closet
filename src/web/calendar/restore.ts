@@ -71,5 +71,3 @@ export function createUndoStore(now: () => number = Date.now) {
     },
   };
 }
-
-export type UndoStore = ReturnType<typeof createUndoStore>;

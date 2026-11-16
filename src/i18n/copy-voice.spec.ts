@@ -12,20 +12,20 @@ function leaves(node: unknown, path = ''): [string, string][] {
 
 const strings = leaves(english);
 
-// Words that stay capitalised mid-label: names, not Title Case.
-const PROPER_NOUNS = new Set([
-  'Muse',
-  'Claude',
-  'Code',
-  'Open-Meteo',
-  'Styling',
-  'Weather',
-]);
+// Names that stay capitalised mid-label: names, not Title Case. Phrases, not
+// words, so a name's parts ('Code', 'Weather') do not pass on their own.
+const PROPER_NOUNS = [
+  'Muse', // the wishlist's agent
+  'Claude Code', // the MCP client the token screen names
+  'Open-Meteo', // the weather provider (its credit line)
+  'Styling', // the composer's section name
+];
 
 // Labels that quote or name other copy.
 const NAMING_OTHER_COPY = new Set([
   'wear.UNDO_WORE_TODAY', // quotes the "Wore today" button
   'style.WEEK_CHANGE', // names the "Your week" section
+  'style.CHANGE_HOME', // names the Weather settings page
   'style.BUDGET_HINT', // the budget tiers as the form names them
 ]);
 
@@ -41,17 +41,17 @@ function isLabel(text: string): boolean {
   return !/[.!?:;,](\s|$)/.test(stripped(text));
 }
 
+function withoutNames(text: string): string {
+  return PROPER_NOUNS.reduce((rest, name) => rest.replaceAll(name, ''), text);
+}
+
 /** Words after the first that start uppercase and are not acronyms or names. */
 function titleCasedWords(text: string): string[] {
-  const words = stripped(text).match(/[A-Za-z][A-Za-z’'-]*/g) ?? [];
+  const words =
+    withoutNames(stripped(text)).match(/[A-Za-z][A-Za-z’'-]*/g) ?? [];
   return words
     .slice(1)
-    .filter(
-      (word) =>
-        /^[A-Z]/.test(word) &&
-        word !== word.toUpperCase() &&
-        !PROPER_NOUNS.has(word),
-    );
+    .filter((word) => /^[A-Z]/.test(word) && word !== word.toUpperCase());
 }
 
 describe('the copy speaks in one voice (#729)', () => {
@@ -85,6 +85,9 @@ describe('the copy speaks in one voice (#729)', () => {
     expect(titleCasedWords('Add to Calendar')).toEqual(['Calendar']);
     expect(titleCasedWords('Request ID')).toEqual([]);
     expect(titleCasedWords('Date acquired')).toEqual([]);
+    expect(titleCasedWords('Connect Claude Code')).toEqual([]);
+    expect(titleCasedWords('Weather Settings')).toEqual(['Settings']);
+    expect(titleCasedWords('Open Weather')).toEqual(['Weather']);
     expect(isLabel('Tap Save. Then wait')).toBe(false);
   });
 });

@@ -237,11 +237,14 @@ export async function proposeOutfitTo(
   if (proposed.reason === 'owners') {
     throw new HttpError(
       409,
-      `These garments are an outfit of the owner's own already (outfit ${proposed.id})`,
+      t('refusal.outfit.ownersAlready', { id: proposed.id }),
     );
   }
   throw new HttpError(
     409,
-    `The owner declined these garments as an outfit (outfit ${proposed.id}, ${proposed.dismissedReason ?? 'no reason'}): never propose it again`,
+    t('refusal.outfit.declined', {
+      id: proposed.id,
+      reason: proposed.dismissedReason ?? t('refusal.outfit.noReason'),
+    }),
   );
 }
