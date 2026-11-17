@@ -119,6 +119,26 @@ function keysInFlight(
   );
 }
 
+/** A `desktop="grid"` strip at 1440: a grid of at least four tracks that scrolls nothing (SnapStrip, #1065). */
+async function expectIdeaGrid(strip: Locator) {
+  await expect(strip).toHaveAttribute('data-snap-desktop', 'grid');
+  const box = await strip.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      display: style.display,
+      overflowX: style.overflowX,
+      scrolls: el.scrollWidth > el.clientWidth,
+      tracks: style.gridTemplateColumns.split(' ').length,
+    };
+  });
+  expect(box).toMatchObject({
+    display: 'grid',
+    overflowX: 'visible',
+    scrolls: false,
+  });
+  expect(box.tracks).toBeGreaterThanOrEqual(4);
+}
+
 async function wardrobe(page: Page) {
   return {
     oldTee: await createGarment(page, 'Old tee', 'tops'),
@@ -543,6 +563,41 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.keyboard.press('ArrowRight');
     await expect(chosen(accessories)).toHaveValue(String(socks[9]));
     await page.context().unroute(newer);
+  });
+
+  await test.step('from lg Today and Ideas lay their cards out as a grid, and Ideas pages as its last row scrolls in (#1065)', async () => {
+    // Three more bottoms: a dozen tops and bottoms, past one page of six.
+    for (const name of ['Chinos', 'Cords', 'Shorts']) {
+      await createGarment(page, name, 'bottoms');
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await expectIdeaGrid(
+      page.locator('[data-today-row="ideas"] [data-snap-strip]'),
+    );
+    // A short window, so the grid's last row (with the sentinel) starts
+    // below the fold: these cards have no photos and two rows fit in 900.
+    await page.setViewportSize({ width: 1440, height: 480 });
+    await page.goto('/outfits/ideas');
+    const strip = page.locator('#idea-strip');
+    await expectIdeaGrid(strip);
+    const cards = strip.locator('[data-idea]');
+    await expect(cards).toHaveCount(6);
+    await expect(strip.locator('[data-ideas-more]')).not.toBeInViewport();
+    const firstRow = await cards.evaluateAll(
+      (all) =>
+        all.filter(
+          (card) =>
+            card.getBoundingClientRect().top ===
+            all[0].getBoundingClientRect().top,
+        ).length,
+    );
+    expect(firstRow).toBeGreaterThanOrEqual(4);
+    // The page's own scroll brings the sentinel in: the grid itself never
+    // scrolls.
+    await page.mouse.wheel(0, 4000);
+    await expect.poll(() => cards.count()).toBeGreaterThan(6);
+    await page.setViewportSize({ width: 390, height: 844 });
   });
 
   expect(errors, errors.join('\n')).toEqual([]);

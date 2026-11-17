@@ -18,8 +18,11 @@
  *  - `OUTFIT_GRID`: saved-outfit tiles (collage and name), the Saved tab and
  *    Inspiration's looks; two on a phone, three at `sm`, from `lg`
  *    `--tile-outfit` (five at 1280, six at 1440).
- *  - `IDEA_GRID`: idea cards (Today's and the Ideas tab's, adopted with D7's
- *    strip modes); one on a phone, from `lg` `--tile-idea` (four at 1440).
+ *  - `IDEA_GRID`: idea cards, from `lg` only: `--tile-idea` wide, four at
+ *    1440. Below `lg` the cards are a strip (`SnapStrip desktop="grid"`,
+ *    src/web/strip/snap-strip.tsx: Ideas, Today's ideas, a Muse need's
+ *    options) or the parent's stack (Today's planned cards beside them,
+ *    so both sit on the same tracks), so it carries no phone layout.
  *  - `CANDIDATE_GRID`: large product photos with their price and actions
  *    under them (the inbox's Ready to buy and own items): two on a phone,
  *    from `lg` `--tile-candidate`.
@@ -31,9 +34,8 @@
  *  - `CARD_COLUMNS`: blocks of mixed height (Insights' cards) flowing down
  *    CSS columns, so a short card leaves no hole: one on a phone (stacked
  *    with the same 1rem gap), two at `lg`, three at `xl`.
- *  - `PAIR_GRID`: two side by side from `lg` (Today's rows: the planned
- *    suggestion beside the ideas strip; a lone ideas row spans both and
- *    shows two ideas at a time).
+ *  - `PAIR_GRID`: two side by side from `lg` (the Wishlist inbox's Muse
+ *    picks).
  *  - `MUSE_GRID`: Muse's outfit cards (the Outfits tab, #335), the page's
  *    hero, every piece big: one on a phone, two from `lg` (never three:
  *    the pieces being decided on must stay the largest images on the page,
@@ -61,7 +63,7 @@ export const GALLERY_GRID =
 export const OUTFIT_GRID =
   'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-outfit),1fr))]';
 export const IDEA_GRID =
-  'grid grid-cols-1 gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-idea),1fr))]';
+  'lg:grid lg:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-idea),1fr))]';
 export const CANDIDATE_GRID =
   'grid grid-cols-2 items-start gap-x-3 gap-y-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-candidate),1fr))]';
 export const CARD_GRID =

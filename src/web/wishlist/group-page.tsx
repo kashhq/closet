@@ -136,9 +136,10 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
         <>
           <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
           <SnapStrip
-            size="options"
+            size="peek"
             label={t('muse.OPTIONS_LABEL', { need: need.name })}
             listbox={false}
+            desktop="grid"
             tapThrough
             class="pb-2"
             attributes={{ 'data-need-options': '' }}
@@ -265,8 +266,9 @@ function OptionCard(props: {
       {...snapItem({
         value: String(pick.id),
         selected: props.selected,
-        size: 'options',
+        size: 'peek',
         listbox: false,
+        desktop: 'grid',
       })}
       data-option={String(pick.id)}
     >
