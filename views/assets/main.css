@@ -560,8 +560,11 @@ html {
     --page-gap: 2rem;
   }
   /* A split page on a phone is one column, the subject then the body: the
-     body's own gap between them, as before the subject was a region. */
-  .page-shell[data-layout="split"] > .page-body {
+     body's own gap between them, as before the subject was a region.
+     A layout rule that sets a body's padding names the layout in :where(),
+     so it weighs what .page-body does and the gutter (flush, bleed: a class
+     and an attribute) always outranks it. */
+  :where(.page-shell[data-layout="split"]) > .page-body {
     padding-top: var(--page-gap, 1rem);
   }
   /* On a phone the settings index is Profile itself. */
@@ -595,8 +598,17 @@ html {
       max-width: var(--container-page-narrow);
     }
     /* Side by side, the subject and the body start on one line. */
-    .page-shell[data-layout="split"] > .page-body {
+    :where(.page-shell[data-layout="split"]) > .page-body {
       padding-top: 1rem;
+    }
+    /* The subject is sticky only while it fits: taller than the window under
+       the bar, it scrolls inside itself, so its last row (the collage under
+       a long note) stays reachable. A non-sticky fallback is not expressible
+       in CSS alone; this keeps the subject in view. */
+    .page-shell[data-layout="split"] > .page-aside {
+      max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
     /* Work and its result: the result beside it, right. */
     .page-shell[data-layout="panel"] {
@@ -628,7 +640,7 @@ html {
     min-height: 100%;
     padding-top: calc(var(--app-bar-h) + 1rem);
   }
-  .page-shell[data-layout="centred"] > .page-body {
+  :where(.page-shell[data-layout="centred"]) > .page-body {
     display: flex;
     flex-direction: column;
     align-items: center;

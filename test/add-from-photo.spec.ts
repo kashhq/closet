@@ -95,7 +95,46 @@ async function checkSplitAtDesktop(page: Page) {
   const bar = (await page.locator('header.app-bar').boundingBox())!;
   expect(after.y).toBeGreaterThanOrEqual(bar.y + bar.height);
   expect(after.y + after.height).toBeLessThanOrEqual(560);
+  await checkTallSubjectScrolls(page, id);
   await page.setViewportSize({ width: 390, height: 844 });
+}
+
+/**
+ * A split page's subject taller than the window under the bar scrolls inside
+ * itself (main.css, the split aside's max-height), so the collage under long
+ * notes stays reachable. An outfit of the coat with notes at the cap, at 1440
+ * x 700.
+ */
+async function checkTallSubjectScrolls(page: Page, garmentId: number) {
+  const made = await page.request.post('/outfits', {
+    form: {
+      name: 'Long notes outfit',
+      notes: 'Wear it open over a plain tee, sleeves pushed up. '
+        .repeat(80)
+        .slice(0, 4000),
+      category: 'coats',
+      garmentId: String(garmentId),
+      scheduleDate: '',
+    },
+    headers: SAME_ORIGIN,
+  });
+  expect(made.ok()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto(made.url());
+  const subject = page.locator('#outfit-aside');
+  const collage = subject.locator('[data-collage]');
+  await expect(collage).toBeAttached();
+  const frame = await subject.evaluate((el) => ({
+    scrolls: el.scrollHeight > el.clientHeight,
+    bottom: el.getBoundingClientRect().bottom,
+  }));
+  expect(frame.scrolls).toBe(true);
+  expect(frame.bottom).toBeLessThanOrEqual(700);
+  await collage.scrollIntoViewIfNeeded();
+  const at = (await collage.boundingBox())!;
+  const box = (await subject.boundingBox())!;
+  expect(at.y + at.height).toBeLessThanOrEqual(box.y + box.height + 1);
+  expect(at.y + at.height).toBeLessThanOrEqual(700);
 }
 
 const photo = () =>
