@@ -40,9 +40,10 @@ import { type GalleryState, ideasUrl } from './urls';
 
 /**
  * The Outfits page's Ideas tab (#9): generated outfits as full-width cards
- * in a horizontal scroll-snap strip. Swiping is the browser's own
- * scrolling (no carousel library, no touch handlers); the strip's last
- * child is a sentinel that loads the next page when it scrolls into view
+ * in a horizontal scroll-snap strip, from `lg` a grid (`desktop="grid"`).
+ * Swiping is the browser's own scrolling (no carousel library, no touch
+ * handlers); the strip's last child is a sentinel that loads the next page
+ * when it scrolls into view (the strip's end, or the grid's last row)
  * and replaces itself (GET /outfits/ideas/more), as the wardrobe grid's
  * does. A card's primary action follows `?for=` (OutfitDestination): plan
  * it on that day (or, with `&replace=`, put it in that entry's place, #69),
@@ -107,8 +108,8 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
             size="page"
             label={t('gallery.STRIP_LABEL')}
             listbox={false}
+            desktop="grid"
             tapThrough
-            frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
             class="pb-2"
             attributes={{ id: 'idea-strip' }}
           >
@@ -326,6 +327,7 @@ function IdeaCard(props: {
         selected,
         size: 'page',
         listbox: false,
+        desktop: 'grid',
       })}
       data-idea={ideaKey}
     >

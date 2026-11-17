@@ -99,6 +99,7 @@ export function GoesWithSection({
             size={best.length > 1 ? 'pair' : 'page'}
             label={t('goesWith.BEST_LABEL')}
             listbox={false}
+            desktop="row"
             focusable
             class="pb-1"
             attributes={{ 'data-goes-with-strip': '' }}
@@ -110,6 +111,7 @@ export function GoesWithSection({
                   selected: index === 0,
                   size: best.length > 1 ? 'pair' : 'page',
                   listbox: false,
+                  desktop: 'row',
                   class: 'flex flex-col gap-1',
                 })}
                 data-goes-with-idea={idea.garments.map((g) => g.id).join(',')}

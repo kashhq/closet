@@ -16,7 +16,7 @@ import { ideasUrl } from '../gallery/urls';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
 import { AwayLink } from '../trips/away-link';
-import { PAIR_GRID } from '../layout/columns';
+import { IDEA_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import { sheetOpener } from '../layout/sheet';
@@ -102,13 +102,7 @@ export function TodayPage(props: {
       }
     >
       {firstRun && <FirstRunCard stage={firstRun} />}
-      {model.weather && firstRun !== 'empty' && (
-        <UserWeatherLine
-          weather={model.weather}
-          timeZone={props.timeZone}
-          now={props.now}
-        />
-      )}
+      <WeatherRow model={model} timeZone={props.timeZone} now={props.now} />
       {model.away.map((trip) => (
         <AwayLink trip={trip} class="self-start" />
       ))}
@@ -120,16 +114,12 @@ export function TodayPage(props: {
         {t('today.OFFLINE')}
       </p>
       <MuseCard round={model.round} needs={model.needs} />
-      {model.rows.length > 0 && (
-        <div class={PAIR_GRID}>
-          {model.rows.map((row) =>
-            row.kind === 'planned' ? (
-              <PlannedRowView row={row} today={model.today} wore={wore} />
-            ) : (
-              <IdeasRowView row={row} today={model.today} />
-            ),
-          )}
-        </div>
+      {model.rows.map((row) =>
+        row.kind === 'planned' ? (
+          <PlannedRowView row={row} today={model.today} wore={wore} />
+        ) : (
+          <IdeasRowView row={row} today={model.today} />
+        ),
       )}
       <SnapStripsInit />
       {!firstRun && (
@@ -140,11 +130,41 @@ export function TodayPage(props: {
           >
             + {t('today.PLAN_ANOTHER')}
           </a>
-          {/* The week ahead (#16): lands on the calendar with what it planned. */}
-          <PlanWeekForm small />
+          {/* The week ahead (#16): lands on the calendar with what it
+                planned. From lg it is the one beside the weather. */}
+          <PlanWeekForm small class="lg:hidden" />
         </div>
       )}
     </PageShell>
+  );
+}
+
+/**
+ * The weather line (the city once a garment is in, on the first-run path)
+ * and, from lg, "Plan my week" beside it. Below lg that button stays in the
+ * foot's row, the phone's place for it: the server cannot know the width,
+ * so it renders both and CSS shows one, rather than reordering the DOM
+ * (a phone's focus order follows what it sees). `max-lg:contents`: below
+ * lg the row draws no box, so the line is the body's own child as before
+ * and no gap is added when it renders nothing.
+ */
+function WeatherRow(props: { model: TodayModel; timeZone: string; now: Date }) {
+  const firstRun = props.model.firstRun ?? null;
+  const weather = firstRun === 'empty' ? null : props.model.weather;
+  if (!weather && firstRun) return null;
+  return (
+    <div class="max-lg:contents lg:flex lg:items-start lg:gap-4">
+      {weather && (
+        <UserWeatherLine
+          weather={weather}
+          timeZone={props.timeZone}
+          now={props.now}
+        />
+      )}
+      {!firstRun && (
+        <PlanWeekForm small class="hidden lg:block lg:ml-auto lg:shrink-0" />
+      )}
+    </div>
   );
 }
 
@@ -252,9 +272,10 @@ function NeedsCard({ needs }: { needs: NeedsToDecide }) {
   );
 }
 
+/** An occasion's heading and its Refresh: at the row's far edge on a phone, beside the heading from lg, where the edge is a screen away. */
 function RowHeading(props: { occasion: Occasion; children?: Child }) {
   return (
-    <div class="flex items-center justify-between gap-2 px-2">
+    <div class="flex items-center justify-between gap-2 px-2 lg:justify-start lg:gap-4">
       <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
         {occasionLabel(props.occasion)}
       </h2>
@@ -276,14 +297,18 @@ function PlannedRowView(props: {
       data-occasion={row.occasion}
     >
       <RowHeading occasion={row.occasion} />
-      {row.entries.map((entry, index) => (
-        <PlannedCard
-          entry={entry}
-          today={today}
-          eager={index === 0}
-          focused={entry.id === props.wore}
-        />
-      ))}
+      {/* The ideas' tracks from lg, so a planned card is an idea card's
+            size; below lg the section's own stack. */}
+      <div class={`flex flex-col gap-2 ${IDEA_GRID}`}>
+        {row.entries.map((entry, index) => (
+          <PlannedCard
+            entry={entry}
+            today={today}
+            eager={index === 0}
+            focused={entry.id === props.wore}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -367,7 +392,7 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
   const { row, today } = props;
   return (
     <section
-      class="flex flex-col gap-2 lg:only:col-span-full"
+      class="flex flex-col gap-2"
       data-today-row="ideas"
       data-occasion={row.occasion}
       data-page={row.page}
@@ -392,8 +417,8 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
           size="peek"
           label={t('today.STRIP_LABEL')}
           listbox={false}
+          desktop="grid"
           tapThrough
-          frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
           class="pb-2"
         >
           {row.ideas.map((idea, index) => (
@@ -445,6 +470,7 @@ function IdeaCard(props: {
         selected: props.eager,
         size: 'peek',
         listbox: false,
+        desktop: 'grid',
       })}
       data-idea={ideaKey}
     >

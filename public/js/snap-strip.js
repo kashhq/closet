@@ -37,40 +37,85 @@
  *   has been (re)scanned. Styling's locks use the first and last, its
  *   preview the second.
  *
+ * - From `lg` a strip that is not a choice may be a `row` or a `grid`
+ *   (SnapStrip's `desktop`, `data-snap-desktop`): browsed, not chosen from.
+ *   Such a strip gets no observer and no centring there; a `row`'s steps
+ *   page by its visible width and the arrow keys move focus item to item.
+ *   Decided by a media query, never by measuring: when the strip is first
+ *   watched, and again whenever the query changes (a tablet rotating across
+ *   `lg`), which attaches or detaches the observer and the tap-to-centre.
+ *
  * Evaluated once per document: the listeners below sit on the document and
  * serve every page's strips.
  */
 
-/** Strips already watched, each with its observer. */
+/** Strips already watched, each with its observer (null for a browsed one). */
 const watched = new WeakMap();
+
+/** Tailwind's `lg`, where `row` and `grid` strips stop being strips. */
+const DESKTOP = window.matchMedia('(min-width: 64rem)');
+const BROWSE_MODES = new Set(['row', 'grid']);
+
+/** Strips watched as browsed: a `row` or `grid` at `lg`. */
+const browsed = new WeakSet();
+
+// A tablet rotating across `lg` (an installed PWA keeps its document) changes
+// every watched strip's mode; strips not yet watched pick it up at their first watch.
+DESKTOP.addEventListener('change', () => {
+  for (const strip of document.querySelectorAll('[data-snap-strip]')) {
+    if (watched.has(strip) && browsed.has(strip) !== wantsBrowsed(strip)) {
+      applyMode(strip);
+      watch(strip);
+    }
+  }
+});
 
 export function initSnapStrips(root) {
   if (!root) return;
   for (const strip of root.querySelectorAll('[data-snap-strip]')) watch(strip);
 }
 
-function watch(strip) {
-  let observer = watched.get(strip);
-  if (!observer) {
-    centre(strip, strip.querySelector('[data-selected]'), 'instant');
-    observer = new IntersectionObserver(
-      (entries) => chooseFrom(strip, entries),
-      {
-        root: strip,
-        // A zero-width band down the middle: an item intersects it only while
-        // it covers the centre, which is where scroll-snap parks the choice.
-        rootMargin: '0px -50% 0px -50%',
-        threshold: 0,
-      },
-    );
-    watched.set(strip, observer);
+/** Whether `strip` is browsed (a `row` or `grid`) at the viewport's current width. */
+function wantsBrowsed(strip) {
+  return DESKTOP.matches && BROWSE_MODES.has(strip.dataset.snapDesktop);
+}
+
+/** Puts `strip` in the mode its width calls for: a browsed one has no observer, a strip has the centre-line one. */
+function applyMode(strip) {
+  watched.get(strip)?.disconnect();
+  heading.delete(strip);
+  if (wantsBrowsed(strip)) {
+    browsed.add(strip);
+    watched.set(strip, null);
+  } else {
+    browsed.delete(strip);
+    watched.set(strip, observe(strip));
   }
+}
+
+function watch(strip) {
+  if (!watched.has(strip)) applyMode(strip);
+  const observer = watched.get(strip);
   // A strip's next page arrives as new items: observing one twice is a no-op.
-  for (const item of strip.querySelectorAll('[data-snap-item]')) {
-    observer.observe(item);
+  if (observer) {
+    for (const item of strip.querySelectorAll('[data-snap-item]')) {
+      observer.observe(item);
+    }
   }
   syncSteps(strip);
   strip.dispatchEvent(new CustomEvent('snap-strip:watch', { bubbles: true }));
+}
+
+/** Centres the strip's chosen item and watches its centre line. */
+function observe(strip) {
+  centre(strip, strip.querySelector('[data-selected]'), 'instant');
+  return new IntersectionObserver((entries) => chooseFrom(strip, entries), {
+    root: strip,
+    // A zero-width band down the middle: an item intersects it only while
+    // it covers the centre, which is where scroll-snap parks the choice.
+    rootMargin: '0px -50% 0px -50%',
+    threshold: 0,
+  });
 }
 
 function chooseFrom(strip, entries) {
@@ -141,7 +186,8 @@ document.addEventListener(
     const item = event.target.closest('[data-snap-item]');
     if (!item || item.hasAttribute('data-selected')) return;
     const strip = item.closest('[data-snap-strip]');
-    if (!strip) return;
+    // A browsed strip has no centre to bring a tile to: the tap is the tile's.
+    if (!strip || browsed.has(strip)) return;
     // A tile's own button or link in a strip that opted in works first time.
     if (
       strip.hasAttribute('data-snap-tap-through') &&
@@ -197,19 +243,44 @@ function stepStrip(strip, step) {
  * script runs). Styling calls this when a lock makes neighbours inert.
  */
 export function syncSteps(strip) {
-  const where = position(strip);
   const buttons = strip.parentElement.querySelectorAll('[data-snap-step]');
+  if (browsed.has(strip)) {
+    for (const button of buttons) {
+      const canPage = canPageBy(strip, Number(button.dataset.snapStep));
+      button.setAttribute('aria-disabled', String(!canPage));
+    }
+    return;
+  }
+  const where = position(strip);
   for (const button of buttons) {
     const target = stepTarget(where, Number(button.dataset.snapStep));
     button.setAttribute('aria-disabled', String(!target));
   }
 }
 
+/**
+ * Whether a browsed strip can page that way: not at its start or end. A
+ * grid never scrolls, so both stay disabled (and CSS hides them there).
+ * One pixel of slack: a fractional scroll width rounds.
+ */
+function canPageBy(strip, step) {
+  if (step < 0) return strip.scrollLeft > 1;
+  return strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+}
+
 document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-snap-step]');
   if (!button) return;
   const strip = button.parentElement.querySelector('[data-snap-strip]');
-  if (strip) stepStrip(strip, Number(button.dataset.snapStep));
+  if (!strip) return;
+  const step = Number(button.dataset.snapStep);
+  if (!browsed.has(strip)) {
+    stepStrip(strip, step);
+  } else if (canPageBy(strip, step)) {
+    // A page at a time; snapping parks the next item at the start. The
+    // buttons re-sync when the scroll ends (`stopped`).
+    strip.scrollBy({ left: step * strip.clientWidth, behavior: smooth() });
+  }
 });
 
 const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]';
@@ -226,6 +297,10 @@ document.addEventListener('keydown', (event) => {
   if (!strip) return;
   event.preventDefault();
   const source = event.target.closest('[data-snap-item]');
+  if (browsed.has(strip)) {
+    focusBeside(strip, source, step);
+    return;
+  }
   const target = stepStrip(strip, step);
   // A focused item hands focus to the step's target now, not when the
   // observer chooses it: Enter or a held key's next repeat then acts on
@@ -238,6 +313,24 @@ document.addEventListener('keydown', (event) => {
     target.focus({ preventScroll: true });
   }
 });
+
+/**
+ * A browsed strip's arrow keys: focus moves to the item beside the one
+ * holding it (from the strip itself, ArrowRight reaches its first item),
+ * scrolled into view where it is a row. Nothing is chosen.
+ */
+function focusBeside(strip, source, step) {
+  const items = [...strip.querySelectorAll('[data-snap-item]')];
+  const target = items[(source ? items.indexOf(source) : -1) + step];
+  if (!target) return;
+  if (!target.matches(FOCUSABLE)) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({
+    block: 'nearest',
+    inline: 'nearest',
+    behavior: smooth(),
+  });
+}
 
 /**
  * A page landing before the chosen item (Styling's newer garments, #996)
@@ -304,7 +397,8 @@ document.addEventListener(
 /** Whatever ended the scroll (arrival, a swipe taking over, a finger letting go), the strip's own state is the truth again. */
 function stopped(strip) {
   scrolling.delete(strip);
-  if (heading.delete(strip)) syncSteps(strip);
+  // A browsed row's steps follow where it scrolled to; a strip's, the step.
+  if (heading.delete(strip) || browsed.has(strip)) syncSteps(strip);
   const page = held.get(strip);
   if (!page) return;
   held.delete(strip);

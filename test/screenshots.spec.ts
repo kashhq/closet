@@ -320,6 +320,18 @@ test.describe('desktop', () => {
     await expect(page.locator('#pick-form')).toBeVisible();
     await shot(page, '96-demo-capsule-picker-desktop');
   });
+
+  // The strip's desktop modes (#1065): Today's cards in a grid (Ideas' is
+  // 92 above) and Goes-with's best outfits a row. No persona has a Muse
+  // need, so its options grid has no shot.
+  test('demo: Theo, the strips at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '97-demo-today-desktop', '/');
+    await page.goto('/wardrobe/wishlist');
+    await page.getByRole('link', { name: 'White Couriers' }).click();
+    await expect(page.locator('[data-goes-with-strip]')).toBeVisible();
+    await shot(page, '98-demo-goes-with-desktop');
+  });
 });
 
 /**
