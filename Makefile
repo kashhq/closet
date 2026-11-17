@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check lg-check migration-check secrets-check actionlint-check install
+.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check lg-check migration-check secrets-check actionlint-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -86,7 +86,7 @@ help:
 	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index (part of ci-quick)"
 	@echo "make layer-check      — fail on an import in src/ that reaches up scripts/ci/layers.conf's layer stack (part of ci-quick)"
 	@echo "make guard-check      — fail on a code-structure rule in scripts/ci/guards.conf (devkit/bin/guard_check.py; part of ci-quick)"
-	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/ci/lg_check.py; part of ci-quick)"
+	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/ci/lg_check.py, its unit tests first; part of ci-quick)"
 	@echo "make migration-check  — fail on an edit to a shipped drizzle migration (devkit/bin/migration_check.py; part of ci-quick)"
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
 	@echo "make secrets-staged   — the same scan over the staged paths only (the pre-commit hook's half)"
@@ -103,9 +103,9 @@ ci-quick: ci-guards secrets-check ci-lint ci-typecheck
 # Sub-second each and stdlib only: they run before npm ci. ci-guards-staged is the pre-commit
 # hook's copy: devkit-check judges the staged gate_plan.sh (devkit #124 reads the working tree
 # by default, which let a bad staged plan through when only the disk copy was fixed).
-GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check lg-check migration-check
-ci-guards: devkit-check $(GUARDS_AFTER_DEVKIT)
-ci-guards-staged: devkit-check-staged $(GUARDS_AFTER_DEVKIT)
+GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check migration-check
+ci-guards: devkit-check $(GUARDS_AFTER_DEVKIT) lg-check
+ci-guards-staged: devkit-check-staged $(GUARDS_AFTER_DEVKIT) lg-check-staged
 
 # Formatting is prettier's alone (format:check); eslint does not run prettier as a rule, which
 # read every file a second time (a third of a cold lint). Caches live in node_modules/.cache, so a
@@ -282,7 +282,12 @@ guard-check:
 # Page-level `lg:` classes in src/web are counted per file against scripts/ci/lg_count.conf, which
 # only shrinks (#1066; the desktop layout plan's principle 7). Stdlib only, like layer-check.
 lg-check:
+	python3 -I scripts/ci/lg_check_test.py
 	python3 -I scripts/ci/lg_check.py
+
+# The pre-commit hook's half: the conf, the file list and every file read from the index.
+lg-check-staged:
+	python3 -I scripts/ci/lg_check.py --staged
 
 # A migration on origin/main has run on the deployed database: never edit or delete it, fix forward
 # (the `migration-contract` label passes a deliberate edit). drizzle-kit's append to

@@ -1,24 +1,49 @@
 #!/usr/bin/env python3
 """`make lg-check`: a shrink-only count of page-level `lg:` classes (#1066).
 
-Counts every `lg:` variant in the .ts/.tsx files under `src` (spec files aside) that
-scripts/ci/lg_count.conf does not exempt, per file. A file fails when its count is above its
+Counts every variant that applies at or above lg (`lg:`, `xl:`, `2xl:`, their `min-` forms and
+`min-[<n>rem|px]:` from 64rem / 1024px; the `max-*` forms never) in the .ts/.tsx files under `src`
+(spec files aside) that scripts/ci/lg_count.conf does not exempt, per file. A file fails when its count is above its
 `known` line, or has none; a count below its line passes but says to lower the number in the same
 PR. Stdlib only, so it runs before npm ci, like layer-check.
+
+`--staged` (the pre-commit hook, `make lg-check-staged`) reads the conf, the file list and every
+file from the index, so it judges exactly what is about to be committed.
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONF = ROOT / "scripts/ci/lg_count.conf"
-# `lg:` as a variant, also stacked (`hover:lg:`, `max-lg:` is a different variant and not matched).
-LG = re.compile(r"(?<![A-Za-z0-9_-])lg:")
+# The one place that says what counts. A variant at or above Tailwind v4's lg breakpoint (64rem,
+# 1024px at the default 16px root), also stacked (`hover:lg:`). The lookbehind refuses `max-lg:`
+# and any longer name; `min-[<n>rem|px]:` is checked against the breakpoint in `at_or_above_lg`.
+LG_VARIANT = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:(?:min-)?(?:lg|xl|2xl):|min-\[(?P<n>\d+(?:\.\d+)?)(?P<unit>rem|px)\]:)"
+)
+LG_REM = 64
 
 
-def read_conf() -> tuple[str, list[str], dict[str, int]]:
+def at_or_above_lg(match: re.Match[str]) -> bool:
+    n = match["n"]
+    if n is None:
+        return True
+    return float(n) >= (LG_REM if match["unit"] == "rem" else LG_REM * 16)
+
+
+def count_lg(text: str) -> int:
+    return sum(1 for m in LG_VARIANT.finditer(text) if at_or_above_lg(m))
+
+
+def git_out(*args: str) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+
+
+def read_conf(text: str) -> tuple[str, list[str], dict[str, int]]:
     src, exempt, known = "src/web", [], {}
-    for number, raw in enumerate(CONF.read_text().splitlines(), 1):
+    for number, raw in enumerate(text.splitlines(), 1):
         line = raw.split("#", 1)[0].split()
         if not line:
             continue
@@ -33,23 +58,34 @@ def read_conf() -> tuple[str, list[str], dict[str, int]]:
     return src, exempt, known
 
 
-def counts(src: str, exempt: list[str]) -> dict[str, int]:
+def is_exempt(rel: str, exempt: list[str]) -> bool:
+    return any(rel == e or (e.endswith("/") and rel.startswith(e)) for e in exempt)
+
+
+def counted(rel: str, exempt: list[str]) -> bool:
+    name = rel.rsplit("/", 1)[-1]
+    return rel.endswith((".ts", ".tsx")) and ".spec." not in name and not is_exempt(rel, exempt)
+
+
+def counts(src: str, exempt: list[str], staged: bool) -> dict[str, int]:
+    if staged:
+        paths = git_out("ls-files", "-z", "--", src).split("\0")
+    else:
+        paths = [p.relative_to(ROOT).as_posix() for p in sorted((ROOT / src).rglob("*.ts*"))]
     found: dict[str, int] = {}
-    for path in sorted((ROOT / src).rglob("*.ts*")):
-        rel = path.relative_to(ROOT).as_posix()
-        if path.suffix not in (".ts", ".tsx") or ".spec." in path.name:
-            continue
-        if any(rel == e or (e.endswith("/") and rel.startswith(e)) for e in exempt):
-            continue
-        n = len(LG.findall(path.read_text()))
+    for rel in sorted(p for p in paths if p and counted(p, exempt)):
+        text = git_out("show", f":{rel}") if staged else (ROOT / rel).read_text()
+        n = count_lg(text)
         if n:
             found[rel] = n
     return found
 
 
 def main() -> int:
-    src, exempt, known = read_conf()
-    found = counts(src, exempt)
+    staged = "--staged" in sys.argv[1:]
+    conf = git_out("show", f":{CONF.relative_to(ROOT)}") if staged else CONF.read_text()
+    src, exempt, known = read_conf(conf)
+    found = counts(src, exempt, staged)
     failures, lowered = [], []
     for rel, n in found.items():
         allowed = known.get(rel)
