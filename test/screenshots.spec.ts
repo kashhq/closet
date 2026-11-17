@@ -305,7 +305,7 @@ test.describe('desktop', () => {
 
   // The Wardrobe's facets (#1067): the filters docked beside the grid,
   // applied (the chips in the scope row, the choices checked in the
-  // column), and the search heading them focused by `/`.
+  // column), and the scope row's search focused by `/`.
   test('demo: Theo, the Wardrobe facets at 1440', async ({ page }) => {
     await signInAs(page, 'demo');
     await page.goto('/wardrobe');
@@ -316,7 +316,9 @@ test.describe('desktop', () => {
     await expect(page).toHaveURL(/category=tops/);
     await shot(page, '83b-demo-wardrobe-facets-desktop');
     await page.keyboard.press('/');
-    await expect(facets.getByRole('textbox', { name: 'Search' })).toBeFocused();
+    await expect(
+      page.getByRole('search').getByRole('textbox', { name: 'Search' }),
+    ).toBeFocused();
     await page.keyboard.type('blue');
     await shot(page, '83c-demo-wardrobe-search-desktop');
   });

@@ -639,6 +639,14 @@ html {
     .page-shell[data-layout="index"] > .page-aside {
       display: block;
     }
+    /* The facets scroll inside their sticky column, the aside itself the
+       scroller: a fragment swaps its content in place (PageFragment), so
+       the scroll survives an Apply. */
+    .page-shell[data-layout="facets"] > .page-aside {
+      max-height: calc(100dvh - var(--app-bar-h));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
   }
 
   /* A standalone page (sign in, register, the invite, the offline page): one
@@ -731,9 +739,9 @@ html {
    one place CSS overrides a UA default (a closed dialog is display: none),
    chosen over a script calling show() on resize, which would be layout in
    script; a closed dialog shown by CSS is neither modal nor inert, and stays
-   named by its heading. Its opener says it is the sheet's
-   (`filtersShown`, below) and its backdrop's Close goes here; the box scrolls inside the sticky aside,
-   under the app bar, with Clear and Apply kept at its foot. In utilities:
+   named by its heading. Its opener (`dockedFiltersOpener`) and its
+   backdrop's Close go here; the box does not scroll, the aside does (the
+   page-shell block), with Clear and Apply kept at its foot. In utilities:
    daisyUI's layers rank above components, and this overrides its modal. */
 @layer utilities {
   @media (min-width: 1024px) {
@@ -757,7 +765,8 @@ html {
         scale: none;
         width: auto;
         max-width: none;
-        max-height: calc(100dvh - var(--app-bar-h) - 1rem);
+        max-height: none;
+        overflow: visible;
         padding: 0;
         border-radius: 0;
         box-shadow: none;
@@ -774,19 +783,8 @@ html {
         background-color: var(--color-base-100);
       }
     }
-  }
-  /* The controls beside it say when they show (sheet.tsx's `filtersShown`):
-     the opener and a page's own search while the filters are a sheet, the
-     column's head only where they are docked. */
-  [data-filters-shown="docked"] {
-    display: none;
-  }
-  @media (min-width: 1024px) {
-    .page-shell[data-layout="facets"] [data-filters-shown="sheet"] {
+    .page-shell[data-layout="facets"] [data-filters-opener] {
       display: none;
-    }
-    .page-shell[data-layout="facets"] [data-filters-shown="docked"] {
-      display: block;
     }
   }
 }

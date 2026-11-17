@@ -421,14 +421,27 @@ async function checkFilterSheet(page: Page) {
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
 
+  // A keyword typed and not yet searched rides along with the sheet's
+  // Apply: the page has one keyword field, the scope row's (#1067).
+  await page.getByRole('search').locator('label').click();
+  await page.getByRole('textbox', { name: 'Search' }).fill('shirt');
+  await opener.click();
+  await sheet.getByRole('radio', { name: 'Red', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=red\b/);
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Red shirt');
+
   await checkDockedFilters(page);
 }
 
 /**
  * The same filter sheet at a desktop's width (#1067): docked as the facet
  * column left of the grid, shown without opening anything (no opener), a
- * change applied in place with focus kept in the facets (Apply leaves them
- * unswapped), and `/` focusing the search that heads them.
+ * change applied with focus kept on Apply (htmx refocuses it by id in the
+ * facets the answer brings), Back landing on facets that show its URL's
+ * filters, and `/` focusing the search.
  */
 async function checkDockedFilters(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -451,13 +464,36 @@ async function checkDockedFilters(page: Page) {
   await expect(tiles).toHaveCount(1);
   await expect(tiles.first()).toContainText('Red shirt');
   await expect(apply).toBeFocused();
-  await expect(
-    facets.getByRole('radio', { name: 'Red', exact: true }),
-  ).toBeChecked();
+  const red = facets.getByRole('radio', { name: 'Red', exact: true });
+  await expect(red).toBeChecked();
 
-  // `/` from anywhere but a field focuses the search heading the facets.
+  // A second filter, then Back: the facets are the snapshot's markup, so
+  // they must hold the first URL's filters in their attributes, not
+  // whatever the form held when it was left.
+  const colors = facets.getByRole('group', { name: 'Color' });
+  const categories = facets.getByRole('group', { name: 'Category' });
+  const tops = categories.getByRole('radio', { name: 'Tops', exact: true });
+  await tops.click();
+  await apply.click();
+  await expect(page).toHaveURL(/[?&]category=tops\b/);
+  await expect(categories.getByRole('radio', { name: '× Clear' })).toHaveCount(
+    1,
+  );
+  await page.goBack();
+  await expect(page).not.toHaveURL(/category=/);
+  await expect(page).toHaveURL(/[?&]color=red\b/);
+  await expect(red).toBeChecked();
+  await expect(tops).not.toBeChecked();
+  await expect(colors.getByRole('radio', { name: '× Clear' })).toHaveCount(1);
+  await expect(categories.getByRole('radio', { name: '× Clear' })).toHaveCount(
+    0,
+  );
+
+  // `/` from anywhere but a field focuses the search.
   await page.keyboard.press('/');
-  const search = facets.getByRole('textbox', { name: 'Search' });
+  const search = page
+    .getByRole('search')
+    .getByRole('textbox', { name: 'Search' });
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('');
   await page.setViewportSize({ width: 390, height: 844 });

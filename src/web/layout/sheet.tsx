@@ -13,10 +13,11 @@ import { SheetBackdrop } from './parts';
  *    main.css; centred where a browser has none): the Wardrobe's Add.
  *  - `dialog`: centred at every size, the phone included, for what is shown
  *    rather than asked or filled in (the mask editor's canvas, a selfie).
- *  - `filters`: never opened at all, but shown in place, closed, in a
- *    `facets` page's aside (main.css docks it there and hides its opener
- *    and its backdrop), so the one form is the phone's sheet and the
- *    desktop's facet column: the Wardrobe's filters (#1067). It must sit in
+ *  - `filters`: the bottom sheet below lg; from lg never opened at all,
+ *    but shown in place, closed, in a `facets` page's aside (main.css
+ *    docks it there and hides its opener, `dockedFiltersOpener`, and its
+ *    backdrop), so the one form is the phone's sheet and the desktop's
+ *    facet column: the Wardrobe's filters (#1067). It must sit in
  *    `PageShell`'s `aside`, never in `overlays` (`expectDockedFilters`).
  * main.css finds every kind by `dialog[data-sheet=<kind>]`.
  */
@@ -121,17 +122,13 @@ export function sheetOpener(id: string) {
 }
 
 /**
- * What a control beside a `filters` sheet spreads to say when it shows, so
- * a page never names the breakpoint the sheet docks at (main.css, the
- * docking block; the page-level `lg:` ratchet, scripts/ci/lg_count.conf):
- *  - `sheet`: while the filters are a sheet, gone where a facets page docks
- *    them (from lg): the sheet's opener, and a page's own search, which the
- *    docked column replaces.
- *  - `docked`: only where they are docked: what heads the column there
- *    (the Wardrobe's search, #1067).
+ * The opener of a `filters` sheet: `sheetOpener`, and gone where a facets
+ * page docks the sheet (from lg, main.css's docking block), so a page never
+ * names that breakpoint (the page-level `lg:` ratchet,
+ * scripts/ci/lg_count.conf).
  */
-export function filtersShown(when: 'sheet' | 'docked') {
-  return { 'data-filters-shown': when } as const;
+export function dockedFiltersOpener(id: string) {
+  return { ...sheetOpener(id), 'data-filters-opener': '' } as const;
 }
 
 /** A sheet's own Cancel, beside its action: closes it, nothing posted. */

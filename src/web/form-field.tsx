@@ -111,35 +111,21 @@ export function ChipGroup(props: {
  * `aria-label`), and a clear chip (value '') while something is chosen:
  * radios cannot be unchecked, and a choice must stay settable back to unset.
  * The garment form's properties and the grid's filter sheet.
- *
- * `clear` says who knows that something is chosen: `selected` (the default)
- * renders the clear chip only beside a stored choice, for a form the server
- * renders again after each change; `checked` always renders it and shows it
- * while a chip of the group is checked (the clear chip's own included), for
- * a form left in place after its own submit, which never hears the server
- * again: the docked facets (#1067). Until then it is no tab stop and no
- * radio a reader announces, as when it was absent.
  */
 export function Chips(props: {
   name: string;
   options: readonly (string | number)[];
   selected: string;
   label: (option: string | number) => string;
-  clear?: 'selected' | 'checked';
 }) {
-  const revealed = props.clear === 'checked';
   return (
     <>
-      {(revealed || props.selected) && (
+      {props.selected && (
         <input
           type="radio"
           name={props.name}
           value=""
-          class={
-            revealed
-              ? 'btn btn-sm btn-ghost rounded-full hidden has-[~input:checked]:inline-flex checked:inline-flex'
-              : 'btn btn-sm btn-ghost rounded-full'
-          }
+          class="btn btn-sm btn-ghost rounded-full"
           aria-label={`× ${t('CLEAR_CHOICE')}`}
         />
       )}

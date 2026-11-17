@@ -24,12 +24,12 @@ import { GALLERY_GRID } from '../layout/columns';
 import type { ActionBarProps } from '../layout/action-bar';
 import { GarmentMark } from '../layout/garment-mark';
 import {
-  bodySwap,
   type PageAsideFrame,
   type PageBodyFrame,
   PageFragment,
   PageShell,
   type PageShellProps,
+  regionId,
 } from '../layout/page-shell';
 import {
   EmptyState,
@@ -37,7 +37,12 @@ import {
   SavedToast,
   StripFlags,
 } from '../layout/parts';
-import { filtersShown, Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
+import {
+  dockedFiltersOpener,
+  Sheet,
+  SheetCancel,
+  sheetOpener,
+} from '../layout/sheet';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
@@ -197,17 +202,12 @@ const EAGER_TILES = 8;
 const WARDROBE = 'wardrobe';
 const WARDROBE_BODY: PageBodyFrame = { gutter: 'flush' };
 
-// Filter links and the search form replace the body and push the URL;
-// their href/action keep them working without JavaScript. Everything that
-// filters from the body (the scope row, the empty grid's Clear) and the
-// facets' own Clear take the facets from the answer too, so the filter form
-// shows what the grid now does; the facets' Apply keeps them (FILTER_SWAP).
+// Filter links, the search form and the filter sheet replace the body and
+// push the URL; their href/action keep them working without JavaScript.
+// The answer brings the facets too (PageFragment's aside), whoever asked.
 const SWAP_BODY = {
-  ...bodySwap(WARDROBE, 'replace'),
-  'hx-push-url': 'true',
-} as const;
-const FILTER_SWAP = {
-  ...bodySwap(WARDROBE, 'keep'),
+  'hx-target': `#${regionId(WARDROBE, 'body')}`,
+  'hx-swap': 'outerHTML',
   'hx-push-url': 'true',
 } as const;
 
@@ -297,10 +297,9 @@ function wardrobeFacets(
 
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
- * chips and scope menu, the facets): the main, with select mode's bar out
- * of band and, browsing, the facets for a requester that takes them
- * (`PageFragment`, `SWAP_BODY`), and the ⋯ menu out of band, so its Select
- * keeps the filters the grid now shows.
+ * chips and scope menu, the facets): the main, with select mode's bar and,
+ * browsing, the facets out of band (`PageFragment`), and the ⋯ menu out of
+ * band, so its Select keeps the filters the grid now shows.
  */
 export function WardrobeFragment({
   ctx,
@@ -873,13 +872,13 @@ function PropertyPills(props: {
   );
 }
 
+// The filter sheet's form and its "Clear" send the search box's keyword
+// along, typed or not yet searched: the page's one keyword field.
+const INCLUDE_KEYWORD = "#search-form [name='keyword']";
 const FILTER_SHEET_ID = 'filter-modal';
-const FILTER_FORM_ID = 'filter-form';
-const FILTER_KEYWORD_ID = 'filter-keyword';
 
-// `/` focuses whichever search field this width shows (public/js/
-// search-shortcut.js; owner decision 5 of the desktop plan): the module
-// loads with the facets, the page's one copy of them.
+// `/` focuses the search (public/js/search-shortcut.js; owner decision 5 of
+// the desktop plan): the module loads with the search form.
 const SEARCH_SHORTCUT_IMPORT = "import 'search-shortcut';";
 
 /**
@@ -887,8 +886,8 @@ const SEARCH_SHORTCUT_IMPORT = "import 'search-shortcut';";
  * fixed bar above the dock): the capsule scope, the active filters as
  * chips (each drops itself), search, the filter sheet's opener and the
  * count. Search expands in place over the chips while it has the focus,
- * and stays open while it holds a keyword. From lg search and the opener
- * give way to the docked facets, whose head is the search field (#1067).
+ * and stays open while it holds a keyword. From lg the opener gives way to
+ * the docked facets (#1067); search stays here at every width.
  * Every filter's chip is one tone (primary, as its checked choice in the
  * sheet); only the care filters keep the colour of the tile mark they find
  * (wash, attention) and archived its warning.
@@ -913,8 +912,7 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
       <SearchForm search={search} viewOwner={viewOwner} />
       <button
         type="button"
-        {...sheetOpener(FILTER_SHEET_ID)}
-        {...filtersShown('sheet')}
+        {...dockedFiltersOpener(FILTER_SHEET_ID)}
         class="btn btn-ghost btn-sm btn-square shrink-0"
         aria-label={t('FILTERS')}
       >
@@ -1070,11 +1068,12 @@ function FilterChips(props: {
 }
 
 /**
- * The phone's search, collapsed to its icon until tapped: the field grows
- * over the chips while it has the focus (the row's group-has rule hides
- * them) and keeps some width while it holds a keyword. Enter submits; every
- * other filter rides along as a hidden field. Hidden from lg, where the
- * facets' own field (`FacetSearch`) heads the filters.
+ * Search, collapsed to its icon until tapped: the field grows over the
+ * chips while it has the focus (the row's group-has rule hides them) and
+ * keeps some width while it holds a keyword. Enter submits; every other
+ * filter rides along as a hidden field. The page's only keyword field at
+ * every width, from lg too beside the docked facets (#1067): two would
+ * each hold a keyword, and the filter sheet's Apply could post only one.
  */
 function SearchForm(props: {
   search: GridSearch;
@@ -1089,9 +1088,14 @@ function SearchForm(props: {
       {...SWAP_BODY}
       id="search-form"
       role="search"
-      {...filtersShown('sheet')}
       class="flex shrink-0 justify-end focus-within:flex-1"
     >
+      {/* The `/` shortcut, through the importmap for its versioned URL. A
+          fixed string with nothing interpolated. */}
+      <script
+        type="module"
+        dangerouslySetInnerHTML={{ __html: SEARCH_SHORTCUT_IMPORT }}
+      />
       {Object.entries(searchParams(search))
         .filter(([name, value]) => name !== 'keyword' && value !== '')
         .map(([name, value]) => (
@@ -1101,70 +1105,34 @@ function SearchForm(props: {
         <input type="hidden" name="ownerId" value={viewOwner} />
       )}
       <label class="input input-sm w-9 gap-1 px-2 transition-[width] duration-150 focus-within:w-full has-[input:not(:placeholder-shown)]:w-32 motion-reduce:transition-none">
-        <SearchIcon />
-        <KeywordInput keyword={search.keyword} />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="size-4 shrink-0"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+          />
+        </svg>
+        <input
+          type="text"
+          name="keyword"
+          value={search.keyword}
+          maxlength={200}
+          placeholder={t('SEARCH_PLACEHOLDER')}
+          aria-label={t('SEARCH')}
+          enterkeyhint="search"
+          class="min-w-0 grow"
+          data-search-shortcut
+        />
       </label>
     </form>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="1.5"
-      stroke="currentColor"
-      class="size-4 shrink-0"
-      aria-hidden="true"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-      />
-    </svg>
-  );
-}
-
-/** The keyword field, the phone's (SearchForm) and the facets' (FacetSearch). */
-function KeywordInput(props: { keyword: string; id?: string }) {
-  return (
-    <input
-      type="text"
-      id={props.id}
-      name="keyword"
-      value={props.keyword}
-      maxlength={200}
-      placeholder={t('SEARCH_PLACEHOLDER')}
-      aria-label={t('SEARCH')}
-      enterkeyhint="search"
-      class="min-w-0 grow"
-      data-search-shortcut
-    />
-  );
-}
-
-/**
- * The facets' head from lg (§4: search heads the facets): the keyword as a
- * field of the filter form, so Enter and Apply send it with the filters,
- * one request either way. Below lg it is not shown, and the scope row's
- * field (SearchForm) is the phone's; this one still posts with the sheet,
- * holding the keyword the grid shows, since every search from the scope
- * row replaces the facets (SWAP_BODY). So a keyword typed in the scope row
- * and not yet searched no longer rides along with the sheet's Apply (it
- * did through `hx-include`): two fields named `keyword` cannot both post,
- * and only CSS knows which one this width shows.
- */
-function FacetSearch(props: { keyword: string }) {
-  return (
-    <div role="search" class="mb-4" {...filtersShown('docked')}>
-      <label class="input input-sm w-full gap-1 px-2">
-        <SearchIcon />
-        <KeywordInput keyword={props.keyword} id={FILTER_KEYWORD_ID} />
-      </label>
-    </div>
   );
 }
 
@@ -1172,12 +1140,13 @@ function FacetSearch(props: { keyword: string }) {
  * The filters as a GET form of their own, the one `filters` sheet (#1067):
  * the bottom sheet on a phone, the docked facet column from lg, the same
  * element at both (layout/sheet.tsx). Applying submits it into
- * #wardrobe-body with the keyword (FacetSearch) and keeps the facets as
- * they are (FILTER_SWAP), so the docked form keeps its focus and scroll;
- * the open sheet closes itself on submit, as the old swap closed it by
- * replacing it. "Clear" asks for the grid with only the keyword and the
- * capsule scope, and takes the cleared facets from the answer. Without
- * JavaScript it is a plain GET to /wardrobe.
+ * #wardrobe-body with the search box's keyword, and the answer's facets
+ * replace this one's content (PageFragment), so the form always holds what
+ * the URL asks for, in the markup a history snapshot keeps too; the open
+ * sheet goes with it, as it went with the body before it docked. Apply and
+ * Clear keep their ids, so htmx gives the docked column's focus back to
+ * the new one. "Clear" asks for the grid with only the keyword and the
+ * capsule scope. Without JavaScript it is a plain GET to /wardrobe.
  */
 function FilterSheet(props: {
   search: GridSearch;
@@ -1193,23 +1162,15 @@ function FilterSheet(props: {
       labelledBy="filter-modal-title"
       dismiss="close"
     >
-      {/* The `/` shortcut to search, through the importmap for its
-          versioned URL. A fixed string with nothing interpolated. */}
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: SEARCH_SHORTCUT_IMPORT }}
-      />
       {/* group/filter: the chosen category reveals its type chips (TYPE_GROUP_REVEAL). */}
       <form
-        id={FILTER_FORM_ID}
         method="get"
         action="/wardrobe"
         hx-get="/wardrobe"
-        {...FILTER_SWAP}
-        onsubmit="this.closest('dialog').close()"
+        hx-include={INCLUDE_KEYWORD}
+        {...SWAP_BODY}
         class="group/filter"
       >
-        <FacetSearch keyword={search.keyword} />
         <h3 id="filter-modal-title" class="font-bold text-lg mb-4">
           {t('FILTERS')}
         </h3>
@@ -1222,7 +1183,6 @@ function FilterSheet(props: {
         )}
         <FilterGroup id="filter-category" title={t('CATEGORY')}>
           <Chips
-            clear="checked"
             name="category"
             options={options.categories}
             selected={search.category}
@@ -1231,7 +1191,6 @@ function FilterSheet(props: {
         </FilterGroup>
         <FilterGroup id="filter-color" title={t('COLOR')}>
           <Chips
-            clear="checked"
             name="color"
             options={GARMENT_COLORS}
             selected={search.color}
@@ -1241,7 +1200,6 @@ function FilterSheet(props: {
         {options.sizes.length > 0 && (
           <FilterGroup id="filter-size" title={t('SIZE')}>
             <Chips
-              clear="checked"
               name="size"
               options={options.sizes}
               selected={search.size}
@@ -1278,12 +1236,16 @@ function FilterSheet(props: {
             id="filter-clear"
             class="btn btn-ghost btn-sm"
             hx-get={wardrobeUrl(viewOwner, { capsule: search.capsule })}
-            hx-include={`#${FILTER_KEYWORD_ID}`}
+            hx-include={INCLUDE_KEYWORD}
             {...SWAP_BODY}
           >
             {t('CLEAR_FILTERS')}
           </button>
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button
+            type="submit"
+            id="filter-apply"
+            class="btn btn-primary btn-sm"
+          >
             {t('APPLY_FILTERS')}
           </button>
         </div>
@@ -1376,7 +1338,6 @@ function PropertyFilterGroups(props: {
             class={`hidden ${TYPE_GROUP_REVEAL[category]}`}
           >
             <Chips
-              clear="checked"
               name="type"
               options={types}
               selected={
@@ -1395,7 +1356,6 @@ function PropertyFilterGroups(props: {
         .map((group) => (
           <FilterGroup id={`filter-${group.name}`} title={group.title}>
             <Chips
-              clear="checked"
               name={group.name}
               options={group.values}
               selected={search[group.name]}

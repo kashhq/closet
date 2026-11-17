@@ -243,14 +243,13 @@ export interface PageAsideFrame {
  * `form=` names the form in this answer. A page with a swapped body answers
  * through this, never a bare body, so no fragment leaves a stale bar.
  *
- * `aside` answers the aside region as well, not out of band: the requester
- * decides whether to take it (`bodySwap`), because only it knows whether
- * the aside it holds is stale. A request sent from the aside itself (the
- * facets' Apply) leaves it in place, with its focus, its scroll and what
- * was typed in it; one from the body (a chip dropping a filter) replaces
- * it, since what it changed shows there too (#1067). Every requester of an
- * answer with an aside must spread `bodySwap`, which selects the body out of
- * it.
+ * `aside` sends the aside region out of band too, its content only
+ * (`innerHTML`): the region element stays, so its scroll (a docked facet
+ * column scrolls inside itself) and the focus htmx restores by id survive,
+ * and its content always shows the state the answer's URL asks for. A
+ * history snapshot serialises attributes, never a checked radio's
+ * property, so an aside kept across a pushed answer restored Back with the
+ * wrong choices beside a grid filtered by the right ones (#1067).
  */
 export function PageFragment(
   props: PageBodyFrame & {
@@ -271,6 +270,7 @@ export function PageFragment(
           id={regionId(name, 'aside')}
           layout={aside.layout}
           label={aside.label}
+          oob
         >
           {aside.content}
         </PageAside>
@@ -278,26 +278,6 @@ export function PageFragment(
       <ActionsRegion name={name} bar={actionBar} oob />
     </>
   );
-}
-
-/**
- * The htmx attributes of a control whose request swaps page `name`'s body
- * and is answered by `PageFragment`: the body is selected out of the answer
- * and, with `aside: 'replace'`, the aside is taken out of band
- * (`hx-select-oob`) where the answer carries one. `replace` is for a
- * control that changes what the aside shows (a chip that drops a filter,
- * the capsule scope, Clear); `keep` for a request sent from inside the aside
- * that already shows what it asked for (the facets' Apply).
- */
-export function bodySwap(name: string, aside: 'replace' | 'keep') {
-  const body = `#${regionId(name, 'body')}`;
-  return {
-    'hx-target': body,
-    'hx-swap': 'outerHTML',
-    'hx-select': body,
-    'hx-select-oob':
-      aside === 'replace' ? `#${regionId(name, 'aside')}` : undefined,
-  } as const;
 }
 
 /** `#<name>-actions`: the page's bar, else its empty place (PageRegion). */
@@ -335,24 +315,27 @@ function PageAside(props: {
   id: string;
   layout: AsideLayout;
   label: string | undefined;
+  /** In a fragment (PageFragment): its content swapped into the region in place. */
+  oob?: boolean;
   children: Child;
 }) {
+  const region = {
+    id: props.id,
+    class: 'page-aside',
+    'hx-swap-oob': props.oob ? 'innerHTML' : undefined,
+  };
   switch (props.layout) {
     case 'split':
-      return (
-        <section id={props.id} class="page-aside">
-          {props.children}
-        </section>
-      );
+      return <section {...region}>{props.children}</section>;
     case 'index':
       return (
-        <nav id={props.id} class="page-aside" aria-label={props.label}>
+        <nav {...region} aria-label={props.label}>
           {props.children}
         </nav>
       );
     default:
       return (
-        <aside id={props.id} class="page-aside" aria-label={props.label}>
+        <aside {...region} aria-label={props.label}>
           {props.children}
         </aside>
       );
