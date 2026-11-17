@@ -7,46 +7,66 @@ const ORIGINAL_POST_MESSAGE = '__closetPostMessage';
 /** The worker's image cache (views/assets/src-sw.ts, IMAGES_CACHE). */
 const IMAGES_CACHE = 'images-v2';
 
+/** A switched context's state: what its route answers, and whether it is closing. */
+interface Switch {
+  offline: boolean;
+  closing: boolean;
+}
+
+/** networkSwitch's state per context, for closeSwitchedContext. */
+const switches = new WeakMap<BrowserContext, Switch>();
+
 /**
  * Takes the device off the network and puts it back. Chromium's setOffline
  * cuts the page's requests and the navigation preload but not a request the
  * worker makes itself (NetworkFirst for an htmx request, REVALIDATE_PAGE,
- * CacheFirst for an image), which the route fails meanwhile.
+ * CacheFirst for an image), which the route fails meanwhile. The route stays
+ * until the context closes (closeSwitchedContext).
  */
 export async function networkSwitch(context: BrowserContext) {
-  let offline = false;
+  const state: Switch = { offline: false, closing: false };
+  switches.set(context, state);
   await context.route('**/*', async (route) => {
-    if (offline) await route.abort('internetdisconnected');
-    else await route.fallback();
+    try {
+      if (state.offline) await route.abort('internetdisconnected');
+      else await route.fallback();
+    } catch (error) {
+      // A request still in here as its context closes gets "Target page,
+      // context or browser has been closed", which would land on close()
+      // (#867). Nothing it still does matters once the device is closing.
+      if (!state.closing) throw error;
+    }
   });
-  return async (state: 'offline' | 'online') => {
-    offline = state === 'offline';
-    await context.setOffline(offline);
+  return async (network: 'offline' | 'online') => {
+    state.offline = network === 'offline';
+    await context.setOffline(state.offline);
   };
 }
 
 /**
- * Closes a context that went through networkSwitch. The switch's handler
- * answers every request the context makes, and a device left offline with
- * queued writes keeps making them (the outbox's replays, the heartbeat). A
- * request whose handler is still awaiting its `abort()` when the context goes
- * away gets "Target page, context or browser has been closed" from it, and
- * that rejection lands on `close()` (#867). 'ignoreErrors' drops those
- * in-flight handlers' errors instead, without waiting on them: 'wait' (#868)
- * made teardown wait on every `abort()`'s browser round trip, which Playwright
- * races only against the request's page or worker closing, so one that never
- * answered hung the scenario until its timeout (#886). Nothing those handlers
- * still do matters once the device is offline and closing.
- * setOffline(true) comes first: unrouting alone would put the device online
- * for a moment, and its queued ticks and wears would replay against the shared
- * e2e server, changing other scenarios' state. Chromium's own network kill
- * needs no route.
+ * Closes a context that went through networkSwitch, offline to the end: a
+ * device left offline with queued writes keeps making requests (the outbox's
+ * replays, the heartbeat), and one let through would replay its ticks and
+ * wears against the shared e2e server, changing other scenarios' state. The
+ * switch's own route keeps failing them until the close, and its handler
+ * drops the errors of those still in flight (#867), so the close awaits
+ * nothing but the browser's own teardown.
+ *
+ * Never `setOffline` or `unrouteAll` here (#1104): each is a call Playwright
+ * sends to every page and service worker of the context and awaits with no
+ * deadline, so a worker that stopped answering hung the trips scenario in
+ * `unrouteAll` until its timeout (`service-worker.spec.ts` beside this file
+ * stops one). Before that, `unrouteAll`'s 'wait' (#868) hung it on an
+ * `abort()` that never answered (#886).
  */
 export async function closeSwitchedContext(
   context: BrowserContext,
 ): Promise<void> {
-  await context.setOffline(true);
-  await context.unrouteAll({ behavior: 'ignoreErrors' });
+  const state = switches.get(context);
+  if (state) {
+    state.offline = true;
+    state.closing = true;
+  }
   await context.close();
 }
 
