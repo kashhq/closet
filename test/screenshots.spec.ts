@@ -332,6 +332,17 @@ test.describe('desktop', () => {
     await expect(page.locator('[data-goes-with-strip]')).toBeVisible();
     await shot(page, '98-demo-goes-with-desktop');
   });
+
+  // The split pages (#1068): the photo or collage left and sticky, the
+  // facts beside it.
+  test('demo: Theo, the garment and outfit pages at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await openRawSelvedgeJeans(page);
+    await shot(page, '99-demo-garment-desktop');
+    await page.goto('/outfits');
+    await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+    await shot(page, '99b-demo-outfit-desktop');
+  });
 });
 
 /**
