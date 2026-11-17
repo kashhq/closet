@@ -2,7 +2,7 @@ import { type Page } from '@playwright/test';
 import { expect } from './support/fixtures';
 import sharp from 'sharp';
 import { test } from './support/cutout-hold';
-import { createGarment } from './support/e2e-data';
+import { addPhotographedGarment, createGarment } from './support/e2e-data';
 import { SAME_ORIGIN, signIn } from './support/e2e-session';
 
 /**
@@ -15,7 +15,7 @@ import { SAME_ORIGIN, signIn } from './support/e2e-session';
  * until the page has shown it, test/support/cutout-stub.ts); then the
  * search box finds it by two of its words in any order (#673). The filter
  * sheet (#674) and select mode's kept selection (#677) ride along at the
- * same width.
+ * same width, and the garment page's split (#1068) at a desktop's.
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -51,6 +51,50 @@ async function checkAddMenuReach(page: Page) {
   expect(frame.y).toBeGreaterThanOrEqual(0);
   expect(frame.y + frame.height).toBeLessThanOrEqual(view.height);
   await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 390, height: 844 });
+}
+
+/**
+ * The garment page from lg is PageShell's `split` (#1068): the photo left
+ * of the facts, and sticky, so it stays in view at its place under the bar
+ * while the facts scroll past it. A garment of its own, with notes and care
+ * notes long enough that the facts run well past the photo (a fresh
+ * garment's are about its height, and sticky holds nothing in a frame no
+ * taller than itself). Run last: it adds a garment to the closet.
+ */
+async function checkSplitAtDesktop(page: Page) {
+  const words = 'Soft brushed twill, a little roomy in the shoulder. '.repeat(
+    30,
+  );
+  const id = await addPhotographedGarment(page, 'Long notes coat', 'coats', {
+    notes: words,
+    washingDetails: words,
+  });
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await page.goto(`/wardrobe/${id}`);
+  const photo = page.locator('#garment-photo');
+  const facts = page.locator('#garment-body');
+  await expect(photo.locator('img')).toBeVisible();
+  const before = {
+    photo: (await photo.boundingBox())!,
+    facts: (await facts.boundingBox())!,
+  };
+  expect(before.photo.x + before.photo.width).toBeLessThanOrEqual(
+    before.facts.x,
+  );
+  const step = 200;
+  expect(
+    await page.evaluate((y) => {
+      window.scrollTo(0, y);
+      return window.scrollY;
+    }, step),
+  ).toBe(step);
+  expect((await facts.boundingBox())!.y).toBeCloseTo(before.facts.y - step, 0);
+  const after = (await photo.boundingBox())!;
+  expect(after.y).toBeCloseTo(before.photo.y, 0);
+  const bar = (await page.locator('header.app-bar').boundingBox())!;
+  expect(after.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+  expect(after.y + after.height).toBeLessThanOrEqual(560);
   await page.setViewportSize({ width: 390, height: 844 });
 }
 
@@ -138,6 +182,7 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
 
   await checkFilterSheet(page);
   await checkSelectMode(page);
+  await checkSplitAtDesktop(page);
 });
 
 /**

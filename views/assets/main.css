@@ -537,6 +537,33 @@ html {
   .page-body[data-gutter="flush"] {
     padding: 0;
   }
+  /* The body's named flow (page-shell.tsx's `gap`): a column that far apart,
+     in Tailwind's steps. */
+  .page-body[data-gap] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--page-gap);
+  }
+  .page-body[data-gap="3"] {
+    --page-gap: 0.75rem;
+  }
+  .page-body[data-gap="4"] {
+    --page-gap: 1rem;
+  }
+  .page-body[data-gap="5"] {
+    --page-gap: 1.25rem;
+  }
+  .page-body[data-gap="6"] {
+    --page-gap: 1.5rem;
+  }
+  .page-body[data-gap="8"] {
+    --page-gap: 2rem;
+  }
+  /* A split page on a phone is one column, the subject then the body: the
+     body's own gap between them, as before the subject was a region. */
+  .page-shell[data-layout="split"] > .page-body {
+    padding-top: var(--page-gap, 1rem);
+  }
   /* On a phone the settings index is Profile itself. */
   .page-shell[data-layout="index"] > .page-aside {
     display: none;
@@ -566,6 +593,10 @@ html {
     .page-shell[data-layout="split"] > .page-body,
     .page-shell[data-layout="index"] > .page-body {
       max-width: var(--container-page-narrow);
+    }
+    /* Side by side, the subject and the body start on one line. */
+    .page-shell[data-layout="split"] > .page-body {
+      padding-top: 1rem;
     }
     /* Work and its result: the result beside it, right. */
     .page-shell[data-layout="panel"] {

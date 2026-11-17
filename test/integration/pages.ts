@@ -299,12 +299,26 @@ export function pageRoutes(f: PageFixture, inviteToken: string): PageRoute[] {
  * One page frame (#1059): a page framed by `PageShell` has exactly one
  * `.page-shell`, and it is the page's only `<main>`. Which pages are framed
  * is guards.conf's `@page-main` (a `<main>` outside page-shell.tsx is debt
- * with a `known` line), not a list here.
+ * with a `known` line), not a list here. Its regions sit in the desktop's
+ * visual order (#1068): a region placed left of the body (`split`'s subject,
+ * `facets`, `index`) comes before it in the DOM, `panel`'s after, so the
+ * keyboard, a reader and the phone's stack read what the desktop shows.
  */
 export function expectPageShell(res: LightMyRequestResponse): void {
   const shells = res.body.match(/<main class="page-shell\b/g)?.length ?? 0;
   expect(shells).toBeLessThanOrEqual(1);
-  if (shells === 1) expect(res.body.match(/<main\b/g)).toHaveLength(1);
+  if (shells === 0) return;
+  expect(res.body.match(/<main\b/g)).toHaveLength(1);
+  const layout = /<main class="page-shell\b[^>]*data-layout="([a-z]+)"/.exec(
+    res.body,
+  )?.[1];
+  const aside = res.body.search(/ class="page-aside"/);
+  if (aside === -1) return;
+  const body = res.body.search(/ class="page-body"/);
+  expect({ layout, asideFirst: aside < body }).toEqual({
+    layout,
+    asideFirst: layout !== 'panel',
+  });
 }
 
 /**

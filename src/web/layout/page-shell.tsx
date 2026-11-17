@@ -42,18 +42,12 @@ export type PageGutter = 'page' | 'bleed' | 'flush';
 
 /**
  * The body's flow, by name: absent, its children flow as blocks; a `gap`
- * stacks them in a column that far apart (Tailwind's steps). Padding and
- * width are the shell's (`gutter`, `width`), so the body takes no class.
+ * stacks them in a column that far apart (Tailwind's steps, in main.css's
+ * `.page-body[data-gap]`, where a `split` page's phone stack also leaves it
+ * between the subject and the body). Padding and width are the shell's
+ * (`gutter`, `width`), so the body takes no class.
  */
 export type PageGap = 3 | 4 | 5 | 6 | 8;
-
-const GAP_CLASS: Readonly<Record<PageGap, string>> = {
-  3: 'flex flex-col gap-3',
-  4: 'flex flex-col gap-4',
-  5: 'flex flex-col gap-5',
-  6: 'flex flex-col gap-6',
-  8: 'flex flex-col gap-8',
-};
 
 /** The body region's own frame: what PageBody and the shell both render. */
 export interface PageBodyFrame {
@@ -277,12 +271,12 @@ function documentTitle(props: PageShellProps): string | undefined {
 
 /** The shell's body region, `#<name>-body` (PageShell, PageFragment). */
 function PageBody(props: PageBodyFrame & { name: string; children?: Child }) {
-  const flow = props.gap === undefined ? '' : ` ${GAP_CLASS[props.gap]}`;
   return (
     <div
       id={regionId(props.name, 'body')}
-      class={`page-body${flow}`}
+      class="page-body"
       data-gutter={props.gutter ?? 'page'}
+      data-gap={props.gap}
     >
       {props.children}
     </div>

@@ -42,6 +42,11 @@ import { outfitUrl } from './urls';
 
 const PLAN_SHEET_ID = 'outfit-plan-sheet';
 
+/** A garment of the outfit with the marks its collage and list show. */
+type OutfitPiece = OutfitSummary['garments'][number] & {
+  marks: GarmentMarkKind[];
+};
+
 /**
  * GET /outfits/:id (redesign plan, "Outfits"; R5): the outfit as a record,
  * not an event. The collage, then its two actions, Plan (a sheet: a day and
@@ -88,6 +93,14 @@ export function OutfitPage(props: {
         back: '/outfits',
         actions: <OutfitMenu ctx={ctx} outfit={outfit} />,
       }}
+      layout="split"
+      aside={
+        <OutfitSubject
+          outfit={outfit}
+          pieces={pieces}
+          complete={toBuy.length === 0}
+        />
+      }
       body={{ gap: 6 }}
       overlays={
         <>
@@ -97,24 +110,6 @@ export function OutfitPage(props: {
         </>
       }
     >
-      {outfit.proposal && (
-        <ProposalBlock
-          outfitId={outfit.id}
-          proposal={outfit.proposal}
-          complete={toBuy.length === 0}
-        />
-      )}
-      {outfit.agent && (
-        <p class="px-1">
-          <AgentBadge agent={outfit.agent} byMuse={outfit.proposal !== null} />
-        </p>
-      )}
-      {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
-      {outfit.garments.length > 0 ? (
-        <OutfitCollage garments={pieces} eager />
-      ) : (
-        <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
-      )}
       {toBuy.length > 0 && <ToBuySection pieces={toBuy} />}
       <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(outfit)} />
       <div class="flex gap-2">
@@ -147,6 +142,41 @@ export function OutfitPage(props: {
       )}
       {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
     </PageShell>
+  );
+}
+
+/**
+ * The split page's subject: what the outfit is (Muse's proposal and its
+ * answer, who made it, the notes) and the collage. A phone reads them before
+ * the actions, so they lead the subject rather than the facts.
+ */
+function OutfitSubject(props: {
+  outfit: OutfitPageDetail;
+  pieces: OutfitPiece[];
+  complete: boolean;
+}) {
+  const { outfit } = props;
+  return (
+    <div class="flex flex-col gap-6">
+      {outfit.proposal && (
+        <ProposalBlock
+          outfitId={outfit.id}
+          proposal={outfit.proposal}
+          complete={props.complete}
+        />
+      )}
+      {outfit.agent && (
+        <p class="px-1">
+          <AgentBadge agent={outfit.agent} byMuse={outfit.proposal !== null} />
+        </p>
+      )}
+      {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
+      {outfit.garments.length > 0 ? (
+        <OutfitCollage garments={props.pieces} eager />
+      ) : (
+        <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
+      )}
+    </div>
   );
 }
 
@@ -330,13 +360,7 @@ function WornStrip(props: { outfitId: number; worn: WornDay[] }) {
 }
 
 /** The garments in the order the outfit was built, each opening its page. */
-function GarmentList({
-  pieces,
-}: {
-  pieces: (OutfitSummary['garments'][number] & {
-    marks: GarmentMarkKind[];
-  })[];
-}) {
+function GarmentList({ pieces }: { pieces: OutfitPiece[] }) {
   return (
     <section aria-labelledby="outfit-garments-title">
       <h2 id="outfit-garments-title" class="text-sm text-muted mb-2">

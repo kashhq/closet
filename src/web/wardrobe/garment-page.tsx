@@ -167,7 +167,9 @@ const GARMENT_PAGE_FLAGS = [
  * capsules row, "In N outfits", then the details and care; "Shared
  * publicly" under the summary while it has a public link. Everything
  * else (edit, photo, clone, share, archive, delete) is in the app bar's ⋯
- * menu; the photo is taken or chosen in a sheet.
+ * menu; the photo is taken or chosen in a sheet. A `split` page (#1068):
+ * the hero is the subject, first on a phone and left and sticky from lg,
+ * with the rest beside it.
  */
 export function GarmentPage(props: {
   ctx: ViewContext;
@@ -185,6 +187,16 @@ export function GarmentPage(props: {
         back: backUrl(garment, model.viewOwner),
         actions: <GarmentMenu ctx={ctx} model={model} />,
       }}
+      layout="split"
+      aside={
+        <div id="garment-photo-slot">
+          <GarmentPhotoView
+            garment={garment}
+            viewOwner={model.viewOwner}
+            canEdit={model.canEdit}
+          />
+        </div>
+      }
       body={{ gap: 6 }}
       overlays={
         <>
@@ -193,13 +205,6 @@ export function GarmentPage(props: {
         </>
       }
     >
-      <div id="garment-photo-slot">
-        <GarmentPhotoView
-          garment={garment}
-          viewOwner={model.viewOwner}
-          canEdit={model.canEdit}
-        />
-      </div>
       <Summary model={model} />
       {model.canEdit && (
         <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(model)} />
