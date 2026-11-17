@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests for lg_check.py; run by `make lg-check` (stdlib unittest, so before npm ci)."""
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,19 +15,38 @@ class CountLg(unittest.TestCase):
     def test_counts_variants_at_or_above_lg(self) -> None:
         for cls in ("lg:flex", "xl:flex", "2xl:flex", "min-lg:flex", "min-xl:flex", "min-2xl:flex",
                     "hover:lg:flex", "md:hover:min-[1024px]:flex", "min-[64rem]:flex", "min-[1024px]:flex",
-                    "min-[80rem]:flex", "min-[1200px]:flex", "min-[64.5rem]:flex"):
+                    "min-[80rem]:flex", "min-[64em]:flex", "min-[calc(100vw)]:flex", "min-[64vw]:flex", "min-[1200px]:flex", "min-[64.5rem]:flex"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 1)
 
     def test_ignores_variants_below_lg_and_max_forms(self) -> None:
-        for cls in ("max-lg:flex", "max-xl:flex", "md:flex", "sm:flex", "min-md:flex", "min-[48rem]:flex",
+        for cls in ("max-lg:flex", "max-xl:flex", "md:flex", "sm:flex", "min-md:flex", "min-[48rem]:flex", "min-[40rem]:flex", "min-[40em]:flex", "@lg:flex", "@xl:flex", "@min-lg:flex", "@lg/card:flex", "@max-lg:flex",
                     "min-[1023px]:flex", "min-[63.9rem]:flex", "md:max-lg:flex", "max-[1024px]:flex",
-                    "flex-lg:x", "xxl:flex", "min-[64vw]:flex"):
+                    "flex-lg:x", "xxl:flex"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 0)
 
     def test_counts_each_occurrence(self) -> None:
         self.assertEqual(lg_check.count_lg("lg:a xl:b max-lg:c hover:lg:d"), 3)
+
+
+class ReadIndex(unittest.TestCase):
+    def test_reads_staged_blobs_in_one_batch_not_the_disk(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def git(*args: str) -> None:
+                subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+            git("init", "-q")
+            (root / "a.tsx").write_text("lg:a\n")
+            (root / "b.tsx").write_text("xl:b \u00e9\n")
+            git("add", "a.tsx", "b.tsx")
+            (root / "a.tsx").write_text("changed on disk")
+            with mock.patch.object(lg_check, "ROOT", root):
+                self.assertEqual(lg_check.read_index(["a.tsx", "b.tsx"]), {"a.tsx": "lg:a\n", "b.tsx": "xl:b \u00e9\n"})
+                with self.assertRaises(SystemExit):
+                    lg_check.read_index(["nope.tsx"])
 
 
 class ReadConf(unittest.TestCase):
@@ -97,11 +117,10 @@ class Main(unittest.TestCase):
         index = {"scripts/ci/lg_count.conf": "known src/web/a.tsx 1\n", "src/web/a.tsx": "lg:a xl:b"}
 
         def fake_git(*args: str) -> str:
-            if args[0] == "ls-files":
-                return "src/web/a.tsx\0"
-            return index[args[1].removeprefix(":")]
+            return "src/web/a.tsx\0"
 
-        with mock.patch.object(lg_check, "git_out", fake_git):
+        with mock.patch.object(lg_check, "git_out", fake_git), \
+             mock.patch.object(lg_check, "read_index", lambda paths: {p: index[p] for p in paths}):
             code, _ = self.run_main("known src/web/a.tsx 2\n", {"src/web/a.tsx": "lg:a xl:b"}, staged=True)
         self.assertEqual(code, 1, "the staged conf says 1, the disk conf says 2")
 

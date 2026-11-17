@@ -282,12 +282,12 @@ guard-check:
 # Page-level `lg:` classes in src/web are counted per file against scripts/ci/lg_count.conf, which
 # only shrinks (#1066; the desktop layout plan's principle 7). Stdlib only, like layer-check.
 lg-check:
-	python3 -I scripts/ci/lg_check_test.py
-	python3 -I scripts/ci/lg_check.py
+	python3 -B -I scripts/ci/lg_check_test.py
+	python3 -B -I scripts/ci/lg_check.py
 
 # The pre-commit hook's half: the conf, the file list and every file read from the index.
 lg-check-staged:
-	python3 -I scripts/ci/lg_check.py --staged
+	python3 -B -I scripts/ci/lg_check.py --staged
 
 # A migration on origin/main has run on the deployed database: never edit or delete it, fix forward
 # (the `migration-contract` label passes a deliberate edit). drizzle-kit's append to
