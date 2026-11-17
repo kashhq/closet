@@ -41,8 +41,9 @@
  *   (SnapStrip's `desktop`, `data-snap-desktop`): browsed, not chosen from.
  *   Such a strip gets no observer and no centring there; a `row`'s steps
  *   page by its visible width and the arrow keys move focus item to item.
- *   Decided by a media query when the strip is first watched, never by
- *   measuring it, and kept for that visit.
+ *   Decided by a media query, never by measuring: when the strip is first
+ *   watched, and again whenever the query changes (a tablet rotating across
+ *   `lg`), which attaches or detaches the observer and the tap-to-centre.
  *
  * Evaluated once per document: the listeners below sit on the document and
  * serve every page's strips.
@@ -58,18 +59,42 @@ const BROWSE_MODES = new Set(['row', 'grid']);
 /** Strips watched as browsed: a `row` or `grid` at `lg`. */
 const browsed = new WeakSet();
 
+// A tablet rotating across `lg` (an installed PWA keeps its document) changes
+// every watched strip's mode; strips not yet watched pick it up at their first watch.
+DESKTOP.addEventListener('change', () => {
+  for (const strip of document.querySelectorAll('[data-snap-strip]')) {
+    if (watched.has(strip) && browsed.has(strip) !== wantsBrowsed(strip)) {
+      applyMode(strip);
+      watch(strip);
+    }
+  }
+});
+
 export function initSnapStrips(root) {
   if (!root) return;
   for (const strip of root.querySelectorAll('[data-snap-strip]')) watch(strip);
 }
 
-function watch(strip) {
-  if (!watched.has(strip)) {
-    if (DESKTOP.matches && BROWSE_MODES.has(strip.dataset.snapDesktop)) {
-      browsed.add(strip);
-    }
-    watched.set(strip, browsed.has(strip) ? null : observe(strip));
+/** Whether `strip` is browsed (a `row` or `grid`) at the viewport's current width. */
+function wantsBrowsed(strip) {
+  return DESKTOP.matches && BROWSE_MODES.has(strip.dataset.snapDesktop);
+}
+
+/** Puts `strip` in the mode its width calls for: a browsed one has no observer, a strip has the centre-line one. */
+function applyMode(strip) {
+  watched.get(strip)?.disconnect();
+  heading.delete(strip);
+  if (wantsBrowsed(strip)) {
+    browsed.add(strip);
+    watched.set(strip, null);
+  } else {
+    browsed.delete(strip);
+    watched.set(strip, observe(strip));
   }
+}
+
+function watch(strip) {
+  if (!watched.has(strip)) applyMode(strip);
   const observer = watched.get(strip);
   // A strip's next page arrives as new items: observing one twice is a no-op.
   if (observer) {

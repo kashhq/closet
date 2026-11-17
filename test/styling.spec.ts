@@ -600,5 +600,78 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.setViewportSize({ width: 390, height: 844 });
   });
 
+  await test.step('Goes-with is a row from lg: steps page it, arrows move focus, nothing is chosen, and crossing lg switches its mode (#1065)', async () => {
+    for (const name of ['Polo', 'Henley']) {
+      await createGarment(page, name, 'tops');
+    }
+    const wanted = await createGarment(page, 'Wanted tee', 'tops', {
+      to: 'wishlist',
+      wishlist: '1',
+      replaces: '',
+      product: '1',
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/wardrobe/${wanted}`);
+    const strip = page.locator('[data-goes-with-strip]');
+    const items = strip.locator('[data-snap-item]');
+    await expect(strip).toHaveAttribute('data-snap-desktop', 'row');
+    expect(await items.count()).toBeGreaterThan(2);
+    const selected = () =>
+      items.evaluateAll((all) =>
+        all.findIndex((item) => item.hasAttribute('data-selected')),
+      );
+    expect(await selected()).toBe(0);
+    const frame = strip.locator('xpath=..');
+    const next = frame.locator('[data-snap-step="1"]');
+    const previous = frame.locator('[data-snap-step="-1"]');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await expect(next).toHaveAttribute('aria-disabled', 'false');
+
+    // The next button pages by the visible width; the buttons re-sync from
+    // the scroll position when the scroll ends, until the end disables Next.
+    const scrollEnd = () =>
+      strip.evaluate(
+        (el) =>
+          new Promise<void>((resolve) =>
+            el.addEventListener('scrollend', () => resolve(), { once: true }),
+          ),
+      );
+    for (let paged = 0; paged < 10; paged += 1) {
+      if ((await next.getAttribute('aria-disabled')) === 'true') break;
+      const ended = scrollEnd();
+      // The spec's context is a touch one, where CSS hides the buttons
+      // (`fine:` only); the document's click handler serves them all the same.
+      await next.evaluate((button) => button.click());
+      await ended;
+    }
+    expect(await strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(previous).toHaveAttribute('aria-disabled', 'false');
+    expect(await selected()).toBe(0);
+
+    // Arrow keys move focus item to item and choose nothing.
+    await strip.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(items.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(items.nth(0)).toBeFocused();
+    expect(await selected()).toBe(0);
+
+    // A tap on a neighbour is the tile's own, not a choice.
+    await items.nth(1).click();
+    expect(await selected()).toBe(0);
+
+    // Below lg the same strip is a strip again: a tap centres and chooses.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await items.nth(1).click();
+    await expect.poll(selected).toBe(1);
+    // And back at lg a tap chooses nothing.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await items.nth(2).click();
+    expect(await selected()).toBe(1);
+  });
+
   expect(errors, errors.join('\n')).toEqual([]);
 });
