@@ -115,6 +115,13 @@ export type PageLayout =
       aside: Child;
       asideLabel?: never;
       actionBar?: never;
+      /**
+       * The subject below lg: `first`, stacked above the body (the default:
+       * the garment and outfit pages), or `hidden`, the page then the
+       * narrow column a `single` page is (FormPage's: a form the phone
+       * reached from its subject's page shows only the fields, #1069).
+       */
+      subjectBelowLg?: 'first' | 'hidden';
     }
   | {
       layout: 'panel' | 'facets' | 'index';
@@ -186,6 +193,11 @@ export function PageShell(props: PageShellProps) {
       <main
         class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
         data-layout={layout}
+        data-subject={
+          props.layout === 'split' && props.subjectBelowLg === 'hidden'
+            ? 'lg'
+            : undefined
+        }
       >
         {mainRegions(props, layout)}
       </main>

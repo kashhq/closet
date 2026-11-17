@@ -1,17 +1,9 @@
 import type { Child } from 'hono/jsx';
-import { showsCutout } from '../../cutout/state';
 import { garmentMarks } from '../../wardrobe/marks';
 import { PostForm } from '../form';
 import { GarmentCapsules } from '../capsules/garment-capsules';
 import type { GarmentCapsule } from '../capsules/queries';
 import { DayTime } from '../day-time';
-import { imageUrl } from '../files/image-url';
-import {
-  enlargeLabel,
-  PhotoSet,
-  viewerTrigger,
-  type ViewerPhoto,
-} from '../files/photo-viewer';
 import { AvoidedPartners } from '../gallery/avoided';
 import { GoesWithSection } from '../gallery/goes-with';
 import type { GoesWithCloset } from '../gallery/ideas';
@@ -22,7 +14,6 @@ import { GarmentMark } from '../layout/garment-mark';
 import { PageShell } from '../layout/page-shell';
 import {
   CameraIcon,
-  GarmentSilhouette,
   PHOTO_ACCEPT,
   PhotoLibraryIcon,
   PREPARE_AND_SUBMIT_PHOTO,
@@ -53,6 +44,7 @@ import type { BrandSize } from '../sizes/queries';
 import { BrandSizeNote } from '../sizes/views';
 import { categoryLabel, priceLabel } from './garment';
 import { GarmentCondition } from './garment-condition';
+import { GarmentPhotoView, PHOTO_SHEET_ID } from './garment-photo';
 import { RepairLogSection } from './repair-log';
 import type { RepairLog } from './repairs';
 import { fabricWeightLabel, valueLabel } from './labels';
@@ -126,10 +118,6 @@ export interface GarmentPageModel {
   /** A Muse decision made on this page landed here: its toast. */
   decided: DecisionToast | undefined;
 }
-
-type GarmentPhoto = NonNullable<GarmentDetail['photo']>;
-
-const PHOTO_SHEET_ID = 'garment-photo-sheet';
 
 /** The ⋯ menu's Photo closes the menu as the sheet opens over it. */
 const CLOSE_MENU = "this.closest('details').removeAttribute('open')";
@@ -620,250 +608,6 @@ function OwnerMenuItems({ model }: { model: GarmentPageModel }) {
         </li>
       )}
     </>
-  );
-}
-
-// The pending photo's poll (#689): every 2 s for its first 30 s (a cutout
-// takes 4 to 7 s), then every 10 s. Past 2 min it stops only while the
-// queue waits for a model it cannot have: that photo finishes later, and an
-// open page must not poll it forever; a working queue that is merely busy
-// (a bulk upload) keeps the 10 s poll, so its cutout still lands on the
-// page. Counted in polls, which the URL carries (`poll`), so the server
-// needs no clock and no per-page state; a reload starts over.
-const FAST_POLL_SECONDS = 2;
-const FAST_PHASE_SECONDS = 30;
-const SLOW_POLL_SECONDS = 10;
-const POLL_CAP_SECONDS = 120;
-const FAST_POLLS = FAST_PHASE_SECONDS / FAST_POLL_SECONDS;
-const MAX_POLL_COUNT = 1000;
-
-/**
- * The `poll` query as a count: anything but digits is 0 (a poll the page
- * never wrote starts the backoff over), and a count past the point where
- * every delay is the same is clamped, so an endless poll never outgrows it.
- */
-export function pollCount(raw: string | undefined): number {
-  if (raw === undefined || !/^\d+$/.test(raw)) return 0;
-  return Math.min(Number(raw), MAX_POLL_COUNT);
-}
-
-/**
- * The seconds until poll number `poll + 1`, or undefined once the polls so
- * far have waited POLL_CAP_SECONDS while `modelUnavailable` (the queue is
- * waiting-for-model): the fragment then stops polling.
- */
-function cutoutPollDelay(
-  poll: number,
-  modelUnavailable: boolean,
-): number | undefined {
-  const waited =
-    poll <= FAST_POLLS
-      ? poll * FAST_POLL_SECONDS
-      : FAST_PHASE_SECONDS + (poll - FAST_POLLS) * SLOW_POLL_SECONDS;
-  if (waited < FAST_PHASE_SECONDS) return FAST_POLL_SECONDS;
-  if (waited >= POLL_CAP_SECONDS && modelUnavailable) return undefined;
-  return SLOW_POLL_SECONDS;
-}
-
-/**
- * The hero: the cutout (the original when there is none), contained on the
- * plinth at 4:5, with the mask editor's pencil, and where the cutout
- * stands: pending polls GET /wardrobe/:id/cutout?poll=N on the backoff of
- * cutoutPollDelay (this component again, swapped over itself; the answer
- * without the trigger ends the polling: ready, failed, or the cap while
- * the model is unavailable, which says it will finish later), failed offers
- * "Try again". Its own
- * hx-indicator keeps the polls off the app bar's spinner. Without a photo,
- * its role's silhouette, and for whoever may add one the button that opens
- * the photo sheet. `poll`: how many polls led here (0 on the page itself);
- * `modelUnavailable`: the queue's state, read by the poll's route only.
- */
-export function GarmentPhotoView(props: {
-  garment: GarmentDetail;
-  viewOwner: number | undefined;
-  canEdit: boolean;
-  poll?: number;
-  modelUnavailable?: boolean;
-}) {
-  const { garment, viewOwner, canEdit } = props;
-  const photo = garment.photo;
-  if (!photo) {
-    return (
-      <div
-        id="garment-photo"
-        class="rounded-box bg-base-200 aspect-[4/5] w-full flex flex-col items-center justify-center gap-4 text-faint"
-      >
-        <GarmentSilhouette
-          category={garment.category}
-          class="size-20"
-          strokeWidth="1"
-        />
-        {canEdit && (
-          <button
-            type="button"
-            class="btn btn-outline btn-sm"
-            {...sheetOpener(PHOTO_SHEET_ID)}
-          >
-            <CameraIcon class="size-4" />
-            {t('garment.ADD_PHOTO')}
-          </button>
-        )}
-      </div>
-    );
-  }
-  const status = photo.cutoutStatus;
-  const pending = status === 'pending';
-  const polling = pending ? nextPoll(props) : undefined;
-  return (
-    <div id="garment-photo" {...polling}>
-      <figure class="relative rounded-box overflow-hidden bg-base-200 aspect-[4/5] w-full">
-        {/* The viewer swipes from the cutout to the photo it was cut from. */}
-        <PhotoSet id="garment-photos" photos={viewerPhotos(garment, photo)} />
-        <button
-          type="button"
-          class="size-full"
-          aria-label={enlargeLabel(garment.name)}
-          {...viewerTrigger('garment-photos', photo, viewerVariant(photo))}
-        >
-          <img
-            src={imageUrl(photo, 'nobg')}
-            alt={garment.name ?? ''}
-            class="object-contain w-full h-full"
-          />
-        </button>
-        {pending && <PendingStatus polling={polling !== undefined} />}
-        {canEdit && !pending && (
-          <EditMaskButton
-            garment={garment}
-            photo={photo}
-            viewOwner={viewOwner}
-          />
-        )}
-      </figure>
-      {status === 'failed' && (
-        <CutoutFailed
-          retryUrl={
-            canEdit
-              ? garmentUrl(garment.id, viewOwner, '/cutout/retry')
-              : undefined
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-// The pending photo's next poll, or undefined past the cap.
-function nextPoll(props: {
-  garment: GarmentDetail;
-  viewOwner: number | undefined;
-  poll?: number;
-  modelUnavailable?: boolean;
-}) {
-  const poll = props.poll ?? 0;
-  const delay = cutoutPollDelay(poll, props.modelUnavailable === true);
-  if (delay === undefined) return undefined;
-  return {
-    'hx-get': garmentUrl(props.garment.id, props.viewOwner, '/cutout', {
-      poll: poll + 1,
-    }),
-    'hx-trigger': `every ${delay}s`,
-    'hx-swap': 'outerHTML',
-    'hx-indicator': '#garment-photo-status',
-  };
-}
-
-/**
- * A pending cutout's line over the photo: removing, while the page polls;
- * past the poll's cap, queued for later, without the spinner.
- */
-function PendingStatus(props: { polling: boolean }) {
-  return (
-    <div
-      id="garment-photo-status"
-      role="status"
-      class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-base-100/80 p-2 text-sm"
-    >
-      {props.polling ? (
-        <>
-          <span class="loading loading-spinner loading-xs"></span>
-          {t('REMOVING_BACKGROUND')}
-        </>
-      ) : (
-        t('CUTOUT_QUEUED')
-      )}
-    </div>
-  );
-}
-
-/** A failed cutout, and "Try again" for whoever may change the photo. */
-function CutoutFailed(props: { retryUrl: string | undefined }) {
-  return (
-    <div
-      role="alert"
-      class="alert alert-warning alert-soft mt-2 w-full flex justify-between"
-    >
-      <span>{t('CUTOUT_FAILED')}</span>
-      {props.retryUrl && (
-        <PostForm action={props.retryUrl}>
-          <button type="submit" class="btn btn-sm">
-            {t('CUTOUT_RETRY')}
-          </button>
-        </PostForm>
-      )}
-    </div>
-  );
-}
-
-/**
- * The pencil: mask-editor.js reads what it edits and where it saves from
- * the data attributes at the tap (the button is swapped with the photo),
- * and writes the new version back into them after a save.
- */
-/** The photo viewer opens on the cutout while one is shown, else on the photo itself. */
-function viewerVariant(photo: GarmentPhoto): 'nobg' | 'original' {
-  return showsCutout(photo.cutoutStatus) ? 'nobg' : 'original';
-}
-
-function viewerPhotos(garment: GarmentDetail, photo: GarmentPhoto) {
-  const alt = garment.name ?? '';
-  const original: ViewerPhoto = { photo, alt, variant: 'original' };
-  return showsCutout(photo.cutoutStatus)
-    ? [{ photo, alt } satisfies ViewerPhoto, original]
-    : [original];
-}
-
-function EditMaskButton(props: {
-  garment: GarmentDetail;
-  photo: GarmentPhoto;
-  viewOwner: number | undefined;
-}) {
-  return (
-    <button
-      id="editMaskBtn"
-      type="button"
-      class="btn btn-circle absolute bottom-3 right-3 btn-neutral opacity-80 hover:opacity-100"
-      title={t('MASK_EDITOR_TITLE')}
-      aria-label={t('MASK_EDITOR_TITLE')}
-      data-original-url={imageUrl(props.photo, 'original')}
-      data-nobg-url={imageUrl(props.photo, 'nobg')}
-      data-save-url={garmentUrl(props.garment.id, props.viewOwner, '/nobg')}
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        class="size-5"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
-        />
-      </svg>
-    </button>
   );
 }
 

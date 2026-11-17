@@ -510,6 +510,40 @@ html {
   }
 }
 
+/* A form's Cancel and submit (layout/form-page.tsx, #1069; docs/plans/
+   2026-11-16-desktop-layout.md §3.7). Below lg the form's last row, as it
+   always was. From lg the row sticks at the window's foot while the form
+   runs past it, so Save is in reach on a long form, and rides up with the
+   form's end once that is in view (sticky keeps it inside its PostForm,
+   so it never covers the forms after it). Not the action bar: that is the
+   page's, outside the form and fixed above a phone's dock, where this row
+   must stay in the flow. Its height is `--form-actions-h` (its padding, its
+   border and a default btn's `--size-field * 10`), which focus scrolls clear
+   of; z-10, under a menu (z-20) opening over it. */
+:root {
+  --form-actions-h: calc(var(--size-field) * 10 + 1.5rem + 1px);
+}
+@layer components {
+  @media (min-width: 1024px) {
+    .form-actions {
+      position: sticky;
+      bottom: var(--spacing-dock);
+      z-index: 10;
+      padding-block: 0.75rem;
+      border-top: 1px solid var(--color-base-300);
+      background-color: var(--color-base-100);
+    }
+  }
+}
+/* Unlayered, after the dock's, as the scroll padding above is. */
+@media (min-width: 1024px) {
+  :root:has(.form-actions) {
+    scroll-padding-bottom: calc(
+      var(--spacing-dock) + var(--form-actions-h) + 0.5rem
+    );
+  }
+}
+
 /* The page frame (layout/page-shell.tsx, #1059; docs/plans/
    2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
    app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
@@ -577,6 +611,15 @@ html {
   @media (max-width: 1023.98px) {
     .page-shell[data-layout="facets"] > .page-aside {
       padding: 0;
+    }
+    /* A subject shown from lg only (`subjectBelowLg: 'hidden'`, FormPage's
+       aside, #1069): below lg the page is the narrow column a `single` page
+       is, pixel for pixel; the body's padding is already its 1rem. */
+    .page-shell[data-subject="lg"] {
+      max-width: var(--container-page-narrow);
+    }
+    .page-shell[data-subject="lg"] > .page-aside {
+      display: none;
     }
   }
 

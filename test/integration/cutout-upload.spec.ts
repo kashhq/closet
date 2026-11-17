@@ -92,6 +92,54 @@ describe('cutouts: upload, page and polling', () => {
     expectNoRawI18nKeys(res);
   });
 
+  // #1069: the edit form's subject is the page's photo view in the form's
+  // place, which keeps its place across the polls and never draws the
+  // page's tools: the form has no photo sheet or mask editor, and a retry
+  // would leave what was typed. A new garment has no subject.
+  it("shows the edit form's photo as its subject, pending and polling in the form's place, without the page's tools", async () => {
+    const id = await createGarment(t, { name: 'Form shirt' });
+    await uploadPhoto(t, id, await jpegPhoto());
+
+    const form = await t.inject({ method: 'GET', url: `/wardrobe/${id}/edit` });
+    expect(form.statusCode).toBe(200);
+    const html = unescapeHtml(form.body);
+    expect(html).toMatch(
+      /<main class="page-shell w-full mx-auto" data-layout="split" data-subject="lg">\s*<section id="form-aside" class="page-aside">/,
+    );
+    expect(html).toContain(
+      `<div id="garment-photo" hx-get="/wardrobe/${id}/cutout?poll=1&place=form" hx-trigger="every 2s"`,
+    );
+    expect(html).toContain('Removing background…');
+    expect(html).toMatch(
+      /<img src="\/file\/[^"]+" alt="Form shirt" class="object-contain w-full h-full" loading="lazy"\/?>/,
+    );
+
+    t.cutouts.start(
+      fakeRunner(() => {
+        throw new Error('model exploded');
+      }),
+    );
+    await t.cutouts.whenIdle();
+    const failed = unescapeHtml(
+      (
+        await t.inject({
+          method: 'GET',
+          url: `/wardrobe/${id}/cutout?poll=3&place=form`,
+          headers: HX_FRAGMENT,
+        })
+      ).body,
+    );
+    expect(failed).toContain('The background could not be removed.');
+    expect(failed).not.toContain('/cutout/retry');
+    expect(failed).not.toContain('id="editMaskBtn"');
+
+    const add = unescapeHtml(
+      (await t.inject({ method: 'GET', url: '/wardrobe/new' })).body,
+    );
+    expect(add).toContain('data-layout="single"');
+    expect(add).not.toContain('id="garment-photo"');
+  });
+
   // #689: a queue that cannot run its model leaves the photo pending for
   // as long as that lasts; an open page must not poll it every 2 s forever.
   // A busy but working queue (a bulk upload) must keep polling, so the

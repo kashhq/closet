@@ -62,7 +62,10 @@
  *  - `FIELD_GRID`: form fields two to a row (a trip's dates, the repair's
  *    day and cost, body measurements, Styling's day and occasion);
  *    `DENSE_FIELD_GRID` the same with the row gap of a field that carries
- *    its own label row (a saved look's pieces). `BRAND_SIZE_FIELDS`: a
+ *    its own label row (a saved look's pieces). `FIELD_ROW` (`FieldRow`,
+ *    form-field.tsx): two short fields stacked below `lg` as the form's own
+ *    column stacks them (its flex column and gap), side by side from it
+ *    (the garment form's brand and size, #1069). `BRAND_SIZE_FIELDS`: a
  *    brand's name beside its size, two to one.
  *  - `STAT_GRID`: three figures in a row (Insights' worn shares, the recap's
  *    numbers).
@@ -95,6 +98,7 @@ export const MONTH_DAY =
   'lg:grid lg:grid-flow-col lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[repeat(4,auto)_1fr]';
 export const FIELD_GRID = 'grid grid-cols-2 gap-3';
 export const DENSE_FIELD_GRID = 'grid grid-cols-2 gap-x-3 gap-y-1';
+export const FIELD_ROW = 'flex flex-col gap-4 lg:grid lg:grid-cols-2';
 export const BRAND_SIZE_FIELDS = 'grid grid-cols-[2fr_1fr] gap-2';
 export const STAT_GRID = 'grid grid-cols-3 gap-2';
 export const THUMB_ROW = 'grid grid-cols-3 gap-2';
