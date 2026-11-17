@@ -394,6 +394,36 @@ test.describe('Trips', () => {
     expect(bar?.contentTop).toBeGreaterThanOrEqual(bar?.barBottom ?? Infinity);
     await expect(page.locator('.dock-label').first()).toHaveCSS('width', '1px');
     await expect(page.getByRole('link', { name: 'Wardrobe' })).toBeVisible();
+    // The labels give way only where they would overflow their links
+    // (#1027): a 340 px phone hides them at 200% and shows them at 100%,
+    // and at the query's 18rem (288 px) the widest one still fits.
+    const dockLabels = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('.dock > a'))
+          // Profile's link is the rail's alone.
+          .filter((link) => link.getClientRects().length > 0)
+          .map((link) => {
+            const label = link.querySelector('.dock-label');
+            return {
+              shown: (label?.getBoundingClientRect().width ?? 0) > 1,
+              fits: (label?.scrollWidth ?? Infinity) <= link.clientWidth,
+            };
+          }),
+      );
+    await page.setViewportSize({ width: 340, height: 844 });
+    expect((await dockLabels()).map((label) => label.shown)).toEqual(
+      Array(5).fill(false),
+    );
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+    for (const width of [340, 288]) {
+      await page.setViewportSize({ width, height: 844 });
+      expect(await dockLabels(), `${width} px`).toEqual(
+        Array(5).fill({ shown: true, fits: true }),
+      );
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
 
     // The error page (#644): inside the phone's width, its actions tappable.
     const missing = await page.goto('/wardrobe/999999');
