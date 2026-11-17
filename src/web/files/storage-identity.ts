@@ -59,7 +59,9 @@ const ADOPT_MIN_COVERAGE = 0.9;
  * this database never wrote it: one whose id a claim of this database
  * recorded (storage_claim) is that claim's own, left by a crash after it
  * lost the pairing race and before it withdrew it (#1049). It is withdrawn
- * and the directory claimed as unmarked, by #650 and #850's rules.
+ * (kept as an orphan: that claim may have been the real share's, and the
+ * repair command can put it back) and the directory claimed as unmarked, by
+ * #650 and #850's rules.
  *
  * Called by createPhotos, so the server's boot and every CLI that writes
  * photos (reconcile, retrim, seed) refuse the same directory.
@@ -121,7 +123,7 @@ async function healOrphan(
     return read;
   }
   logger.warn(
-    `Photo storage ${read.marker.installId}: a claim of this database wrote this marker and lost the pairing to install ${paired}; withdrawing it`,
+    `Photo storage ${read.marker.installId}: a claim of this database wrote this marker and lost the pairing to install ${paired}; moving it aside as an orphan (--repair-storage-identity --orphan ${read.marker.installId} puts it back)`,
   );
   await withdrawMarker(storage, read.marker);
   return storage.readMarker();
@@ -305,24 +307,42 @@ export async function storageIdentityProblem(
   return paired === storage.claimedInstallId ? undefined : { kind: 'unpaired' };
 }
 
-export type StorageRepair = { paired: string } | { refused: string };
+export type StorageRepair =
+  | { paired: string }
+  | { refused: string; orphans?: StorageMarker[] };
 
 /**
  * `maintenance:reconcile -- --repair-storage-identity --confirm`: pairs the
  * database with the marker DATA_PATH holds now, once an operator checked it
  * is the right share (a deliberate restore onto new storage:
- * docs/operations.md#photo-storage-marker). Never writes the marker, so an
- * unmounted share (no marker) is refused, never paired. Runs without
- * claimStorage, which refuses exactly this storage.
+ * docs/operations.md#photo-storage-marker). Never writes a new marker, so
+ * an unmounted share (no marker) is refused, never paired; the refusal
+ * lists the orphaned markers there (withdrawn by a claim that lost its
+ * pairing, #1049), and `--orphan <id>` puts that one back and pairs it.
+ * Runs without claimStorage, which refuses exactly this storage.
  */
 export async function repairStorageIdentity(
   storage: PhotoStorage,
   db: Db,
   logger: Logger,
+  { orphan }: { orphan?: string } = {},
 ): Promise<StorageRepair> {
+  if (orphan !== undefined) {
+    if (!(await storage.restoreOrphan(orphan))) {
+      return {
+        refused: `DATA_PATH holds a ${STORAGE_MARKER} already, or no orphaned marker of install ${orphan}`,
+        orphans: (await storage.orphanedMarkers()).map((o) => o.marker),
+      };
+    }
+    logger.warn(`Storage identity: put back the orphaned marker of ${orphan}`);
+  }
   const read = await storage.readMarker();
   if (read.state === 'absent') {
-    return { refused: identityRefusal({ kind: 'absent' }) };
+    const orphans = (await storage.orphanedMarkers()).map((o) => o.marker);
+    return {
+      refused: identityRefusal({ kind: 'absent' }),
+      ...(orphans.length > 0 && { orphans }),
+    };
   }
   if (read.state === 'unreadable') {
     return {

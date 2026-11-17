@@ -81,6 +81,7 @@ describe('the photo storage marker', () => {
     readText: (path) => readFile(path, 'utf8'),
     writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
     link: (from, to) => link(from, to),
+    rename: (from, to) => rename(from, to),
     remove: (path) => rm(path, { force: true }),
   };
   const fsError = (code: string) =>
@@ -528,6 +529,11 @@ describe('the photo storage marker', () => {
       refused?: RegExp;
       next: 'paired' | { refused: RegExp; paired: string | undefined };
       pairedWith?: string;
+      /**
+       * The claim's marker is kept as an orphan, and the repair command
+       * pairs it back (#1049: it may have been the real share's).
+       */
+      orphaned?: true;
     }
     const crashPoints: CrashPoint[] = [
       {
@@ -608,11 +614,14 @@ describe('the photo storage marker', () => {
           refused: /^DATA_PATH has no \.closet-storage marker/,
           paired: otherShare,
         },
+        orphaned: true,
       },
       {
         // #1049: its marker, beside a database paired with the other share,
         // is this database's own claim (storage_claim), never another
-        // install's: withdrawn, then the same refusal as the row above.
+        // install's: kept as an orphan, then the same refusal as the row
+        // above. Also the real share's claim losing to a bare mountpoint's:
+        // the next boot must not destroy the only marker the repair can pair.
         point:
           'the process dies after losing the pairing, before withdrawing its marker',
         first: (dir) => {
@@ -625,16 +634,17 @@ describe('the photo storage marker', () => {
           refused: /^DATA_PATH has no \.closet-storage marker/,
           paired: otherShare,
         },
+        orphaned: true,
       },
       {
         point: 'the withdrawal of its marker fails (EACCES)',
         first: (dir) => {
           const storage = new OutPaired(dir, silentLogger, {
             ...diskFs,
-            remove: (path) =>
-              path === markerIn(dir)
+            rename: (from, to) =>
+              from === markerIn(dir)
                 ? Promise.reject(fsError('EACCES'))
-                : diskFs.remove(path),
+                : diskFs.rename(from, to),
           });
           storage.prepare();
           return storage;
@@ -645,6 +655,7 @@ describe('the photo storage marker', () => {
           refused: /^DATA_PATH has no \.closet-storage marker/,
           paired: otherShare,
         },
+        orphaned: true,
       },
     ];
 
@@ -678,6 +689,23 @@ describe('the photo storage marker', () => {
           row.next.paired === undefined ? [] : [row.next.paired],
         );
       }
+      if (!row.orphaned) return;
+      const storage = storageOver(directory);
+      const [orphan] = (await storage.orphanedMarkers()).map((o) => o.marker);
+      expect(await repairStorageIdentity(storage, t.db, silentLogger)).toEqual({
+        refused: expect.stringMatching(/^DATA_PATH has no/),
+        orphans: [orphan],
+      });
+      expect(
+        await repairStorageIdentity(storage, t.db, silentLogger, {
+          orphan: orphan.installId,
+        }),
+      ).toEqual({ paired: orphan.installId });
+      expect(await onDisk()).toBe(orphan.installId);
+      expect(await storage.orphanedMarkers()).toEqual([]);
+      expect((await claim(storageOver(directory))).installId).toBe(
+        orphan.installId,
+      );
     });
 
     // Only a claim that never paired leaves an orphan: a share once paired

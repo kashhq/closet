@@ -4,6 +4,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  rename,
   rm,
   utimes,
   writeFile,
@@ -498,6 +499,7 @@ describe('storage reconciliation', () => {
           writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
           link: (from, to) =>
             once('link', to, fail.link?.(to)) ? eio() : link(from, to),
+          rename: (from, to) => rename(from, to),
           remove: (path) =>
             once('remove', path, fail.remove?.(path))
               ? eio()
