@@ -64,8 +64,11 @@ export interface PageBodyFrame {
 /**
  * A page's regions, each with a stable id the shell derives from the page's
  * `name` (`regionId`): the target an htmx fragment swaps (`#wardrobe-body`)
- * or an out-of-band swap names. A fragment swaps only the region it owns.
- * `actions` is the action bar (`actionBar`, action-bar.tsx).
+ * or an out-of-band swap names. A fragment swaps only the region it owns,
+ * and answers the others it changes out of band (`PageFragment`).
+ * `actions` is the action bar (`actionBar`, action-bar.tsx); every page
+ * renders it, empty and `hidden` when the page has no bar, so a fragment
+ * that brings or drops the bar always finds it.
  */
 export type PageRegion = 'body' | 'aside' | 'actions';
 
@@ -198,17 +201,16 @@ export function PageShell(props: PageShellProps) {
 }
 
 /**
- * `<main>`'s regions in DOM order, which is the desktop's visual order: a
- * `row` action bar heads it (from lg it sticks there, above what it acts
- * on), a left aside precedes the body and a right one follows it, and a
- * `stack` action bar comes last (below lg it rides above the dock in the
- * body's flow; from lg it is the column beside the body).
+ * `<main>`'s regions in DOM order: a left aside precedes the body and a
+ * right one follows it (the desktop's left to right, also the phone's
+ * stack), and the action bar comes last, the phone's visual order (a `row`
+ * fixed above the dock, a `stack` riding on it in the body's flow), so Tab
+ * reaches the content before the controls acting on it. From lg main.css
+ * places the bar (a `row` by `order` at the head of the column, a `stack`
+ * in the grid column beside the body), never the markup.
  */
 function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
-  const { name, actionBar } = props;
-  const actions = actionBar && (
-    <ActionBar id={regionId(name, 'actions')} {...actionBar} />
-  );
+  const { name } = props;
   const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
@@ -219,16 +221,52 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
     </PageAside>
   );
   const asideFirst = ASIDE_FIRST[layout];
-  const stack = actionBar?.kind === 'stack';
   return [
-    !stack && actions,
     asideFirst && aside,
     <PageBody name={name} {...props.body}>
       {props.children}
     </PageBody>,
     !asideFirst && aside,
-    stack && actions,
+    <ActionsRegion name={name} bar={props.actionBar} />,
   ];
+}
+
+/**
+ * The answer to an htmx request that swaps a page's body in place (the
+ * Wardrobe's filtering targets `#<name>-body`, outerHTML): the body with the
+ * same name and frame the page gave its shell, and the actions region out
+ * of band, so the bar follows the body it acts on. Filtering select mode
+ * to no tiles drops the bar, back to some brings it, and its controls'
+ * `form=` names the form in this answer. A page with a swapped body answers
+ * through this, never a bare body, so no fragment leaves a stale bar.
+ */
+export function PageFragment(
+  props: PageBodyFrame & {
+    name: string;
+    actionBar: ActionBarProps | undefined;
+    children?: Child;
+  },
+) {
+  const { name, actionBar, children, ...frame } = props;
+  return (
+    <>
+      <PageBody name={name} {...frame}>
+        {children}
+      </PageBody>
+      <ActionsRegion name={name} bar={actionBar} oob />
+    </>
+  );
+}
+
+/** `#<name>-actions`: the page's bar, else its empty place (PageRegion). */
+function ActionsRegion(props: {
+  name: string;
+  bar: ActionBarProps | undefined;
+  oob?: boolean;
+}) {
+  const id = regionId(props.name, 'actions');
+  if (props.bar) return <ActionBar id={id} oob={props.oob} {...props.bar} />;
+  return <div id={id} hidden hx-swap-oob={props.oob ? 'true' : undefined} />;
 }
 
 /** The document's `<title>`: the page's own, else the bar's when it is a string. */
@@ -237,14 +275,8 @@ function documentTitle(props: PageShellProps): string | undefined {
   return typeof props.bar.title === 'string' ? props.bar.title : undefined;
 }
 
-/**
- * The shell's body region, `#<name>-body`. Rendered alone only as the answer
- * to an htmx request that swaps it in place (the Wardrobe's), with the same
- * name and frame the page gave its shell.
- */
-export function PageBody(
-  props: PageBodyFrame & { name: string; children?: Child },
-) {
+/** The shell's body region, `#<name>-body` (PageShell, PageFragment). */
+function PageBody(props: PageBodyFrame & { name: string; children?: Child }) {
   const flow = props.gap === undefined ? '' : ` ${GAP_CLASS[props.gap]}`;
   return (
     <div

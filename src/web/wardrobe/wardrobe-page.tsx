@@ -24,8 +24,8 @@ import { GALLERY_GRID } from '../layout/columns';
 import type { ActionBarProps } from '../layout/action-bar';
 import { GarmentMark } from '../layout/garment-mark';
 import {
-  PageBody,
   type PageBodyFrame,
+  PageFragment,
   PageShell,
   type PageShellProps,
   regionId,
@@ -251,8 +251,9 @@ export function WardrobePage(props: {
 
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
- * chips and scope menu, the filter modal): the main, and the ⋯ menu out
- * of band, so its Select keeps the filters the grid now shows.
+ * chips and scope menu, the filter modal): the main, with select mode's
+ * bar out of band (`PageFragment`), and the ⋯ menu out of band, so its
+ * Select keeps the filters the grid now shows.
  */
 export function WardrobeFragment({
   ctx,
@@ -263,9 +264,13 @@ export function WardrobeFragment({
 }) {
   return (
     <>
-      <PageBody name={WARDROBE} {...WARDROBE_BODY}>
+      <PageFragment
+        name={WARDROBE}
+        {...WARDROBE_BODY}
+        actionBar={selectBar(model)}
+      >
         <WardrobeMain model={model} />
-      </PageBody>
+      </PageFragment>
       {!model.selecting && (
         <WardrobeMenu
           viewOwner={model.viewOwner}

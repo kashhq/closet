@@ -404,7 +404,10 @@ html {
    a phone and hid focus once the row wrapped). Below lg a row is fixed
    above the dock: focus scrolls clear of it and the page's end leaves its
    height. From lg it sticks at the head of `<main>` under the app bar,
-   aligned to the content column: focus scrolls clear of it at the top. A
+   aligned to the content column: focus scrolls clear of it at the top.
+   Every bar follows the body in the DOM, the phone's visual order, so Tab
+   reaches the rows first; from lg `order` lifts a row to the head of a
+   flex column, where it sticks against the whole of `<main>`. A
    `stack` (varying height, #664) is sticky above the dock in the flow after
    the body, so it reserves nothing: the page leaves only the dock below it;
    from lg it is the 20rem column beside the body. Page content is z-20 at
@@ -461,7 +464,12 @@ html {
   }
 
   @media (min-width: 1024px) {
+    .page-shell:has(> .action-bar[data-kind="row"]) {
+      display: flex;
+      flex-direction: column;
+    }
     .page-shell > .action-bar[data-kind="row"] {
+      order: -1;
       position: sticky;
       top: var(--app-bar-h);
       bottom: auto;

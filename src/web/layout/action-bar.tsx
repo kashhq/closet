@@ -15,8 +15,9 @@ import type { Child } from 'hono/jsx';
  *    column, above the rows it acts on. Its height is `--action-bar-h` at
  *    every text size: the row never wraps (at large text it scrolls
  *    sideways), so the scroll padding and the shell's reservation, which
- *    read the same token, always match it (#1030). It comes first in
- *    `<main>`, so from lg the DOM order is the visual order.
+ *    read the same token, always match it (#1030). It follows the body in
+ *    the DOM, the phone's visual order, so Tab reaches the rows before it;
+ *    from lg main.css moves it to the head (`order`), not the markup.
  *  - `stack`: content whose height varies (Styling's preview, fit line,
  *    Shuffle and Save). Below lg it is sticky above the dock in the flow
  *    after the body: it rides on the dock while the body scrolls and lands
@@ -33,12 +34,18 @@ export type ActionBarProps =
     }
   | { kind: 'stack'; align?: never; children: Child };
 
-/** Rendered by `PageShell` only, which gives it the region's id. */
-export function ActionBar(props: ActionBarProps & { id: string }) {
+/**
+ * Rendered by page-shell.tsx only (`PageShell`, `PageFragment`), which gives
+ * it the region's id and, in a fragment, marks it out of band.
+ */
+export function ActionBar(
+  props: ActionBarProps & { id: string; oob?: boolean },
+) {
   const kind = props.kind ?? 'row';
   return (
     <div
       id={props.id}
+      hx-swap-oob={props.oob ? 'true' : undefined}
       class="action-bar"
       data-kind={kind}
       data-align={kind === 'row' ? (props.align ?? 'end') : undefined}

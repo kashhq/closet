@@ -109,6 +109,38 @@ describe('select mode verbs', () => {
     }
   });
 
+  it('a filter swap brings the bar exactly when the body has tiles, its Save on the answer’s form', async () => {
+    // The fragment GET the scope row's search sends (PageFragment).
+    const filter = async (query: string) => {
+      const res = await t.inject({
+        method: 'GET',
+        url: `/wardrobe?pick=${capsuleId}&${query}`,
+        headers: { 'hx-request': 'true' },
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      // The actions region always rides out of band, so it is never stale.
+      expect(html).toMatch(/<div id="wardrobe-actions"[^>]*hx-swap-oob="true"/);
+      return html;
+    };
+    const bar = (html: string) => html.includes('class="action-bar"');
+    for (const [query, tiles] of [
+      ['keyword=nothing-matches', false],
+      ['category=tops', true],
+      ['keyword=nothing-matches', false],
+    ] as const) {
+      const html = await filter(query);
+      expect({ query, bar: bar(html) }).toEqual({ query, bar: tiles });
+      if (!tiles) {
+        expect(html).toMatch(/<div id="wardrobe-actions" hidden=""/);
+        continue;
+      }
+      // Save submits the picker's form in this same answer.
+      expect(html).toMatch(/<button type="submit" form="pick-form"/);
+      expect(html).toContain('<form id="pick-form"');
+    }
+  });
+
   it('offers "Select all N" with the filters’ count, and it acts on every page', async () => {
     const html = (await get('/wardrobe?select=1&category=outerwear')).body;
     expect(html).toContain(`Select all ${coats.length}`);
