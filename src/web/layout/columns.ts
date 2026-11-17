@@ -54,7 +54,11 @@
  *  - `MONTH_DAY`: a month cell from `lg` (#1070): its date, weather chip,
  *    worn dot and "+N" a narrow column beside the collage, which spans the
  *    cell's rows (`MONTH_CELL`, layout/calendar-grid.ts); the last row takes
- *    the slack so the column stays at the top. The phone stacks them.
+ *    the slack so the column stays at the top. Column-major flow keeps the
+ *    pieces in column 1 on a day with no collage too (row-major put the
+ *    chip beside the date there); a flow, not a `col-start-1` on each, as
+ *    the chip's slot is replaced whole by its out-of-band swap. The phone
+ *    stacks them.
  *  - `FIELD_GRID`: form fields two to a row (a trip's dates, the repair's
  *    day and cost, body measurements, Styling's day and occasion);
  *    `DENSE_FIELD_GRID` the same with the row gap of a field that carries
@@ -88,7 +92,7 @@ export const MUSE_PIECES = 'grid grid-cols-4 gap-1.5';
 export const WEEK_STRIP = 'grid grid-cols-7 gap-1';
 export const WEEK_COLUMNS = 'lg:grid lg:grid-cols-7 lg:gap-2';
 export const MONTH_DAY =
-  'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[repeat(4,auto)_1fr]';
+  'lg:grid lg:grid-flow-col lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[repeat(4,auto)_1fr]';
 export const FIELD_GRID = 'grid grid-cols-2 gap-3';
 export const DENSE_FIELD_GRID = 'grid grid-cols-2 gap-x-3 gap-y-1';
 export const BRAND_SIZE_FIELDS = 'grid grid-cols-[2fr_1fr] gap-2';

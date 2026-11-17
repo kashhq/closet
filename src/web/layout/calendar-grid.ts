@@ -4,8 +4,9 @@ import { MONTH_DAY, WEEK_COLUMNS, WEEK_STRIP } from './columns';
  * The Calendar's desktop step, by role (#1070): the week grid (#467) and the
  * month's cells. A calendar page writes its phone classes and appends the
  * role's string here, so its markup reads as the phone sees it and every
- * `lg:` of the Calendar lives in this one file (lg-check: a page carries
- * none). Used by calendar-page.tsx, occasion-row.tsx and month-page.tsx.
+ * `lg:` of the Calendar lives in this one file, where lg-check counts it
+ * (a feature's map, not an exempt primitive: scripts/ci/lg_count.conf).
+ * Used by calendar-page.tsx, occasion-row.tsx and month-page.tsx.
  * Whole class names, so Tailwind finds them.
  *
  * The week is one markup for every viewport (a cached tab root): below lg
@@ -25,7 +26,8 @@ export const WEEK_GRID = {
   /** A trip link in the heading, its own line on a phone. */
   away: 'basis-full lg:basis-auto',
   /** An occasion's cell: its entries (or its open slot) as one grid item. */
-  cell: 'contents lg:flex lg:flex-col lg:gap-2',
+  // `flex-col gap-2` apply only once the cell is a box (from lg).
+  cell: 'contents flex-col gap-2 lg:flex',
   /** A week occasion the day has nothing for: a cell the phone never draws. */
   emptyCell: 'hidden lg:flex lg:flex-col',
   /** The day's "+ Plan" at the column's foot, flush with the cards above it. */

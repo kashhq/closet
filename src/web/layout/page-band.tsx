@@ -9,13 +9,13 @@ import type { Child } from 'hono/jsx';
  * column: the `lead` lines (the subject, a note) span it, and the controls
  * (`children`: chips, then `BandActions`) share the row under them, the
  * actions at its end. The lead's wrapper is `contents` below lg, so its
- * lines are the band's own flex items there. Used by the calendar's plan
- * page.
+ * lines are the band's own flex items there (its `flex-col gap-3` apply
+ * only once it is a box). Used by the calendar's plan page.
  */
 export function PageBand(props: { lead: Child; children: Child }) {
   return (
-    <div class="flex flex-col gap-(--page-gap) lg:flex-row lg:flex-wrap lg:items-end lg:gap-x-8 lg:gap-y-3">
-      <div class="contents lg:flex lg:flex-col lg:gap-3 lg:basis-full">
+    <div class="flex flex-col gap-(--page-gap) lg:flex-row lg:flex-wrap lg:items-end">
+      <div class="contents flex-col gap-3 lg:flex lg:basis-full">
         {props.lead}
       </div>
       {props.children}
