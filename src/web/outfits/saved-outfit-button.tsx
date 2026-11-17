@@ -1,6 +1,7 @@
 import { cardClass } from '../card';
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
+import { PICK_GRID } from '../layout/columns';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { collagePieces, OutfitCollage } from './collage';
@@ -75,7 +76,7 @@ export function SavedOutfitButtons(props: {
       {props.more !== undefined && (
         <PageSentinel
           as="div"
-          class="flex justify-center py-4"
+          class="col-span-full flex justify-center py-4"
           href={props.more}
           trigger="revealed"
           marker="picker"
@@ -91,7 +92,8 @@ export function SavedOutfitButtons(props: {
  * page's address without it), the first page of the owner's outfits of
  * that list as SavedOutfitButtons of one native PostForm to `action`,
  * which carries the page's hidden fields (`children`), or the line saying
- * there are none.
+ * there are none. The buttons are `PICK_GRID`'s items, and a next page's
+ * land beside them, its sentinel spanning the row.
  */
 export function SavedOutfitPicker(props: {
   heading: Child;
@@ -111,7 +113,7 @@ export function SavedOutfitPicker(props: {
       </h2>
       <OutfitListTabs list={props.list} href={props.href} />
       {props.outfits.length > 0 ? (
-        <PostForm action={props.action} class="flex flex-col gap-2">
+        <PostForm action={props.action} class={PICK_GRID}>
           {props.children}
           <SavedOutfitButtons
             outfits={props.outfits}

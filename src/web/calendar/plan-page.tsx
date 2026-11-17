@@ -1,5 +1,6 @@
 import { type Occasion, OCCASIONS } from '../../wardrobe/occasions';
 import { t } from '../i18n';
+import { BandActions, PageBand } from '../layout/page-band';
 import { PageShell } from '../layout/page-shell';
 import { ideasUrl } from '../gallery/urls';
 import type { GarmentOutfit } from '../outfits/queries';
@@ -38,6 +39,10 @@ export interface PlanModel extends DayChoice {
  * same three ways; its "Pick a saved outfit" is the Saved tab with `?for=`
  * (R5). This page is Change's (#69) and the links cached before R6.
  *
+ * The page is wide (#1070): its head a band (PageBand: the day, the
+ * occasion chips, the two links) over the saved outfits, which fill the
+ * width as a grid (SavedOutfitPicker's PICK_GRID).
+ *
  * Opened to change an entry (`&replace=`, the calendar row's Change, #69),
  * it is "Change outfit": the occasion is the entry's (no chips), and ideas,
  * Styling and saved outfits all carry `replace`, so the choice takes the
@@ -62,19 +67,20 @@ export function PlanPage(props: { ctx: ViewContext; model: PlanModel }) {
       ctx={ctx}
       name="plan"
       bar={{ title, back: dayUrl(model.day) }}
+      width="wide"
       body={{ gap: 5 }}
     >
-      <PlanHeading model={model} changing={changing} />
-      {!changing && <OccasionChips day={model.day} chosen={model.occasion} />}
-
-      <div class="flex flex-col gap-2">
-        <a href={ideas} class="btn btn-primary w-full" data-plan-ideas="">
-          {t('gallery.PLAN_IDEAS')}
-        </a>
-        <a href={build} class="btn btn-outline w-full" data-plan-styling="">
-          + {t('CALENDAR_PLAN_BUILD')}
-        </a>
-      </div>
+      <PageBand lead={<PlanHeading model={model} changing={changing} />}>
+        {!changing && <OccasionChips day={model.day} chosen={model.occasion} />}
+        <BandActions>
+          <a href={ideas} class="btn btn-primary w-full" data-plan-ideas="">
+            {t('gallery.PLAN_IDEAS')}
+          </a>
+          <a href={build} class="btn btn-outline w-full" data-plan-styling="">
+            + {t('CALENDAR_PLAN_BUILD')}
+          </a>
+        </BandActions>
+      </PageBand>
 
       <SavedOutfitPicker
         heading={t('CALENDAR_PLAN_SAVED')}

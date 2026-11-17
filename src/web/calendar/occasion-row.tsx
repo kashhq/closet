@@ -1,6 +1,7 @@
 import type { Occasion } from '../../wardrobe/occasions';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
+import { WEEK_CARD } from '../layout/calendar-grid';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import { EntrySelfie } from '../selfies/views';
 import { WornControl } from '../wears/worn-control';
@@ -25,9 +26,9 @@ import { dayUrl, planPageUrl } from './urls';
  * the same worn route (docs/plans/2026-09-26-redesign.md, section 5).
  * `data-occasion` is what the specs read the order from, and what the worn
  * control swaps: POST /calendar/:id/worn answers with this row whole.
- * From lg (#467) it is a card in its column of the week grid: the collage
- * at the column's width with the name under it, the selfie and pill
- * wrapping below; the same markup, so the worn swap keeps the look.
+ * From lg (#467) it is a card in its column of the week grid (WEEK_CARD,
+ * layout/calendar-grid.ts); the same markup, so the worn swap keeps the
+ * look.
  */
 export function OccasionRow(props: {
   entry: EntryView;
@@ -44,10 +45,10 @@ export function OccasionRow(props: {
   const editUrl = stylingUrl({ outfitId: entry.outfit.id, returnTo: back });
   return (
     <div
-      class="flex flex-col gap-1 py-2 lg:p-2 lg:rounded-box lg:border lg:border-base-300"
+      class={`flex flex-col gap-1 py-2 ${WEEK_CARD.entry}`}
       data-occasion={entry.occasion}
     >
-      <div class="flex items-center gap-1 min-h-6 lg:flex-wrap">
+      <div class={`flex items-center gap-1 min-h-6 ${WEEK_CARD.labels}`}>
         <OccasionLabel occasion={entry.occasion} />
         {entry.plannedBy === 'auto' && (
           <span
@@ -61,13 +62,13 @@ export function OccasionRow(props: {
         <AgentBadge agent={entry.agent} />
         <EntryMenu entry={entry} name={name} />
       </div>
-      <div class="flex items-center gap-2 lg:flex-wrap">
+      <div class={`flex items-center gap-2 ${WEEK_CARD.body}`}>
         <a
           href={editUrl}
-          class="flex items-center gap-3 min-w-0 flex-1 lg:basis-full lg:flex-col lg:items-stretch lg:gap-1"
+          class={`flex items-center gap-3 min-w-0 flex-1 ${WEEK_CARD.link}`}
           aria-label={outfitLabel(name, entry.pieces)}
         >
-          <span class="w-16 shrink-0 lg:w-full">
+          <span class={`w-16 shrink-0 ${WEEK_CARD.thumb}`}>
             <OutfitCollage garments={entry.pieces} size="cell" decorative />
           </span>
           {entry.outfit.kept && (
@@ -104,20 +105,22 @@ export function OccasionRow(props: {
 /**
  * A template occasion the day has no outfit for yet (#16), as a row that
  * opens the day's "+ Plan" sheet with the occasion chosen. From lg a
- * dashed card in its cell of the week grid.
+ * dashed card in its cell of the week grid (WEEK_CARD's `slot`).
  */
 export function OpenSlotRow(props: { day: IsoDate; occasion: Occasion }) {
   const { day, occasion } = props;
   return (
     <button
       type="button"
-      class="flex items-center gap-3 w-full py-2 text-start lg:flex-col lg:items-start lg:gap-1 lg:p-2 lg:rounded-box lg:border lg:border-dashed lg:border-base-300 lg:hover:bg-base-200"
+      class={`flex items-center gap-3 w-full py-2 text-start ${WEEK_CARD.slot}`}
       {...planSheetOpener(day, occasion)}
       data-open-slot={occasion}
     >
-      <span class="w-16 h-12 shrink-0 rounded-field border border-dashed border-base-300 lg:hidden"></span>
+      <span
+        class={`w-16 h-12 shrink-0 rounded-field border border-dashed border-base-300 ${WEEK_CARD.slotThumb}`}
+      ></span>
       <OccasionLabel occasion={occasion} />
-      <span class="ms-auto text-sm text-muted lg:ms-0">
+      <span class={`ms-auto text-sm text-muted ${WEEK_CARD.slotAction}`}>
         + {t('CALENDAR_PLAN')}
       </span>
     </button>
