@@ -136,9 +136,10 @@ describe('wardrobe', () => {
     const sheet = async (query = '') => {
       const res = await t.inject({ method: 'GET', url: `/wardrobe${query}` });
       expect(res.statusCode).toBe(200);
-      const html = unescapeHtml(res.body);
-      return html.slice(html.indexOf('<dialog id="filter-modal"'));
+      return filterDialog(unescapeHtml(res.body));
     };
+    const filterDialog = (html: string) =>
+      /<dialog id="filter-modal"[\s\S]*?<\/dialog>/.exec(html)![0];
 
     beforeAll(async () => {
       const res = await t.inject({
@@ -235,6 +236,55 @@ describe('wardrobe', () => {
         .split('role="group"')
         .find((chunk) => chunk.includes(checked[0][0]))!;
       expect(group).toContain('filter-type-accessories-title');
+    });
+
+    it('is the facets aside, posting the scope row’s keyword, the page’s only one (#1067)', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/wardrobe?keyword=shirt&category=tops',
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      expect(html).toMatch(
+        /<main class="page-shell[^"]*" data-layout="facets"><aside id="wardrobe-aside" class="page-aside" aria-label="Filters"><dialog id="filter-modal"[^>]*data-sheet="filters"/,
+      );
+      // One keyword field, so a keyword typed and not yet searched is the
+      // one Apply and Clear send: two would each hold one.
+      expect(html.match(/<input\b[^>]*\bname="keyword"/g)).toHaveLength(1);
+      expect(html).toMatch(
+        /<form[^>]*id="search-form"[\s\S]*?name="keyword" value="shirt"[\s\S]*?<\/form>/,
+      );
+      const dialog = filterDialog(html);
+      expect(dialog).not.toContain('name="keyword"');
+      const include = 'hx-include="#search-form [name=\'keyword\']"';
+      expect(
+        /<form\b[^>]*hx-get="\/wardrobe"[^>]*>/.exec(dialog)![0],
+      ).toContain(include);
+      expect(
+        /<button\b[^>]*id="filter-clear"[^>]*>/.exec(dialog)![0],
+      ).toContain(include);
+    });
+
+    it('answers a fragment with the body, and the facets’ content and the bar out of band', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/wardrobe?category=tops',
+        headers: { 'hx-request': 'true' },
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      expect(html.trimStart()).toMatch(/^<div id="wardrobe-body"/);
+      // Swapped into the aside, never kept: htmx's history snapshot holds
+      // attributes, so the markup must be the URL's filters.
+      expect(html).toMatch(
+        /<aside id="wardrobe-aside" class="page-aside" hx-swap-oob="innerHTML"/,
+      );
+      expect(filterDialog(html)).toMatch(
+        /name="category" value="tops"[^>]*checked/,
+      );
+      expect(html).toMatch(
+        /<div id="wardrobe-actions" hidden="" hx-swap-oob="true"/,
+      );
     });
 
     it('offers a clear chip only beside a chosen value, and keeps the chosen one checked', async () => {

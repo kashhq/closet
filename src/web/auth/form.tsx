@@ -24,7 +24,7 @@ export interface FieldProps {
 /**
  * The signed-in account's address beside a current-password field, for
  * password managers to know whose password it is: readonly, never shown,
- * the one hidden control of the step-up forms (guards.conf @hidden-control).
+ * the one hidden control of the step-up forms (closet/no-hidden-control).
  */
 export function UsernameTwin(props: { email: string | null | undefined }) {
   return (
@@ -33,6 +33,7 @@ export function UsernameTwin(props: { email: string | null | undefined }) {
       name="username"
       autocomplete="username"
       value={props.email ?? ''}
+      // eslint-disable-next-line closet/no-hidden-control -- a password manager's reading, never a person's control
       class="hidden"
       readonly
     />

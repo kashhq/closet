@@ -15,7 +15,8 @@ import { SAME_ORIGIN, signIn } from './support/e2e-session';
  * until the page has shown it, test/support/cutout-stub.ts); then the
  * search box finds it by two of its words in any order (#673). The filter
  * sheet (#674) and select mode's kept selection (#677) ride along at the
- * same width, and the garment page's split (#1068) at a desktop's.
+ * same width, and at a desktop's the garment page's split (#1068) and the
+ * filters docked beside the grid (#1067).
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -249,6 +250,8 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
 
   // Typing two of its words, in another order than its name's, finds it.
   // The field is collapsed to its icon until tapped, as a finger does.
+  // Enter submits the scope row's own form: the page's one keyword field,
+  // which a filter-form field could not be (#1067, docs/decisions.md).
   await page.getByRole('search').locator('label').click();
   const search = page.getByRole('textbox', { name: 'Search' });
   await expect(search).toBeFocused();
@@ -430,4 +433,81 @@ async function checkFilterSheet(page: Page) {
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
+
+  // A keyword typed and not yet searched rides along with the sheet's
+  // Apply: the page has one keyword field, the scope row's (#1067).
+  await page.getByRole('search').locator('label').click();
+  await page.getByRole('textbox', { name: 'Search' }).fill('shirt');
+  await opener.click();
+  await sheet.getByRole('radio', { name: 'Red', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=red\b/);
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Red shirt');
+
+  await checkDockedFilters(page);
+}
+
+/**
+ * The same filter sheet at a desktop's width (#1067): docked as the facet
+ * column left of the grid, shown without opening anything (no opener), a
+ * change applied with focus kept on Apply (htmx refocuses it by id in the
+ * facets the answer brings), Back landing on facets that show its URL's
+ * filters, and `/` focusing the search.
+ */
+async function checkDockedFilters(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/wardrobe');
+  const tiles = page.locator('[data-tile]');
+  await expect(tiles).toHaveCount(4);
+  const facets = page.getByRole('dialog', { name: 'Filters' });
+  await expect(facets).toBeVisible();
+  await expect(facets).not.toHaveAttribute('open');
+  await expect(
+    page.getByRole('button', { name: 'Filters', exact: true }),
+  ).toBeHidden();
+  const facetsBox = (await facets.boundingBox())!;
+  const gridBox = (await page.locator('#wardrobe-grid').boundingBox())!;
+  expect(facetsBox.x + facetsBox.width).toBeLessThanOrEqual(gridBox.x);
+
+  await facets.getByRole('radio', { name: 'Red', exact: true }).click();
+  const apply = facets.getByRole('button', { name: 'Apply filters' });
+  await apply.click();
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Red shirt');
+  await expect(apply).toBeFocused();
+  const red = facets.getByRole('radio', { name: 'Red', exact: true });
+  await expect(red).toBeChecked();
+
+  // A second filter, then Back: the facets are the snapshot's markup, so
+  // they must hold the first URL's filters in their attributes, not
+  // whatever the form held when it was left.
+  const colors = facets.getByRole('group', { name: 'Color' });
+  const categories = facets.getByRole('group', { name: 'Category' });
+  const tops = categories.getByRole('radio', { name: 'Tops', exact: true });
+  await tops.click();
+  await apply.click();
+  await expect(page).toHaveURL(/[?&]category=tops\b/);
+  await expect(categories.getByRole('radio', { name: '× Clear' })).toHaveCount(
+    1,
+  );
+  await page.goBack();
+  await expect(page).not.toHaveURL(/category=/);
+  await expect(page).toHaveURL(/[?&]color=red\b/);
+  await expect(red).toBeChecked();
+  await expect(tops).not.toBeChecked();
+  await expect(colors.getByRole('radio', { name: '× Clear' })).toHaveCount(1);
+  await expect(categories.getByRole('radio', { name: '× Clear' })).toHaveCount(
+    0,
+  );
+
+  // `/` from anywhere but a field focuses the search.
+  await page.keyboard.press('/');
+  const search = page
+    .getByRole('search')
+    .getByRole('textbox', { name: 'Search' });
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('');
+  await page.setViewportSize({ width: 390, height: 844 });
 }

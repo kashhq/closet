@@ -53,9 +53,11 @@ describe('the left rail', () => {
       // tabs carry theirs, #726), and no second navigation exists for the rail.
       expect(dock.match(/aria-current="page"/g)).toHaveLength(1);
       expect(body).not.toMatch(/class="([^"]* )?rail[ "]/);
-      // The page's own column comes from the layout's width tokens.
+      // The page's own column comes from the layout's width tokens: a
+      // `single` page's class, or a wide layout's frame, which main.css
+      // sizes (the Wardrobe's facets, #1067).
       expect(body).toMatch(
-        /<main [^>]*class="[^"]*\bmax-w-page-(narrow|wide)\b/,
+        /<main [^>]*class="[^"]*\bmax-w-page-(narrow|wide)\b|<main [^>]*data-layout="(split|panel|facets|index)"/,
       );
       expect(body).not.toMatch(/<main [^>]*\bmax-w-lg\b/);
     },

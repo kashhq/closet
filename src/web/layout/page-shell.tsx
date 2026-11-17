@@ -77,8 +77,9 @@ export function regionId(name: string, region: PageRegion): string {
  * needs one, and the landmark it is follows from the layout:
  *  - `split`: a `<section>`, the subject (a photo, a collage), left from lg.
  *  - `panel`: an `<aside>`, the work's result, right from lg.
- *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a filter
- *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`).
+ *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a `filters`
+ *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`; on a
+ *    phone the aside takes no room, its sheet closed).
  *  - `index`: a `<nav>`, the settings index, left from lg, hidden below it
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
@@ -225,6 +226,14 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   ];
 }
 
+/** A page's aside as its shell renders it: what `PageFragment` answers too. */
+export interface PageAsideFrame {
+  layout: AsideLayout;
+  /** The landmark's accessible name (`asideLabel`); `split`'s section has none. */
+  label?: string;
+  content: Child;
+}
+
 /**
  * The answer to an htmx request that swaps a page's body in place (the
  * Wardrobe's filtering targets `#<name>-body`, outerHTML): the body with the
@@ -233,20 +242,39 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
  * to no tiles drops the bar, back to some brings it, and its controls'
  * `form=` names the form in this answer. A page with a swapped body answers
  * through this, never a bare body, so no fragment leaves a stale bar.
+ *
+ * `aside` sends the aside region out of band too, its content only
+ * (`innerHTML`): the region element stays, so its scroll (a docked facet
+ * column scrolls inside itself) and the focus htmx restores by id survive,
+ * and its content always shows the state the answer's URL asks for. A
+ * history snapshot serialises attributes, never a checked radio's
+ * property, so an aside kept across a pushed answer restored Back with the
+ * wrong choices beside a grid filtered by the right ones (#1067).
  */
 export function PageFragment(
   props: PageBodyFrame & {
     name: string;
     actionBar: ActionBarProps | undefined;
+    aside?: PageAsideFrame;
     children?: Child;
   },
 ) {
-  const { name, actionBar, children, ...frame } = props;
+  const { name, actionBar, aside, children, ...frame } = props;
   return (
     <>
       <PageBody name={name} {...frame}>
         {children}
       </PageBody>
+      {aside && (
+        <PageAside
+          id={regionId(name, 'aside')}
+          layout={aside.layout}
+          label={aside.label}
+          oob
+        >
+          {aside.content}
+        </PageAside>
+      )}
       <ActionsRegion name={name} bar={actionBar} oob />
     </>
   );
@@ -287,24 +315,27 @@ function PageAside(props: {
   id: string;
   layout: AsideLayout;
   label: string | undefined;
+  /** In a fragment (PageFragment): its content swapped into the region in place. */
+  oob?: boolean;
   children: Child;
 }) {
+  const region = {
+    id: props.id,
+    class: 'page-aside',
+    'hx-swap-oob': props.oob ? 'innerHTML' : undefined,
+  };
   switch (props.layout) {
     case 'split':
-      return (
-        <section id={props.id} class="page-aside">
-          {props.children}
-        </section>
-      );
+      return <section {...region}>{props.children}</section>;
     case 'index':
       return (
-        <nav id={props.id} class="page-aside" aria-label={props.label}>
+        <nav {...region} aria-label={props.label}>
           {props.children}
         </nav>
       );
     default:
       return (
-        <aside id={props.id} class="page-aside" aria-label={props.label}>
+        <aside {...region} aria-label={props.label}>
           {props.children}
         </aside>
       );

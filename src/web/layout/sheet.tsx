@@ -8,16 +8,20 @@ import { SheetBackdrop } from './parts';
  *  - `choice`: centred, daisyUI's modal width (a question and its answers:
  *    the confirmation, a Plan sheet, Styling's Save, the bulk verbs).
  *  - `form`: a full-height panel at the right edge, `max-w-md` (fields to
- *    fill or pick: the photo sheet, bulk "Set…", the Wardrobe's filters
- *    until D9 docks them).
+ *    fill or pick: the photo sheet, bulk "Set…").
  *  - `menu`: hung under the control that opened it (CSS anchor positioning,
  *    main.css; centred where a browser has none): the Wardrobe's Add.
  *  - `dialog`: centred at every size, the phone included, for what is shown
  *    rather than asked or filled in (the mask editor's canvas, a selfie).
- * D9 adds `filters`, docked in a `facets` page's aside rather than modal;
+ *  - `filters`: the bottom sheet below lg; from lg never opened at all,
+ *    but shown in place, closed, in a `facets` page's aside (main.css
+ *    docks it there and hides its opener, `dockedFiltersOpener`, and its
+ *    backdrop), so the one form is the phone's sheet and the desktop's
+ *    facet column: the Wardrobe's filters (#1067). It must sit in
+ *    `PageShell`'s `aside`, never in `overlays` (`expectDockedFilters`).
  * main.css finds every kind by `dialog[data-sheet=<kind>]`.
  */
-export type SheetKind = 'choice' | 'form' | 'menu' | 'dialog';
+export type SheetKind = 'choice' | 'form' | 'menu' | 'dialog' | 'filters';
 
 // Whole class names, so Tailwind finds them. The dialog is daisyUI's
 // `modal`, the box its `modal-box`: guards.conf `@sheet` keeps both here.
@@ -26,12 +30,14 @@ const DIALOG_CLASS: Readonly<Record<SheetKind, string>> = {
   form: 'modal modal-bottom lg:modal-end',
   menu: 'modal modal-bottom lg:modal-middle',
   dialog: 'modal',
+  filters: 'modal modal-bottom',
 };
 const BOX_CLASS: Readonly<Record<SheetKind, string>> = {
   choice: '',
   form: ' lg:w-full lg:max-w-md',
   menu: '',
   dialog: '',
+  filters: '',
 };
 
 /**
@@ -113,6 +119,16 @@ export function Sheet(props: SheetProps) {
  */
 export function sheetOpener(id: string) {
   return { 'data-sheet-open': id, 'aria-haspopup': 'dialog' } as const;
+}
+
+/**
+ * The opener of a `filters` sheet: `sheetOpener`, and gone where a facets
+ * page docks the sheet (from lg, main.css's docking block), so a page never
+ * names that breakpoint (the page-level `lg:` ratchet,
+ * scripts/ci/lg_count.conf).
+ */
+export function dockedFiltersOpener(id: string) {
+  return { ...sheetOpener(id), 'data-filters-opener': '' } as const;
 }
 
 /** A sheet's own Cancel, beside its action: closes it, nothing posted. */

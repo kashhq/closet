@@ -315,6 +315,26 @@ test.describe('desktop', () => {
     await shot(page, '94-demo-profile-desktop', '/auth/profile');
   });
 
+  // The Wardrobe's facets (#1067): the filters docked beside the grid,
+  // applied (the chips in the scope row, the choices checked in the
+  // column), and the scope row's search focused by `/`.
+  test('demo: Theo, the Wardrobe facets at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe');
+    const facets = page.locator('#filter-modal');
+    await expect(facets).toBeVisible();
+    await facets.getByRole('radio', { name: 'Tops', exact: true }).click();
+    await facets.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page).toHaveURL(/category=tops/);
+    await shot(page, '83b-demo-wardrobe-facets-desktop');
+    await page.keyboard.press('/');
+    await expect(
+      page.getByRole('search').getByRole('textbox', { name: 'Search' }),
+    ).toBeFocused();
+    await page.keyboard.type('blue');
+    await shot(page, '83c-demo-wardrobe-search-desktop');
+  });
+
   // The action bars (#1063) at the head of their column (Laundry's is 91
   // above): select mode with two checked, and the capsule picker.
   test('demo: Theo, the action bars at 1440', async ({ page }) => {
@@ -374,9 +394,13 @@ async function sheetShots(page: Page, suffix: string): Promise<void> {
     });
   };
   await signInAs(page, 'demo');
-  await page.goto('/wardrobe');
-  await page.getByRole('button', { name: 'Filters' }).click();
-  await open('filters', '#filter-modal');
+  // From lg the filters are docked beside the grid, never opened (#1067):
+  // the facets block above shoots them there.
+  if (page.viewportSize()!.width < 1024) {
+    await page.goto('/wardrobe');
+    await page.getByRole('button', { name: 'Filters' }).click();
+    await open('filters', '#filter-modal');
+  }
   await page.goto('/wardrobe');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await open('add', '#add-sheet');

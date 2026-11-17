@@ -24,6 +24,7 @@ import { GALLERY_GRID } from '../layout/columns';
 import type { ActionBarProps } from '../layout/action-bar';
 import { GarmentMark } from '../layout/garment-mark';
 import {
+  type PageAsideFrame,
   type PageBodyFrame,
   PageFragment,
   PageShell,
@@ -36,7 +37,12 @@ import {
   SavedToast,
   StripFlags,
 } from '../layout/parts';
-import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
+import {
+  dockedFiltersOpener,
+  Sheet,
+  SheetCancel,
+  sheetOpener,
+} from '../layout/sheet';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
@@ -196,8 +202,9 @@ const EAGER_TILES = 8;
 const WARDROBE = 'wardrobe';
 const WARDROBE_BODY: PageBodyFrame = { gutter: 'flush' };
 
-// Filter links and the search form replace the body and push the URL;
-// their href/action keep them working without JavaScript.
+// Filter links, the search form and the filter sheet replace the body and
+// push the URL; their href/action keep them working without JavaScript.
+// The answer brings the facets too (PageFragment's aside), whoever asked.
 const SWAP_BODY = {
   'hx-target': `#${regionId(WARDROBE, 'body')}`,
   'hx-swap': 'outerHTML',
@@ -216,9 +223,13 @@ export function searchParams(search: GridSearch): Record<string, string> {
 /**
  * GET /wardrobe: the Closet tab (docs/plans/2026-09-26-redesign.md, section
  * 3, "Wardrobe"). Browsing, it is the Wardrobe's header (the switcher in
- * the title, ⋯ and ＋), the tabs and the swappable main (no weather: it has no job on the catalog, #732).
- * Select mode and the capsule picker are tasks, not the closet: their own
- * bar (the task's title and Cancel) over the checkbox grid, no tabs.
+ * the title, ⋯ and ＋), the tabs, and the swappable main beside its facets
+ * (no weather: it has no job on the catalog, #732): the `facets` layout,
+ * whose aside is the filter sheet, docked as the left column from lg and
+ * the bottom sheet on a phone (docs/plans/2026-11-16-desktop-layout.md §4,
+ * #1067). Select mode and the capsule picker are tasks, not the closet:
+ * their own bar (the task's title and Cancel) over the checkbox grid, no
+ * tabs and no filters, so a `single` page with the select bar.
  */
 export function WardrobePage(props: {
   ctx: ViewContext;
@@ -233,27 +244,62 @@ export function WardrobePage(props: {
     canEdit: model.canEdit,
     selectUrl: selectUrl(model),
   };
+  const frame = {
+    ctx,
+    name: WARDROBE,
+    title: t('WARDROBE'),
+    body: WARDROBE_BODY,
+  };
+  if (model.selecting) {
+    return (
+      <PageShell
+        {...frame}
+        bar={taskBar(model)}
+        width="wide"
+        actionBar={selectBar(model)}
+      >
+        <WardrobeMain model={model} />
+      </PageShell>
+    );
+  }
+  const facets = wardrobeFacets(model);
   return (
     <PageShell
-      ctx={ctx}
-      name={WARDROBE}
-      title={t('WARDROBE')}
-      bar={model.selecting ? taskBar(model) : wardrobeBar(header)}
-      width="wide"
-      body={WARDROBE_BODY}
-      actionBar={selectBar(model)}
-      overlays={!model.selecting && <WardrobeAddSheet {...header} />}
+      {...frame}
+      bar={wardrobeBar(header)}
+      layout={facets.layout}
+      aside={facets.content}
+      asideLabel={facets.label}
+      overlays={<WardrobeAddSheet {...header} />}
     >
       <WardrobeMain model={model} />
     </PageShell>
   );
 }
 
+/** The Closet tab's facets: the page's aside and its fragments' alike. */
+function wardrobeFacets(
+  model: WardrobeModel,
+): PageAsideFrame & { layout: 'facets'; label: string } {
+  return {
+    layout: 'facets',
+    label: t('FILTERS'),
+    content: (
+      <FilterSheet
+        search={model.search}
+        options={model.options}
+        viewOwner={model.viewOwner}
+        ownerView={model.ownerView}
+      />
+    ),
+  };
+}
+
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
- * chips and scope menu, the filter modal): the main, with select mode's
- * bar out of band (`PageFragment`), and the ⋯ menu out of band, so its
- * Select keeps the filters the grid now shows.
+ * chips and scope menu, the facets): the main, with select mode's bar and,
+ * browsing, the facets out of band (`PageFragment`), and the ⋯ menu out of
+ * band, so its Select keeps the filters the grid now shows.
  */
 export function WardrobeFragment({
   ctx,
@@ -268,6 +314,7 @@ export function WardrobeFragment({
         name={WARDROBE}
         {...WARDROBE_BODY}
         actionBar={selectBar(model)}
+        aside={model.selecting ? undefined : wardrobeFacets(model)}
       >
         <WardrobeMain model={model} />
       </PageFragment>
@@ -317,14 +364,15 @@ function taskBar(model: WardrobeModel): PageShellProps['bar'] {
 /**
  * The swappable part of the Closet tab, inside the shell's body (`#wardrobe-body`):
  * the sticky scope row (the capsule scope, the active filters, search, the
- * filter sheet and the count), the slim prompts, the first page of the
- * grid and the filter modal; in select mode the checkbox grid and its bar.
- * GET /wardrobe answers htmx fragment requests with the body alone
- * (WardrobeFragment), so filtering and searching never re-render the app
- * bar, the tabs and the dock, and always start again from the first page.
+ * filter sheet's opener and the count), the slim prompts and the first page
+ * of the grid; in select mode the checkbox grid and its sheets. The filter
+ * sheet is the shell's aside, not the body's (`wardrobeFacets`). GET
+ * /wardrobe answers htmx fragment requests with the body (WardrobeFragment),
+ * so filtering and searching never re-render the app bar, the tabs and the
+ * dock, and always start again from the first page.
  */
 function WardrobeMain({ model }: { model: WardrobeModel }) {
-  const { viewOwner, selecting } = model;
+  const { selecting } = model;
   return (
     <>
       {!selecting && <ScopeRow model={model} />}
@@ -333,14 +381,6 @@ function WardrobeMain({ model }: { model: WardrobeModel }) {
         <Tiles model={model} />
       </div>
       {model.selecting && !model.picking && <BulkDialog />}
-      {!selecting && (
-        <FilterModal
-          search={model.search}
-          options={model.options}
-          viewOwner={viewOwner}
-          ownerView={model.ownerView}
-        />
-      )}
       {model.selecting && !model.picking && <BulkActions model={model} />}
       {model.bulkOutcome && <BulkToast outcome={model.bulkOutcome} />}
     </>
@@ -832,20 +872,25 @@ function PropertyPills(props: {
   );
 }
 
-// The filter modal's form and its "Clear" send the search box's keyword
-// along, typed or not yet searched.
+// The filter sheet's form and its "Clear" send the search box's keyword
+// along, typed or not yet searched: the page's one keyword field.
 const INCLUDE_KEYWORD = "#search-form [name='keyword']";
 const FILTER_SHEET_ID = 'filter-modal';
+
+// `/` focuses the search (public/js/search-shortcut.js; owner decision 5 of
+// the desktop plan): the module loads with the search form.
+const SEARCH_SHORTCUT_IMPORT = "import 'search-shortcut';";
 
 /**
  * The scope row, sticky under the app bar (the plan's replacement for the
  * fixed bar above the dock): the capsule scope, the active filters as
- * chips (each drops itself), search, the filter sheet and the count.
- * Search expands in place over the chips while it has the focus, and stays
- * open while it holds a keyword. Every filter's chip is one tone (primary,
- * as its checked choice in the modal); only the care filters keep the
- * colour of the tile mark they find (wash, attention) and archived its
- * warning.
+ * chips (each drops itself), search, the filter sheet's opener and the
+ * count. Search expands in place over the chips while it has the focus,
+ * and stays open while it holds a keyword. From lg the opener gives way to
+ * the docked facets (#1067); search stays here at every width.
+ * Every filter's chip is one tone (primary, as its checked choice in the
+ * sheet); only the care filters keep the colour of the tile mark they find
+ * (wash, attention) and archived its warning.
  */
 function ScopeRow({ model }: { model: WardrobeModel }) {
   const { search, viewOwner } = model;
@@ -867,7 +912,7 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
       <SearchForm search={search} viewOwner={viewOwner} />
       <button
         type="button"
-        {...sheetOpener(FILTER_SHEET_ID)}
+        {...dockedFiltersOpener(FILTER_SHEET_ID)}
         class="btn btn-ghost btn-sm btn-square shrink-0"
         aria-label={t('FILTERS')}
       >
@@ -1026,7 +1071,9 @@ function FilterChips(props: {
  * Search, collapsed to its icon until tapped: the field grows over the
  * chips while it has the focus (the row's group-has rule hides them) and
  * keeps some width while it holds a keyword. Enter submits; every other
- * filter rides along as a hidden field.
+ * filter rides along as a hidden field. The page's only keyword field at
+ * every width, from lg too beside the docked facets (#1067): two would
+ * each hold a keyword, and the filter sheet's Apply could post only one.
  */
 function SearchForm(props: {
   search: GridSearch;
@@ -1043,6 +1090,12 @@ function SearchForm(props: {
       role="search"
       class="flex shrink-0 justify-end focus-within:flex-1"
     >
+      {/* The `/` shortcut, through the importmap for its versioned URL. A
+          fixed string with nothing interpolated. */}
+      <script
+        type="module"
+        dangerouslySetInnerHTML={{ __html: SEARCH_SHORTCUT_IMPORT }}
+      />
       {Object.entries(searchParams(search))
         .filter(([name, value]) => name !== 'keyword' && value !== '')
         .map(([name, value]) => (
@@ -1076,6 +1129,7 @@ function SearchForm(props: {
           aria-label={t('SEARCH')}
           enterkeyhint="search"
           class="min-w-0 grow"
+          data-search-shortcut
         />
       </label>
     </form>
@@ -1083,13 +1137,18 @@ function SearchForm(props: {
 }
 
 /**
- * The filters as a GET form of their own: applying submits it into
- * #wardrobe-body like the search form (the swap takes the open dialog with
- * it), with the search box's keyword; "Clear" asks for the grid with only
- * the keyword and the capsule scope. Without JavaScript it is a plain GET
- * to /wardrobe.
+ * The filters as a GET form of their own, the one `filters` sheet (#1067):
+ * the bottom sheet on a phone, the docked facet column from lg, the same
+ * element at both (layout/sheet.tsx). Applying submits it into
+ * #wardrobe-body with the search box's keyword, and the answer's facets
+ * replace this one's content (PageFragment), so the form always holds what
+ * the URL asks for, in the markup a history snapshot keeps too; the open
+ * sheet goes with it, as it went with the body before it docked. Apply and
+ * Clear keep their ids, so htmx gives the docked column's focus back to
+ * the new one. "Clear" asks for the grid with only the keyword and the
+ * capsule scope. Without JavaScript it is a plain GET to /wardrobe.
  */
-function FilterModal(props: {
+function FilterSheet(props: {
   search: GridSearch;
   options: FilterOptions;
   viewOwner: number | undefined;
@@ -1099,7 +1158,7 @@ function FilterModal(props: {
   return (
     <Sheet
       id={FILTER_SHEET_ID}
-      kind="form"
+      kind="filters"
       labelledBy="filter-modal-title"
       dismiss="close"
     >
@@ -1174,6 +1233,7 @@ function FilterModal(props: {
         <div class="modal-action">
           <button
             type="button"
+            id="filter-clear"
             class="btn btn-ghost btn-sm"
             hx-get={wardrobeUrl(viewOwner, { capsule: search.capsule })}
             hx-include={INCLUDE_KEYWORD}
@@ -1181,7 +1241,11 @@ function FilterModal(props: {
           >
             {t('CLEAR_FILTERS')}
           </button>
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button
+            type="submit"
+            id="filter-apply"
+            class="btn btn-primary btn-sm"
+          >
             {t('APPLY_FILTERS')}
           </button>
         </div>

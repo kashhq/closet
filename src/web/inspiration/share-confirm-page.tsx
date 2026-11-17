@@ -114,6 +114,7 @@ export function ShareConfirmPage(props: { ctx: ViewContext }) {
           type="file"
           name={SHARE_PHOTO_FIELD}
           accept="image/*"
+          // eslint-disable-next-line closet/no-hidden-control -- the module fills it from the stash; no one picks a file here
           class="hidden"
           tabindex={-1}
           aria-hidden="true"

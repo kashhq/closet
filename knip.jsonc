@@ -45,6 +45,7 @@
     "recap-export": ["public/js/recap-export.js"],
     "click-gate": ["public/js/click-gate.js"],
     "share-saved": ["public/js/share-saved.js"],
+    "search-shortcut": ["public/js/search-shortcut.js"],
     "pwa-install": ["node_modules/@khmyznikov/pwa-install/dist/pwa-install.bundle.js"]
   },
   "ignoreDependencies": [

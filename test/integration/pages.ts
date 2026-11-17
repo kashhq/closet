@@ -339,6 +339,32 @@ export function expectActionBar(res: LightMyRequestResponse): void {
   }
 }
 
+/**
+ * A `filters` sheet (#1067, layout/sheet.tsx) is docked, closed, in its
+ * page's facets aside from lg: main.css shows it there only while it is not
+ * `open`, so markup that opens it would be a modal over the grid on a
+ * desktop, and one outside the aside would never dock. At most one a page.
+ */
+export function expectDockedFilters(res: LightMyRequestResponse): void {
+  const sheets = [
+    ...res.body.matchAll(/<dialog\b[^>]*data-sheet="filters"[^>]*>/g),
+  ];
+  expect(sheets.length).toBeLessThanOrEqual(1);
+  const [sheet] = sheets;
+  if (!sheet) return;
+  expect(sheet[0]).not.toMatch(/\sopen\b/);
+  expect(res.body).toMatch(
+    /<main class="page-shell\b[^>]*data-layout="facets"/,
+  );
+  const before = res.body.slice(0, sheet.index);
+  const asideOpens = before.lastIndexOf('<aside ');
+  expect(asideOpens).toBeGreaterThan(-1);
+  expect(before.slice(asideOpens)).toMatch(
+    /^<aside id="[a-z-]+-aside" class="page-aside"/,
+  );
+  expect(before.slice(asideOpens)).not.toContain('</aside>');
+}
+
 /** The `<div>` element that starts at `start`, through its closing tag. */
 function divAt(html: string, start: number): string {
   const rest = html.slice(start);
@@ -405,6 +431,7 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectAppBar(res);
   expectPageShell(res);
   expectActionBar(res);
+  expectDockedFilters(res);
   // _hyperscript left the app (2026-09-26): an `_=` attribute would do
   // nothing at all.
   expect(res.body).not.toMatch(/\s_="/);
