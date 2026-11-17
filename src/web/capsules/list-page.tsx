@@ -10,7 +10,7 @@ import {
   wardrobeBar,
 } from '../wardrobe/wardrobe-header';
 import type { CapsuleCard, StripGarment } from './queries';
-import { THUMB_ROW_WIDE } from '../layout/columns';
+import { CARD_GRID, THUMB_ROW_WIDE } from '../layout/columns';
 
 export interface CapsulesModel {
   /** The closet (inCloset): the first and permanent capsule. */
@@ -36,7 +36,8 @@ export function garmentCount(count: number): string {
  * the capsule every other is carved from (it is not a row: it links to the
  * grid), then the wardrobe's capsules by name, each its name, its count
  * and its newest garments on the plinth, like the grid's tiles: no card
- * chrome, the garments are the colour. "New capsule" is the add sheet's.
+ * chrome, the garments are the colour. One column on a phone, as many as
+ * fit from lg (`CARD_GRID`, #1071). "New capsule" is the add sheet's.
  */
 export function CapsulesPage(props: {
   ctx: ViewContext;
@@ -58,9 +59,10 @@ export function CapsulesPage(props: {
       name="capsules"
       title={t('CAPSULES')}
       bar={wardrobeBar(header)}
+      width="wide"
       overlays={<WardrobeAddSheet {...header} />}
     >
-      <ul class="flex flex-col gap-6" id="capsule-list">
+      <ul class={`${CARD_GRID} gap-6`} id="capsule-list">
         <CapsuleEntry
           href={wardrobeUrl(viewOwner)}
           name={t('ALL_GARMENTS')}

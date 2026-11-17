@@ -26,15 +26,20 @@
  *  - `CANDIDATE_GRID`: large product photos with their price and actions
  *    under them (the inbox's Ready to buy and own items): two on a phone,
  *    from `lg` `--tile-candidate`.
- *  - `PICK_GRID`: a picker's saved outfits, each a button with its `row`
- *    collage over the name (SavedOutfitPicker: the calendar's plan page, a
- *    trip's add page): one column of rows on a phone, from `lg`
- *    `--tile-pick`, wide enough for a seven-piece row at the phone's piece
- *    size (four at 1440, in the plan page's wide column). Not `OUTFIT_GRID`:
+ *  - `OUTFIT_ROW_GRID`: outfits drawn as their `row` collage over the name:
+ *    a picker's saved outfits (SavedOutfitPicker: the calendar's plan page,
+ *    a trip's add page) and a trip day's outfits (#1071). One column of rows
+ *    on a phone, from `lg` `--tile-outfit-row`, wide enough for a
+ *    seven-piece row at the phone's piece size (four at 1440 in the plan
+ *    page's wide column, three in a trip's main column). Not `OUTFIT_GRID`:
  *    its two phone columns would halve the rows a phone has always shown,
  *    and a `row` collage in its 12rem tile scrolls by the fourth piece.
- *  - `CARD_GRID`: a list of cards (trips, capsules; adopted by D12/D13 with
- *    their pages' widths): one on a phone, from `lg` `--tile-card`.
+ *  - `CARD_GRID`: a list of cards (the trips list, the capsules list, #1071):
+ *    one on a phone, from `lg` `--tile-card`. **No gap of its own**: the
+ *    list's spacing is its cards' (a bordered trip card's `gap-2`, a
+ *    chromeless capsule entry's `gap-6`), the same at both sizes, so a list
+ *    moved onto it keeps its phone pixel for pixel. A card in it is `h-full`,
+ *    so a row of them ends on one line.
  *
  * **Fixed steps**, whose count is the content's own:
  *
@@ -79,10 +84,10 @@ export const IDEA_GRID =
   'lg:grid lg:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-idea),1fr))]';
 export const CANDIDATE_GRID =
   'grid grid-cols-2 items-start gap-x-3 gap-y-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-candidate),1fr))]';
-export const PICK_GRID =
-  'grid grid-cols-1 gap-2 lg:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-pick),1fr))]';
+export const OUTFIT_ROW_GRID =
+  'grid grid-cols-1 gap-2 lg:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-outfit-row),1fr))]';
 export const CARD_GRID =
-  'grid grid-cols-1 gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-card),1fr))]';
+  'grid grid-cols-1 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-card),1fr))]';
 
 export const CARD_COLUMNS =
   'space-y-4 lg:space-y-0 lg:columns-2 lg:gap-4 xl:columns-3 lg:*:mb-4 lg:*:break-inside-avoid';

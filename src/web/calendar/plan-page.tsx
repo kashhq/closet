@@ -41,7 +41,7 @@ export interface PlanModel extends DayChoice {
  *
  * The page is wide (#1070): its head a band (PageBand: the day, the
  * occasion chips, the two links) over the saved outfits, which fill the
- * width as a grid (SavedOutfitPicker's PICK_GRID).
+ * width as a grid (SavedOutfitPicker's OUTFIT_ROW_GRID).
  *
  * Opened to change an entry (`&replace=`, the calendar row's Change, #69),
  * it is "Change outfit": the occasion is the entry's (no chips), and ideas,
