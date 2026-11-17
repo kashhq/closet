@@ -40,6 +40,8 @@ import {
   intentEnding,
   regionEnd,
   discardedRecord,
+  droppedRecord,
+  atDrop,
   DISCARD_TOMBSTONE_MS,
   tombstoneExpired,
   type StoredRecord,
@@ -880,6 +882,64 @@ describe('regionEnd: a Discard is never read as a save (#900)', () => {
     );
     await enqueue(store, '1', [record('pending')]);
     expect(regionEnd('packed:7:41', rows)).toBe('pending');
+  });
+});
+
+describe('atDrop: a session or account drop leaves tombstones (#1042)', () => {
+  const pending = {
+    account: '7',
+    key: 'packed:7:41',
+    state: 'pending' as StoredRecord['state'],
+    attempts: 3,
+    serverErrors: 3,
+    stuckAt: 0,
+    label: 'Navy chinos',
+  };
+  /** The store after a drop, as dropQueuedWrites applies atDrop to each row. */
+  const dropped = (rows: (typeof pending)[], goes: boolean, now: number) =>
+    rows.flatMap((row) => {
+      const step = atDrop(row, goes, now);
+      if (step === 'prune') return [];
+      return [step === 'tombstone' ? droppedRecord(row, now) : row];
+    });
+
+  it('replaces an unsent record it names with a label-free tombstone, never deleting it', () => {
+    expect(atDrop(pending, true, 1_000)).toBe('tombstone');
+    expect(atDrop({ ...pending, state: 'failed' }, true, 1_000)).toBe(
+      'tombstone',
+    );
+    expect(atDrop(pending, false, 1_000)).toBe('keep');
+    expect(droppedRecord(pending, 1_000)).toEqual({
+      account: '7',
+      key: 'packed:7:41',
+      state: 'discarded',
+      discardedAt: 1_000,
+      attempts: 0,
+      serverErrors: undefined,
+      stuckAt: undefined,
+      label: '',
+    });
+  });
+
+  it('a tab still open on the dropped account reverts its tick instead of confirming it', () => {
+    // Before #1042 the drop deleted the record and this read said saved.
+    const after = dropped([pending], true, 1_000);
+    expect(regionEnd('packed:7:41', after)).toBe('discarded');
+    expect(intentEnding('ticked', 'discarded')).toBe('revert');
+  });
+
+  it('keeps a fresh tombstone of any account for the tabs still to read it, and prunes an expired one', () => {
+    const tombstone = droppedRecord(pending, 1_000);
+    for (const goes of [true, false]) {
+      expect(atDrop(tombstone, goes, 1_000 + DISCARD_TOMBSTONE_MS - 1)).toBe(
+        'keep',
+      );
+      expect(atDrop(tombstone, goes, 1_000 + DISCARD_TOMBSTONE_MS)).toBe(
+        'prune',
+      );
+    }
+    // A second drop re-stamps nothing: the prune clock is the first one's.
+    expect(dropped([tombstone], true, 5_000)).toEqual([tombstone]);
   });
 });
 

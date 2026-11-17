@@ -38,10 +38,11 @@
  *   order (backoff), a 401 keeps everything for the next sign-in, a
  *   404/409/400 is a failure the notice shows until it is dismissed.
  * - **Accounts**: a record is its page's account's (`data-account`). A page
- *   of another account deletes the others' records unsent; signing out
- *   and deleting the account drain for at most SIGN_OUT_DRAIN_MS; then
- *   only signing out asks before discarding what is left (deletion never
- *   asks: the next other account's page deletes it unsent).
+ *   of another account drops the others' records unsent, each to its
+ *   tombstone (dropQueuedWrites); signing out and deleting the account
+ *   drain for at most SIGN_OUT_DRAIN_MS; then only signing out asks before
+ *   discarding what is left (deletion never asks: the next other account's
+ *   page drops it unsent).
  *
  * Listeners sit on the document once, at module evaluation (a module runs
  * once per document; boosted navigations swap only the body).
@@ -69,7 +70,6 @@ import {
   type IntentEnd,
   regionEnd,
   discardedRecord,
-  tombstoneExpired,
   showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
@@ -94,7 +94,12 @@ import {
   retryStuck,
   type StuckActionStore,
 } from '../../src/offline-writes';
-import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
+import {
+  dropQueuedWrites,
+  openOutboxChannel,
+  outbox,
+  type OutboxChange,
+} from './outbox-store';
 
 type Fields = Record<string, string | string[]>;
 
@@ -325,28 +330,26 @@ const remove = (records: OutboxRecord[]) =>
   });
 
 /**
- * A page of another account than the records' deletes them unsent (plan
- * section 6): never replayed into, or shown to, the new account. Discard's
- * tombstones past DISCARD_TOMBSTONE_MS go here too: every tab has re-read
- * the store since.
+ * A page of another account than the records' drops them unsent (plan
+ * section 6): never replayed into, or shown to, the new account, and each
+ * left as its tombstone so a tab still open on that account reverts it
+ * (#1042). Tombstones past DISCARD_TOMBSTONE_MS go here, whoever's: every
+ * tab has re-read the store since.
  */
 async function claimForAccount(): Promise<void> {
   const account = pageAccount();
-  const now = Date.now();
-  const all = await readAll();
-  const others = all.filter((record) => record.account !== account);
-  const expired = all.filter(
-    (record) => record.account === account && tombstoneExpired(record, now),
+  const { dropped, pruned } = await dropQueuedWrites(
+    write,
+    (record) => record.account !== account,
+    Date.now(),
   );
-  if (others.length === 0 && expired.length === 0) return;
-  await remove([...others, ...expired]);
-  if (others.length > 0) {
+  if (dropped > 0) {
     console.info(
-      `[outbox] ${others.length} queued change(s) of another account deleted unsent`,
+      `[outbox] ${dropped} queued change(s) of another account dropped unsent`,
     );
   }
-  if (expired.length > 0) {
-    console.info(`[outbox] ${expired.length} discard tombstone(s) pruned`);
+  if (pruned > 0) {
+    console.info(`[outbox] ${pruned} discard tombstone(s) pruned`);
   }
 }
 
@@ -440,9 +443,8 @@ const intentOf = (record: OutboxRecord | undefined) =>
  * to save; one whose record failed or was discarded shows the server's
  * state again; one whose record was saved keeps what it shows, now the
  * server's too (endIntent). Which is read from the store alone
- * (regionEnd): Discard leaves a tombstone, so a record gone means saved
- * whichever tab reads first; a session boundary's deletion leaves the page
- * anyway.
+ * (regionEnd): Discard, and a session or account drop, leave a tombstone
+ * (#1042), so a record gone means saved whichever tab reads first.
  */
 function renderRegions(records: OutboxRecord[]): void {
   const waiting = new Map(
@@ -1214,10 +1216,15 @@ async function drainBeforeLeaving(
     question: counted('Discard', left.length),
   });
   if (!discard) return false;
-  await remove(left);
-  console.info(
-    `[outbox] ${left.length} unsynced change(s) discarded at sign-out`,
+  // Tombstones, not deletions (#1042): another tab of this account still
+  // showing one of these ticks reverts it instead of taking it for saved.
+  const named = new Set(left.map((record) => record.id));
+  const { dropped } = await dropQueuedWrites(
+    write,
+    (record) => named.has(record.id),
+    Date.now(),
   );
+  console.info(`[outbox] ${dropped} unsynced change(s) discarded at sign-out`);
   return true;
 }
 

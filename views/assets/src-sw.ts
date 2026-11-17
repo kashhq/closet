@@ -84,7 +84,12 @@ import {
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
-import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
+import {
+  dropQueuedWrites,
+  openOutboxChannel,
+  outbox,
+  type OutboxChange,
+} from './outbox-store';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
@@ -537,7 +542,7 @@ function claimPageCache(
     const gone = queuedWritesGoneAtClaim(owner, account);
     if (gone) {
       event.waitUntil(
-        deleteQueuedWrites('a page for another account arrived', gone),
+        dropQueuedWritesOf('a page for another account arrived', gone),
       );
     }
     if (owner !== undefined) {
@@ -947,39 +952,34 @@ async function dropPushSubscription(): Promise<void> {
 }
 
 // The outbox's records (#178, views/assets/outbox-store.ts): only ever
-// deleted here, never sent. The open tabs re-read the store on the channel's
+// dropped here, never sent. The open tabs re-read the store on the channel's
 // message and draw what is left.
 const outboxChannel = openOutboxChannel();
 
 /**
- * Deletes the queued writes whose `account` field `goes` accepts. Never
- * throws: a store that cannot be opened (private mode) holds nothing to
- * delete, and a session boundary must not fail on it.
+ * Drops the queued writes whose `account` field `goes` accepts, each to its
+ * tombstone (dropQueuedWrites, #1042: a tab still open on that account
+ * reverts the intent rather than showing it saved). Never throws: a store
+ * that cannot be opened (private mode) holds nothing to drop, and a session
+ * boundary must not fail on it.
  */
-async function deleteQueuedWrites(
+async function dropQueuedWritesOf(
   reason: string,
   goes: (recordAccount: unknown) => boolean,
 ): Promise<void> {
   try {
-    let deleted = 0;
-    await outbox.transact('readwrite', (store) => {
-      const cursor = store.openCursor();
-      cursor.onsuccess = () => {
-        const row = cursor.result;
-        if (!row) return;
-        const { account } = row.value as { account?: unknown };
-        if (goes(account)) {
-          row.delete();
-          deleted += 1;
-        }
-        row.continue();
-      };
-    });
-    if (deleted === 0) return;
+    const { dropped, pruned } = await dropQueuedWrites(
+      (work) => outbox.transact('readwrite', work),
+      (record) => goes(record.account),
+      Date.now(),
+    );
+    if (dropped + pruned === 0) return;
     outboxChannel?.postMessage({ drain: false } satisfies OutboxChange);
-    console.info(`[sw] ${reason}: ${deleted} queued change(s) deleted unsent`);
+    console.info(
+      `[sw] ${reason}: ${dropped} queued change(s) dropped unsent, ${pruned} tombstone(s) pruned`,
+    );
   } catch (error) {
-    console.warn('[sw] could not delete the queued changes', error);
+    console.warn('[sw] could not drop the queued changes', error);
   }
 }
 

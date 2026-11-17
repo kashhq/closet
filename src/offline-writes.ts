@@ -523,6 +523,39 @@ export const tombstoneExpired = (record: StoredRecord, now: number): boolean =>
   now - (record.discardedAt ?? 0) >= DISCARD_TOMBSTONE_MS;
 
 /**
+ * The tombstone a session or account drop writes in an unsent record's
+ * place (#1042): Discard's, so a tab still open on the dropped account
+ * reverts the intent instead of taking the vanished record for a save. It
+ * keeps no label: the account has left this device, and the garment's name
+ * must not outlive it in the store for a day.
+ */
+export function droppedRecord<R extends ReplayRecord & { label: string }>(
+  record: R,
+  now: number,
+): R {
+  return { ...discardedRecord(record, now), label: '' };
+}
+
+/**
+ * What a drop does to one stored record (`goes`: the drop names it, as
+ * sign-out's leftovers or another account's records at a claim): an unsent
+ * one is replaced by its tombstone (`droppedRecord`), never deleted; an
+ * expired tombstone of any account is pruned, a fresh one kept until every
+ * tab has re-read it. Run inside the drop's one transaction
+ * (`dropQueuedWrites`, outbox-store.ts).
+ */
+export function atDrop(
+  record: StoredRecord,
+  goes: boolean,
+  now: number,
+): 'tombstone' | 'prune' | 'keep' {
+  if (record.state === 'discarded') {
+    return tombstoneExpired(record, now) ? 'prune' : 'keep';
+  }
+  return goes ? 'tombstone' : 'keep';
+}
+
+/**
  * What a region does once its record is no longer pending (outbox.ts,
  * endIntent): only a region that showed the intent has anything to undo or
  * keep (#876); one whose markup was already in the record's state shows

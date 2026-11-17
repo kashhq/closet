@@ -1,11 +1,17 @@
 /**
  * The outbox's IndexedDB store and its change channel (#178,
  * src/web/shell/outbox.md), shared by the page's outbox (outbox.ts) and the
- * service worker (src-sw.ts), which only deletes records at session
- * boundaries. One definition on purpose: whichever opens the database first
+ * service worker (src-sw.ts), which only drops records at session
+ * boundaries (dropQueuedWrites). One definition on purpose: whichever opens the database first
  * creates it, and an open without the schema's upgrade would leave version 1
  * with no store, which the other could then never add.
  */
+
+import {
+  atDrop,
+  droppedRecord,
+  type ReplayRecord,
+} from '../../src/offline-writes';
 
 const DB_NAME = 'closet-outbox';
 const DB_VERSION = 1;
@@ -140,6 +146,42 @@ export function createOutboxConnection(
       await settle(transaction, work);
     },
   };
+}
+
+/** A stored record as a drop reads it: the store holds whatever a build of either bundle put. */
+type DroppableRecord = ReplayRecord & { id: string; label: string };
+
+/**
+ * A session or account drop over the store (#1042), the page's and the
+ * worker's: every record `goes` names becomes its tombstone and expired
+ * tombstones are pruned (`atDrop`), all in the one readwrite transaction
+ * `write` runs, so no tab reads the drop half done. `write` is the caller's
+ * own (the page's announces and re-renders; the worker posts after it).
+ */
+export async function dropQueuedWrites(
+  write: (work: (store: IDBObjectStore) => void) => Promise<void>,
+  goes: (record: DroppableRecord) => boolean,
+  now: number,
+): Promise<{ dropped: number; pruned: number }> {
+  const counts = { dropped: 0, pruned: 0 };
+  await write((store) => {
+    const cursor = store.openCursor();
+    cursor.onsuccess = () => {
+      const row = cursor.result;
+      if (!row) return;
+      const record = row.value as DroppableRecord;
+      const step = atDrop(record, goes(record), now);
+      if (step === 'tombstone') {
+        row.update(droppedRecord(record, now));
+        counts.dropped += 1;
+      } else if (step === 'prune') {
+        row.delete();
+        counts.pruned += 1;
+      }
+      row.continue();
+    };
+  });
+  return counts;
 }
 
 /** The page's and the worker's connection to the real database. */
