@@ -15,7 +15,8 @@ import { SAME_ORIGIN, signIn } from './support/e2e-session';
  * until the page has shown it, test/support/cutout-stub.ts); then the
  * search box finds it by two of its words in any order (#673). The filter
  * sheet (#674) and select mode's kept selection (#677) ride along at the
- * same width, and the garment page's split (#1068) at a desktop's.
+ * same width, and at a desktop's the garment page's split (#1068) and the
+ * filters docked beside the grid (#1067).
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -419,4 +420,45 @@ async function checkFilterSheet(page: Page) {
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
+
+  await checkDockedFilters(page);
+}
+
+/**
+ * The same filter sheet at a desktop's width (#1067): docked as the facet
+ * column left of the grid, shown without opening anything (no opener), a
+ * change applied in place with focus kept in the facets (Apply leaves them
+ * unswapped), and `/` focusing the search that heads them.
+ */
+async function checkDockedFilters(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/wardrobe');
+  const tiles = page.locator('[data-tile]');
+  await expect(tiles).toHaveCount(4);
+  const facets = page.getByRole('dialog', { name: 'Filters' });
+  await expect(facets).toBeVisible();
+  await expect(facets).not.toHaveAttribute('open');
+  await expect(
+    page.getByRole('button', { name: 'Filters', exact: true }),
+  ).toBeHidden();
+  const facetsBox = (await facets.boundingBox())!;
+  const gridBox = (await page.locator('#wardrobe-grid').boundingBox())!;
+  expect(facetsBox.x + facetsBox.width).toBeLessThanOrEqual(gridBox.x);
+
+  await facets.getByRole('radio', { name: 'Red', exact: true }).click();
+  const apply = facets.getByRole('button', { name: 'Apply filters' });
+  await apply.click();
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Red shirt');
+  await expect(apply).toBeFocused();
+  await expect(
+    facets.getByRole('radio', { name: 'Red', exact: true }),
+  ).toBeChecked();
+
+  // `/` from anywhere but a field focuses the search heading the facets.
+  await page.keyboard.press('/');
+  const search = facets.getByRole('textbox', { name: 'Search' });
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('');
+  await page.setViewportSize({ width: 390, height: 844 });
 }

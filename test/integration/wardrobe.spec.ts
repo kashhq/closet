@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { imageUrl } from '../../src/web/files/image-url';
 import { readPhotoRef } from '../../src/web/files/queries';
 import { variantFileName } from '../../src/web/files/image-variant';
+import { EMPTY_SEARCH } from '../../src/web/wardrobe/wardrobe-page';
 import { createGarment, garmentRow, jpegPhoto, uploadPhoto } from './garments';
 import {
   createTestApp,
@@ -136,9 +137,10 @@ describe('wardrobe', () => {
     const sheet = async (query = '') => {
       const res = await t.inject({ method: 'GET', url: `/wardrobe${query}` });
       expect(res.statusCode).toBe(200);
-      const html = unescapeHtml(res.body);
-      return html.slice(html.indexOf('<dialog id="filter-modal"'));
+      return filterDialog(unescapeHtml(res.body));
     };
+    const filterDialog = (html: string) =>
+      /<dialog id="filter-modal"[\s\S]*?<\/dialog>/.exec(html)![0];
 
     beforeAll(async () => {
       const res = await t.inject({
@@ -166,7 +168,10 @@ describe('wardrobe', () => {
       for (const [chip] of chips) {
         expect(chip).toContain('type="radio"');
         expect(chip).toMatch(/aria-label="[^"]+"/);
-        expect(chip).not.toMatch(/class="[^"]*\bhidden\b/);
+        // Only a clear chip waits hidden, until its group has a choice.
+        if (!chip.includes('value=""')) {
+          expect(chip).not.toMatch(/class="[^"]*\bhidden\b/);
+        }
       }
     });
 
@@ -237,11 +242,81 @@ describe('wardrobe', () => {
       expect(group).toContain('filter-type-accessories-title');
     });
 
-    it('offers a clear chip only beside a chosen value, and keeps the chosen one checked', async () => {
+    it('is the facets aside, one form with its own keyword: Apply keeps the aside, the body’s controls take it (#1067)', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/wardrobe?keyword=shirt&category=tops',
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      expect(html).toMatch(
+        /<main class="page-shell[^"]*" data-layout="facets"><aside id="wardrobe-aside" class="page-aside" aria-label="Filters"><dialog id="filter-modal"[^>]*data-sheet="filters"/,
+      );
+      // The sheet posts what it did, the keyword now a field of its own
+      // form rather than the scope row's through hx-include: every named
+      // control is a filter, and the keyword is there once.
+      const dialog = filterDialog(html);
+      const names = [...dialog.matchAll(/<input\b[^>]*\bname="([^"]+)"/g)].map(
+        ([, name]) => name,
+      );
+      expect(names.filter((name) => name === 'keyword')).toHaveLength(1);
+      const filters = [...Object.keys(EMPTY_SEARCH), 'ownerId'];
+      for (const name of new Set(names)) expect(filters).toContain(name);
+      expect(dialog).toMatch(
+        /id="filter-keyword" name="keyword" value="shirt"/,
+      );
+      const form = /<form id="filter-form"[^>]*>/.exec(dialog)![0];
+      expect(form).toContain('hx-select="#wardrobe-body"');
+      expect(form).not.toContain('hx-select-oob');
+      expect(form).not.toContain('hx-include');
+      // Everything else that swaps the body takes the facets from the
+      // answer, so the form shows what the grid now does.
+      const others = [
+        ...html.matchAll(
+          /<(a|form|button)\b[^>]*hx-target="#wardrobe-body"[^>]*>/g,
+        ),
+      ]
+        .map(([control]) => control)
+        .filter((control) => !control.includes('id="filter-form"'));
+      expect(others.length).toBeGreaterThan(2);
+      for (const control of others) {
+        expect(control).toContain('hx-select="#wardrobe-body"');
+        expect(control).toContain('hx-select-oob="#wardrobe-aside"');
+      }
+    });
+
+    it('answers a fragment with the body, then the facets in band for the requester to take or leave', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/wardrobe?category=tops',
+        headers: { 'hx-request': 'true' },
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      expect(html.trimStart()).toMatch(/^<div id="wardrobe-body"/);
+      const aside = /<aside id="wardrobe-aside"[^>]*>/.exec(html)![0];
+      expect(aside).not.toContain('hx-swap-oob');
+      expect(filterDialog(html)).toMatch(
+        /name="category" value="tops"[^>]*checked/,
+      );
+      expect(html).toMatch(
+        /<div id="wardrobe-actions" hidden="" hx-swap-oob="true"/,
+      );
+    });
+
+    it('offers a clear chip in every group, shown only while a chip of it is checked, and keeps the chosen one checked', async () => {
+      // The docked facets keep their form after Apply, so the server cannot
+      // add a clear chip beside a new choice: CSS shows it (Chips' `clear`).
+      const clearChips = (html: string) =>
+        html.match(/<input type="radio"[^>]*value=""[^>]*>/g) ?? [];
       const plain = await sheet();
-      expect(plain).not.toContain('value=""');
+      expect(clearChips(plain).length).toBeGreaterThan(2);
+      for (const chip of clearChips(plain)) {
+        expect(chip).toContain(
+          'hidden has-[~input:checked]:inline-flex checked:inline-flex',
+        );
+      }
       const chosen = await sheet('?category=tops&type=shirt&color=blue');
-      expect(chosen.match(/<input[^>]*value=""[^>]*>/g)).toHaveLength(3);
       expect(chosen).toMatch(
         /<input[^>]*name="type"[^>]*value="shirt"[^>]*checked/,
       );

@@ -77,8 +77,9 @@ export function regionId(name: string, region: PageRegion): string {
  * needs one, and the landmark it is follows from the layout:
  *  - `split`: a `<section>`, the subject (a photo, a collage), left from lg.
  *  - `panel`: an `<aside>`, the work's result, right from lg.
- *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a filter
- *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`).
+ *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a `filters`
+ *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`; on a
+ *    phone the aside takes no room, its sheet closed).
  *  - `index`: a `<nav>`, the settings index, left from lg, hidden below it
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
@@ -225,6 +226,14 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   ];
 }
 
+/** A page's aside as its shell renders it: what `PageFragment` answers too. */
+export interface PageAsideFrame {
+  layout: AsideLayout;
+  /** The landmark's accessible name (`asideLabel`); `split`'s section has none. */
+  label?: string;
+  content: Child;
+}
+
 /**
  * The answer to an htmx request that swaps a page's body in place (the
  * Wardrobe's filtering targets `#<name>-body`, outerHTML): the body with the
@@ -233,23 +242,62 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
  * to no tiles drops the bar, back to some brings it, and its controls'
  * `form=` names the form in this answer. A page with a swapped body answers
  * through this, never a bare body, so no fragment leaves a stale bar.
+ *
+ * `aside` answers the aside region as well, not out of band: the requester
+ * decides whether to take it (`bodySwap`), because only it knows whether
+ * the aside it holds is stale. A request sent from the aside itself (the
+ * facets' Apply) leaves it in place, with its focus, its scroll and what
+ * was typed in it; one from the body (a chip dropping a filter) replaces
+ * it, since what it changed shows there too (#1067). Every requester of an
+ * answer with an aside must spread `bodySwap`, which selects the body out of
+ * it.
  */
 export function PageFragment(
   props: PageBodyFrame & {
     name: string;
     actionBar: ActionBarProps | undefined;
+    aside?: PageAsideFrame;
     children?: Child;
   },
 ) {
-  const { name, actionBar, children, ...frame } = props;
+  const { name, actionBar, aside, children, ...frame } = props;
   return (
     <>
       <PageBody name={name} {...frame}>
         {children}
       </PageBody>
+      {aside && (
+        <PageAside
+          id={regionId(name, 'aside')}
+          layout={aside.layout}
+          label={aside.label}
+        >
+          {aside.content}
+        </PageAside>
+      )}
       <ActionsRegion name={name} bar={actionBar} oob />
     </>
   );
+}
+
+/**
+ * The htmx attributes of a control whose request swaps page `name`'s body
+ * and is answered by `PageFragment`: the body is selected out of the answer
+ * and, with `aside: 'replace'`, the aside is taken out of band
+ * (`hx-select-oob`) where the answer carries one. `replace` is for a
+ * control that changes what the aside shows (a chip that drops a filter,
+ * the capsule scope, Clear); `keep` for a request sent from inside the aside
+ * that already shows what it asked for (the facets' Apply).
+ */
+export function bodySwap(name: string, aside: 'replace' | 'keep') {
+  const body = `#${regionId(name, 'body')}`;
+  return {
+    'hx-target': body,
+    'hx-swap': 'outerHTML',
+    'hx-select': body,
+    'hx-select-oob':
+      aside === 'replace' ? `#${regionId(name, 'aside')}` : undefined,
+  } as const;
 }
 
 /** `#<name>-actions`: the page's bar, else its empty place (PageRegion). */

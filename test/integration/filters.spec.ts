@@ -21,12 +21,12 @@ describe('wardrobe filters', () => {
     );
   };
 
-  /** The filter modal's radio values for one query parameter. */
+  /** The filter sheet's choices for one query parameter (not its clear chip, value ''). */
   const optionValues = (html: string, name: string) => {
     const modal = /<dialog id="filter-modal"[\s\S]*?<\/dialog>/.exec(html)![0];
     return [
       ...modal.matchAll(
-        new RegExp(`type="radio" name="${name}" value="([^"]*)"`, 'g'),
+        new RegExp(`type="radio" name="${name}" value="([^"]+)"`, 'g'),
       ),
     ].map((m) => m[1]);
   };
