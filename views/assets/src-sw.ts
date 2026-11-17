@@ -60,6 +60,7 @@ import {
   type WarmList,
 } from '../../src/web/shell/offline-warm';
 import { WARM_REQUEST_HEADER } from '../../src/warm-request';
+import { dropCacheAndRows } from '../../src/web/shell/cache-drop';
 import {
   ACTIVATED_KEY,
   answerContentHashed,
@@ -229,30 +230,26 @@ const MAX_ENTRIES: Readonly<Record<string, number>> = {
 };
 
 /**
- * Deletes a cache and Workbox's expiration rows for it: every URL an
- * ExpirationPlugin saw stored there is a row in the `workbox-expiration`
- * IndexedDB, which `caches.delete` alone leaves behind (the previous
- * account's URLs, search queries included, still counted toward maxEntries,
- * #731). Every whole-cache delete in this worker goes through here.
+ * Deletes a cache and Workbox's expiration rows for it (`cache-drop.ts`:
+ * rows, cache, rows, then a row for every entry stored meanwhile). Every
+ * whole-cache delete in this worker goes through here.
  * Not ExpirationPlugin.deleteCacheAndMetadata: it forgets only the caches
  * its plugin touched since this worker started, so a cold worker's drop
  * would forget nothing. CacheExpiration asks for a limit (asserted in
  * development builds); delete() reads none, so a retired cache's is nominal.
- * Rows, the cache, then the rows again: the two deletes cannot be atomic, so
- * a store landing between them leaves a row with no entry, which the second
- * pass sweeps (the first pass alone would miss it; the cache alone would
- * leave the first pass's rows). A store landing after the last step writes
- * an entry and its row into a fresh cache, consistent with each other; whether
- * that store may happen at all is the generation and owner checks' business
- * (pageStore's claim, imageStore), not this delete's.
  */
 async function deleteCacheAndMetadata(name: string): Promise<boolean> {
-  const expiration = new CacheExpiration(name, {
-    maxEntries: MAX_ENTRIES[name] ?? 1,
-  });
-  await expiration.delete();
-  const deleted = await self.caches.delete(name);
-  await expiration.delete();
+  const { deleted, adopted } = await dropCacheAndRows(
+    self.caches,
+    name,
+    new CacheExpiration(name, { maxEntries: MAX_ENTRIES[name] ?? 1 }),
+    outsideExpiration,
+  );
+  if (adopted > 0) {
+    console.info(
+      `[sw] ${name}: ${adopted} entr(ies) stored during the drop given their expiration row`,
+    );
+  }
   return deleted;
 }
 
@@ -354,6 +351,16 @@ const REFRESHED_AT_KEY = 'https://page-cache.invalid/refreshed-at';
 // RefreshBackoff (#782).
 const REFRESH_BACKOFF_PREFIX =
   'https://page-cache.invalid/refresh-backoff?key=';
+
+/**
+ * The pages cache's entries no ExpirationPlugin stores: the records above
+ * (off-origin keys) and the offline page (offlinePage, kept out of the
+ * expiration so no warm evicts it). A drop never gives one a row.
+ */
+function outsideExpiration(url: string): boolean {
+  const { origin, pathname } = new URL(url);
+  return origin !== self.location.origin || pathname === FALLBACK_HTML_URL;
+}
 
 async function readRecord(key: string): Promise<string | undefined> {
   const cache = await self.caches.open(PAGES_CACHE);
