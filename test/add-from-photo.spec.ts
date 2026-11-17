@@ -95,7 +95,79 @@ async function checkSplitAtDesktop(page: Page) {
   const bar = (await page.locator('header.app-bar').boundingBox())!;
   expect(after.y).toBeGreaterThanOrEqual(bar.y + bar.height);
   expect(after.y + after.height).toBeLessThanOrEqual(560);
+  await checkTallSubjectScrolls(page, id);
+  await checkSubjectFocusRing(page);
   await page.setViewportSize({ width: 390, height: 844 });
+}
+
+/**
+ * The scrolling subject clips on both axes, so a control's focus ring (2px
+ * plus a 2px offset) must sit inside it: a photoless garment's "Add photo"
+ * button is the subject's one control.
+ */
+async function checkSubjectFocusRing(page: Page) {
+  const bare = await createGarment(page, 'Bare coat', 'coats');
+  await page.goto(`/wardrobe/${bare}`);
+  const subject = page.locator('#garment-aside');
+  const button = subject.getByRole('button', { name: 'Add a photo' });
+  await page.keyboard.press('Tab');
+  await button.focus();
+  await expect(button).toBeFocused();
+  const ring = await button.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const reach =
+      parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+    const box = el.getBoundingClientRect();
+    const frame = el.closest('#garment-aside')!.getBoundingClientRect();
+    return {
+      reach,
+      inside:
+        box.left - reach >= frame.left &&
+        box.right + reach <= frame.right &&
+        box.top - reach >= frame.top &&
+        box.bottom + reach <= frame.bottom,
+    };
+  });
+  expect(ring.reach).toBeGreaterThanOrEqual(4);
+  expect(ring.inside).toBe(true);
+}
+
+/**
+ * A split page's subject taller than the window under the bar scrolls inside
+ * itself (main.css, the split aside's max-height), so the collage under long
+ * notes stays reachable. An outfit of the coat with notes at the cap, at 1440
+ * x 700.
+ */
+async function checkTallSubjectScrolls(page: Page, garmentId: number) {
+  const made = await page.request.post('/outfits', {
+    form: {
+      name: 'Long notes outfit',
+      notes: 'Wear it open over a plain tee, sleeves pushed up. '
+        .repeat(80)
+        .slice(0, 4000),
+      category: 'coats',
+      garmentId: String(garmentId),
+      scheduleDate: '',
+    },
+    headers: SAME_ORIGIN,
+  });
+  expect(made.ok()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto(made.url());
+  const subject = page.locator('#outfit-aside');
+  const collage = subject.locator('[data-collage]');
+  await expect(collage).toBeAttached();
+  const frame = await subject.evaluate((el) => ({
+    scrolls: el.scrollHeight > el.clientHeight,
+    bottom: el.getBoundingClientRect().bottom,
+  }));
+  expect(frame.scrolls).toBe(true);
+  expect(frame.bottom).toBeLessThanOrEqual(700);
+  await collage.scrollIntoViewIfNeeded();
+  const at = (await collage.boundingBox())!;
+  const box = (await subject.boundingBox())!;
+  expect(at.y + at.height).toBeLessThanOrEqual(box.y + box.height + 1);
+  expect(at.y + at.height).toBeLessThanOrEqual(700);
 }
 
 const photo = () =>
