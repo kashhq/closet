@@ -21,10 +21,11 @@ import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { GALLERY_GRID } from '../layout/columns';
+import type { ActionBarProps } from '../layout/action-bar';
 import { GarmentMark } from '../layout/garment-mark';
 import {
-  PageBody,
   type PageBodyFrame,
+  PageFragment,
   PageShell,
   type PageShellProps,
   regionId,
@@ -240,6 +241,7 @@ export function WardrobePage(props: {
       bar={model.selecting ? taskBar(model) : wardrobeBar(header)}
       width="wide"
       body={WARDROBE_BODY}
+      actionBar={selectBar(model)}
       overlays={!model.selecting && <WardrobeAddSheet {...header} />}
     >
       <WardrobeMain model={model} />
@@ -249,8 +251,9 @@ export function WardrobePage(props: {
 
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
- * chips and scope menu, the filter modal): the main, and the ⋯ menu out
- * of band, so its Select keeps the filters the grid now shows.
+ * chips and scope menu, the filter modal): the main, with select mode's
+ * bar out of band (`PageFragment`), and the ⋯ menu out of band, so its
+ * Select keeps the filters the grid now shows.
  */
 export function WardrobeFragment({
   ctx,
@@ -261,9 +264,13 @@ export function WardrobeFragment({
 }) {
   return (
     <>
-      <PageBody name={WARDROBE} {...WARDROBE_BODY}>
+      <PageFragment
+        name={WARDROBE}
+        {...WARDROBE_BODY}
+        actionBar={selectBar(model)}
+      >
         <WardrobeMain model={model} />
-      </PageBody>
+      </PageFragment>
       {!model.selecting && (
         <WardrobeMenu
           viewOwner={model.viewOwner}
@@ -401,16 +408,6 @@ function Tiles({ model }: { model: WardrobeModel }) {
     const batch = model.page.tiles.filter((tile) =>
       model.batchSaved.has(tile.id),
     ).length;
-    const shown = new Set(model.page.tiles.map((tile) => tile.id));
-    // A kept selection's garments this page does not show (a later page, or
-    // a filter a verb's change moved them out of) still count and post.
-    const carried = model.selection.all
-      ? []
-      : [...model.selection.ids].filter((id) => !shown.has(id));
-    const checked = model.selection.all
-      ? model.count
-      : model.page.tiles.filter((tile) => isChecked(tile, model)).length +
-        carried.length;
     return (
       <>
         {batch > 0 && (
@@ -426,9 +423,9 @@ function Tiles({ model }: { model: WardrobeModel }) {
             <StripFlags names={BATCH_FLAGS} />
           </>
         )}
-        <BulkForm model={model} checked={checked}>
+        <BulkForm model={model}>
           <SelectAll count={model.count} checked={model.selection.all} />
-          {carried.map((id) => (
+          {carriedIds(model).map((id) => (
             <input type="hidden" name="ids" value={id} data-carried="true" />
           ))}
           <Grid model={model} />
@@ -437,6 +434,27 @@ function Tiles({ model }: { model: WardrobeModel }) {
     );
   }
   return <Grid model={model} />;
+}
+
+/**
+ * A kept selection's garments this page does not show (a later page, or a
+ * filter a verb's change moved them out of): they still count and post.
+ */
+function carriedIds(model: WardrobeModel): number[] {
+  if (model.selection.all) return [];
+  const shown = new Set(model.page.tiles.map((tile) => tile.id));
+  return [...model.selection.ids].filter((id) => !shown.has(id));
+}
+
+/** Boxes checked as rendered: the picker's members, or select mode's selection. */
+function checkedCount(model: WardrobeModel): number {
+  if (model.picking)
+    return model.page.tiles.filter((tile) => tile.member).length;
+  if (model.selection.all) return model.count;
+  return (
+    model.page.tiles.filter((tile) => isChecked(tile, model)).length +
+    carriedIds(model).length
+  );
 }
 
 /** A select-mode tile checked as the page renders it: a batch's garment (#200), or the selection a verb kept. */
@@ -1335,21 +1353,17 @@ const BULK_SET_ID = 'bulk-dialog';
 
 /**
  * Select mode's form: the grid's checkbox tiles (later pages arrive inside
- * it too) and the bar above the dock with the live count and the mode's
- * action. A native post carrying what the page needs back in its action's
- * query. The count is the one line of script: it re-counts the checked
- * boxes on every change, and once when it loads.
+ * it too), a native post carrying what the page needs back in its action's
+ * query. Its bar (`selectBar`) is the page's action bar, outside the form:
+ * the live count and the mode's actions, joined to it through `form=` and
+ * `data-select-count`. The count is the one line of script: it re-counts
+ * the checked boxes on every change, and once when it loads.
  */
 const SELECT_COUNT_IMPORT = "import 'select-count';";
+const PICK_FORM_ID = 'pick-form';
+const SELECTED_COUNT_ID = 'selected-count';
 
-function SelectForm(props: {
-  id: string;
-  action: string;
-  /** Boxes checked as rendered (the picker's members on this page). */
-  checked: number;
-  button: Child;
-  children: Child;
-}) {
+function SelectForm(props: { id: string; action: string; children: Child }) {
   return (
     <PostForm id={props.id} action={props.action}>
       {/* The count follows toggles and the pages the sentinel appends
@@ -1359,24 +1373,57 @@ function SelectForm(props: {
         type="module"
         dangerouslySetInnerHTML={{ __html: SELECT_COUNT_IMPORT }}
       />
-      <div data-select-count>
-        {props.children}
-        <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex items-center justify-between gap-2">
-          <span class="text-sm">
-            <span
-              id="selected-count"
-              class="font-semibold"
-              data-select-count-value
-            >
-              {props.checked}
-            </span>{' '}
-            {t('SELECTED')}
-          </span>
-          {props.button}
-        </div>
-      </div>
+      <div data-select-count={SELECTED_COUNT_ID}>{props.children}</div>
     </PostForm>
   );
+}
+
+/**
+ * Select mode's and the picker's action bar, while there are tiles to
+ * check: the live count (`#selected-count`, which select-count.js keeps)
+ * and the mode's actions, the bulk verbs' sheets or the picker's Save.
+ */
+function selectBar(model: WardrobeModel): ActionBarProps | undefined {
+  if (!model.selecting || model.page.tiles.length === 0) return undefined;
+  return {
+    align: 'between',
+    children: (
+      <>
+        <span class="text-sm">
+          <span id={SELECTED_COUNT_ID} class="font-semibold">
+            {checkedCount(model)}
+          </span>{' '}
+          {t('SELECTED')}
+        </span>
+        {model.picking ? (
+          <button
+            type="submit"
+            form={PICK_FORM_ID}
+            class="btn btn-primary btn-sm"
+          >
+            {t('SAVE')}
+          </button>
+        ) : (
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="btn btn-sm"
+              {...sheetOpener(BULK_ACTIONS_ID)}
+            >
+              {t('BULK_ACTIONS')}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              {...sheetOpener(BULK_SET_ID)}
+            >
+              {t('BULK_SET')}
+            </button>
+          </div>
+        )}
+      </>
+    ),
+  };
 }
 
 /**
@@ -1385,36 +1432,12 @@ function SelectForm(props: {
  * its own `formaction`, all with the filters in the query, so the redirect
  * lands back in select mode on the same grid.
  */
-function BulkForm(props: {
-  model: WardrobeModel;
-  /** Boxes checked as rendered (a batch's garments, #200, or a kept selection). */
-  checked: number;
-  children: Child;
-}) {
+function BulkForm(props: { model: WardrobeModel; children: Child }) {
   const { search, viewOwner } = props.model;
   return (
     <SelectForm
       id={BULK_FORM_ID}
       action={wardrobeUrl(viewOwner, searchParams(search), '/wardrobe/bulk')}
-      checked={props.checked}
-      button={
-        <div class="flex gap-2">
-          <button
-            type="button"
-            class="btn btn-sm"
-            {...sheetOpener(BULK_ACTIONS_ID)}
-          >
-            {t('BULK_ACTIONS')}
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            {...sheetOpener(BULK_SET_ID)}
-          >
-            {t('BULK_SET')}
-          </button>
-        </div>
-      }
     >
       {props.children}
     </SelectForm>
@@ -1533,14 +1556,8 @@ function PickForm(props: {
   const { model, picking } = props;
   return (
     <SelectForm
-      id="pick-form"
+      id={PICK_FORM_ID}
       action={capsuleUrl(picking.capsuleId, model.viewOwner, '/garments')}
-      checked={model.page.tiles.filter((tile) => tile.member).length}
-      button={
-        <button type="submit" class="btn btn-primary btn-sm">
-          {t('SAVE')}
-        </button>
-      }
     >
       {props.children}
     </SelectForm>

@@ -1,4 +1,4 @@
-import { type Page, type Route } from '@playwright/test';
+import { type Page, type Request, type Route } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 import { createGarment, createOutfit } from './support/e2e-data';
 import {
@@ -150,6 +150,43 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     }
     // The add sheet's camera and library inputs name their forms in `form=`.
     expect(outside).toBeGreaterThanOrEqual(2);
+
+    // The capsule picker's Save sits in the action bar, outside #pick-form
+    // (`form=`): disabled offline beside the banner's reason, and online a
+    // double tap posts once (submit-once.js reads the form's `elements`).
+    await createGarment(page, 'Picked tee');
+    const made = await page.request.post('/capsules', {
+      form: { name: 'Picked' },
+      headers: SAME_ORIGIN,
+    });
+    const capsuleId = /^\/capsules\/(\d+)/.exec(
+      new URL(made.url()).pathname,
+    )![1];
+    const capsule = `/capsules/${capsuleId}`;
+    await page.goto(`/wardrobe?pick=${capsuleId}`);
+    const save = page.locator('#wardrobe-actions').getByRole('button', {
+      name: 'Save',
+      exact: true,
+    });
+    await setReachable(page, false);
+    await expect(save).toBeDisabled();
+    await expect(page.locator('#connectivity-banner')).toContainText(
+      'Dimmed controls need a connection.',
+    );
+    await setReachable(page, true);
+    await expect(save).toBeEnabled();
+    const picks: string[] = [];
+    const countPick = (request: Request) => {
+      const { pathname } = new URL(request.url());
+      if (request.method() === 'POST' && pathname === `${capsule}/garments`) {
+        picks.push(pathname);
+      }
+    };
+    page.on('request', countPick);
+    await save.dblclick();
+    await page.waitForURL((url) => url.pathname === capsule);
+    page.off('request', countPick);
+    expect(picks).toHaveLength(1);
   });
 
   await test.step('wears and ticks queue offline, save on reconnect, and stay their account’s', async () => {

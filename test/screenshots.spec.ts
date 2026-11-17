@@ -302,6 +302,24 @@ test.describe('desktop', () => {
     await shot(page, '93-demo-trips-desktop', '/trips');
     await shot(page, '94-demo-profile-desktop', '/auth/profile');
   });
+
+  // The action bars (#1063) at the head of their column (Laundry's is 91
+  // above): select mode with two checked, and the capsule picker.
+  test('demo: Theo, the action bars at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe?select=1');
+    const boxes = page.locator('#wardrobe-grid input[name="ids"]');
+    await boxes.nth(0).check();
+    await boxes.nth(1).check();
+    await expect(page.locator('#selected-count')).toHaveText('2');
+    await shot(page, '95-demo-select-desktop');
+    await page.goto('/capsules');
+    await page.getByRole('link', { name: /^Weekend/ }).click();
+    await expect(page).toHaveURL(/\/capsules\/\d+$/);
+    await page.getByRole('link', { name: 'Choose garments' }).first().click();
+    await expect(page.locator('#pick-form')).toBeVisible();
+    await shot(page, '96-demo-capsule-picker-desktop');
+  });
 });
 
 /**

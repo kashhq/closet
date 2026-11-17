@@ -40,7 +40,7 @@ import {
   type StylingState,
   stylingUrl,
 } from './urls';
-import { COMPOSER_COLUMNS, FIELD_GRID } from '../layout/columns';
+import { FIELD_GRID } from '../layout/columns';
 
 /**
  * GET /styling (#42; docs/plans/2026-09-26-redesign.md, "Styling"): the
@@ -148,40 +148,40 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
       width="wide"
       // The strips reach the screen's edges; the header pads its own text.
       body={{ gutter: 'bleed', gap: 3 }}
-      // The composer's bar is sticky in the flow (StylingAside).
-      endsOnBar
+      actionBar={
+        model.rows.length > 0
+          ? {
+              kind: 'stack',
+              children: <StylingAside ctx={ctx} model={model} />,
+            }
+          : undefined
+      }
       overlays={
         model.rows.length > 0 && !model.shared && <SaveSheet model={model} />
       }
     >
       <Header model={model} />
       {model.rows.length > 0 ? (
-        // Two columns from lg (#468): the rows, and the aside beside them.
-        // Below lg both wrappers are `contents`, so a phone lays out the
-        // same boxes as before they existed.
-        <div class={COMPOSER_COLUMNS}>
-          <div class="contents lg:flex lg:flex-col lg:gap-3 lg:min-w-0">
-            {/* Not guarded as a whole: guarding it would dim and freeze the
-                  strips it wraps, and "choosing still works" offline
-                  (styling.OFFLINE). Every network control around it
-                  (Shuffle, picks, + Add row, the sheet's Save) carries its
-                  own data-needs-network. */}
-            <PostForm
-              id="styling-form"
-              action={STYLING_PATH}
-              allowOffline="choosing a look works offline; Save is guarded in the sheet"
-            >
-              <StateFields model={model} />
-              <StylingRows model={model} context={context} />
-            </PostForm>
-            <AddRow model={model} />
-            <script
-              type="module"
-              dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
-            />
-          </div>
-          <StylingAside ctx={ctx} model={model} />
-        </div>
+        <>
+          {/* Not guarded as a whole: guarding it would dim and freeze the
+                strips it wraps, and "choosing still works" offline
+                (styling.OFFLINE). Every network control around it
+                (Shuffle, picks, + Add row, the sheet's Save) carries its
+                own data-needs-network. */}
+          <PostForm
+            id="styling-form"
+            action={STYLING_PATH}
+            allowOffline="choosing a look works offline; Save is guarded in the sheet"
+          >
+            <StateFields model={model} />
+            <StylingRows model={model} context={context} />
+          </PostForm>
+          <AddRow model={model} />
+          <script
+            type="module"
+            dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
+          />
+        </>
       ) : (
         <Empty model={model} />
       )}
@@ -232,22 +232,22 @@ export function StylingRows(props: {
 
 /**
  * The outfit as it stands and the way to keep it: the preview and the fit
- * line, then Shuffle and Save. On a phone (#664) it is the bar above the
- * dock, `sticky`, not fixed: in the flow after the rows and "Add row", it
+ * line, then Shuffle and Save, the page's `stack` action bar
+ * (layout/action-bar.tsx, `#styling-actions`). On a phone (#664) it is the
+ * bar above the dock, sticky in the flow after the rows and "Add row": it
  * rides on the dock while they scroll and lands below the last one at their
  * end, so it never covers a row whatever its height (the fit's chips wrap,
- * the preview opens). z-10: over the rows (a strip's step buttons are z-10
- * and come first), under "Add row"'s z-20 menu. From lg (#468) it is the
+ * the preview opens). Over the rows (a strip's step buttons are z-10 and
+ * come first), under "Add row"'s z-20 menu. From lg (#468) it is the
  * column beside the rows, sticky under the app bar. In DOM order after the
- * rows, so Tab reaches Shuffle and Save last on both.
+ * rows, so Tab reaches Shuffle and Save last on both. `group/bar` (a box-less
+ * wrapper inside the bar's flex column) is what Shuffle and Save read the
+ * preview's state from.
  */
 function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
   const { model } = props;
   return (
-    <div
-      data-styling-bar=""
-      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-under-bar lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
-    >
+    <div class="group/bar contents">
       {/* A tap opens the strip into the whole outfit (CSS off `open`, the
           PREVIEW_* classes). The open panel scrolls inside the space between
           the app bar (`--app-bar-h`) and the dock, so a tall outfit never
@@ -277,7 +277,7 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
           <StylingFit />
         </div>
       )}
-      <ActionBar model={model} />
+      <StylingActions model={model} />
     </div>
   );
 }
@@ -683,7 +683,7 @@ function AddRow({ model }: { model: StylingModel }) {
  * is no Save: in a line at the foot of the phone's bar (StylingAside), and
  * from lg under the preview, its buttons stacked full width.
  */
-function ActionBar({ model }: { model: StylingModel }) {
+function StylingActions({ model }: { model: StylingModel }) {
   return (
     <div class="flex w-full items-center gap-2 px-4 py-2 max-w-page-narrow mx-auto lg:flex-col lg:items-stretch lg:p-0 lg:max-w-none">
       <button

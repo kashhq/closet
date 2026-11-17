@@ -310,7 +310,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.goto('/');
     await page.goto('/styling');
 
-    const bar = page.locator('[data-styling-bar]');
+    const bar = page.locator('#styling-actions');
     const layerSlot = bar.locator('#styling-preview [data-preview-slot="0"]');
     const fit = bar.locator('#styling-fit-line');
     // Opens empty (#665): the bar says so and judges nothing; choosing the

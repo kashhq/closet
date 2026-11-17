@@ -93,7 +93,7 @@ describe('select mode verbs', () => {
     expectNativePostForms(page);
     // Still select mode, the same three checked, the bar counting them.
     expect(checkedIds(page.body).sort()).toEqual([...tops].sort());
-    expect(page.body).toMatch(/data-select-count-value="true">3</);
+    expect(page.body).toMatch(/id="selected-count"[^>]*>3</);
     expect(page.body).toContain('Set on 3 garments');
 
     const formality = await post('/wardrobe/bulk?category=tops', {
@@ -106,6 +106,38 @@ describe('select mode verbs', () => {
     );
     for (const top of await rows(tops)) {
       expect([top.warmth, top.formality]).toEqual([2, 3]);
+    }
+  });
+
+  it('a filter swap brings the bar exactly when the body has tiles, its Save on the answer’s form', async () => {
+    // The fragment GET the scope row's search sends (PageFragment).
+    const filter = async (query: string) => {
+      const res = await t.inject({
+        method: 'GET',
+        url: `/wardrobe?pick=${capsuleId}&${query}`,
+        headers: { 'hx-request': 'true' },
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      // The actions region always rides out of band, so it is never stale.
+      expect(html).toMatch(/<div id="wardrobe-actions"[^>]*hx-swap-oob="true"/);
+      return html;
+    };
+    const bar = (html: string) => html.includes('class="action-bar"');
+    for (const [query, tiles] of [
+      ['keyword=nothing-matches', false],
+      ['category=tops', true],
+      ['keyword=nothing-matches', false],
+    ] as const) {
+      const html = await filter(query);
+      expect({ query, bar: bar(html) }).toEqual({ query, bar: tiles });
+      if (!tiles) {
+        expect(html).toMatch(/<div id="wardrobe-actions" hidden=""/);
+        continue;
+      }
+      // Save submits the picker's form in this same answer.
+      expect(html).toMatch(/<button type="submit" form="pick-form"/);
+      expect(html).toContain('<form id="pick-form"');
     }
   });
 
@@ -137,7 +169,7 @@ describe('select mode verbs', () => {
       coats.length - GRID_PAGE_SIZE,
     );
     expect(back).toMatch(
-      new RegExp(`data-select-count-value="true">${coats.length}<`),
+      new RegExp(`id="selected-count"[^>]*>${coats.length}<`),
     );
     // Later pages arrive checked: the sentinel's tiles carry the selection.
     const tilesUrl = /hx-get="([^"]*\/wardrobe\/tiles[^"]*)"/.exec(

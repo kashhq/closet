@@ -186,9 +186,7 @@ async function checkSelectMode(page: Page) {
   // Focus scrolls clear of the action bar above the dock too (#1026): the
   // scroll padding reserves at least the bar's height beyond the dock's.
   const reserved = await page.evaluate(() => {
-    const bar = document.querySelector(
-      '[data-select-count] .fixed.bottom-dock',
-    );
+    const bar = document.getElementById('wardrobe-actions');
     if (!bar) return null;
     return {
       padding: parseFloat(
@@ -200,6 +198,29 @@ async function checkSelectMode(page: Page) {
   expect(reserved?.padding).toBeGreaterThanOrEqual(
     reserved?.needed ?? Infinity,
   );
+  // At 200% text too (#1030): the reservation is the bar's real height, so
+  // a checkbox scrolled to the bottom edge, as focus scrolls one up from
+  // below the fold, lands whole above the action bar.
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  await grid.getByRole('checkbox').last().focus();
+  const clear = await page.evaluate(() => {
+    const focused = document.activeElement!;
+    focused.scrollIntoView({ block: 'end' });
+    const box = focused.getBoundingClientRect();
+    const bar = document.getElementById('wardrobe-actions')!;
+    const appBar = document.querySelector('.app-bar')!;
+    return {
+      below: bar.getBoundingClientRect().top - box.bottom,
+      above: box.top - appBar.getBoundingClientRect().bottom,
+    };
+  });
+  expect(clear.below).toBeGreaterThanOrEqual(0);
+  expect(clear.above).toBeGreaterThanOrEqual(0);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
 }
 
 /**
