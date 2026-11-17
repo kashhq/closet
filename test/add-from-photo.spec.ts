@@ -168,6 +168,17 @@ async function checkTallSubjectScrolls(page: Page, garmentId: number) {
   const box = (await subject.boundingBox())!;
   expect(at.y + at.height).toBeLessThanOrEqual(box.y + box.height + 1);
   expect(at.y + at.height).toBeLessThanOrEqual(700);
+
+  // Scroll chaining stays on: once the subject is at its end, a wheel over it
+  // moves the page (#1132), so half the window is not a dead zone.
+  await subject.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const pageBefore = await page.evaluate(() => window.scrollY);
+  const over = (await subject.boundingBox())!;
+  await page.mouse.move(over.x + over.width / 2, over.y + over.height / 2);
+  await page.mouse.wheel(0, 300);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(pageBefore);
 }
 
 const photo = () =>

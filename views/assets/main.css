@@ -614,7 +614,6 @@ html {
     .page-shell[data-layout="split"] > .page-aside {
       max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
       overflow-y: auto;
-      overscroll-behavior: contain;
       padding-bottom: 0.25rem;
       margin-bottom: -0.25rem;
     }
