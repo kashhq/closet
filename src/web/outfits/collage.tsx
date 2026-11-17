@@ -23,7 +23,7 @@ import { isPieceToBuy } from './references';
  * (docs/plans/2026-09-26-redesign.md, sections 3 and 5): the gallery's
  * Ideas cards, the outfit page and Today (`card`), the Saved grid
  * (`tile`), the garment page's "In N outfits" (`thumb`), the calendar
- * (`cell`, `month`: a `thumb` with a desktop step), and an outfit's row beside its name (`row`:
+ * (`cell`, a `thumb` with a desktop step; `month`, a `thumb`), and an outfit's row beside its name (`row`:
  * the pickers' SavedOutfitButton and a trip's outfits, #360).
  */
 
@@ -131,9 +131,10 @@ export function bodyOf<G extends CollagePieceView>(
  * page's "In N outfits", about 96 px wide). `cell` and `month` are the
  * calendar's: `thumb` on a phone (a week row's 64 px, a month cell about
  * 48 px wide), `cell` with one desktop step at `lg` (#1064, the desktop
- * layout's §3.6): the week grid's card about 150 px tall, so a
- * three-occasion week fits the fold; `month` has none, so a desktop piece is
- * never smaller than the phone's. Density is the size's, never a page's class.
+ * layout's §3.6): the week grid's collage about 150 px tall; `month` has
+ * none, so a desktop piece is never smaller than the phone's: the month's
+ * density is its cell's (the collage beside the date, #1070,
+ * layout/calendar-grid.ts). Density is the size's, never a page's class.
  */
 const SIZES = {
   card: {

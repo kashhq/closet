@@ -183,6 +183,12 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
   await shot(page, '10-demo-calendar-planned', '/calendar?week=2026-09-27');
   // The calendar's month of collages (R6, #86): August's history.
   await shot(page, '70-demo-calendar-month', '/calendar/month?month=2026-08');
+  // The plan page (#1070): its head a band from lg, the saved outfits a grid.
+  await shot(
+    page,
+    '71b-demo-calendar-plan-page',
+    '/calendar/plan?for=day:2026-09-29&occasion=evening',
+  );
   // The planned week's "+ Plan" on Tuesday: its sheet, the three ways.
   // Opened by the day's button or, while the week template leaves it open
   // slots (from today on), the first of those.
@@ -270,8 +276,9 @@ test.describe('desktop', () => {
     await shot(page, '82b-demo-styling-shuffled-desktop');
   });
 
-  // Density (#1064): the galleries auto-fill from lg, and the calendar's
-  // collages take their desktop step, so a month fits the 900 px fold.
+  // Density (#1064): the galleries auto-fill from lg, the week's collages
+  // take their desktop step, a month cell sets its collage beside the date
+  // and the plan page's outfits fill a grid (#1070).
   test('demo: Theo, the grids and the calendar at 1440', async ({ page }) => {
     await signInAs(page, 'demo');
     await shot(page, '83-demo-wardrobe-desktop', '/wardrobe');
@@ -288,6 +295,11 @@ test.describe('desktop', () => {
       page,
       '89-demo-calendar-month-desktop',
       '/calendar/month?month=2026-08',
+    );
+    await shot(
+      page,
+      '89b-demo-calendar-plan-page-desktop',
+      '/calendar/plan?for=day:2026-09-29&occasion=evening',
     );
   });
 

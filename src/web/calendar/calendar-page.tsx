@@ -30,7 +30,7 @@ import { OccasionRow, OpenSlotRow } from './occasion-row';
 import { PlanSheet, planSheetOpener } from './plan-sheet';
 import { dayAnchor, weekUrl } from './urls';
 import { AwayLink } from '../trips/away-link';
-import { WEEK_COLUMNS, WEEK_STRIP } from '../layout/columns';
+import { WEEK_GRID, weekRow, weekRows } from '../layout/calendar-grid';
 
 /**
  * GET /calendar: the week as an agenda (R6; docs/plans/2026-09-26-redesign.md,
@@ -47,7 +47,8 @@ import { WEEK_COLUMNS, WEEK_STRIP } from '../layout/columns';
  * From lg (#467) the same markup is a grid, CSS alone (the page is a cached
  * tab root, the same bytes for every viewport): the days are columns and
  * the week's occasions (`weekOccasions`) rows lined up across them, each
- * day a subgrid of the week's rows (WEEK_ROWS, ROW_START below).
+ * day a subgrid of the week's rows: the grid's classes are the layout's
+ * (layout/calendar-grid.ts, WEEK_GRID), never this page's.
  */
 export function CalendarPage(props: {
   ctx: ViewContext;
@@ -106,9 +107,7 @@ export function CalendarPage(props: {
         </a>
       </nav>
       <WeekStrip view={view} />
-      <div
-        class={`${WEEK_COLUMNS} lg:mt-3 ${WEEK_ROWS[view.weekOccasions.length]}`}
-      >
+      <div class={weekRows(view.weekOccasions.length)}>
         {view.days.map((day) => (
           <DaySection
             ctx={ctx}
@@ -133,7 +132,7 @@ export function CalendarPage(props: {
  */
 function WeekStrip({ view }: { view: CalendarView }) {
   return (
-    <ol class={`${WEEK_STRIP} my-2 text-center select-none lg:hidden`}>
+    <ol class={`${WEEK_GRID.strip} my-2 text-center select-none`}>
       {view.days.map((day) => (
         <li>
           <a
@@ -161,42 +160,10 @@ function WeekStrip({ view }: { view: CalendarView }) {
 }
 
 /**
- * The desktop grid's rows (#467): the day's heading, one per week occasion,
- * its looks, then its "+ Plan". Indexed by the number of week occasions
- * (0 to all six); whole class names, so Tailwind finds them.
- */
-const WEEK_ROWS = [
-  'lg:grid-rows-[repeat(3,auto)]',
-  'lg:grid-rows-[repeat(4,auto)]',
-  'lg:grid-rows-[repeat(5,auto)]',
-  'lg:grid-rows-[repeat(6,auto)]',
-  'lg:grid-rows-[repeat(7,auto)]',
-  'lg:grid-rows-[repeat(8,auto)]',
-  'lg:grid-rows-[repeat(9,auto)]',
-] as const;
-
-/** The grid row a day's piece sits on from lg, 1-based (WEEK_ROWS' order). */
-const ROW_START = [
-  'lg:row-start-1',
-  'lg:row-start-2',
-  'lg:row-start-3',
-  'lg:row-start-4',
-  'lg:row-start-5',
-  'lg:row-start-6',
-  'lg:row-start-7',
-  'lg:row-start-8',
-  'lg:row-start-9',
-] as const;
-
-function rowStart(row: number): string {
-  return ROW_START[row - 1];
-}
-
-/**
  * One day: a block of the agenda on a phone, a column of the grid from lg.
  * Its pieces keep the phone's order (entries, then open slots, both in
  * occasion order; looks; "+ Plan") and are placed on the week's rows by
- * `lg:row-start-*`, so the phone's box tree is the one it always had: the
+ * `weekRow`, so the phone's box tree is the one it always had: the
  * cell wrappers are `contents` below lg. A week occasion the day has nothing
  * for is a desktop-only cell, from today on an opener of the day's sheet
  * with that occasion chosen (the phone keeps one way in per day). The
@@ -216,7 +183,7 @@ function DaySection({
   canDress: boolean;
 }) {
   const occasionRow = (occasion: Occasion) =>
-    rowStart(occasions.indexOf(occasion) + 2);
+    weekRow(occasions.indexOf(occasion) + 2);
   const filled = new Set<Occasion>([
     ...day.entries.map((entry) => entry.occasion),
     ...day.openSlots,
@@ -224,12 +191,12 @@ function DaySection({
   return (
     <section
       id={dayAnchor(day.date)}
-      class="scroll-mt-under-bar py-3 border-t border-base-300 lg:grid lg:grid-rows-subgrid lg:row-span-full lg:content-start lg:p-1 lg:border-t-0 lg:rounded-box lg:target:ring-2 lg:target:ring-primary"
+      class={`scroll-mt-under-bar py-3 border-t border-base-300 ${WEEK_GRID.day}`}
       data-day={day.date}
       aria-labelledby={`${dayAnchor(day.date)}-title`}
     >
       <div
-        class={`flex flex-wrap items-baseline gap-x-2 lg:flex-col lg:flex-nowrap lg:gap-0.5 lg:pb-1 lg:border-b lg:border-base-300 ${rowStart(1)}`}
+        class={`flex flex-wrap items-baseline gap-x-2 ${WEEK_GRID.head} ${weekRow(1)}`}
       >
         <DayHeading
           as="h2"
@@ -241,14 +208,14 @@ function DaySection({
         {day.away.map((trip) => (
           // In the heading's row, so the desktop grid needs no row of its
           // own; on a phone it wraps under the date.
-          <AwayLink trip={trip} class="basis-full lg:basis-auto" />
+          <AwayLink trip={trip} class={WEEK_GRID.away} />
         ))}
       </div>
       {OCCASIONS.filter((occasion) =>
         day.entries.some((entry) => entry.occasion === occasion),
       ).map((occasion) => (
         <div
-          class={`contents lg:flex lg:flex-col lg:gap-2 ${occasionRow(occasion)}`}
+          class={`${WEEK_GRID.cell} ${occasionRow(occasion)}`}
           data-cell={occasion}
         >
           {day.entries
@@ -264,7 +231,7 @@ function DaySection({
       ))}
       {day.openSlots.map((occasion) => (
         <div
-          class={`contents lg:flex lg:flex-col ${occasionRow(occasion)}`}
+          class={`${WEEK_GRID.cell} ${occasionRow(occasion)}`}
           data-cell={occasion}
         >
           <OpenSlotRow day={day.date} occasion={occasion} />
@@ -276,14 +243,14 @@ function DaySection({
           .filter((occasion) => !filled.has(occasion))
           .map((occasion) => (
             <div
-              class={`hidden lg:flex lg:flex-col ${occasionRow(occasion)}`}
+              class={`${WEEK_GRID.emptyCell} ${occasionRow(occasion)}`}
               data-cell={occasion}
             >
               <EmptyCellPlan day={day.date} occasion={occasion} />
             </div>
           ))}
       {day.looks.length > 0 && (
-        <DayLooks day={day} class={rowStart(occasions.length + 2)} />
+        <DayLooks day={day} class={weekRow(occasions.length + 2)} />
       )}
       {/* One way into the sheet per day: an open slot opens the same sheet
           (every occasion on it), so the day's own button would say it
@@ -291,7 +258,7 @@ function DaySection({
       {canDress && day.openSlots.length === 0 && (
         <button
           type="button"
-          class={`btn btn-ghost btn-sm mt-1 -ms-3 font-normal text-muted lg:ms-0 lg:justify-start ${rowStart(occasions.length + 3)}`}
+          class={`btn btn-ghost btn-sm mt-1 -ms-3 font-normal text-muted ${WEEK_GRID.dayAction} ${weekRow(occasions.length + 3)}`}
           {...planSheetOpener(day.date, DEFAULT_OCCASION)}
           data-day-plan={day.date}
         >

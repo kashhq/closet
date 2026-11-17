@@ -26,6 +26,13 @@
  *  - `CANDIDATE_GRID`: large product photos with their price and actions
  *    under them (the inbox's Ready to buy and own items): two on a phone,
  *    from `lg` `--tile-candidate`.
+ *  - `PICK_GRID`: a picker's saved outfits, each a button with its `row`
+ *    collage over the name (SavedOutfitPicker: the calendar's plan page, a
+ *    trip's add page): one column of rows on a phone, from `lg`
+ *    `--tile-pick`, wide enough for a seven-piece row at the phone's piece
+ *    size (four at 1440, in the plan page's wide column). Not `OUTFIT_GRID`:
+ *    its two phone columns would halve the rows a phone has always shown,
+ *    and a `row` collage in its 12rem tile scrolls by the fourth piece.
  *  - `CARD_GRID`: a list of cards (trips, capsules; adopted by D12/D13 with
  *    their pages' widths): one on a phone, from `lg` `--tile-card`.
  *
@@ -43,7 +50,15 @@
  *    actions line up at the foot. `MUSE_PIECES` is a card's four pieces.
  *  - `WEEK_DAYS`: the Calendar week's seven days, the phone's strip of
  *    letters (`WEEK_STRIP`) and the desktop grid's columns (`WEEK_COLUMNS`,
- *    #467; its rows are the page's `WEEK_ROWS`).
+ *    #467; its rows are `weekRows`, layout/calendar-grid.ts).
+ *  - `MONTH_DAY`: a month cell from `lg` (#1070): its date, weather chip,
+ *    worn dot and "+N" a narrow column beside the collage, which spans the
+ *    cell's rows (`MONTH_CELL`, layout/calendar-grid.ts); the last row takes
+ *    the slack so the column stays at the top. Column-major flow keeps the
+ *    pieces in column 1 on a day with no collage too (row-major put the
+ *    chip beside the date there); a flow, not a `col-start-1` on each, as
+ *    the chip's slot is replaced whole by its out-of-band swap. The phone
+ *    stacks them.
  *  - `FIELD_GRID`: form fields two to a row (a trip's dates, the repair's
  *    day and cost, body measurements, Styling's day and occasion);
  *    `DENSE_FIELD_GRID` the same with the row gap of a field that carries
@@ -64,6 +79,8 @@ export const IDEA_GRID =
   'lg:grid lg:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-idea),1fr))]';
 export const CANDIDATE_GRID =
   'grid grid-cols-2 items-start gap-x-3 gap-y-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-candidate),1fr))]';
+export const PICK_GRID =
+  'grid grid-cols-1 gap-2 lg:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-pick),1fr))]';
 export const CARD_GRID =
   'grid grid-cols-1 gap-4 lg:grid-cols-[repeat(auto-fill,minmax(var(--tile-card),1fr))]';
 
@@ -74,6 +91,8 @@ export const MUSE_GRID = 'grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2';
 export const MUSE_PIECES = 'grid grid-cols-4 gap-1.5';
 export const WEEK_STRIP = 'grid grid-cols-7 gap-1';
 export const WEEK_COLUMNS = 'lg:grid lg:grid-cols-7 lg:gap-2';
+export const MONTH_DAY =
+  'lg:grid lg:grid-flow-col lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[repeat(4,auto)_1fr]';
 export const FIELD_GRID = 'grid grid-cols-2 gap-3';
 export const DENSE_FIELD_GRID = 'grid grid-cols-2 gap-x-3 gap-y-1';
 export const BRAND_SIZE_FIELDS = 'grid grid-cols-[2fr_1fr] gap-2';

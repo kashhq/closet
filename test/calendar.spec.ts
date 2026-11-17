@@ -8,6 +8,7 @@ import {
 import { expectCollagePiecesInsidePlinths } from './support/collage-fit';
 import { E2E_PASSWORD, SAME_ORIGIN, signIn } from './support/e2e-session';
 import { householdToday } from './support/household-today';
+import { addDays } from '../src/calendar-date';
 import { pageErrors } from './support/page-errors';
 import { OUTFIT_PAGE_SIZE as PAGE_SIZE } from '../src/web/outfits/page-size';
 
@@ -107,6 +108,39 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await expectCollagePiecesInsidePlinths(page);
   await page.goto('/calendar/month?month=2030-10');
   await expectCollagePiecesInsidePlinths(page);
+
+  // #1070: from lg a month cell's date, chip, dot and "+N" are a column
+  // beside the collage; a forecast day with no outfit keeps its chip under
+  // the date, where a planned day has it, not in the collage's column.
+  const home = await page.request.post('/weather/home', {
+    form: { name: 'Brooklyn', latitude: '40.69', longitude: '-73.97' },
+    headers: SAME_ORIGIN,
+  });
+  expect(home.ok()).toBe(true);
+  const planned = addDays(householdToday(), 1);
+  const empty = addDays(planned, 1);
+  const plan = await page.request.post('/calendar', {
+    form: { date: planned, outfitId: `${layered}` },
+    headers: SAME_ORIGIN,
+  });
+  expect(plan.ok()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const chipPlace = async (day: string) => {
+    await page.goto(`/calendar/month?month=${day.slice(0, 7)}`);
+    const cell = page.locator(`[data-month-day="${day}"]`);
+    const chip = cell.locator(`[data-weather-day="${day}"]`);
+    await expect(chip).toBeVisible();
+    const date = (await cell.locator('span').first().boundingBox())!;
+    const box = (await chip.boundingBox())!;
+    // Centred under the date: the chip's width follows its temperature.
+    return {
+      below: box.y >= date.y + date.height - 1,
+      centred: Math.abs(box.x + box.width / 2 - (date.x + date.width / 2)) <= 1,
+    };
+  };
+  const underDate = { below: true, centred: true };
+  expect(await chipPlace(planned)).toEqual(underDate);
+  expect(await chipPlace(empty)).toEqual(underDate);
 
   // #822: an agent's entry wears its token's name as a badge, and a long
   // name stays inside the row at phone width.
