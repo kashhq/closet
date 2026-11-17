@@ -12,10 +12,8 @@ import type { IsoDate } from '../../calendar-date';
 import { occasionLabel } from '../date-labels';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
 import { DayHeading } from '../layout/day-heading';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import {
   type OfflineNotice,
@@ -89,59 +87,65 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
   const { ctx, model } = props;
   const { trip } = model;
   return (
-    <Layout ctx={ctx} title={trip.name}>
-      <AppBar
-        ctx={ctx}
-        title={trip.name}
-        back={TRIPS_PATH}
-        actions={
+    <PageShell
+      ctx={ctx}
+      name="trip"
+      bar={{
+        title: trip.name,
+        back: TRIPS_PATH,
+        actions: (
           <a href={tripUrl(trip.id, '/edit')} class="btn btn-ghost btn-sm">
             {t('trips.EDIT_SHORT')}
           </a>
-        }
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-6">
-        <div>
-          <p class="text-sm text-base-content/70">
-            {tripDates(trip)} · {phaseLabel(model.phase)}
-          </p>
-          {trip.destination && (
-            <p class="text-sm text-muted">{trip.destination}</p>
+        ),
+      }}
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {model.created && (
+            <SavedToast id="trip-created" text={t('trips.CREATED')} />
           )}
-        </div>
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t(NOTICE_TEXT[offlineNotice(queuedKinds(model))])}
+          {model.picked && (
+            <SavedToast id="trip-picked" text={t('trips.PICKED')} />
+          )}
+          {model.copied !== undefined && (
+            <SavedToast
+              id="trip-copied"
+              text={t('trips.COPIED', { count: model.copied })}
+            />
+          )}
+          <StripFlags names={FLAGS} />
+        </>
+      }
+    >
+      <div>
+        <p class="text-sm text-base-content/70">
+          {tripDates(trip)} · {phaseLabel(model.phase)}
         </p>
-        {ctx.weatherEnabled && <TripWeatherSection model={model} />}
-        <OutfitsSection model={model} />
-        <PackingSection model={model} />
-        <ExtrasSection model={model} />
-        {trip.notes && (
-          <section>
-            <h2 class="text-xs font-semibold uppercase tracking-wide text-muted mb-1">
-              {t('NOTES')}
-            </h2>
-            <p class="text-sm whitespace-pre-line">{trip.notes}</p>
-          </section>
+        {trip.destination && (
+          <p class="text-sm text-muted">{trip.destination}</p>
         )}
-      </main>
-      {model.created && (
-        <SavedToast id="trip-created" text={t('trips.CREATED')} />
+      </div>
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t(NOTICE_TEXT[offlineNotice(queuedKinds(model))])}
+      </p>
+      {ctx.weatherEnabled && <TripWeatherSection model={model} />}
+      <OutfitsSection model={model} />
+      <PackingSection model={model} />
+      <ExtrasSection model={model} />
+      {trip.notes && (
+        <section>
+          <h2 class="text-xs font-semibold uppercase tracking-wide text-muted mb-1">
+            {t('NOTES')}
+          </h2>
+          <p class="text-sm whitespace-pre-line">{trip.notes}</p>
+        </section>
       )}
-      {model.picked && <SavedToast id="trip-picked" text={t('trips.PICKED')} />}
-      {model.copied !== undefined && (
-        <SavedToast
-          id="trip-copied"
-          text={t('trips.COPIED', { count: model.copied })}
-        />
-      )}
-      <StripFlags names={FLAGS} />
-      <Dock ctx={ctx} />
-    </Layout>
+    </PageShell>
   );
 }
 

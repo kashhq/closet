@@ -3,9 +3,7 @@ import { tripPhase } from '../../wardrobe/packing';
 import { calendarTabs } from '../calendar/calendar-tabs';
 import type { IsoDate } from '../../calendar-date';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { phaseLabel, tripDates } from './labels';
@@ -30,66 +28,65 @@ export function TripsPage(props: {
 }) {
   const { ctx, trips, today } = props;
   return (
-    <Layout ctx={ctx} title={t('trips.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('CALENDAR')}
-        actions={
+    <PageShell
+      ctx={ctx}
+      name="trips"
+      title={t('trips.TITLE')}
+      bar={{
+        title: t('CALENDAR'),
+        actions: (
           <a href={`${TRIPS_PATH}/new`} class="btn btn-primary btn-sm">
             + {t('trips.NEW')}
           </a>
-        }
-        tabs={calendarTabs('trips')}
-      />
-      <main class="p-4 pt-under-bar pb-24 w-full max-w-lg mx-auto flex flex-col gap-3">
-        {trips.length === 0 ? (
-          <EmptyState message={t('trips.EMPTY')}>
-            <a href={`${TRIPS_PATH}/new`} class="btn btn-primary btn-sm">
-              {t('trips.NEW')}
-            </a>
-          </EmptyState>
-        ) : (
-          <ul class="flex flex-col gap-2" data-trips="">
-            {trips.map((trip) => {
-              const phase = tripPhase(trip, today);
-              return (
-                <li>
-                  <Card
-                    as="a"
-                    variant="content"
-                    class="hover:bg-base-200 transition-colors"
-                    bodyClass="p-4 gap-1"
-                    href={tripUrl(trip.id)}
-                    data-trip={trip.id}
-                  >
-                    <div class="flex items-start justify-between gap-2">
-                      <h2 class="font-semibold truncate">{trip.name}</h2>
-                      <span class={`badge badge-sm ${PHASE_BADGE[phase]}`}>
-                        {phaseLabel(phase)}
-                      </span>
-                    </div>
-                    <p class="text-sm text-base-content/70">
-                      {tripDates(trip)}
+        ),
+        tabs: calendarTabs('trips'),
+      }}
+      body={{ gap: 3 }}
+    >
+      {trips.length === 0 ? (
+        <EmptyState message={t('trips.EMPTY')}>
+          <a href={`${TRIPS_PATH}/new`} class="btn btn-primary btn-sm">
+            {t('trips.NEW')}
+          </a>
+        </EmptyState>
+      ) : (
+        <ul class="flex flex-col gap-2" data-trips="">
+          {trips.map((trip) => {
+            const phase = tripPhase(trip, today);
+            return (
+              <li>
+                <Card
+                  as="a"
+                  variant="content"
+                  class="hover:bg-base-200 transition-colors"
+                  bodyClass="p-4 gap-1"
+                  href={tripUrl(trip.id)}
+                  data-trip={trip.id}
+                >
+                  <div class="flex items-start justify-between gap-2">
+                    <h2 class="font-semibold truncate">{trip.name}</h2>
+                    <span class={`badge badge-sm ${PHASE_BADGE[phase]}`}>
+                      {phaseLabel(phase)}
+                    </span>
+                  </div>
+                  <p class="text-sm text-base-content/70">{tripDates(trip)}</p>
+                  {trip.destination && (
+                    <p class="text-sm text-muted truncate">
+                      {trip.destination}
                     </p>
-                    {trip.destination && (
-                      <p class="text-sm text-muted truncate">
-                        {trip.destination}
-                      </p>
-                    )}
-                    <p class="text-xs text-muted">
-                      {t('trips.COUNTS', {
-                        outfits: trip.outfits,
-                        extras: trip.extras,
-                      })}
-                    </p>
-                  </Card>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+                  )}
+                  <p class="text-xs text-muted">
+                    {t('trips.COUNTS', {
+                      outfits: trip.outfits,
+                      extras: trip.extras,
+                    })}
+                  </p>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </PageShell>
   );
 }

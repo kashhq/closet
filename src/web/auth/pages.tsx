@@ -2,9 +2,7 @@ import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import { todayIn } from '../../calendar-date';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { ProfileSection } from '../layout/parts';
 import { SettingsPage } from '../layout/settings-page';
 import { wardrobeExportPath } from '../page-cache';
@@ -339,97 +337,98 @@ function SettingsRow(props: {
 export function ProfilePage(props: ProfileProps) {
   const { ctx } = props;
   return (
-    <Layout ctx={ctx} title={t('PROFILE')}>
-      <AppBar ctx={ctx} title={t('PROFILE')} />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-4">
-        <ProfileNotices {...props} />
-        <AccountSection ctx={ctx} />
-        <Card
-          as="nav"
-          variant="content"
-          class="w-full"
-          aria-label={t('profile.SETTINGS')}
-        >
-          <ul class="card-body py-1 gap-0 divide-y divide-base-300">
+    <PageShell
+      ctx={ctx}
+      name="profile"
+      bar={{ title: t('PROFILE') }}
+      body={{ gap: 4 }}
+    >
+      <ProfileNotices {...props} />
+      <AccountSection ctx={ctx} />
+      <Card
+        as="nav"
+        variant="content"
+        class="w-full"
+        aria-label={t('profile.SETTINGS')}
+      >
+        <ul class="card-body py-1 gap-0 divide-y divide-base-300">
+          <SettingsRow
+            id={SHARING_SECTION_ID}
+            href={SHARING_PATH}
+            label={t('WARDROBE_SHARING')}
+            summary={sharingSummary(props.sharing)}
+          />
+          {/* Web Push needs the service worker, which only PWA_ENABLED serves. */}
+          {ctx.pwaEnabled && (
             <SettingsRow
-              id={SHARING_SECTION_ID}
-              href={SHARING_PATH}
-              label={t('WARDROBE_SHARING')}
-              summary={sharingSummary(props.sharing)}
+              id={PUSH_SETTINGS_ID}
+              href={PUSH_SETTINGS_PATH}
+              label={t('PUSH_HEADING')}
+              summary={t('profile.NOTIFICATIONS_SUMMARY')}
             />
-            {/* Web Push needs the service worker, which only PWA_ENABLED serves. */}
-            {ctx.pwaEnabled && (
-              <SettingsRow
-                id={PUSH_SETTINGS_ID}
-                href={PUSH_SETTINGS_PATH}
-                label={t('PUSH_HEADING')}
-                summary={t('profile.NOTIFICATIONS_SUMMARY')}
-              />
-            )}
-            {props.weather && (
-              <SettingsRow
-                id={WEATHER_SETTINGS_ID}
-                href={WEATHER_SETTINGS_PATH}
-                label={t('weather.SETTINGS_HEADING')}
-                summary={weatherSummary(props.weather)}
-              />
-            )}
+          )}
+          {props.weather && (
             <SettingsRow
-              id={WEEK_SETTINGS_ID}
-              href={WEEK_SETTINGS_PATH}
-              label={t('weekPlan.template.HEADING')}
-              summary={weekTemplateSummary(props.week)}
+              id={WEATHER_SETTINGS_ID}
+              href={WEATHER_SETTINGS_PATH}
+              label={t('weather.SETTINGS_HEADING')}
+              summary={weatherSummary(props.weather)}
             />
+          )}
+          <SettingsRow
+            id={WEEK_SETTINGS_ID}
+            href={WEEK_SETTINGS_PATH}
+            label={t('weekPlan.template.HEADING')}
+            summary={weekTemplateSummary(props.week)}
+          />
+          <SettingsRow
+            id={STYLE_SECTION_ID}
+            href={STYLE_PROFILE_PATH}
+            label={t('style.TITLE')}
+            summary={t('profile.STYLE_HINT')}
+          />
+          <SettingsRow
+            id={SIZES_SECTION_ID}
+            href={SIZES_PATH}
+            label={t('sizes.TITLE')}
+            summary={t('profile.SIZES_SUMMARY')}
+          />
+          <SettingsRow
+            id={AGENT_ACCESS_SECTION_ID}
+            href={TOKENS_PATH}
+            label={t('agentAccess.TITLE')}
+            summary={
+              props.tokens.length === 0
+                ? t('agentAccess.NONE')
+                : t('agentAccess.SUMMARY', { count: props.tokens.length })
+            }
+          />
+          {/* Only while there is one: nothing on the web mints a device token. */}
+          {props.devices.length > 0 && (
             <SettingsRow
-              id={STYLE_SECTION_ID}
-              href={STYLE_PROFILE_PATH}
-              label={t('style.TITLE')}
-              summary={t('profile.STYLE_HINT')}
+              id={DEVICES_SECTION_ID}
+              href={DEVICES_PATH}
+              label={t('devices.TITLE')}
+              summary={t('devices.SUMMARY', { count: props.devices.length })}
             />
-            <SettingsRow
-              id={SIZES_SECTION_ID}
-              href={SIZES_PATH}
-              label={t('sizes.TITLE')}
-              summary={t('profile.SIZES_SUMMARY')}
-            />
-            <SettingsRow
-              id={AGENT_ACCESS_SECTION_ID}
-              href={TOKENS_PATH}
-              label={t('agentAccess.TITLE')}
-              summary={
-                props.tokens.length === 0
-                  ? t('agentAccess.NONE')
-                  : t('agentAccess.SUMMARY', { count: props.tokens.length })
-              }
-            />
-            {/* Only while there is one: nothing on the web mints a device token. */}
-            {props.devices.length > 0 && (
-              <SettingsRow
-                id={DEVICES_SECTION_ID}
-                href={DEVICES_PATH}
-                label={t('devices.TITLE')}
-                summary={t('devices.SUMMARY', { count: props.devices.length })}
-              />
-            )}
-          </ul>
-        </Card>
-        <ExportSection />
-        <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
-          <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>
-          <SignOutForm />
-          <p class="text-sm text-muted">
-            {t('profile.SIGN_OUT_EVERYWHERE_LINK_HINT')}
-          </p>
-          <a href={SIGN_OUT_EVERYWHERE_PATH} class="btn btn-sm self-start">
-            {t(SIGN_OUT_EVERYWHERE_KEY)}
-          </a>
-        </ProfileSection>
-        <a href="/about" class="link link-hover text-sm self-center">
-          {t('ABOUT_TITLE')}
+          )}
+        </ul>
+      </Card>
+      <ExportSection />
+      <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
+        <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>
+        <SignOutForm />
+        <p class="text-sm text-muted">
+          {t('profile.SIGN_OUT_EVERYWHERE_LINK_HINT')}
+        </p>
+        <a href={SIGN_OUT_EVERYWHERE_PATH} class="btn btn-sm self-start">
+          {t(SIGN_OUT_EVERYWHERE_KEY)}
         </a>
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      </ProfileSection>
+      <a href="/about" class="link link-hover text-sm self-center">
+        {t('ABOUT_TITLE')}
+      </a>
+    </PageShell>
   );
 }
 

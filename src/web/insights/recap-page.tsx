@@ -6,9 +6,7 @@ import { dateLabel, shortDayLabel, weekRangeLabel } from '../date-labels';
 import { CALENDAR_PATH } from '../calendar/urls';
 import { jsonForScript } from '../html';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, GarmentThumb } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { priceLabel } from '../wardrobe/garment';
@@ -44,26 +42,20 @@ const IMAGE_MOST_WORN = 3;
 export function RecapPage(props: { ctx: ViewContext; model: RecapPageModel }) {
   const { ctx, model } = props;
   const { recap } = model;
-  const { period } = recap;
   return (
-    <Layout ctx={ctx} title={t('recap.TITLE')}>
-      <AppBar ctx={ctx} title={t('recap.TITLE')} back="/wardrobe" />
-      <main
-        class="p-4 pt-20 pb-24 w-full sm:max-w-lg sm:mx-auto flex flex-col gap-4"
-        id="recap"
-        data-year={period.year}
-        data-from={period.from}
-        data-to={period.to}
-      >
-        <YearNav model={model} />
-        {recap.enough ? (
-          <Figures model={model} appName={ctx.appName} />
-        ) : (
-          <Empty recap={recap} />
-        )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="recap"
+      bar={{ title: t('recap.TITLE'), back: '/wardrobe' }}
+      body={{ gap: 4 }}
+    >
+      <YearNav model={model} />
+      {recap.enough ? (
+        <Figures model={model} appName={ctx.appName} />
+      ) : (
+        <Empty recap={recap} />
+      )}
+    </PageShell>
   );
 }
 
@@ -98,7 +90,13 @@ function YearNav({ model }: { model: RecapPageModel }) {
       )}
       <div class="text-center">
         <h2 class="text-xl font-semibold">{yearTitle(recap)}</h2>
-        <p class="text-xs text-muted" id="recap-range">
+        <p
+          class="text-xs text-muted"
+          id="recap-range"
+          data-year={year}
+          data-from={recap.period.from}
+          data-to={recap.period.to}
+        >
           {/* The week's heading formats any span of days: "Jan 1 – Sep 27, 2026". */}
           {weekRangeLabel(recap.period.from, recap.period.to)}
         </p>

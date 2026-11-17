@@ -8,9 +8,7 @@ import { Card } from '../card';
 import { AutosaveForm } from '../autosave';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, HangerIcon } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
@@ -46,17 +44,13 @@ export interface TagCardModel {
 export function TagPage(props: { ctx: ViewContext; model: TagCardModel }) {
   const { ctx, model } = props;
   return (
-    <Layout ctx={ctx} title={t('TAG_GARMENTS')}>
-      <AppBar
-        ctx={ctx}
-        title={t('TAG_GARMENTS')}
-        back={wardrobeUrl(model.viewOwner)}
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        <TagCard model={model} />
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="tag"
+      bar={{ title: t('TAG_GARMENTS'), back: wardrobeUrl(model.viewOwner) }}
+    >
+      <TagCard model={model} />
+    </PageShell>
   );
 }
 

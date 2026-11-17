@@ -5,7 +5,7 @@ import { expect } from './support/fixtures';
 import sharp from 'sharp';
 import { addDays } from '../src/calendar-date';
 import { test } from './support/cutout-hold';
-import { signUpHeaders } from './support/e2e-session';
+import { SAME_ORIGIN, signUpHeaders } from './support/e2e-session';
 import { openGarmentMenu, openPhotoSheet } from './support/garment-page';
 import { householdToday } from './support/household-today';
 import { fakeSubscription, stubPushManager } from './support/push-stub';
@@ -366,6 +366,108 @@ test.describe('sheets', () => {
 
     test('demo: Theo, every sheet at 1440', async ({ page }) => {
       await sheetShots(page, '-desktop');
+    });
+  });
+});
+
+/**
+ * The pages D2 (#1060) put on `PageShell`, plus the capsule page and a
+ * selfie's dialog (their frames moved in #1096 and #1106), at the current
+ * viewport: `make screenshots` runs it at 390 and at 1440, so a change to
+ * the frame shows against `main` on a phone and at a desktop's width.
+ * `suffix` names the viewport. Theo's data is as the seed left it (before
+ * the tests that re-seed him); the tagging page needs untagged garments,
+ * which are Dana's.
+ */
+async function framedPageShots(page: Page, suffix: string): Promise<void> {
+  const name = (slug: string) => `91-framed-${slug}${suffix}`;
+  await signInAs(page, 'demo');
+  await shot(page, name('profile'), '/auth/profile');
+  await shot(page, name('style'), '/auth/profile/style');
+  await shot(page, name('sizes'), '/auth/profile/sizes');
+  await shot(page, name('tokens'), '/auth/tokens');
+  await shot(page, name('link-import'), '/wardrobe/new/from-link');
+  await shot(page, name('plan'), `/calendar/plan?for=day:${ANCHOR}`);
+  await shot(page, name('recap'), `/wardrobe/recap?year=${ANCHOR.slice(0, 4)}`);
+  await page.goto('/outfits');
+  await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+  await shot(page, name('outfit'));
+  const outfitPath = new URL(page.url()).pathname;
+  const hx = { ...SAME_ORIGIN, 'hx-request': 'true' };
+  await page.request.post(`${outfitPath}/share`, { headers: hx });
+  await page.goto(outfitPath);
+  const shareLink = new URL(
+    await page.locator('[data-public-share] input').inputValue(),
+  );
+  const invite = await page.request.post('/wardrobe-share/create-invite-link', {
+    form: { permission: 'VIEW' },
+    headers: hx,
+  });
+  const invitePath = /\/wardrobe-share\/invite\/[0-9a-f-]{36}/.exec(
+    await invite.text(),
+  )?.[0];
+  expect(invitePath).toBeDefined();
+  await page.goto('/trips');
+  await page.getByRole('link', { name: /Austin conference/ }).click();
+  await expect(page.locator('#trip-packed-summary')).toBeVisible();
+  await shot(page, name('trip'));
+  await page.locator('[data-add-outfit]').first().click();
+  await expect(
+    page.getByRole('heading', { name: 'Add an outfit' }),
+  ).toBeVisible();
+  await shot(page, name('trip-add-outfit'));
+  await page.goto('/capsules');
+  await page.getByRole('link', { name: /^Weekend/ }).click();
+  await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
+  await shot(page, name('capsule'));
+  await openSelfie(page);
+  await page.screenshot({
+    path: `${DIR}/${name('selfie-dialog')}.png`,
+    animations: 'disabled',
+  });
+  await shot(page, name('trips'), '/trips');
+  await shot(page, name('laundry'), '/laundry');
+  await shot(page, name('about'), '/about');
+  await shot(page, name('offline'), '/offline.html');
+  await shot(page, name('invite-signed-in'), invitePath);
+  await page.context().clearCookies();
+  await shot(page, name('login'), '/auth/login');
+  await shot(page, name('register'), '/auth/register');
+  await shot(page, name('invite'), invitePath);
+  await shot(page, name('offline-signed-out'), '/offline.html');
+  await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
+  await signInAs(page, 'demo');
+  await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
+  await signInAs(page, 'sparse');
+  await shot(page, name('tag'), '/wardrobe/tag');
+}
+
+/** The latest week with a selfie, its first one open in its dialog. */
+async function openSelfie(page: Page): Promise<void> {
+  for (const start of [
+    '2026-09-20',
+    '2026-09-13',
+    '2026-09-06',
+    '2026-08-30',
+  ]) {
+    await page.goto(`/calendar?week=${start}`);
+    if ((await page.locator('button[data-selfie]').count()) > 0) break;
+  }
+  await page.locator('button[data-selfie]').first().click();
+  await expect(page.locator('dialog[open] img')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('framed pages', () => {
+  test('demo: Theo, the framed pages at 390', async ({ page }) => {
+    await framedPageShots(page, '');
+  });
+
+  test.describe('desktop', () => {
+    test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+    test('demo: Theo, the framed pages at 1440', async ({ page }) => {
+      await framedPageShots(page, '-desktop');
     });
   });
 });

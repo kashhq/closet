@@ -71,15 +71,22 @@ function importMap(version: string) {
   };
 }
 
-export interface LayoutProps {
+/**
+ * A page's own link preview: the og tags (the share page's garment, a public
+ * entry page's description). Each falls back to the app's, or the request's
+ * URL and the app icon. `PageShell`'s `meta`.
+ */
+export interface PageMeta {
+  ogTitle?: string;
+  ogDescription?: string;
+  ogUrl?: string;
+  ogImage?: string;
+}
+
+export interface LayoutProps extends PageMeta {
   ctx: ViewContext;
   /** <title>; the app name when absent. */
   title?: string;
-  ogTitle?: string;
-  ogDescription?: string;
-  /** The page's own link preview (the share page); the request URL and app icon otherwise. */
-  ogUrl?: string;
-  ogImage?: string;
   children?: Child;
 }
 
