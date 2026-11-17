@@ -34,10 +34,13 @@ NOT_VARIANTS = frozenset({
     "generate",
 })
 SAFE_PREFIXES = ("group-", "peer-", "has-", "data-", "aria-", "motion-", "max-", "@")  # @ = container query
-ELEMENT = r"(?:@?[\w.-]+(?:-?\[[^\]\s]*\])?(?:/[\w-]+)?|\[[^\]\s]*\])"
+BRACKET = r"\[(?:[^\[\]\s]|\[[^\[\]\s]*\])*\]"  # one level of nesting: group-has-[[name=a]:checked]
+ELEMENT = rf"(?:@?[\w.-]+(?:-?{BRACKET})?(?:/[\w-]+)?|{BRACKET})"
 # A chain of variants ending in a utility (not `key: value`, `https://`, `a ? b : c`).
 CHAIN = re.compile(rf"(?<![\w@/\[\]:.-])(?P<chain>(?:{ELEMENT}:)+)(?=[\w!\[@-])")
 MIN_ARBITRARY = re.compile(r"min-\[(?P<value>[^\]]*)\]")
+# Width-independent states: the only variants `not-` may negate (negating a width form flips it).
+WIDTH_FORMS = frozenset({"sm", "md", "min-sm", "min-md"})
 LENGTH = re.compile(r"(?P<n>\d*\.?\d+)(?P<unit>rem|em|px)")
 LG_PX = 64 * 16
 
@@ -49,13 +52,24 @@ def provably_below_lg(value: str) -> bool:
     return float(m["n"]) * (1 if m["unit"] == "px" else 16) < LG_PX
 
 
+def is_state(variant: str) -> bool:
+    """A variant that never depends on the viewport width (what `not-` may negate)."""
+    if variant.startswith("["):
+        return "@" not in variant  # an & / attribute / pseudo-class selector; @media and @supports count
+    return (variant in SAFE_VARIANTS and variant not in WIDTH_FORMS) or variant.startswith(
+        ("group-", "peer-", "has-", "data-", "aria-", "motion-")
+    )
+
+
 def is_safe(variant: str) -> bool:
     m = MIN_ARBITRARY.fullmatch(variant)
     if m is not None:
         return provably_below_lg(m["value"])
     if variant.isdigit() or "[" not in variant and not variant.islower():
         return True
-    return variant in SAFE_VARIANTS or variant.startswith(SAFE_PREFIXES)
+    if variant.startswith("not-"):
+        return is_state(variant.removeprefix("not-"))
+    return variant in SAFE_VARIANTS or variant.startswith(SAFE_PREFIXES) or is_state(variant)
 
 
 def count_lg(text: str) -> int:

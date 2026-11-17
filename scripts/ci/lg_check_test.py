@@ -18,7 +18,8 @@ class CountLg(unittest.TestCase):
                     "hover:lg:flex", "md:hover:min-[1024px]:flex", "min-[64rem]:flex", "min-[1024px]:flex",
                     "min-[80rem]:flex", "min-[64em]:flex", "min-[calc(100vw)]:flex", "min-[64vw]:flex",
                     "min-[1200px]:flex", "min-[64.5rem]:flex", "not-max-lg:flex", "not-max-[1100px]:flex",
-                    "[@media(min-width:64rem)]:flex", "[&>*]:flex", "xxl:flex", "flex-lg:x", "hover:focus:lg:flex"):
+                    "[@media(min-width:64rem)]:flex", "[@supports(display:grid)]:flex", "not-lg:flex", "not-md:flex",
+                    "not-min-[40rem]:flex", "not-[@media(min-width:64rem)]:flex", "xxl:flex", "flex-lg:x", "hover:focus:lg:flex"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 1)
 
@@ -28,7 +29,8 @@ class CountLg(unittest.TestCase):
                     "motion-reduce:flex", "max-lg:flex", "max-xl:flex", "max-[1100px]:flex", "md:max-lg:flex",
                     "min-[48rem]:flex", "min-[40rem]:flex", "min-[40em]:flex", "min-[1023px]:flex",
                     "min-[63.9rem]:flex", "@lg:flex", "@xl:flex", "@min-lg:flex", "@lg/card:flex",
-                    "@max-lg:flex", "key: value", "https://x.y"):
+                    "@max-lg:flex", "not-checked:flex", "not-hover:flex", "not-data-[open]:flex", "[&>:first-child]:flex",
+                    "[&>*]:flex", "group-has-[[name=a][value=b]:checked]/rule:flex", "key: value", "https://x.y"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 0)
 
