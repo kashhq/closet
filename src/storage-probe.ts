@@ -178,42 +178,43 @@ export async function probeWritable(
 }
 
 export interface StorageFailure {
-  directory: string;
+  key: StorageDirectory['key'];
   code: string;
 }
 
 /**
  * What the operator does about each kind of failed probe, keyed by its code
- * (the table is the one place a new code gets its words). The directories
- * are named as the container sees them, since only the host knows what is
- * mounted there; the chown carries this process's own uid:gid, never a
+ * (the table is the one place a new code gets its words). The directory is
+ * named by its config key, never its path: the phrase is /health/ready's
+ * public `fix` (#1090), and docs/operations.md#permissions maps the key to
+ * the host directory. The chown carries this process's own uid:gid, never a
  * hardcoded one.
  */
 const FIXES: readonly {
   codes: readonly string[];
-  say: (where: string) => string;
+  say: (keys: string) => string;
 }[] = [
   {
     codes: ['EACCES', 'EPERM'],
-    say: (where) =>
-      `chown -R ${processOwner()} the host directory mounted at ${where}; docs/operations.md#permissions`,
+    say: (keys) =>
+      `chown -R ${processOwner()} the host directory mounted at ${keys}; docs/operations.md#permissions`,
   },
   {
     codes: ['ENOSPC', 'EDQUOT'],
-    say: (where) => `the share mounted at ${where} is full`,
+    say: (keys) => `the share mounted at ${keys} is full`,
   },
   {
     codes: ['TIMEOUT'],
-    say: (where) =>
-      `the share mounted at ${where} is not answering (NFS stalled?)`,
+    say: (keys) =>
+      `the share mounted at ${keys} is not answering (NFS stalled?)`,
   },
 ];
 
 /** Used for a code no row claims (EROFS, EIO, ENOTDIR, ...). */
-const GENERIC_FIX = (where: string): string =>
-  `${where} cannot be written; docs/operations.md#permissions`;
+const GENERIC_FIX = (keys: string): string =>
+  `${keys} cannot be written; docs/operations.md#permissions`;
 
-/** The fix for each distinct kind of failure, joined; never the path value of an error. */
+/** The fix for each distinct kind of failure, joined; names config keys, never a path. */
 export function storageFix(failures: readonly StorageFailure[]): string {
   const claimed = new Set(FIXES.flatMap((row) => row.codes));
   const groups = [
@@ -228,9 +229,7 @@ export function storageFix(failures: readonly StorageFailure[]): string {
   ];
   return groups
     .filter((group) => group.failures.length > 0)
-    .map((group) =>
-      group.say(group.failures.map((f) => f.directory).join(' and ')),
-    )
+    .map((group) => group.say(group.failures.map((f) => f.key).join(' and ')))
     .join('; ');
 }
 

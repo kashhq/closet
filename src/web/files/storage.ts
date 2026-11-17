@@ -35,6 +35,24 @@ const TRASH_DAY = /^\d{4}-\d{2}-\d{2}$/;
  */
 export const STORAGE_MARKER = '.closet-storage';
 
+/**
+ * A withdrawn marker is kept, never deleted, as
+ * `.closet-storage.orphan-<id>-<random>` (#1049): a claim that lost its
+ * pairing may have been the real share's, and
+ * `--repair-storage-identity --orphan <id>` puts it back. The only name a
+ * withdrawal ever gives a marker, so a crash anywhere in it leaves the
+ * marker or an orphan, both of which boot and repair read; an orphan is
+ * judged by its content, the name is a hint. list() skips every name
+ * starting with STORAGE_MARKER.
+ */
+const ORPHAN_PREFIX = `${STORAGE_MARKER}.orphan-`;
+
+/** An orphaned marker and the file it is in (orphanedMarkers). */
+export interface OrphanedMarker {
+  name: string;
+  marker: StorageMarker;
+}
+
 export interface StorageMarker {
   /** A random UUID, stable for the life of the storage. */
   installId: string;
@@ -79,6 +97,8 @@ export interface StorageFs {
   writeNew(file: string, text: string): Promise<void>;
   /** A hard link: fails with EEXIST when `to` exists, so never replaces it. */
   link(from: string, to: string): Promise<void>;
+  /** Atomic within the directory; replaces `to`. */
+  rename(from: string, to: string): Promise<void>;
   remove(file: string): Promise<void>;
 }
 
@@ -86,6 +106,7 @@ const NODE_STORAGE_FS: StorageFs = {
   readText: (file) => fs.promises.readFile(file, 'utf8'),
   writeNew: (file, text) => fs.promises.writeFile(file, text, { flag: 'wx' }),
   link: (from, to) => fs.promises.link(from, to),
+  rename: (from, to) => fs.promises.rename(from, to),
   remove: (file) => fs.promises.rm(file, { force: true }),
 };
 
@@ -175,10 +196,14 @@ export class PhotoStorage {
    * The marker on disk. Any read error but ENOENT is `unreadable` with its
    * code, and so is content that is not a marker (MALFORMED).
    */
-  async readMarker(): Promise<MarkerRead> {
+  readMarker(): Promise<MarkerRead> {
+    return this.readMarkerAt(STORAGE_MARKER);
+  }
+
+  private async readMarkerAt(name: string): Promise<MarkerRead> {
     let text: string;
     try {
-      text = await this.storageFs.readText(this.pathOf(STORAGE_MARKER));
+      text = await this.storageFs.readText(this.pathOf(name));
     } catch (error) {
       const code = String((error as NodeJS.ErrnoException).code);
       if (code === 'ENOENT') return { state: 'absent' };
@@ -235,18 +260,94 @@ export class PhotoStorage {
   }
 
   /**
-   * Removes the marker only while it is `marker` (same id, same timestamp):
-   * claimStorage's own, written by a claim whose pairing then lost to
-   * another install's. Answers whether it did; another's is never removed.
+   * Moves the marker aside as an orphan only while it is `marker` (same id,
+   * same timestamp): claimStorage's own, written by a claim whose pairing
+   * lost to another install's. Answers whether it did.
+   *
+   * Atomic against a second withdrawer (#1049): one rename takes the marker
+   * straight to its orphan name, a name of this call's own (the random part:
+   * a rename replaces, and another withdrawal of the same id may have left
+   * one), and only then is it read, so what is judged is exactly what was
+   * taken. A read-then-remove let one healer delete the marker another had
+   * just linked. What was taken and is not `marker` is linked back (never
+   * over a marker linked meanwhile: then it stays an orphan). Every name
+   * on the way is the marker's or an orphan's (ORPHAN_PREFIX).
+   * `marker.installId` is always an id a claim minted (randomUUID or a
+   * storage_claim row), so it is a safe name.
    */
   async withdrawMarker(marker: StorageMarker): Promise<boolean> {
-    const read = await this.readMarker();
-    const ours =
-      read.state === 'present' &&
-      read.marker.installId === marker.installId &&
-      read.marker.createdAt === marker.createdAt;
-    if (ours) await this.storageFs.remove(this.pathOf(STORAGE_MARKER));
-    return ours;
+    const orphan = `${ORPHAN_PREFIX}${marker.installId}-${randomUUID()}`;
+    try {
+      await this.storageFs.rename(
+        this.pathOf(STORAGE_MARKER),
+        this.pathOf(orphan),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+    const taken = await this.readMarkerAt(orphan);
+    if (
+      taken.state === 'present' &&
+      taken.marker.installId === marker.installId &&
+      taken.marker.createdAt === marker.createdAt
+    ) {
+      this.logger.warn(
+        `${STORAGE_MARKER} of install ${marker.installId} moved aside as ${orphan}`,
+      );
+      return true;
+    }
+    try {
+      await this.storageFs.link(
+        this.pathOf(orphan),
+        this.pathOf(STORAGE_MARKER),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      this.logger.warn(
+        `${STORAGE_MARKER} taken by a withdrawal was replaced meanwhile; kept as ${orphan}`,
+      );
+      return false;
+    }
+    // Back in place; this name is only a second link to it now.
+    await this.storageFs.remove(this.pathOf(orphan));
+    return false;
+  }
+
+  /** The markers withdrawn as orphans (withdrawMarker), for the repair command to offer. */
+  async orphanedMarkers(): Promise<OrphanedMarker[]> {
+    const names = (await fs.promises.readdir(this.directory)).filter((name) =>
+      name.startsWith(ORPHAN_PREFIX),
+    );
+    const orphans: OrphanedMarker[] = [];
+    for (const name of names) {
+      const read = await this.readMarkerAt(name);
+      if (read.state === 'present') orphans.push({ name, marker: read.marker });
+    }
+    return orphans;
+  }
+
+  /**
+   * Puts an orphaned marker back as the marker, linked, so never over one
+   * present. Answers whether it did: false when no orphan carries
+   * `installId` or a marker is there already.
+   */
+  async restoreOrphan(installId: string): Promise<boolean> {
+    const orphan = (await this.orphanedMarkers()).find(
+      ({ marker }) => marker.installId === installId,
+    );
+    if (!orphan) return false;
+    try {
+      await this.storageFs.link(
+        this.pathOf(orphan.name),
+        this.pathOf(STORAGE_MARKER),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+      throw error;
+    }
+    await this.storageFs.remove(this.pathOf(orphan.name));
+    return true;
   }
 
   /**
@@ -341,13 +442,14 @@ export class PhotoStorage {
     });
   }
 
-  /** Every file in the directory but the marker; the caller filters. */
+  /** Every file in the directory but the markers; the caller filters. */
   async *list(): AsyncIterable<StoredObject> {
     const entries = await fs.promises.readdir(this.directory, {
       withFileTypes: true,
     });
     for (const entry of entries) {
-      if (!entry.isFile() || entry.name === STORAGE_MARKER) continue;
+      // The marker, its orphans and a withdrawal in flight.
+      if (!entry.isFile() || entry.name.startsWith(STORAGE_MARKER)) continue;
       const stat = await fs.promises
         .stat(this.pathOf(entry.name))
         .catch((error: unknown) => {

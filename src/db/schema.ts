@@ -412,6 +412,22 @@ export const install = pgTable(
   (table) => [check('install_singleton_check', sql`${table.singleton}`)],
 );
 
+// Every install id a claim of an unpaired database put in a marker, recorded
+// before the marker is written (markThenPair, storage-identity.ts, #1049). A
+// claim that loses the pairing race withdraws its marker; one that crashes
+// first leaves a marker whose id only this table knows, which the next boot
+// heals as its own orphan, where a marker no row records stays another
+// install's (#833). The id that is paired leaves it in the pairing's
+// transaction (pairInstallOnce, repairInstallId): an id once paired and then
+// re-paired away is another install's, never an orphan. Holds only first
+// boots' losing claims. Not synced.
+export const storageClaim = pgTable('storage_claim', {
+  installId: uuid('install_id').primaryKey(),
+  claimedAt: timestamp('claimed_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // Which history of this database the changes feed's cursors belong to
 // (#652): every cursor carries the epoch it was answered under, and one
 // presented under another is expired. A restore brings back the epoch of

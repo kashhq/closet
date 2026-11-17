@@ -33,9 +33,10 @@ npm run maintenance:reconcile [-- --dry-run] [--force]
                               # docker exec closet npm run maintenance:reconcile. Exits 3 when the
                               # guard refused; --force deletes anyway (dry-run first). Like set-password it
                               # never migrates: a database behind the build is refused (start the server first)
-npm run maintenance:reconcile -- --repair-storage-identity --confirm
+npm run maintenance:reconcile -- --repair-storage-identity --confirm [--orphan <install id>]
                               # pairs `install` with DATA_PATH's marker (#833; docs/operations.md#photo-storage-
-                              # marker); 2 without --confirm, 3 no readable marker (never writes one)
+                              # marker); 2 without --confirm, 3 no readable marker (never writes one; lists
+                              # the `.closet-storage.orphan-*` markers, which --orphan puts back first, #1049)
 npm run maintenance:reconcile -- --restore-from-trash <uuid>.webp | <day>/<entry>
                               # moves one quarantined set back into DATA_PATH (Gotchas: the quarantine);
                               # exits 3 refused (no match, several, or a live set of that name)

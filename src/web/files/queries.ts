@@ -7,7 +7,14 @@ import {
 } from '../../cutout/state';
 import type { Db, Queryable } from '../../db/client';
 import { ownersLockCte } from '../../db/owner-lock';
-import { file, garment, install, outfit, outfitSlot } from '../../db/schema';
+import {
+  file,
+  garment,
+  install,
+  outfit,
+  outfitSlot,
+  storageClaim,
+} from '../../db/schema';
 import { currentRequest } from '../../request-context';
 import { unkeyedPhoto } from './image-variant';
 import type {
@@ -272,17 +279,58 @@ export async function pairedInstallId(
 /**
  * Pairs the database with an install id, once, and answers the id it is
  * paired with now: a row already there (another process's claim racing
- * this one) is kept, and its id is the answer.
+ * this one) is kept, and its id is the answer. The paired id stops being a
+ * claim in the same transaction (forgetClaim).
  */
 export async function pairInstallOnce(
   q: Queryable,
   installId: string,
 ): Promise<string> {
-  await q.insert(install).values({ installId }).onConflictDoNothing();
-  const paired = await pairedInstallId(q);
-  // Only a delete between the two statements; nothing deletes the row.
-  if (paired === undefined) throw new Error('The install row vanished');
-  return paired;
+  return q.transaction(async (tx) => {
+    await tx.insert(install).values({ installId }).onConflictDoNothing();
+    const paired = await pairedInstallId(tx);
+    // Only a delete between the two statements; nothing deletes the row.
+    if (paired === undefined) throw new Error('The install row vanished');
+    await forgetClaim(tx, paired);
+    return paired;
+  });
+}
+
+/**
+ * Records an install id a claim is about to put in a marker beside an
+ * unpaired database, before it writes it (markThenPair, #1049).
+ */
+export async function recordStorageClaim(
+  q: Queryable,
+  installId: string,
+): Promise<void> {
+  await q.insert(storageClaim).values({ installId }).onConflictDoNothing();
+}
+
+/**
+ * An id once paired is never an orphan: re-paired away later (a restore onto
+ * new storage), its share is another install's, which claimStorage must
+ * refuse, never withdraw. So pairing forgets it, atomically with the pairing.
+ */
+async function forgetClaim(q: Queryable, installId: string): Promise<void> {
+  await q.delete(storageClaim).where(eq(storageClaim.installId, installId));
+}
+
+/**
+ * Whether a claim of this database wrote a marker with this id and it was
+ * never paired (recordStorageClaim, forgetClaim): a lost race's own marker.
+ */
+export async function isStorageClaim(
+  q: Queryable,
+  installId: string,
+): Promise<boolean> {
+  const [row] = await q
+    .select({ installId: storageClaim.installId })
+    .from(storageClaim)
+    // As text: a marker's id is read from disk and may be no uuid at all,
+    // which a uuid parameter would refuse with an error, not a miss.
+    .where(sql`${storageClaim.installId}::text = ${installId}`);
+  return row !== undefined;
 }
 
 /** Re-pairs the database with the marker an operator vouched for (repairStorageIdentity). */
@@ -290,13 +338,16 @@ export async function repairInstallId(
   q: Queryable,
   installId: string,
 ): Promise<void> {
-  await q
-    .insert(install)
-    .values({ installId })
-    .onConflictDoUpdate({
-      target: install.singleton,
-      set: { installId, pairedAt: sql`now()` },
-    });
+  await q.transaction(async (tx) => {
+    await tx
+      .insert(install)
+      .values({ installId })
+      .onConflictDoUpdate({
+        target: install.singleton,
+        set: { installId, pairedAt: sql`now()` },
+      });
+    await forgetClaim(tx, installId);
+  });
 }
 
 export async function photoRowExists(
