@@ -18,5 +18,6 @@
 
 ## Gotchas
 
+- **The week opens at the top; nothing scrolls it to today** (#1087): no `:target` on `/calendar?week=`, no `scrollIntoView`, no htmx `show:`. A day is reached by its `#day-D` link only. Its late layout is the weather line (a 20 px slot the summary replaces, about 52 px), which Chromium's scroll anchoring absorbs once scrolled. A spec that shoots a sheet over the week settles first and scrolls the opener itself (`openTuesdayPlanSheet`, `screenshots.spec.ts`, which also takes the shot twice and requires a match).
 - **The calendar's unit specs (`src/web/calendar/*.spec.ts`) run in America/New_York through their own project**, `unit-new-york` in `vitest.config.mts` (`env: { TZ }`, `pool: 'forks'`), to prove the date logic ignores the process's zone. Node reloads the zone on Vitest's `process.env` assignment only in a child process, so the project must stay on forks. Each spec first asserts the offset. Another zoned spec gets its own project likewise (named `unit*` to stay under `npm test`).
 - **`src/calendar-date.ts` keeps one `Intl.DateTimeFormat` per zone and shape** (`perZone`: `todayIn`, `hourIn`, `instantAt`'s offset). Building one is the cost (2.2% of server CPU per call); formatters are stateless. A new zone-aware helper takes a `perZone` formatter.
