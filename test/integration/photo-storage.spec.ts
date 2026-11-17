@@ -352,11 +352,12 @@ describe('photo storage on disk', () => {
       expect((await first.orphanedMarkers()).map((o) => o.marker)).toEqual([
         orphan,
       ]);
+      // The marker and the one orphan: the second's take was put back.
       expect(
         (await readdir(directory)).filter((name) =>
-          name.startsWith(`${STORAGE_MARKER}.withdrawn-`),
+          name.startsWith(STORAGE_MARKER),
         ),
-      ).toEqual([]);
+      ).toHaveLength(2);
     });
 
     // #649: restoring from the trash is whole or nothing.

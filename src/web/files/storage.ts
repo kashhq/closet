@@ -36,14 +36,16 @@ const TRASH_DAY = /^\d{4}-\d{2}-\d{2}$/;
 export const STORAGE_MARKER = '.closet-storage';
 
 /**
- * A withdrawn marker is kept, never deleted, as `.closet-storage.orphan-<id>`
- * (#1049): a claim that lost its pairing may have been the real share's,
- * and `--repair-storage-identity --orphan <id>` puts it back. A marker on
- * its way out sits under WITHDRAWN_PREFIX for the moment it is checked.
- * list() skips every name starting with STORAGE_MARKER.
+ * A withdrawn marker is kept, never deleted, as
+ * `.closet-storage.orphan-<id>-<random>` (#1049): a claim that lost its
+ * pairing may have been the real share's, and
+ * `--repair-storage-identity --orphan <id>` puts it back. The only name a
+ * withdrawal ever gives a marker, so a crash anywhere in it leaves the
+ * marker or an orphan, both of which boot and repair read; an orphan is
+ * judged by its content, the name is a hint. list() skips every name
+ * starting with STORAGE_MARKER.
  */
 const ORPHAN_PREFIX = `${STORAGE_MARKER}.orphan-`;
-const WITHDRAWN_PREFIX = `${STORAGE_MARKER}.withdrawn-`;
 
 /** An orphaned marker and the file it is in (orphanedMarkers). */
 export interface OrphanedMarker {
@@ -258,58 +260,57 @@ export class PhotoStorage {
   }
 
   /**
-   * Moves the marker aside as `.closet-storage.orphan-<id>` only while it is
-   * `marker` (same id, same timestamp): claimStorage's own, written by a
-   * claim whose pairing lost to another install's. Answers whether it did.
+   * Moves the marker aside as an orphan only while it is `marker` (same id,
+   * same timestamp): claimStorage's own, written by a claim whose pairing
+   * lost to another install's. Answers whether it did.
    *
-   * Atomic against a second withdrawer (#1049): the marker is renamed to a
-   * name of this call's own first and only then read, so what is judged is
-   * exactly what was taken. A read-then-remove let one healer delete the
-   * marker another had just linked. What was taken and is not `marker` is
-   * linked back (never over a marker linked meanwhile; that one wins and
-   * the taken one is kept as an orphan). `marker.installId` is always an id
-   * a claim minted (randomUUID or a storage_claim row), so it is a safe name.
+   * Atomic against a second withdrawer (#1049): one rename takes the marker
+   * straight to its orphan name, a name of this call's own (the random part:
+   * a rename replaces, and another withdrawal of the same id may have left
+   * one), and only then is it read, so what is judged is exactly what was
+   * taken. A read-then-remove let one healer delete the marker another had
+   * just linked. What was taken and is not `marker` is linked back (never
+   * over a marker linked meanwhile: then it stays an orphan). Every name
+   * on the way is the marker's or an orphan's (ORPHAN_PREFIX).
+   * `marker.installId` is always an id a claim minted (randomUUID or a
+   * storage_claim row), so it is a safe name.
    */
   async withdrawMarker(marker: StorageMarker): Promise<boolean> {
-    const aside = `${WITHDRAWN_PREFIX}${randomUUID()}`;
+    const orphan = `${ORPHAN_PREFIX}${marker.installId}-${randomUUID()}`;
     try {
       await this.storageFs.rename(
         this.pathOf(STORAGE_MARKER),
-        this.pathOf(aside),
+        this.pathOf(orphan),
       );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
       throw error;
     }
-    const taken = await this.readMarkerAt(aside);
+    const taken = await this.readMarkerAt(orphan);
     if (
       taken.state === 'present' &&
       taken.marker.installId === marker.installId &&
       taken.marker.createdAt === marker.createdAt
     ) {
-      await this.storageFs.rename(
-        this.pathOf(aside),
-        this.pathOf(`${ORPHAN_PREFIX}${marker.installId}`),
-      );
       this.logger.warn(
-        `${STORAGE_MARKER} of install ${marker.installId} moved aside as ${ORPHAN_PREFIX}${marker.installId}`,
+        `${STORAGE_MARKER} of install ${marker.installId} moved aside as ${orphan}`,
       );
       return true;
     }
     try {
       await this.storageFs.link(
-        this.pathOf(aside),
+        this.pathOf(orphan),
         this.pathOf(STORAGE_MARKER),
       );
-      await this.storageFs.remove(this.pathOf(aside));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const kept = `${ORPHAN_PREFIX}${randomUUID()}`;
-      await this.storageFs.rename(this.pathOf(aside), this.pathOf(kept));
       this.logger.warn(
-        `${STORAGE_MARKER} taken by a withdrawal was replaced meanwhile; kept as ${kept}`,
+        `${STORAGE_MARKER} taken by a withdrawal was replaced meanwhile; kept as ${orphan}`,
       );
+      return false;
     }
+    // Back in place; this name is only a second link to it now.
+    await this.storageFs.remove(this.pathOf(orphan));
     return false;
   }
 

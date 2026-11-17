@@ -657,6 +657,29 @@ describe('the photo storage marker', () => {
         },
         orphaned: true,
       },
+      {
+        // The withdrawal's one rename lands and the process dies before it
+        // reads what it took: the name left is an orphan's, which the
+        // repair finds by its content.
+        point: 'the process dies right after its withdrawal renames the marker',
+        first: (dir) => {
+          const storage = new OutPaired(dir, silentLogger, {
+            ...diskFs,
+            rename: async (from, to) => {
+              await diskFs.rename(from, to);
+              if (from === markerIn(dir)) throw new Error('killed');
+            },
+          });
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        next: {
+          refused: /^DATA_PATH has no \.closet-storage marker/,
+          paired: otherShare,
+        },
+        orphaned: true,
+      },
     ];
 
     it.each(crashPoints)('$point: the next boot heals', async (row) => {
