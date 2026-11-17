@@ -491,6 +491,13 @@
       "when": 1794688883983,
       "tag": "0069_outfit-rules-sync",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1794888850321,
+      "tag": "0070_storage-claim",
+      "breakpoints": true
     }
   ]
 }
