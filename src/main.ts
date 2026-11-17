@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   const data = await probeWritable(config.DATA_PATH, { sweep: false });
   if (!data.writable) {
     boot.fatal(
-      `DATA_PATH ${config.DATA_PATH} is not writable by this process (${data.code}): ${storageFix([{ directory: config.DATA_PATH, code: data.code }])}`,
+      `DATA_PATH ${config.DATA_PATH} is not writable by this process (${data.code}): ${storageFix([{ key: 'DATA_PATH', code: data.code }])}`,
     );
     process.exit(1);
   }

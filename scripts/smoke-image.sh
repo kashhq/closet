@@ -244,7 +244,7 @@ while [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" = true ]; do
   sleep 1
 done
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" != 0 ] || fail "a root-owned /app/data: the boot exited 0"
-log_has -F "DATA_PATH /app/data is not writable by this process (EACCES): chown -R $APP_UID:$APP_GID the host directory mounted at /app/data; docs/operations.md#permissions" \
+log_has -F "DATA_PATH /app/data is not writable by this process (EACCES): chown -R $APP_UID:$APP_GID the host directory mounted at DATA_PATH; docs/operations.md#permissions" \
   || fail "a root-owned /app/data: the boot log does not name the chown"
 log "ok: a root-owned /app/data ends the boot with the chown named"
 
@@ -262,7 +262,7 @@ until [ "$(curl -s -o "$health" -w '%{http_code}' "$BASE/health/ready")" = 503 ]
   sleep 1
 done
 fix=$(jq -r '.checks.storage.fix' "$health")
-[ "$fix" = "chown -R $APP_UID:$APP_GID the host directory mounted at /app/models; docs/operations.md#permissions" ] \
+[ "$fix" = "chown -R $APP_UID:$APP_GID the host directory mounted at MODELS_PATH; docs/operations.md#permissions" ] \
   || fail "a root-owned /app/models: storage's fix is '$fix'"
 [ "$(jq -r '.checks.database.status' "$health")" = up ] || fail "a root-owned /app/models: the database check is down too"
 log "ok: a root-owned /app/models is 503, storage down: $fix"

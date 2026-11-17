@@ -103,16 +103,24 @@ The image runs as `node`, **uid/gid 1000** (the Dockerfile's `USER`), never root
 
 The opt-in `LOG_FILE` is not a third path the image owns: it must point into a mount you provide that uid 1000 can write (never under `DATA_PATH`). It never creates a directory; one that is missing or unwritable ends in a single `error` line on stdout and a file-less run, the console log unaffected.
 
+A fix (`/health/ready`'s `storage`, the boot's fatal line) names a directory by its config key, `DATA_PATH` or `MODELS_PATH`, never by its path: the readiness body is public (#1090). The key's host directory is the mount whose destination is that variable's value in the container:
+
 ```bash
-# On the host, as root: give uid 1000 both directories (a root-owned one is what the root image's
-# download left). A network share that squashes every client user may refuse the chown and not need it.
-sudo chown -R 1000:1000 <data dir> <models dir>
+# On the host: the host directory mounted at a key's value in the container.
+mount_of() { docker inspect closet --format '{{json .Mounts}}' | jq -r --arg d "$(docker exec closet printenv "$1")" '.[] | select(.Destination == $d) | .Source'; }
+DATA_DIR=$(mount_of DATA_PATH)
+MODELS_DIR=$(mount_of MODELS_PATH)
+# As root: give uid 1000 both directories (a root-owned one is what the root image's download left).
+# A network share that squashes every client user may refuse the chown and not need it.
+sudo chown -R 1000:1000 "$DATA_DIR" "$MODELS_DIR"
 # Prove both as uid 1000 with the image itself:
-docker run --rm --user 1000:1000 -v <data dir>:/d -v <models dir>:/m --entrypoint sh \
+docker run --rm --user 1000:1000 -v "$DATA_DIR":/d -v "$MODELS_DIR":/m --entrypoint sh \
   ghcr.io/kashhq/closet:latest -c 'for d in /d /m; do touch $d/.probe && rm $d/.probe || exit 1; done; echo writable'
 ```
 
-**The symptom** of a directory uid 1000 cannot write: a root-owned `/app/data` ends the boot (the container restarts in a loop) with the fatal line `DATA_PATH /app/data is not writable by this process (EACCES): chown -R 1000:1000 the host directory mounted at /app/data; docs/operations.md#permissions`, before anything else is logged. A root-owned `/app/models` boots and serves pages, but `/health/ready` answers 503 with `storage` down and that chown as its `fix`, the container goes unhealthy (marked only: production runs no autoheal, see Health) and stays up, and the model download fails (`Downloading BiRefNet 512x512 failed`, `EACCES`). A directory that stops being writable later (the NFS share remounted read-only) shows the same `storage` check within 5 s. `docker exec closet ...` runs as uid 1000 too (`npm` caches under `/home/node`).
+A container whose boot was refused is not running for `docker exec`: set `DATA_DIR` and `MODELS_DIR` from the compose file's `volumes:` instead (the sources mounted at `/app/data` and `/app/models`).
+
+**The symptom** of a directory uid 1000 cannot write: a root-owned `/app/data` ends the boot (the container restarts in a loop) with the fatal line `DATA_PATH /app/data is not writable by this process (EACCES): chown -R 1000:1000 the host directory mounted at DATA_PATH; docs/operations.md#permissions`, before anything else is logged. A root-owned `/app/models` boots and serves pages, but `/health/ready` answers 503 with `storage` down and that chown, for `MODELS_PATH`, as its `fix`, the container goes unhealthy (marked only: production runs no autoheal, see Health) and stays up, and the model download fails (`Downloading BiRefNet 512x512 failed`, `EACCES`). A directory that stops being writable later (the NFS share remounted read-only) shows the same `storage` check within 5 s. `docker exec closet ...` runs as uid 1000 too (`npm` caches under `/home/node`).
 
 ## Backup
 
@@ -150,7 +158,7 @@ Closet notices the mistake itself: the first request carrying `X-Forwarded-For` 
 
 - **`database`** (required): the pool's one statement did not answer in 3 s or failed. Check the Postgres server and `CLOSET_DB_HOST`; the app recovers by itself once it answers.
 - **`migrations`** (required): `schema: "behind"`, the database's newest Drizzle migration is older than this build's, so it was restored or repointed after the boot: restart the container, the boot migrates. `schema: "ahead"`, a newer build migrated the database under this one: deploy that build, or roll the schema back (Migrations and rollback).
-- **`storage`** (required): a directory the process writes (`DATA_PATH`, `MODELS_PATH`) refused a create and unlink as uid 1000; its `fix` is the chown and the log line names the directory and the error code. Or `DATA_PATH` lost the marker the boot claimed, or holds another install's: its `fix` points to Photo storage marker (no database statement: the pairing is checked at boot). Probed at most once every 5 s: see Permissions.
+- **`storage`** (required): a directory the process writes (`DATA_PATH`, `MODELS_PATH`) refused a create and unlink as uid 1000; its `fix` is the chown, naming the key and never the path (Permissions maps it to the host directory), and the log line names the key and the error code. Or `DATA_PATH` lost the marker the boot claimed, or holds another install's: its `fix` points to Photo storage marker (no database statement: the pairing is checked at boot). Probed at most once every 5 s: see Permissions.
 - **`cron_jobs`** (optional): a timer's run has been in flight over 30 minutes (`stuck` names it). Its last `cron-` lines in Loki say where it hangs; a restart starts it afresh.
 - **`cutout_queue`** (optional): `CUTOUT_ENABLED=false` reports it `up` with `"disabled": true` (the operator's choice: no model is fetched or run, uploads keep their original). Otherwise it is down when the background-removal queue is not running (in production, the process is shutting down), or it waits for a model it cannot have: `reason` says why and `fix` what to do (`download`: huggingface.co refused or unreachable; `checksum`: the file in `MODELS_PATH` is not the pinned model, `npm run cutout:fetch-model`; `permission`: see Permissions; `binding`: onnxruntime-node has no native binding for this platform, the image must be linux/amd64; `other`: the `Cutout queue waiting for the model` log line). Photos stay pending meanwhile (the garment page stops polling after 2 minutes and says it will finish later) and are cut out as soon as the model loads, without a restart; `cutout_queue_oldest_age_seconds` shows how long they have waited.
 
