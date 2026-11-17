@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`make lg-check`: a shrink-only count of page-level `lg:` classes (#1066).
 
-Counts every variant that applies at or above lg and fails closed (`lg:`, `xl:`, `2xl:`, their
-`min-` forms and any `min-[...]:` not provably below 64rem; container queries and `max-*` never) in the .ts/.tsx files under `src`
+Counts every class token whose variant chain is not entirely on the SAFE_VARIANTS allowlist (so
+anything unrecognised, `lg:` and `not-max-lg:` alike, counts) in the .ts/.tsx files under `src`
 (spec files aside) that scripts/ci/lg_count.conf does not exempt, per file. A file fails when its count is above its
 `known` line, or has none; a count below its line passes but says to lower the number in the same
 PR. Stdlib only, so it runs before npm ci, like layer-check.
@@ -17,13 +17,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONF = ROOT / "scripts/ci/lg_count.conf"
-# The one place that says what counts, and it fails closed: a variant is counted unless it is provably
-# not a screen breakpoint at or above Tailwind v4's lg (64rem, 1024px at the default 16px root). Not
-# counted: container queries (`@lg:`, `@min-…`), the `max-*` forms and any other variant. Counted:
-# `lg`, `xl`, `2xl`, their `min-` forms, and `min-[<value>]` unless the value parses as rem/em/px
-# below 64rem (calc(), vw, anything unparsed counts). Stacked variants (`hover:lg:`) match one by one.
-VARIANT = re.compile(r"(?<![\w@/\[\]-])(?P<name>@?[\w/-]+?)(?:-\[(?P<arb>[^\]\s]*)\])?:")
-NAMED_LG = frozenset({"lg", "xl", "2xl", "min-lg", "min-xl", "min-2xl"})
+# The one place that says what counts, and it is an allowlist so it fails closed: a class token with
+# at least one variant counts unless EVERY variant in its chain is known not to depend on a desktop
+# width. Anything unrecognised counts (`lg`, `xl`, `not-max-lg`, `[@media(min-width:64rem)]`, ...).
+SAFE_VARIANTS = frozenset({
+    "hover", "focus", "focus-visible", "focus-within", "active", "disabled", "open", "dark", "print",
+    "placeholder", "first", "last", "odd", "even", "empty", "sm", "md", "min-sm", "min-md",
+    "before", "after", "checked", "file", "marker", "selection", "required", "invalid", "enabled",
+    "visited", "target", "backdrop", "indeterminate", "read-only", "only", "*", "**",
+})
+# Colon-joined words that are not classes (a chain starting with one is skipped whole): module
+# specifiers, URIs, meta properties, event and job names, htmx modifiers. Uppercase or all-digit elements (`4:5`, `trip:ID`, `HH:MM`) are never variants.
+NOT_VARIANTS = frozenset({
+    "node", "about", "data", "urn", "og", "twitter", "product", "header", "closet", "htmx", "form", "day",
+    "trip", "user", "push", "maintenance", "styling", "snap-strip", "this", "from", "show", "delay",
+    "generate",
+})
+SAFE_PREFIXES = ("group-", "peer-", "has-", "data-", "aria-", "motion-", "max-", "@")  # @ = container query
+ELEMENT = r"(?:@?[\w.-]+(?:-?\[[^\]\s]*\])?(?:/[\w-]+)?|\[[^\]\s]*\])"
+# A chain of variants ending in a utility (not `key: value`, `https://`, `a ? b : c`).
+CHAIN = re.compile(rf"(?<![\w@/\[\]:.-])(?P<chain>(?:{ELEMENT}:)+)(?=[\w!\[@-])")
+MIN_ARBITRARY = re.compile(r"min-\[(?P<value>[^\]]*)\]")
 LENGTH = re.compile(r"(?P<n>\d*\.?\d+)(?P<unit>rem|em|px)")
 LG_PX = 64 * 16
 
@@ -35,15 +49,21 @@ def provably_below_lg(value: str) -> bool:
     return float(m["n"]) * (1 if m["unit"] == "px" else 16) < LG_PX
 
 
-def at_or_above_lg(match: re.Match[str]) -> bool:
-    name, arb = match["name"], match["arb"]
-    if arb is not None:
-        return name == "min" and not provably_below_lg(arb)
-    return name in NAMED_LG
+def is_safe(variant: str) -> bool:
+    m = MIN_ARBITRARY.fullmatch(variant)
+    if m is not None:
+        return provably_below_lg(m["value"])
+    if variant.isdigit() or "[" not in variant and not variant.islower():
+        return True
+    return variant in SAFE_VARIANTS or variant.startswith(SAFE_PREFIXES)
 
 
 def count_lg(text: str) -> int:
-    return sum(1 for m in VARIANT.finditer(text) if at_or_above_lg(m))
+    n = 0
+    for m in CHAIN.finditer(text):
+        variants = re.findall(rf"({ELEMENT}):", m["chain"])
+        n += variants[0] not in NOT_VARIANTS and not all(is_safe(v) for v in variants)
+    return n
 
 
 def git_out(*args: str) -> str:

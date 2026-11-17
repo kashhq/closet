@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests for lg_check.py; run by `make lg-check` (stdlib unittest, so before npm ci)."""
+import os
 import subprocess
 import sys
 import tempfile
@@ -12,17 +13,22 @@ import lg_check  # noqa: E402
 
 
 class CountLg(unittest.TestCase):
-    def test_counts_variants_at_or_above_lg(self) -> None:
+    def test_counts_variants_at_or_above_lg_and_anything_unrecognised(self) -> None:
         for cls in ("lg:flex", "xl:flex", "2xl:flex", "min-lg:flex", "min-xl:flex", "min-2xl:flex",
                     "hover:lg:flex", "md:hover:min-[1024px]:flex", "min-[64rem]:flex", "min-[1024px]:flex",
-                    "min-[80rem]:flex", "min-[64em]:flex", "min-[calc(100vw)]:flex", "min-[64vw]:flex", "min-[1200px]:flex", "min-[64.5rem]:flex"):
+                    "min-[80rem]:flex", "min-[64em]:flex", "min-[calc(100vw)]:flex", "min-[64vw]:flex",
+                    "min-[1200px]:flex", "min-[64.5rem]:flex", "not-max-lg:flex", "not-max-[1100px]:flex",
+                    "[@media(min-width:64rem)]:flex", "[&>*]:flex", "xxl:flex", "flex-lg:x", "hover:focus:lg:flex"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 1)
 
-    def test_ignores_variants_below_lg_and_max_forms(self) -> None:
-        for cls in ("max-lg:flex", "max-xl:flex", "md:flex", "sm:flex", "min-md:flex", "min-[48rem]:flex", "min-[40rem]:flex", "min-[40em]:flex", "@lg:flex", "@xl:flex", "@min-lg:flex", "@lg/card:flex", "@max-lg:flex",
-                    "min-[1023px]:flex", "min-[63.9rem]:flex", "md:max-lg:flex", "max-[1024px]:flex",
-                    "flex-lg:x", "xxl:flex"):
+    def test_ignores_chains_made_only_of_known_non_desktop_variants(self) -> None:
+        for cls in ("flex", "md:flex", "sm:flex", "min-sm:flex", "min-md:flex", "hover:focus:flex",
+                    "group-hover:flex", "peer-checked:flex", "data-[open]:flex", "dark:md:flex",
+                    "motion-reduce:flex", "max-lg:flex", "max-xl:flex", "max-[1100px]:flex", "md:max-lg:flex",
+                    "min-[48rem]:flex", "min-[40rem]:flex", "min-[40em]:flex", "min-[1023px]:flex",
+                    "min-[63.9rem]:flex", "@lg:flex", "@xl:flex", "@min-lg:flex", "@lg/card:flex",
+                    "@max-lg:flex", "key: value", "https://x.y"):
             with self.subTest(cls):
                 self.assertEqual(lg_check.count_lg(f'<div class="{cls}">'), 0)
 
@@ -32,7 +38,9 @@ class CountLg(unittest.TestCase):
 
 class ReadIndex(unittest.TestCase):
     def test_reads_staged_blobs_in_one_batch_not_the_disk(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        # git exports GIT_INDEX_FILE in pre-commit: the scratch repo must never see the real index.
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, clean_env, clear=True):
             root = Path(tmp)
 
             def git(*args: str) -> None:
