@@ -641,7 +641,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
       const ended = scrollEnd();
       // The spec's context is a touch one, where CSS hides the buttons
       // (`fine:` only); the document's click handler serves them all the same.
-      await next.evaluate((button) => button.click());
+      await next.evaluate((button: HTMLElement) => button.click());
       await ended;
     }
     expect(await strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
