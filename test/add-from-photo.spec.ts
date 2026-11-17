@@ -96,7 +96,40 @@ async function checkSplitAtDesktop(page: Page) {
   expect(after.y).toBeGreaterThanOrEqual(bar.y + bar.height);
   expect(after.y + after.height).toBeLessThanOrEqual(560);
   await checkTallSubjectScrolls(page, id);
+  await checkSubjectFocusRing(page);
   await page.setViewportSize({ width: 390, height: 844 });
+}
+
+/**
+ * The scrolling subject clips on both axes, so a control's focus ring (2px
+ * plus a 2px offset) must sit inside it: a photoless garment's "Add photo"
+ * button is the subject's one control.
+ */
+async function checkSubjectFocusRing(page: Page) {
+  const bare = await createGarment(page, 'Bare coat', 'coats');
+  await page.goto(`/wardrobe/${bare}`);
+  const subject = page.locator('#garment-aside');
+  const button = subject.getByRole('button', { name: 'Add a photo' });
+  await page.keyboard.press('Tab');
+  await button.focus();
+  await expect(button).toBeFocused();
+  const ring = await button.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const reach =
+      parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+    const box = el.getBoundingClientRect();
+    const frame = el.closest('#garment-aside')!.getBoundingClientRect();
+    return {
+      reach,
+      inside:
+        box.left - reach >= frame.left &&
+        box.right + reach <= frame.right &&
+        box.top - reach >= frame.top &&
+        box.bottom + reach <= frame.bottom,
+    };
+  });
+  expect(ring.reach).toBeGreaterThanOrEqual(4);
+  expect(ring.inside).toBe(true);
 }
 
 /**

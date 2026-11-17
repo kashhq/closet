@@ -604,11 +604,19 @@ html {
     /* The subject is sticky only while it fits: taller than the window under
        the bar, it scrolls inside itself, so its last row (the collage under
        a long note) stays reachable. A non-sticky fallback is not expressible
-       in CSS alone; this keeps the subject in view. */
+       in CSS alone; this keeps the subject in view. overflow-y: auto makes
+       the box clip on x too, so nothing may bleed out of it: the aside's own
+       1rem sides and top hold a focus ring (2px + 2px offset), the bottom
+       gets that room back by padding, taken out of the layout again by the
+       equal negative margin. The subject holds no anchored menu (the
+       garment menu lives in the app bar; Not for me is an inline details),
+       and a sheet is top-layer. */
     .page-shell[data-layout="split"] > .page-aside {
       max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
       overflow-y: auto;
       overscroll-behavior: contain;
+      padding-bottom: 0.25rem;
+      margin-bottom: -0.25rem;
     }
     /* Work and its result: the result beside it, right. */
     .page-shell[data-layout="panel"] {
@@ -640,12 +648,15 @@ html {
     min-height: 100%;
     padding-top: calc(var(--app-bar-h) + 1rem);
   }
-  :where(.page-shell[data-layout="centred"]) > .page-body {
+  .page-shell[data-layout="centred"] > .page-body {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.75rem;
     width: 100%;
+  }
+  /* Only the padding yields to the gutter (see the split rule above). */
+  :where(.page-shell[data-layout="centred"]) > .page-body {
     padding: 0 1rem;
   }
 }
