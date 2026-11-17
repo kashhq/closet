@@ -7,9 +7,8 @@ import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
 import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
 import { t, type StringKey } from '../i18n';
-import { AppBar } from '../layout/app-bar';
+import { PageShell } from '../layout/page-shell';
 import { BrandMark } from '../layout/brand-mark';
-import { Layout } from '../layout/layout';
 import { SettingsPage } from '../layout/settings-page';
 import { CopyableText } from '../share/share-button';
 // eslint-disable-next-line closet/no-foreign-page-import -- sharedBy is a share-page helper that is no markup; it moves to share/ with its next change (#718)
@@ -337,32 +336,33 @@ export function InvitePage(props: {
 }) {
   const { ctx, invite } = props;
   return (
-    <Layout ctx={ctx} title={t('WARDROBE_INVITE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('WARDROBE_INVITE')}
-        returnTo={invite && invitePath(props.token)}
-      />
-      <main class="flex flex-col justify-center items-center gap-4 min-h-[80vh] px-4 pt-20">
-        {!ctx.user && <BrandMark ctx={ctx} />}
-        <Card variant="content" class="w-full max-w-md" bodyClass="">
-          {invite && !invite.expired ? (
-            <InviteDetails invite={invite} token={props.token} ctx={ctx} />
-          ) : (
-            <>
-              <div role="alert" class="alert alert-error mb-4">
-                <span>
-                  {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
-                </span>
-              </div>
-              <a href="/" class="btn btn-primary btn-sm">
-                {t('RETURN_TO_HOME')}
-              </a>
-            </>
-          )}
-        </Card>
-      </main>
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="invite"
+      layout="centred"
+      bar={{
+        title: t('WARDROBE_INVITE'),
+        returnTo: invite && invitePath(props.token),
+      }}
+    >
+      {!ctx.user && <BrandMark ctx={ctx} />}
+      <Card variant="content" class="w-full max-w-md" bodyClass="">
+        {invite && !invite.expired ? (
+          <InviteDetails invite={invite} token={props.token} ctx={ctx} />
+        ) : (
+          <>
+            <div role="alert" class="alert alert-error mb-4">
+              <span>
+                {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
+              </span>
+            </div>
+            <a href="/" class="btn btn-primary btn-sm">
+              {t('RETURN_TO_HOME')}
+            </a>
+          </>
+        )}
+      </Card>
+    </PageShell>
   );
 }
 

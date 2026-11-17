@@ -1,9 +1,7 @@
 import { Card } from '../card';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { GarmentThumb, HangerIcon } from '../layout/parts';
 import { FootMark } from '../outfits/collage';
 import { isPieceToBuy } from '../outfits/references';
@@ -44,19 +42,25 @@ export function SharePage(props: {
 }) {
   const { ctx, shared, preview } = props;
   return (
-    <Layout
+    <PageShell
       ctx={ctx}
-      ogUrl={preview?.url}
-      ogTitle={preview?.title}
-      ogDescription={preview?.description}
-      ogImage={preview?.image}
+      name="share"
+      meta={
+        preview && {
+          ogUrl: preview.url,
+          ogTitle: preview.title,
+          ogDescription: preview.description,
+          ogImage: preview.image,
+        }
+      }
+      bar={{ title: ctx.appName }}
     >
-      <AppBar ctx={ctx} title={ctx.appName} />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col items-center gap-6">
-        {shared && <SharedItem shared={shared} />}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      {shared && (
+        <div class="flex flex-col items-center gap-6">
+          <SharedItem shared={shared} />
+        </div>
+      )}
+    </PageShell>
   );
 }
 

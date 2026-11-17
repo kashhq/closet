@@ -5,7 +5,7 @@ import { expect } from './support/fixtures';
 import sharp from 'sharp';
 import { addDays } from '../src/calendar-date';
 import { test } from './support/cutout-hold';
-import { signUpHeaders } from './support/e2e-session';
+import { SAME_ORIGIN, signUpHeaders } from './support/e2e-session';
 import { openGarmentMenu, openPhotoSheet } from './support/garment-page';
 import { householdToday } from './support/household-today';
 import { fakeSubscription, stubPushManager } from './support/push-stub';
@@ -392,6 +392,21 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   await page.goto('/outfits');
   await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
   await shot(page, name('outfit'));
+  const outfitPath = new URL(page.url()).pathname;
+  const hx = { ...SAME_ORIGIN, 'hx-request': 'true' };
+  await page.request.post(`${outfitPath}/share`, { headers: hx });
+  await page.goto(outfitPath);
+  const shareLink = new URL(
+    await page.locator('[data-public-share] input').inputValue(),
+  );
+  const invite = await page.request.post('/wardrobe-share/create-invite-link', {
+    form: { permission: 'VIEW' },
+    headers: hx,
+  });
+  const invitePath = /\/wardrobe-share\/invite\/[0-9a-f-]{36}/.exec(
+    await invite.text(),
+  )?.[0];
+  expect(invitePath).toBeDefined();
   await page.goto('/trips');
   await page.getByRole('link', { name: /Austin conference/ }).click();
   await expect(page.locator('#trip-packed-summary')).toBeVisible();
@@ -410,6 +425,19 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
     path: `${DIR}/${name('selfie-dialog')}.png`,
     animations: 'disabled',
   });
+  await shot(page, name('trips'), '/trips');
+  await shot(page, name('laundry'), '/laundry');
+  await shot(page, name('about'), '/about');
+  await shot(page, name('offline'), '/offline.html');
+  await shot(page, name('invite-signed-in'), invitePath);
+  await page.context().clearCookies();
+  await shot(page, name('login'), '/auth/login');
+  await shot(page, name('register'), '/auth/register');
+  await shot(page, name('invite'), invitePath);
+  await shot(page, name('offline-signed-out'), '/offline.html');
+  await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
+  await signInAs(page, 'demo');
+  await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
   await signInAs(page, 'sparse');
   await shot(page, name('tag'), '/wardrobe/tag');
 }

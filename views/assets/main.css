@@ -484,6 +484,29 @@ html {
       display: block;
     }
   }
+
+  /* A standalone page (sign in, register, the invite, the offline page): one
+     column centred in the room the bar and the dock leave, from the top once
+     it is taller than that (`safe`: nothing ends up under the fixed bar,
+     where no scroll reaches it). After the lg block so it wins over its grid.
+     The body carries the sides and the gap; a card in it brings its own
+     `max-w-*`. */
+  .page-shell[data-layout="centred"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+    align-items: center;
+    min-height: 100%;
+    padding-top: calc(var(--app-bar-h) + 1rem);
+  }
+  .page-shell[data-layout="centred"] > .page-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0 1rem;
+  }
 }
 
 /* Below the rail, the dock's labels give way when the text is too large for
