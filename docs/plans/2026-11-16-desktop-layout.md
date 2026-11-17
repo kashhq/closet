@@ -317,6 +317,8 @@ facets. `GALLERY_GRID` auto-fills to eight columns at 1440. Select mode's `Actio
 grid's head. Capsules, Laundry and Wishlist keep their own layouts below, under the same header
 row.
 
+**As built (#1067):** search stays in the scope row at the head of the grid column at both sizes (the page's one keyword field, its own form, so Enter submits on the phone and focus order matches the visual order); only the filter button gives way from lg (`docs/decisions.md` 2026-11-16).
+
 ### Garment page: `split` (photo left, facts right)
 
 ```

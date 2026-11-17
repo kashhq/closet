@@ -239,6 +239,8 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
 
   // Typing two of its words, in another order than its name's, finds it.
   // The field is collapsed to its icon until tapped, as a finger does.
+  // Enter submits the scope row's own form: the page's one keyword field,
+  // which a filter-form field could not be (#1067, docs/decisions.md).
   await page.getByRole('search').locator('label').click();
   const search = page.getByRole('textbox', { name: 'Search' });
   await expect(search).toBeFocused();
