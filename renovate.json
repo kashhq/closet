@@ -1,4 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>kashhq/devkit//renovate/default"]
+  "extends": ["github>kashhq/devkit//renovate/default"],
+  "packageRules": [
+    {
+      "description": "scripts/lg-check.ts must compile with the Tailwind that builds bundle.css: one version, one PR",
+      "matchPackageNames": ["tailwindcss", "@tailwindcss/**"],
+      "groupName": "tailwindcss"
+    }
+  ]
 }
