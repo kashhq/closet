@@ -303,16 +303,34 @@ test.describe('desktop', () => {
     await shot(page, '94-demo-profile-desktop', '/auth/profile');
   });
 
+  // The action bars (#1063) at the head of their column (Laundry's is 91
+  // above): select mode with two checked, and the capsule picker.
+  test('demo: Theo, the action bars at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe?select=1');
+    const boxes = page.locator('#wardrobe-grid input[name="ids"]');
+    await boxes.nth(0).check();
+    await boxes.nth(1).check();
+    await expect(page.locator('#selected-count')).toHaveText('2');
+    await shot(page, '95-demo-select-desktop');
+    await page.goto('/capsules');
+    await page.getByRole('link', { name: /^Weekend/ }).click();
+    await expect(page).toHaveURL(/\/capsules\/\d+$/);
+    await page.getByRole('link', { name: 'Choose garments' }).first().click();
+    await expect(page.locator('#pick-form')).toBeVisible();
+    await shot(page, '96-demo-capsule-picker-desktop');
+  });
+
   // The strip's desktop modes (#1065): Today's cards in a grid (Ideas' is
   // 92 above) and Goes-with's best outfits a row. No persona has a Muse
   // need, so its options grid has no shot.
   test('demo: Theo, the strips at 1440', async ({ page }) => {
     await signInAs(page, 'demo');
-    await shot(page, '95-demo-today-desktop', '/');
+    await shot(page, '97-demo-today-desktop', '/');
     await page.goto('/wardrobe/wishlist');
     await page.getByRole('link', { name: 'White Couriers' }).click();
     await expect(page.locator('[data-goes-with-strip]')).toBeVisible();
-    await shot(page, '96-demo-goes-with-desktop');
+    await shot(page, '98-demo-goes-with-desktop');
   });
 });
 

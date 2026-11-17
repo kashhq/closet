@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { ViewContext } from '../view-context';
+import { ActionBar, type ActionBarProps } from './action-bar';
 import { AppBar, type AppBarProps } from './app-bar';
 import { Dock } from './dock';
 import { Layout, type PageMeta } from './layout';
@@ -63,9 +64,13 @@ export interface PageBodyFrame {
 /**
  * A page's regions, each with a stable id the shell derives from the page's
  * `name` (`regionId`): the target an htmx fragment swaps (`#wardrobe-body`)
- * or an out-of-band swap names. A fragment swaps only the region it owns.
+ * or an out-of-band swap names. A fragment swaps only the region it owns,
+ * and answers the others it changes out of band (`PageFragment`).
+ * `actions` is the action bar (`actionBar`, action-bar.tsx); every page
+ * renders it, empty and `hidden` when the page has no bar, so a fragment
+ * that brings or drops the bar always finds it.
  */
-export type PageRegion = 'body' | 'aside';
+export type PageRegion = 'body' | 'aside' | 'actions';
 
 export function regionId(name: string, region: PageRegion): string {
   return `${name}-${region}`;
@@ -84,6 +89,8 @@ export function regionId(name: string, region: PageRegion): string {
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
+ * Only `single` takes an `actionBar` so far: a grid layout's place for one
+ * (`panel`'s is the top of its aside, §3.4) arrives with its first page.
  *
  * `centred` is the standalone page (sign in, register, the invite landing,
  * the offline page): its body is one column centred in the room the bar and
@@ -97,20 +104,30 @@ export type PageLayout =
       width?: PageWidth;
       aside?: never;
       asideLabel?: never;
+      /** The page's action bar, which the shell places (action-bar.tsx). */
+      actionBar?: ActionBarProps;
     }
   | {
       layout: 'centred';
       width?: never;
       aside?: never;
       asideLabel?: never;
+      actionBar?: never;
     }
-  | { layout: 'split'; width?: never; aside: Child; asideLabel?: never }
+  | {
+      layout: 'split';
+      width?: never;
+      aside: Child;
+      asideLabel?: never;
+      actionBar?: never;
+    }
   | {
       layout: 'panel' | 'facets' | 'index';
       width?: never;
       aside: Child;
       /** The landmark's accessible name. */
       asideLabel: string;
+      actionBar?: never;
     };
 
 type ShellLayout = NonNullable<PageLayout['layout']>;
@@ -146,12 +163,6 @@ export type PageShellProps = PageLayout & {
   bar: Omit<AppBarProps, 'ctx'>;
   body?: PageBodyFrame;
   /**
-   * The page ends on its own bar sticky above the dock (Styling's, #664):
-   * it leaves only the dock's height below it, not the dock and a gutter.
-   * Superseded by `actionBar` in D5 (#1058), which implies it; removed then.
-   */
-  endsOnBar?: boolean;
-  /**
    * What the page opens over itself: its sheets, dialogs and toasts. After
    * `<main>`, outside the regions, so no layout places them. A filter sheet
    * is not one: it goes in `aside` (`facets`), where the desktop docks it.
@@ -163,16 +174,43 @@ export type PageShellProps = PageLayout & {
 /**
  * One page's frame (#1059): the document, the app bar, `<main>` with the
  * page's regions, and the dock. The shell owns the bar's offset
- * (`--app-bar-h`), the gutter, the room left for the dock and for an action
- * bar fixed above it, and the regions' ids; a page brings its content and
- * picks a layout, a width (`single`), a gutter and a gap by name. Its `lg:`
+ * (`--app-bar-h`), the gutter, the room left for the dock and for its
+ * action bar (main.css keys it off `.action-bar`), the bar's place and the
+ * regions' ids; a page brings its content and picks a layout, a width
+ * (`single`), a gutter and a gap by name. Its `lg:`
  * layout lives in main.css, never on a page. `FormPage` and `SettingsPage`
  * are presets of it. `expectFullPage` (test/integration/pages.ts) holds a
  * page to one `.page-shell`; guards.conf `@page-main` holds every `<main>`
  * to this file.
  */
 export function PageShell(props: PageShellProps) {
-  const { ctx, name, bar, layout = 'single' } = props;
+  const { ctx, bar, layout = 'single' } = props;
+  return (
+    <Layout ctx={ctx} title={documentTitle(props)} {...props.meta}>
+      <AppBar ctx={ctx} {...bar} />
+      <main
+        class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
+        data-layout={layout}
+      >
+        {mainRegions(props, layout)}
+      </main>
+      {props.overlays}
+      <Dock ctx={ctx} />
+    </Layout>
+  );
+}
+
+/**
+ * `<main>`'s regions in DOM order: a left aside precedes the body and a
+ * right one follows it (the desktop's left to right, also the phone's
+ * stack), and the action bar comes last, the phone's visual order (a `row`
+ * fixed above the dock, a `stack` riding on it in the body's flow), so Tab
+ * reaches the content before the controls acting on it. From lg main.css
+ * places the bar (a `row` by `order` at the head of the column, a `stack`
+ * in the grid column beside the body), never the markup.
+ */
+function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
+  const { name } = props;
   const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
@@ -182,24 +220,53 @@ export function PageShell(props: PageShellProps) {
       {props.aside}
     </PageAside>
   );
+  const asideFirst = ASIDE_FIRST[layout];
+  return [
+    asideFirst && aside,
+    <PageBody name={name} {...props.body}>
+      {props.children}
+    </PageBody>,
+    !asideFirst && aside,
+    <ActionsRegion name={name} bar={props.actionBar} />,
+  ];
+}
+
+/**
+ * The answer to an htmx request that swaps a page's body in place (the
+ * Wardrobe's filtering targets `#<name>-body`, outerHTML): the body with the
+ * same name and frame the page gave its shell, and the actions region out
+ * of band, so the bar follows the body it acts on. Filtering select mode
+ * to no tiles drops the bar, back to some brings it, and its controls'
+ * `form=` names the form in this answer. A page with a swapped body answers
+ * through this, never a bare body, so no fragment leaves a stale bar.
+ */
+export function PageFragment(
+  props: PageBodyFrame & {
+    name: string;
+    actionBar: ActionBarProps | undefined;
+    children?: Child;
+  },
+) {
+  const { name, actionBar, children, ...frame } = props;
   return (
-    <Layout ctx={ctx} title={documentTitle(props)} {...props.meta}>
-      <AppBar ctx={ctx} {...bar} />
-      <main
-        class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
-        data-layout={layout}
-        data-end={props.endsOnBar ? 'bar' : undefined}
-      >
-        {ASIDE_FIRST[layout] && aside}
-        <PageBody name={name} {...props.body}>
-          {props.children}
-        </PageBody>
-        {!ASIDE_FIRST[layout] && aside}
-      </main>
-      {props.overlays}
-      <Dock ctx={ctx} />
-    </Layout>
+    <>
+      <PageBody name={name} {...frame}>
+        {children}
+      </PageBody>
+      <ActionsRegion name={name} bar={actionBar} oob />
+    </>
   );
+}
+
+/** `#<name>-actions`: the page's bar, else its empty place (PageRegion). */
+function ActionsRegion(props: {
+  name: string;
+  bar: ActionBarProps | undefined;
+  oob?: boolean;
+}) {
+  const id = regionId(props.name, 'actions');
+  if (props.bar) return <ActionBar id={id} oob={props.oob} {...props.bar} />;
+  return <div id={id} hidden hx-swap-oob={props.oob ? 'true' : undefined} />;
 }
 
 /** The document's `<title>`: the page's own, else the bar's when it is a string. */
@@ -208,14 +275,8 @@ function documentTitle(props: PageShellProps): string | undefined {
   return typeof props.bar.title === 'string' ? props.bar.title : undefined;
 }
 
-/**
- * The shell's body region, `#<name>-body`. Rendered alone only as the answer
- * to an htmx request that swaps it in place (the Wardrobe's), with the same
- * name and frame the page gave its shell.
- */
-export function PageBody(
-  props: PageBodyFrame & { name: string; children?: Child },
-) {
+/** The shell's body region, `#<name>-body` (PageShell, PageFragment). */
+function PageBody(props: PageBodyFrame & { name: string; children?: Child }) {
   const flow = props.gap === undefined ? '' : ` ${GAP_CLASS[props.gap]}`;
   return (
     <div

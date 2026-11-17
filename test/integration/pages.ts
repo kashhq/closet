@@ -307,6 +307,35 @@ export function expectPageShell(res: LightMyRequestResponse): void {
   if (shells === 1) expect(res.body.match(/<main\b/g)).toHaveLength(1);
 }
 
+/**
+ * At most one action bar a page, the shell's (#1063, layout/action-bar.tsx),
+ * and no page fixes its own controls above the dock (`bottom-dock`): such a
+ * bar sat at the viewport's far edge on a desktop, 400 px from the rows it
+ * acted on, and outside the room main.css keeps for `.action-bar`. The
+ * share page's credit line holds no control, so it is not one.
+ */
+export function expectActionBar(res: LightMyRequestResponse): void {
+  expect(
+    res.body.match(/class="action-bar"/g)?.length ?? 0,
+  ).toBeLessThanOrEqual(1);
+  for (const bar of res.body.matchAll(/<div class="[^"]*\bbottom-dock\b/g)) {
+    expect(divAt(res.body, bar.index)).not.toMatch(
+      /<(button|a|input|select|textarea)\b/,
+    );
+  }
+}
+
+/** The `<div>` element that starts at `start`, through its closing tag. */
+function divAt(html: string, start: number): string {
+  const rest = html.slice(start);
+  let depth = 0;
+  for (const tag of rest.matchAll(/<div\b|<\/div>/g)) {
+    depth += tag[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return rest.slice(0, tag.index + tag[0].length);
+  }
+  return rest;
+}
+
 /** The app bar marks exactly the pages `pageRoutes` lists as form pages. */
 export function expectFormPageFlag(
   route: PageRoute,
@@ -361,6 +390,7 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectNoScriptNavigation(res);
   expectAppBar(res);
   expectPageShell(res);
+  expectActionBar(res);
   // _hyperscript left the app (2026-09-26): an `_=` attribute would do
   // nothing at all.
   expect(res.body).not.toMatch(/\s_="/);

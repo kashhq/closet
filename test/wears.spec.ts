@@ -157,6 +157,37 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await expect(
     page.getByRole('checkbox', { name: 'White tees' }),
   ).toBeChecked();
+  // On the phone the bar follows the rows in the DOM, as on screen, so Tab
+  // reaches the hamper's first row before Mark washed.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  const stops: string[] = [];
+  while (!stops.includes('bar') && stops.length < 40) {
+    await page.keyboard.press('Tab');
+    stops.push(
+      await page.evaluate(() => {
+        const focused = document.activeElement;
+        if (focused?.closest('#laundry-actions')) return 'bar';
+        return focused?.closest('#laundry-body li') ? 'row' : 'other';
+      }),
+    );
+  }
+  expect(stops).toContain('bar');
+  expect(stops.indexOf('row')).toBeGreaterThanOrEqual(0);
+  expect(stops.indexOf('row')).toBeLessThan(stops.indexOf('bar'));
+  // From lg the action bar heads the hamper's column (#1063), not the
+  // viewport's far edge: Mark washed sits above the rows it washes, its end
+  // on theirs.
+  const phone = page.viewportSize()!;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const washBox = await page
+    .getByRole('button', { name: 'Mark washed' })
+    .boundingBox();
+  const firstRow = await page.locator('#laundry-body li').first().boundingBox();
+  expect(washBox!.y + washBox!.height).toBeLessThan(firstRow!.y);
+  expect(
+    Math.abs(washBox!.x + washBox!.width - (firstRow!.x + firstRow!.width)),
+  ).toBeLessThanOrEqual(1);
+  await page.setViewportSize(phone);
   await press(page, page.getByRole('button', { name: 'Mark washed' }));
   await expect(toast).toContainText('1 washed');
   await expect(page.getByText('Nothing needs a wash.')).toBeVisible();

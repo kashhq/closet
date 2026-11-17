@@ -1,12 +1,13 @@
 /**
  * A native post submits once (the double-submit guard of every PostForm,
- * src/web/auth/form.tsx, marked `data-submit-once`): a double tap or an
+ * src/web/form.tsx, marked `data-submit-once`): a double tap or an
  * impatient second tap on a slow network would otherwise post twice (two
  * outfits from one gallery pick). The server stays the real guard where a
  * duplicate matters (pickIdea); this spares the second request.
  *
  * - The first submit marks the form; a second one while marked is cancelled.
- * - Its submit buttons are disabled a tick later: disabling the submitter in
+ * - Its submit buttons (its `elements`, so those outside it joined through
+ *   `form=` too) are disabled a tick later: disabling the submitter in
  *   the submit event itself would drop its name=value from the post (the
  *   plan page's outfitId, the gallery's feeling).
  * - Only buttons enabled at that moment are disabled, marked `submitDisabled`,
@@ -36,23 +37,26 @@ document.addEventListener('submit', (event) => {
     return;
   }
   form.dataset[FORM_MARK] = '';
+  // The form's `elements`, never a query inside it: they include the
+  // controls outside it that name it in `form=` (an action bar's Save,
+  // Laundry's Mark washed, select mode's verbs).
   setTimeout(() => {
-    // The form's own buttons and those joined to it through form="id".
-    for (const button of form.querySelectorAll('button, input[type=submit]')) {
-      disable(button);
-    }
-    if (form.id) {
-      for (const button of document.querySelectorAll(
-        `button[form="${CSS.escape(form.id)}"]`,
-      )) {
-        disable(button);
-      }
+    for (const control of form.elements) {
+      if (isSubmitter(control)) disable(control);
     }
   });
 });
 
+function isSubmitter(control) {
+  return (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.type === 'submit'
+  );
+}
+
 function disable(button) {
-  if (button.disabled || button.type === 'button') return;
+  if (button.disabled) return;
   button.disabled = true;
   button.dataset[BUTTON_MARK] = '';
 }

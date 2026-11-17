@@ -330,7 +330,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.goto('/');
     await page.goto('/styling');
 
-    const bar = page.locator('[data-styling-bar]');
+    const bar = page.locator('#styling-actions');
     const layerSlot = bar.locator('#styling-preview [data-preview-slot="0"]');
     const fit = bar.locator('#styling-fit-line');
     // Opens empty (#665): the bar says so and judges nothing; choosing the
@@ -659,8 +659,28 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await expect(items.nth(0)).toBeFocused();
     expect(await selected()).toBe(0);
 
+    // In strip mode a choice lands only after the centring scroll, so a tap
+    // is judged once the strip has stopped moving (a steady scrollLeft over
+    // ten frames) and the observer has had its frame.
+    const settled = () =>
+      strip.evaluate(
+        (el) =>
+          new Promise<void>((resolve) => {
+            let last = NaN;
+            let steady = 0;
+            const frame = () => {
+              steady = el.scrollLeft === last ? steady + 1 : 0;
+              last = el.scrollLeft;
+              if (steady >= 10) resolve();
+              else requestAnimationFrame(frame);
+            };
+            requestAnimationFrame(frame);
+          }),
+      );
+
     // A tap on a neighbour is the tile's own, not a choice.
     await items.nth(1).click();
+    await settled();
     expect(await selected()).toBe(0);
 
     // Below lg the same strip is a strip again: a tap centres and chooses.
@@ -670,6 +690,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     // And back at lg a tap chooses nothing.
     await page.setViewportSize({ width: 1440, height: 900 });
     await items.nth(2).click();
+    await settled();
     expect(await selected()).toBe(1);
   });
 
