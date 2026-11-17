@@ -1,10 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ASSET_VERSION_HEADER } from '../../src/static-build';
 import { PUBLIC_DIR } from '../../src/static-assets';
+import { PROBE_DIRECTORY } from '../../src/storage-probe';
+import { STORAGE_MARKER } from '../../src/web/files/storage';
 import { REPLAY_TIMEOUT_MS } from '../../src/offline-writes';
 import { createGarment, jpegPhoto, uploadPhoto } from './garments';
 import { HEALTH_LIMIT } from '../../src/web/security/rate-limit';
@@ -551,8 +554,9 @@ describe('delivery (PWA_ENABLED=true)', () => {
   });
 });
 
-// A directory the process cannot create (its parent is a file) is the
-// unwritable storage the 503 names, whoever runs the spec.
+// Every storage failure the spec can build, before the first readiness
+// call (the verdict is cached 5 s): MODELS_PATH under a file, DATA_PATH's
+// probe directory a file, its marker gone. No mode bits, so root runs it too.
 describe('/health/ready with unwritable storage', () => {
   let t: TestApp;
   let scratch: string;
@@ -562,6 +566,12 @@ describe('/health/ready with unwritable storage', () => {
     const file = join(scratch, 'not-a-directory');
     writeFileSync(file, '');
     t = await createTestApp({ MODELS_PATH: join(file, 'models') });
+    await rm(join(t.dataPath, PROBE_DIRECTORY), {
+      recursive: true,
+      force: true,
+    });
+    await writeFile(join(t.dataPath, PROBE_DIRECTORY), '');
+    await rm(join(t.dataPath, STORAGE_MARKER));
   });
 
   afterAll(async () => {
@@ -569,7 +579,7 @@ describe('/health/ready with unwritable storage', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it('answers 503 naming storage, with its fix and no error text', async () => {
+  it('answers 503 naming storage by its keys, with no error text and no path', async () => {
     const res = await t.inject({
       method: 'GET',
       url: '/health/ready',
@@ -581,9 +591,12 @@ describe('/health/ready with unwritable storage', () => {
     expect(body.checks.storage).toEqual({
       status: 'down',
       required: true,
-      fix: expect.stringContaining('docs/operations.md#permissions'),
+      fix: 'DATA_PATH and MODELS_PATH cannot be written; docs/operations.md#permissions; see docs/operations.md#photo-storage-marker',
     });
     expect(body.checks.database).toEqual({ status: 'up', required: true });
     expect(res.body).not.toContain('ENOTDIR');
+    // The body is unauthenticated (#1090): no `/` starting a path segment
+    // anywhere (the docs pointers are relative), so no host directory.
+    expect(res.body).not.toMatch(/(?<![\w.#-])\/[\w.-]/);
   });
 });

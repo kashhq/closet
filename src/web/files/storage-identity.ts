@@ -3,14 +3,17 @@ import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
 import { parseStoredName } from './image-variant';
 import {
+  isStorageClaim,
   pairedInstallId,
   pairInstallOnce,
   photoRowNames,
+  recordStorageClaim,
   repairInstallId,
 } from './queries';
 import {
   type IdentityProblem,
   type InstallPairing,
+  type MarkerRead,
   type PhotoStorage,
   STORAGE_MARKER,
   type StorageMarker,
@@ -52,6 +55,14 @@ const ADOPT_MIN_COVERAGE = 0.9;
  * and gate, worktrees each with their own DATA_PATH share one database, so
  * it is one warn line and the claim goes on (#650's rules apply in all).
  *
+ * A marker beside a database paired with another id is refused only when
+ * this database never wrote it: one whose id a claim of this database
+ * recorded (storage_claim) is that claim's own, left by a crash after it
+ * lost the pairing race and before it withdrew it (#1049). It is withdrawn
+ * (kept as an orphan: that claim may have been the real share's, and the
+ * repair command can put it back) and the directory claimed as unmarked, by
+ * #650 and #850's rules.
+ *
  * Called by createPhotos, so the server's boot and every CLI that writes
  * photos (reconcile, retrim, seed) refuse the same directory.
  */
@@ -61,11 +72,17 @@ export async function claimStorage(
   logger: Logger,
   pairing: InstallPairing,
 ): Promise<StorageMarker> {
-  const read = await storage.readMarker();
+  const pairedAtStart = await pairedInstallId(db);
+  const read = await healOrphan(
+    storage,
+    db,
+    await storage.readMarker(),
+    pairedAtStart,
+    logger,
+  );
   if (read.state === 'unreadable') {
     throw new StorageIdentityError({ kind: 'unreadable', code: read.code });
   }
-  const pairedAtStart = await pairedInstallId(db);
   const { marker, paired } =
     read.state === 'present'
       ? {
@@ -85,6 +102,47 @@ export async function claimStorage(
   storage.claim(marker, pairing);
   logger.info(`Photo storage ${marker.installId} (marked ${marker.createdAt})`);
   return marker;
+}
+
+// A marker this database's own claim wrote and lost the pairing with
+// (claimStorage) is withdrawn, answering what DATA_PATH holds after: absent,
+// or the marker a process healing beside this one wrote meanwhile.
+async function healOrphan(
+  storage: PhotoStorage,
+  db: Db,
+  read: MarkerRead,
+  paired: string | undefined,
+  logger: Logger,
+): Promise<MarkerRead> {
+  if (
+    read.state !== 'present' ||
+    paired === undefined ||
+    read.marker.installId === paired ||
+    !(await isStorageClaim(db, read.marker.installId))
+  ) {
+    return read;
+  }
+  logger.warn(
+    `Photo storage ${read.marker.installId}: a claim of this database wrote this marker and lost the pairing to install ${paired}; moving it aside as an orphan (--repair-storage-identity --orphan ${read.marker.installId} puts it back)`,
+  );
+  await withdrawMarker(storage, read.marker);
+  return storage.readMarker();
+}
+
+// Removes this claim's own marker, a filesystem failure refused like an
+// unreadable marker: the code, never the path.
+async function withdrawMarker(
+  storage: PhotoStorage,
+  marker: StorageMarker,
+): Promise<void> {
+  try {
+    await storage.withdrawMarker(marker);
+  } catch (error) {
+    throw new StorageIdentityError({
+      kind: 'unreadable',
+      code: String((error as NodeJS.ErrnoException).code),
+    });
+  }
 }
 
 // Pairs an unpaired database with `installId`, answering the id it is paired
@@ -150,7 +208,9 @@ type RowProof = { covered: number; rows: number } | undefined;
 // An unpaired database: the marker first, with an id of its own, then the
 // pairing with whichever marker is on disk now. Answers `lostTo` when
 // another claim paired the database meanwhile, with this claim's marker
-// withdrawn: the caller marks as beside that pairing.
+// withdrawn: the caller marks as beside that pairing. The id is recorded
+// before the marker, so a crash before the withdrawal leaves a marker the
+// next boot knows as its own (healOrphan), never as another install's.
 async function markThenPair(
   storage: PhotoStorage,
   db: Db,
@@ -158,6 +218,7 @@ async function markThenPair(
   logger: Logger,
 ): Promise<{ marker: StorageMarker; paired: string } | { lostTo: string }> {
   const ownId = randomUUID();
+  await recordStorageClaim(db, ownId);
   const marker = await createMarker(storage, ownId);
   const paired = await pair(db, marker.installId, logger);
   const ours = marker.installId === ownId;
@@ -170,7 +231,7 @@ async function markThenPair(
   logger.warn(
     `Photo storage ${ownId}: this database was paired with install ${paired} meanwhile; withdrawing the marker`,
   );
-  await storage.withdrawMarker(marker);
+  await withdrawMarker(storage, marker);
   return { lostTo: paired };
 }
 
@@ -246,24 +307,42 @@ export async function storageIdentityProblem(
   return paired === storage.claimedInstallId ? undefined : { kind: 'unpaired' };
 }
 
-export type StorageRepair = { paired: string } | { refused: string };
+export type StorageRepair =
+  | { paired: string }
+  | { refused: string; orphans?: StorageMarker[] };
 
 /**
  * `maintenance:reconcile -- --repair-storage-identity --confirm`: pairs the
  * database with the marker DATA_PATH holds now, once an operator checked it
  * is the right share (a deliberate restore onto new storage:
- * docs/operations.md#photo-storage-marker). Never writes the marker, so an
- * unmounted share (no marker) is refused, never paired. Runs without
- * claimStorage, which refuses exactly this storage.
+ * docs/operations.md#photo-storage-marker). Never writes a new marker, so
+ * an unmounted share (no marker) is refused, never paired; the refusal
+ * lists the orphaned markers there (withdrawn by a claim that lost its
+ * pairing, #1049), and `--orphan <id>` puts that one back and pairs it.
+ * Runs without claimStorage, which refuses exactly this storage.
  */
 export async function repairStorageIdentity(
   storage: PhotoStorage,
   db: Db,
   logger: Logger,
+  { orphan }: { orphan?: string } = {},
 ): Promise<StorageRepair> {
+  if (orphan !== undefined) {
+    if (!(await storage.restoreOrphan(orphan))) {
+      return {
+        refused: `DATA_PATH holds a ${STORAGE_MARKER} already, or no orphaned marker of install ${orphan}`,
+        orphans: (await storage.orphanedMarkers()).map((o) => o.marker),
+      };
+    }
+    logger.warn(`Storage identity: put back the orphaned marker of ${orphan}`);
+  }
   const read = await storage.readMarker();
   if (read.state === 'absent') {
-    return { refused: identityRefusal({ kind: 'absent' }) };
+    const orphans = (await storage.orphanedMarkers()).map((o) => o.marker);
+    return {
+      refused: identityRefusal({ kind: 'absent' }),
+      ...(orphans.length > 0 && { orphans }),
+    };
   }
   if (read.state === 'unreadable') {
     return {

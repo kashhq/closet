@@ -169,29 +169,37 @@ describe('storageFix', () => {
   it.each([
     [
       'EACCES',
-      `chown -R ${uid} the host directory mounted at /d; docs/operations.md#permissions`,
+      `chown -R ${uid} the host directory mounted at DATA_PATH; docs/operations.md#permissions`,
     ],
     [
       'EPERM',
-      `chown -R ${uid} the host directory mounted at /d; docs/operations.md#permissions`,
+      `chown -R ${uid} the host directory mounted at DATA_PATH; docs/operations.md#permissions`,
     ],
-    ['ENOSPC', 'the share mounted at /d is full'],
-    ['EDQUOT', 'the share mounted at /d is full'],
-    ['TIMEOUT', 'the share mounted at /d is not answering (NFS stalled?)'],
-    ['EROFS', '/d cannot be written; docs/operations.md#permissions'],
+    ['ENOSPC', 'the share mounted at DATA_PATH is full'],
+    ['EDQUOT', 'the share mounted at DATA_PATH is full'],
+    [
+      'TIMEOUT',
+      'the share mounted at DATA_PATH is not answering (NFS stalled?)',
+    ],
+    ['EROFS', 'DATA_PATH cannot be written; docs/operations.md#permissions'],
   ])('%s', (code, fix) => {
-    expect(storageFix([{ directory: '/d', code }])).toBe(fix);
+    expect(storageFix([{ key: 'DATA_PATH', code }])).toBe(fix);
   });
 
-  it('names each kind once, with the directories it applies to', () => {
+  it('names each kind once, with the keys it applies to', () => {
     expect(
       storageFix([
-        { directory: '/a', code: 'ENOSPC' },
-        { directory: '/b', code: 'TIMEOUT' },
-        { directory: '/c', code: 'EDQUOT' },
+        { key: 'DATA_PATH', code: 'ENOSPC' },
+        { key: 'MODELS_PATH', code: 'EDQUOT' },
+      ]),
+    ).toBe('the share mounted at DATA_PATH and MODELS_PATH is full');
+    expect(
+      storageFix([
+        { key: 'DATA_PATH', code: 'ENOSPC' },
+        { key: 'MODELS_PATH', code: 'TIMEOUT' },
       ]),
     ).toBe(
-      'the share mounted at /a and /c is full; the share mounted at /b is not answering (NFS stalled?)',
+      'the share mounted at DATA_PATH is full; the share mounted at MODELS_PATH is not answering (NFS stalled?)',
     );
   });
 });
@@ -244,7 +252,7 @@ describe('createStorageCheck', () => {
 
   // Root writes through mode bits: the read-only case means nothing there.
   it.skipIf(process.getuid?.() === 0)(
-    'is down with the chown for exactly the read-only directory, the error code only in the log',
+    'is down with the chown for exactly the read-only directory, by its key, the error code only in the log',
     async () => {
       logs.clear();
       const uid = process.getuid?.();
@@ -252,7 +260,7 @@ describe('createStorageCheck', () => {
       expect(await check([data(writable), models(readOnly)])).toEqual({
         status: 'down',
         required: true,
-        fix: `chown -R ${uid}:${gid} the host directory mounted at ${readOnly}; docs/operations.md#permissions`,
+        fix: `chown -R ${uid}:${gid} the host directory mounted at MODELS_PATH; docs/operations.md#permissions`,
       });
       expect(logs.messages('warn')).toEqual([
         `Readiness: MODELS_PATH is not writable by this process (EACCES)`,
@@ -450,7 +458,7 @@ describe('createStorageCheck', () => {
       expect(verdict).toMatchObject({
         status: 'down',
         required: true,
-        fix: 'the share mounted at /app/data is not answering (NFS stalled?)',
+        fix: 'the share mounted at DATA_PATH is not answering (NFS stalled?)',
       });
 
       // Many windows later: each joins the one hung probe and answers at

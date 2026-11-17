@@ -86,7 +86,7 @@ help:
 	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index (part of ci-quick)"
 	@echo "make layer-check      — fail on an import in src/ that reaches up scripts/ci/layers.conf's layer stack (part of ci-quick)"
 	@echo "make guard-check      — fail on a code-structure rule in scripts/ci/guards.conf (devkit/bin/guard_check.py; part of ci-quick)"
-	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/ci/lg_check.py, its unit tests first; part of ci-quick)"
+	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/lg-check.ts, Tailwind's own scanner and compiler; its tests are scripts/lg-check.spec.ts in ci-unit; part of ci-quick)"
 	@echo "make migration-check  — fail on an edit to a shipped drizzle migration (devkit/bin/migration_check.py; part of ci-quick)"
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
 	@echo "make secrets-staged   — the same scan over the staged paths only (the pre-commit hook's half)"
@@ -100,7 +100,7 @@ ci-deps:
 # (scripts/ci/hooks.conf), so a part added here must be added to a hook too.
 ci-quick: ci-guards secrets-check ci-lint ci-typecheck
 
-# Sub-second each and stdlib only: they run before npm ci. ci-guards-staged is the pre-commit
+# Sub-second each and stdlib only, except lg-check (Node, needs npm ci). ci-guards-staged is the pre-commit
 # hook's copy: devkit-check judges the staged gate_plan.sh (devkit #124 reads the working tree
 # by default, which let a bad staged plan through when only the disk copy was fixed).
 GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check migration-check
@@ -280,14 +280,14 @@ guard-check:
 	python3 -I devkit/bin/guard_check.py
 
 # Page-level `lg:` classes in src/web are counted per file against scripts/ci/lg_count.conf, which
-# only shrinks (#1066; the desktop layout plan's principle 7). Stdlib only, like layer-check.
+# only shrinks (#1066; the desktop layout plan's principle 7). Unlike its neighbours it needs
+# node_modules: it compiles each class with Tailwind (ci-quick runs after ci-deps).
 lg-check:
-	python3 -I scripts/ci/lg_check_test.py
-	python3 -I scripts/ci/lg_check.py
+	node -r ts-node/register/transpile-only scripts/lg-check.ts
 
 # The pre-commit hook's half: the conf, the file list and every file read from the index.
 lg-check-staged:
-	python3 -I scripts/ci/lg_check.py --staged
+	node -r ts-node/register/transpile-only scripts/lg-check.ts --staged
 
 # A migration on origin/main has run on the deployed database: never edit or delete it, fix forward
 # (the `migration-contract` label passes a deliberate edit). drizzle-kit's append to

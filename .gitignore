@@ -95,3 +95,7 @@ node_modules/
 # Agent tooling (worktrees are full checkouts)
 **/.claude/*
 !/.claude/settings.json
+
+# Python bytecode
+__pycache__/
+*.pyc

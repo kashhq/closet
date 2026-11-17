@@ -299,7 +299,7 @@ export function createStorageCheck({
       messages.push(
         `Readiness: ${directory.key} is not writable by this process (${result.code})`,
       );
-      unwritable.push({ directory: directory.path, code: result.code });
+      unwritable.push({ key: directory.key, code: result.code });
     });
     if (problem) messages.push(`Readiness: ${problem}`);
     const state = messages.join('\n');

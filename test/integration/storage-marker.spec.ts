@@ -81,6 +81,7 @@ describe('the photo storage marker', () => {
     readText: (path) => readFile(path, 'utf8'),
     writeNew: (path, text) => writeFile(path, text, { flag: 'wx' }),
     link: (from, to) => link(from, to),
+    rename: (from, to) => rename(from, to),
     remove: (path) => rm(path, { force: true }),
   };
   const fsError = (code: string) =>
@@ -504,6 +505,13 @@ describe('the photo storage marker', () => {
         return created;
       }
     }
+    // Loses the pairing as OutPaired, then dies before withdrawing its
+    // marker (#1049).
+    class OutPairedThenDies extends OutPaired {
+      override withdrawMarker(): Promise<never> {
+        return Promise.reject(new Error('killed'));
+      }
+    }
 
     beforeAll(async () => {
       restoreRows = await stashPhotoRows();
@@ -517,8 +525,15 @@ describe('the photo storage marker', () => {
       point: string;
       first: (dir: string) => PhotoStorage;
       claimed: 'rejects' | 'claims';
+      /** What the cut-short claim says, when it says more than "rejects". */
+      refused?: RegExp;
       next: 'paired' | { refused: RegExp; paired: string | undefined };
       pairedWith?: string;
+      /**
+       * The claim's marker is kept as an orphan, and the repair command
+       * pairs it back (#1049: it may have been the real share's).
+       */
+      orphaned?: true;
     }
     const crashPoints: CrashPoint[] = [
       {
@@ -599,6 +614,71 @@ describe('the photo storage marker', () => {
           refused: /^DATA_PATH has no \.closet-storage marker/,
           paired: otherShare,
         },
+        orphaned: true,
+      },
+      {
+        // #1049: its marker, beside a database paired with the other share,
+        // is this database's own claim (storage_claim), never another
+        // install's: kept as an orphan, then the same refusal as the row
+        // above. Also the real share's claim losing to a bare mountpoint's:
+        // the next boot must not destroy the only marker the repair can pair.
+        point:
+          'the process dies after losing the pairing, before withdrawing its marker',
+        first: (dir) => {
+          const storage = new OutPairedThenDies(dir, silentLogger);
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        next: {
+          refused: /^DATA_PATH has no \.closet-storage marker/,
+          paired: otherShare,
+        },
+        orphaned: true,
+      },
+      {
+        point: 'the withdrawal of its marker fails (EACCES)',
+        first: (dir) => {
+          const storage = new OutPaired(dir, silentLogger, {
+            ...diskFs,
+            rename: (from, to) =>
+              from === markerIn(dir)
+                ? Promise.reject(fsError('EACCES'))
+                : diskFs.rename(from, to),
+          });
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        refused: /^DATA_PATH storage unreadable: EACCES /,
+        next: {
+          refused: /^DATA_PATH has no \.closet-storage marker/,
+          paired: otherShare,
+        },
+        orphaned: true,
+      },
+      {
+        // The withdrawal's one rename lands and the process dies before it
+        // reads what it took: the name left is an orphan's, which the
+        // repair finds by its content.
+        point: 'the process dies right after its withdrawal renames the marker',
+        first: (dir) => {
+          const storage = new OutPaired(dir, silentLogger, {
+            ...diskFs,
+            rename: async (from, to) => {
+              await diskFs.rename(from, to);
+              if (from === markerIn(dir)) throw new Error('killed');
+            },
+          });
+          storage.prepare();
+          return storage;
+        },
+        claimed: 'rejects',
+        next: {
+          refused: /^DATA_PATH has no \.closet-storage marker/,
+          paired: otherShare,
+        },
+        orphaned: true,
       },
     ];
 
@@ -609,7 +689,12 @@ describe('the photo storage marker', () => {
         claimStorage(storage, t.db, silentLogger, 'enforced');
       const first = claim(row.first(directory));
       if (row.claimed === 'rejects') {
-        await expect(first).rejects.toThrow();
+        if (!row.refused) await expect(first).rejects.toThrow();
+        else {
+          await expect(first).rejects.toThrow(row.refused);
+          await expect(first).rejects.toBeInstanceOf(StorageIdentityError);
+          await expect(first).rejects.not.toThrow(directory);
+        }
       } else {
         await first;
       }
@@ -627,6 +712,37 @@ describe('the photo storage marker', () => {
           row.next.paired === undefined ? [] : [row.next.paired],
         );
       }
+      if (!row.orphaned) return;
+      const storage = storageOver(directory);
+      const [orphan] = (await storage.orphanedMarkers()).map((o) => o.marker);
+      expect(await repairStorageIdentity(storage, t.db, silentLogger)).toEqual({
+        refused: expect.stringMatching(/^DATA_PATH has no/),
+        orphans: [orphan],
+      });
+      expect(
+        await repairStorageIdentity(storage, t.db, silentLogger, {
+          orphan: orphan.installId,
+        }),
+      ).toEqual({ paired: orphan.installId });
+      expect(await onDisk()).toBe(orphan.installId);
+      expect(await storage.orphanedMarkers()).toEqual([]);
+      expect((await claim(storageOver(directory))).installId).toBe(
+        orphan.installId,
+      );
+    });
+
+    // Only a claim that never paired leaves an orphan: a share once paired
+    // and then re-paired away (a restore onto new storage) is another
+    // install's, refused with its marker kept.
+    it('never withdraws a marker that was paired once, then re-paired away', async () => {
+      await t.db.delete(install);
+      directory = await mkdtemp(join(tmpdir(), 'closet-first-claim-'));
+      const claim = () =>
+        claimStorage(storageOver(directory), t.db, silentLogger, 'enforced');
+      const own = await claim();
+      await repairInstallId(t.db, otherShare);
+      await expect(claim()).rejects.toThrow(OTHER_INSTALL);
+      expect(await onDisk()).toBe(own.installId);
     });
 
     it('withdraws only its own marker when it loses the pairing', async () => {
