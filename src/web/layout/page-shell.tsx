@@ -84,8 +84,10 @@ export function regionId(name: string, region: PageRegion): string {
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
- * Only `single` takes an `actionBar` so far: a grid layout's place for one
- * (`panel`'s is the top of its aside, §3.4) arrives with its first page.
+ * `panel`'s aside follows the body, and on a phone continues its flow:
+ * the body's `gap` (`PageAside`). Only `single` takes an `actionBar` so
+ * far: a grid layout's place for one (`panel`'s is the top of its aside,
+ * §3.4) arrives with its first page.
  *
  * `centred` is the standalone page (sign in, register, the invite landing,
  * the offline page): its body is one column centred in the room the bar and
@@ -206,16 +208,17 @@ export function PageShell(props: PageShellProps) {
  */
 function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   const { name } = props;
+  const asideFirst = ASIDE_FIRST[layout];
   const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
       layout={layout}
       label={props.asideLabel}
+      gap={asideFirst ? undefined : props.body?.gap}
     >
       {props.aside}
     </PageAside>
   );
-  const asideFirst = ASIDE_FIRST[layout];
   return [
     asideFirst && aside,
     <PageBody name={name} {...props.body}>
@@ -311,17 +314,26 @@ function PageBody(props: PageBodyFrame & { name: string; children?: Child }) {
   );
 }
 
+/**
+ * The shell's second region, `#<name>-aside`. One that follows the body
+ * (`panel`'s) continues the body's flow on a phone, where it stacks under
+ * it: the body's `gap` inside it and before it (main.css), so a page whose
+ * last sections move into it keeps its phone pixel for pixel.
+ */
 function PageAside(props: {
   id: string;
   layout: AsideLayout;
   label: string | undefined;
   /** In a fragment (PageFragment): its content swapped into the region in place. */
   oob?: boolean;
+  /** `panel`'s: the body's, as its phone flow continues here (mainRegions). */
+  gap?: PageGap;
   children: Child;
 }) {
   const region = {
     id: props.id,
     class: 'page-aside',
+    'data-gap': props.gap,
     'hx-swap-oob': props.oob ? 'innerHTML' : undefined,
   };
   switch (props.layout) {

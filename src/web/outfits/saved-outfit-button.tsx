@@ -1,7 +1,7 @@
 import { cardClass } from '../card';
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
-import { PICK_GRID } from '../layout/columns';
+import { OUTFIT_ROW_GRID } from '../layout/columns';
 import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { collagePieces, OutfitCollage } from './collage';
@@ -92,8 +92,8 @@ export function SavedOutfitButtons(props: {
  * page's address without it), the first page of the owner's outfits of
  * that list as SavedOutfitButtons of one native PostForm to `action`,
  * which carries the page's hidden fields (`children`), or the line saying
- * there are none. The buttons are `PICK_GRID`'s items, and a next page's
- * land beside them, its sentinel spanning the row.
+ * there are none. The buttons are `OUTFIT_ROW_GRID`'s items, and a next
+ * page's land beside them, its sentinel spanning the row.
  */
 export function SavedOutfitPicker(props: {
   heading: Child;
@@ -113,7 +113,7 @@ export function SavedOutfitPicker(props: {
       </h2>
       <OutfitListTabs list={props.list} href={props.href} />
       {props.outfits.length > 0 ? (
-        <PostForm action={props.action} class={PICK_GRID}>
+        <PostForm action={props.action} class={OUTFIT_ROW_GRID}>
           {props.children}
           <SavedOutfitButtons
             outfits={props.outfits}
