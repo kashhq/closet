@@ -93,7 +93,7 @@ describe('select mode verbs', () => {
     expectNativePostForms(page);
     // Still select mode, the same three checked, the bar counting them.
     expect(checkedIds(page.body).sort()).toEqual([...tops].sort());
-    expect(page.body).toMatch(/data-select-count-value="true">3</);
+    expect(page.body).toMatch(/id="selected-count"[^>]*>3</);
     expect(page.body).toContain('Set on 3 garments');
 
     const formality = await post('/wardrobe/bulk?category=tops', {
@@ -137,7 +137,7 @@ describe('select mode verbs', () => {
       coats.length - GRID_PAGE_SIZE,
     );
     expect(back).toMatch(
-      new RegExp(`data-select-count-value="true">${coats.length}<`),
+      new RegExp(`id="selected-count"[^>]*>${coats.length}<`),
     );
     // Later pages arrive checked: the sentinel's tiles carry the selection.
     const tilesUrl = /hx-get="([^"]*\/wardrobe\/tiles[^"]*)"/.exec(

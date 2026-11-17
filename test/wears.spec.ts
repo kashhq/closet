@@ -157,6 +157,20 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await expect(
     page.getByRole('checkbox', { name: 'White tees' }),
   ).toBeChecked();
+  // From lg the action bar heads the hamper's column (#1063), not the
+  // viewport's far edge: Mark washed sits above the rows it washes, its end
+  // on theirs.
+  const phone = page.viewportSize()!;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const washBox = await page
+    .getByRole('button', { name: 'Mark washed' })
+    .boundingBox();
+  const firstRow = await page.locator('#laundry-body li').first().boundingBox();
+  expect(washBox!.y + washBox!.height).toBeLessThan(firstRow!.y);
+  expect(
+    Math.abs(washBox!.x + washBox!.width - (firstRow!.x + firstRow!.width)),
+  ).toBeLessThanOrEqual(1);
+  await page.setViewportSize(phone);
   await press(page, page.getByRole('button', { name: 'Mark washed' }));
   await expect(toast).toContainText('1 washed');
   await expect(page.getByText('Nothing needs a wash.')).toBeVisible();

@@ -631,14 +631,17 @@ function noticeText(record: OutboxRecord): string {
 /**
  * Past OUTBOX_MAX_PENDING the queueable controls are disabled offline, like
  * connectivity.js's, and the banner says why; marked, so only those come
- * back.
+ * back. A form's controls are its `elements`, which hold those outside it
+ * joined through `form=` too (Laundry's Mark washed, in the action bar).
  */
 function guardFull(waiting: number): void {
   const full = offline() && waiting >= OUTBOX_MAX_PENDING;
   for (const form of document.querySelectorAll<HTMLFormElement>(QUEUE_FORM)) {
-    for (const control of form.querySelectorAll<
-      HTMLButtonElement | HTMLInputElement
-    >('button, input:not([type="hidden"])')) {
+    for (const control of Array.from(form.elements).filter(
+      (el): el is HTMLButtonElement | HTMLInputElement =>
+        el instanceof HTMLButtonElement ||
+        (el instanceof HTMLInputElement && el.type !== 'hidden'),
+    )) {
       if (full && !control.disabled) {
         control.disabled = true;
         control.dataset[FULL_MARK] = '';

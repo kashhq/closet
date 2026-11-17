@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { ViewContext } from '../view-context';
+import { ActionBar, type ActionBarProps } from './action-bar';
 import { AppBar, type AppBarProps } from './app-bar';
 import { Dock } from './dock';
 import { Layout, type PageMeta } from './layout';
@@ -64,8 +65,9 @@ export interface PageBodyFrame {
  * A page's regions, each with a stable id the shell derives from the page's
  * `name` (`regionId`): the target an htmx fragment swaps (`#wardrobe-body`)
  * or an out-of-band swap names. A fragment swaps only the region it owns.
+ * `actions` is the action bar (`actionBar`, action-bar.tsx).
  */
-export type PageRegion = 'body' | 'aside';
+export type PageRegion = 'body' | 'aside' | 'actions';
 
 export function regionId(name: string, region: PageRegion): string {
   return `${name}-${region}`;
@@ -84,6 +86,8 @@ export function regionId(name: string, region: PageRegion): string {
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
+ * Only `single` takes an `actionBar` so far: a grid layout's place for one
+ * (`panel`'s is the top of its aside, §3.4) arrives with its first page.
  *
  * `centred` is the standalone page (sign in, register, the invite landing,
  * the offline page): its body is one column centred in the room the bar and
@@ -97,20 +101,30 @@ export type PageLayout =
       width?: PageWidth;
       aside?: never;
       asideLabel?: never;
+      /** The page's action bar, which the shell places (action-bar.tsx). */
+      actionBar?: ActionBarProps;
     }
   | {
       layout: 'centred';
       width?: never;
       aside?: never;
       asideLabel?: never;
+      actionBar?: never;
     }
-  | { layout: 'split'; width?: never; aside: Child; asideLabel?: never }
+  | {
+      layout: 'split';
+      width?: never;
+      aside: Child;
+      asideLabel?: never;
+      actionBar?: never;
+    }
   | {
       layout: 'panel' | 'facets' | 'index';
       width?: never;
       aside: Child;
       /** The landmark's accessible name. */
       asideLabel: string;
+      actionBar?: never;
     };
 
 type ShellLayout = NonNullable<PageLayout['layout']>;
@@ -146,12 +160,6 @@ export type PageShellProps = PageLayout & {
   bar: Omit<AppBarProps, 'ctx'>;
   body?: PageBodyFrame;
   /**
-   * The page ends on its own bar sticky above the dock (Styling's, #664):
-   * it leaves only the dock's height below it, not the dock and a gutter.
-   * Superseded by `actionBar` in D5 (#1058), which implies it; removed then.
-   */
-  endsOnBar?: boolean;
-  /**
    * What the page opens over itself: its sheets, dialogs and toasts. After
    * `<main>`, outside the regions, so no layout places them. A filter sheet
    * is not one: it goes in `aside` (`facets`), where the desktop docks it.
@@ -163,16 +171,44 @@ export type PageShellProps = PageLayout & {
 /**
  * One page's frame (#1059): the document, the app bar, `<main>` with the
  * page's regions, and the dock. The shell owns the bar's offset
- * (`--app-bar-h`), the gutter, the room left for the dock and for an action
- * bar fixed above it, and the regions' ids; a page brings its content and
- * picks a layout, a width (`single`), a gutter and a gap by name. Its `lg:`
+ * (`--app-bar-h`), the gutter, the room left for the dock and for its
+ * action bar (main.css keys it off `.action-bar`), the bar's place and the
+ * regions' ids; a page brings its content and picks a layout, a width
+ * (`single`), a gutter and a gap by name. Its `lg:`
  * layout lives in main.css, never on a page. `FormPage` and `SettingsPage`
  * are presets of it. `expectFullPage` (test/integration/pages.ts) holds a
  * page to one `.page-shell`; guards.conf `@page-main` holds every `<main>`
  * to this file.
  */
 export function PageShell(props: PageShellProps) {
-  const { ctx, name, bar, layout = 'single' } = props;
+  const { ctx, bar, layout = 'single' } = props;
+  return (
+    <Layout ctx={ctx} title={documentTitle(props)} {...props.meta}>
+      <AppBar ctx={ctx} {...bar} />
+      <main
+        class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
+        data-layout={layout}
+      >
+        {mainRegions(props, layout)}
+      </main>
+      {props.overlays}
+      <Dock ctx={ctx} />
+    </Layout>
+  );
+}
+
+/**
+ * `<main>`'s regions in DOM order, which is the desktop's visual order: a
+ * `row` action bar heads it (from lg it sticks there, above what it acts
+ * on), a left aside precedes the body and a right one follows it, and a
+ * `stack` action bar comes last (below lg it rides above the dock in the
+ * body's flow; from lg it is the column beside the body).
+ */
+function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
+  const { name, actionBar } = props;
+  const actions = actionBar && (
+    <ActionBar id={regionId(name, 'actions')} {...actionBar} />
+  );
   const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
@@ -182,24 +218,17 @@ export function PageShell(props: PageShellProps) {
       {props.aside}
     </PageAside>
   );
-  return (
-    <Layout ctx={ctx} title={documentTitle(props)} {...props.meta}>
-      <AppBar ctx={ctx} {...bar} />
-      <main
-        class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
-        data-layout={layout}
-        data-end={props.endsOnBar ? 'bar' : undefined}
-      >
-        {ASIDE_FIRST[layout] && aside}
-        <PageBody name={name} {...props.body}>
-          {props.children}
-        </PageBody>
-        {!ASIDE_FIRST[layout] && aside}
-      </main>
-      {props.overlays}
-      <Dock ctx={ctx} />
-    </Layout>
-  );
+  const asideFirst = ASIDE_FIRST[layout];
+  const stack = actionBar?.kind === 'stack';
+  return [
+    !stack && actions,
+    asideFirst && aside,
+    <PageBody name={name} {...props.body}>
+      {props.children}
+    </PageBody>,
+    !asideFirst && aside,
+    stack && actions,
+  ];
 }
 
 /** The document's `<title>`: the page's own, else the bar's when it is a string. */

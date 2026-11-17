@@ -24,6 +24,9 @@ import type { LaundryItem } from './queries';
 /** The one-shot flag POST /laundry's redirect carries. */
 const LAUNDRY_FLAGS = ['washed'] as const;
 
+/** The hamper's form: Mark washed, in the page's action bar, submits it. */
+const LAUNDRY_FORM_ID = 'laundry-form';
+
 /**
  * GET /laundry, the Wardrobe's Laundry tab: the signed-in user's own hamper
  * as one native form (PostForm; the answer is this page again): what needs
@@ -61,6 +64,23 @@ export function LaundryPage(props: {
       name="laundry"
       title={t('wear.LAUNDRY')}
       bar={wardrobeBar(header)}
+      actionBar={
+        items.length > 0
+          ? {
+              children: (
+                <button
+                  type="submit"
+                  form={LAUNDRY_FORM_ID}
+                  id="laundry-mark-washed"
+                  class="btn btn-primary btn-sm"
+                  autofocus={landed}
+                >
+                  {t('wear.MARK_WASHED')}
+                </button>
+              ),
+            }
+          : undefined
+      }
       overlays={
         <>
           <WardrobeAddSheet {...header} />
@@ -84,6 +104,7 @@ export function LaundryPage(props: {
         </EmptyState>
       ) : (
         <PostForm
+          id={LAUNDRY_FORM_ID}
           action={LAUNDRY_PATH}
           class="flex flex-col gap-6"
           offlineQueue="wash"
@@ -94,16 +115,6 @@ export function LaundryPage(props: {
           {worn.length > 0 && (
             <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
           )}
-          <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex justify-end">
-            <button
-              type="submit"
-              id="laundry-mark-washed"
-              class="btn btn-primary btn-sm"
-              autofocus={landed}
-            >
-              {t('wear.MARK_WASHED')}
-            </button>
-          </div>
         </PostForm>
       )}
     </PageShell>

@@ -42,8 +42,6 @@
  *  - `WEEK_DAYS`: the Calendar week's seven days, the phone's strip of
  *    letters (`WEEK_STRIP`) and the desktop grid's columns (`WEEK_COLUMNS`,
  *    #467; its rows are the page's `WEEK_ROWS`).
- *  - `COMPOSER_COLUMNS`: Styling's frame from `lg`, the rows' column then
- *    the aside's fixed one (`contents` below it).
  *  - `FIELD_GRID`: form fields two to a row (a trip's dates, the repair's
  *    day and cost, body measurements, Styling's day and occasion);
  *    `DENSE_FIELD_GRID` the same with the row gap of a field that carries
@@ -74,8 +72,6 @@ export const MUSE_GRID = 'grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2';
 export const MUSE_PIECES = 'grid grid-cols-4 gap-1.5';
 export const WEEK_STRIP = 'grid grid-cols-7 gap-1';
 export const WEEK_COLUMNS = 'lg:grid lg:grid-cols-7 lg:gap-2';
-export const COMPOSER_COLUMNS =
-  'contents lg:grid lg:grid-cols-[1fr_20rem] lg:gap-6 lg:pr-4';
 export const FIELD_GRID = 'grid grid-cols-2 gap-3';
 export const DENSE_FIELD_GRID = 'grid grid-cols-2 gap-x-3 gap-y-1';
 export const BRAND_SIZE_FIELDS = 'grid grid-cols-[2fr_1fr] gap-2';

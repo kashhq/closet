@@ -245,8 +245,7 @@
 }
 
 /* The dock's height, the safe area included, as daisyUI sizes .dock: what a
-   bar fixed above the dock sits on (`bottom-dock`: the wardrobe's select
-   bar, Laundry's and Styling's). */
+   bar above the dock sits on (`bottom-dock`; the action bars below). */
 @theme {
   --spacing-dock: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
@@ -297,11 +296,8 @@
    text size like the two-line title clamp it holds (#1028): at 100% text
    nothing differs. `under-bar` is the bar and a 1rem gutter: where a
    sticky column stops (`top-under-bar`) and an anchor lands
-   (`scroll-mt-under-bar`). The height of an action bar fixed above the dock
-   (`fixed bottom-dock`: py-3 around a btn-sm, 3.5rem, in rem like the rest),
-   `--action-bar-h`: what focus scrolls clear of and what PageShell leaves
-   below the page while one shows. A new fixed bar taller than that updates
-   it. `bar` is the bar alone: where a row sticks under it (`top-bar`). */
+   (`scroll-mt-under-bar`). `bar` is the bar alone: where a row sticks under
+   it (`top-bar`). */
 :root {
   --app-bar-row-h: 4rem;
   --app-bar-h: var(--app-bar-row-h);
@@ -309,7 +305,6 @@
      count its tab row; --size-field grows on a coarse pointer (Touch
      sizing). */
   --app-bar-tabs-h: calc(var(--size-field) * 10);
-  --action-bar-h: 3.5rem;
 }
 @theme inline {
   --spacing-bar: var(--app-bar-h);
@@ -388,21 +383,121 @@
 /* Keyboard focus and scripted scrolling stop short of the fixed bars: a
    focused control is scrolled into view clear of the app bar and, where the
    dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
-   the rail, and on a page without one), and of an action bar fixed above it
-   (`--action-bar-h`; the sticky bar in Styling's flow needs none). The same
-   selector makes the page frame (below) leave the action bar's height under
-   the page's end, so its last row is never under the bar (the Wardrobe's
-   select mode). */
+   the rail, and on a page without one). The action bar adds its own height
+   (below). */
 html {
   scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
 }
 :root:has(.dock) {
   scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
 }
-:root:has(.fixed.bottom-dock:not(.hidden, [hidden])) {
-  scroll-padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 0.5rem);
-  & .page-shell {
-    padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 2rem);
+
+/* The action bar (layout/action-bar.tsx, #1063; docs/plans/
+   2026-11-16-desktop-layout.md §3.4), placed by PageShell's `actionBar` as a
+   child of `<main>`: its box, its places and the room it takes, all here.
+   A `row`'s height is `--action-bar-h`: its padding, its 1px border and a
+   btn-sm (daisyUI's --size-field * 8, which grows on a coarse pointer), in
+   rem, so it grows with the text. The row is that tall by construction (it
+   never wraps; text too large for the screen scrolls it sideways), so the
+   room reserved for it, which reads the same token, is its real height at
+   any text size or pointer (#1030: a hand-copied 3.5rem was short of it on
+   a phone and hid focus once the row wrapped). Below lg a row is fixed
+   above the dock: focus scrolls clear of it and the page's end leaves its
+   height. From lg it sticks at the head of `<main>` under the app bar,
+   aligned to the content column: focus scrolls clear of it at the top. A
+   `stack` (varying height, #664) is sticky above the dock in the flow after
+   the body, so it reserves nothing: the page leaves only the dock below it;
+   from lg it is the 20rem column beside the body. Page content is z-20 at
+   most: a row is z-20, a stack z-10 (a menu opening in the body, Styling's
+   "Add row", is z-20 over it). */
+:root {
+  --action-bar-h: calc(var(--size-field) * 8 + 1.5rem + 1px);
+}
+@layer components {
+  .action-bar {
+    background-color: var(--color-base-100);
+    border-top: 1px solid var(--color-base-300);
+  }
+  .action-bar[data-kind="row"] {
+    position: fixed;
+    left: var(--rail-width);
+    right: 0;
+    bottom: var(--spacing-dock);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: var(--action-bar-h);
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  /* `safe`: a row too wide for the screen starts at its start edge, where
+     the scroller reaches it (space-between does so of itself). */
+  .action-bar[data-align="end"] {
+    justify-content: safe flex-end;
+  }
+  .action-bar[data-align="between"] {
+    justify-content: space-between;
+  }
+  .action-bar[data-kind="stack"] {
+    position: sticky;
+    bottom: var(--spacing-dock);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
+    /* The flow step it had inside the body (Styling's gap-3). */
+    margin-top: 0.75rem;
+  }
+  .page-shell:has(> .action-bar[data-kind="stack"]) {
+    padding-bottom: max(var(--spacing-dock), 2rem);
+  }
+
+  @media (max-width: 1023.98px) {
+    .page-shell:has(> .action-bar[data-kind="row"]) {
+      padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 2rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell > .action-bar[data-kind="row"] {
+      position: sticky;
+      top: var(--app-bar-h);
+      bottom: auto;
+      border-top: 0;
+      border-bottom: 1px solid var(--color-base-300);
+    }
+    .page-shell:has(> .action-bar[data-kind="stack"]) {
+      display: grid;
+      grid-template: "body bar" auto / 1fr 20rem;
+      column-gap: 1.5rem;
+      align-items: start;
+    }
+    .page-shell > .action-bar[data-kind="stack"] {
+      grid-area: bar;
+      top: calc(var(--app-bar-h) + 1rem);
+      bottom: auto;
+      z-index: auto;
+      gap: 1rem;
+      max-height: none;
+      margin: 1rem 1rem 0 0;
+      border-top: 0;
+      background-color: transparent;
+    }
+  }
+}
+/* Unlayered, as the scroll padding above is. */
+@media (max-width: 1023.98px) {
+  :root:has(.page-shell > .action-bar[data-kind="row"]) {
+    scroll-padding-bottom: calc(
+      var(--spacing-dock) + var(--action-bar-h) + 0.5rem
+    );
+  }
+}
+@media (min-width: 1024px) {
+  :root:has(.page-shell > .action-bar[data-kind="row"]) {
+    scroll-padding-top: calc(var(--app-bar-h) + var(--action-bar-h) + 0.5rem);
   }
 }
 
@@ -410,10 +505,8 @@ html {
    2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
    app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
    and the dock's below plus a 2rem gutter (only the gutter at the rail,
-   where --spacing-dock is 0), and the action bar's height too while one is
-   fixed above the dock (the scroll-padding rule above); a page ending on a
-   bar sticky above the dock (`data-end="bar"`, Styling's) leaves the dock's
-   height alone. A `single` page's width is its `max-w-page-*` class; every
+   where --spacing-dock is 0); the room its action bar takes is the action
+   bar's rules above. A `single` page's width is its `max-w-page-*` class; every
    other layout's frame is wide, set here, so its grid owns the columns. The body and
    the aside carry the gutter (`data-gutter`). Each layout is one grid here, from lg only: below
    it every region stacks in DOM order, which is the desktop's left to
@@ -422,9 +515,6 @@ html {
   .page-shell {
     padding-top: var(--app-bar-h);
     padding-bottom: calc(var(--spacing-dock) + 2rem);
-  }
-  .page-shell[data-end="bar"] {
-    padding-bottom: max(var(--spacing-dock), 2rem);
   }
   .page-shell:not([data-layout="single"]) {
     max-width: var(--container-page-wide);
