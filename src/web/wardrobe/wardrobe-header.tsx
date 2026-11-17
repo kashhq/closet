@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
-import { AppBar, type AppBarProps } from '../layout/app-bar';
+import type { AppBarProps } from '../layout/app-bar';
 import type { LinkTabsProps } from '../layout/link-tabs';
 import { Sheet, sheetOpener } from '../layout/sheet';
 import {
@@ -124,20 +124,6 @@ export function WardrobeAddSheet(props: WardrobeHeaderProps) {
 
 function canAddIn(props: WardrobeHeaderProps): boolean {
   return props.canEdit || props.newCapsule === true;
-}
-
-/**
- * The bar and its add sheet together, for the Wardrobe tabs not yet on
- * `PageShell` (Capsules and Laundry; D2 of the desktop plan moves them and
- * deletes this).
- */
-export function WardrobeHeader(props: WardrobeHeaderProps) {
-  return (
-    <>
-      <AppBar ctx={props.ctx} {...wardrobeBar(props)} />
-      <WardrobeAddSheet {...props} />
-    </>
-  );
 }
 
 /** "Wardrobe" for one's own; "Dana's wardrobe" for a shared one. */

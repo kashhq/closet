@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import english from '../i18n/en/lang.json';
-import { type StringKey, t } from './i18n';
-import { FORMAT_ONLY_DATA, PLACEHOLDER_KINDS } from './placeholder-kinds';
+import { HttpError } from './errors';
+import { type StringKey, t, type Translated } from './i18n';
+import { DATA_ONLY_KEYS, PLACEHOLDER_KINDS } from './placeholder-kinds';
 
 function entries(node: object, prefix = ''): [string, string][] {
   return Object.entries(node).flatMap(([key, value]) =>
@@ -75,36 +76,29 @@ describe('PLACEHOLDER_KINDS (#1100)', () => {
   });
 });
 
-describe('FORMAT_ONLY_DATA (#1100)', () => {
-  it('justifies every data placeholder of a key made only of placeholders', () => {
-    // Such a key adds no words of its own, so a data placeholder in it wraps
-    // any string into Translated: the decision to leave it data is written down.
-    const needed = Object.fromEntries(
-      Object.entries(KINDS)
-        .filter(
-          ([key]) =>
-            !/\p{L}/u.test(CATALOGUE.get(key)!.replace(/\{\w+\}/g, '')),
-        )
-        .map(([key, kinds]) => [
-          key,
-          Object.entries(kinds)
-            .filter(([, kind]) => kind === 'data')
-            .map(([name]) => name)
-            .sort(),
-        ])
-        .filter(([, names]) => names.length > 0),
-    );
-    const written = Object.fromEntries(
-      Object.entries(
-        FORMAT_ONLY_DATA as Record<string, Record<string, string>>,
-      ).map(([key, why]) => {
-        for (const reason of Object.values(why)) {
-          expect(reason.trim(), key).not.toBe('');
-        }
-        return [key, Object.keys(why).sort()];
-      }),
-    );
-    expect(written).toEqual(needed);
+describe('DATA_ONLY_KEYS (#1109)', () => {
+  it('lists the keys made only of data placeholders, derived from the catalogue', () => {
+    // Such a key holds no copy, so t() returns a plain string for it and a
+    // copy sink refuses it by type.
+    const derived = Object.entries(KINDS)
+      .filter(
+        ([key, kinds]) =>
+          !/\p{L}/u.test(CATALOGUE.get(key)!.replace(/\{\w+\}/g, '')) &&
+          Object.values(kinds).every((kind) => kind === 'data'),
+      )
+      .map(([key]) => key)
+      .sort();
+    expect([...DATA_ONLY_KEYS].sort()).toEqual(derived);
+  });
+
+  it('is a string, never copy', () => {
+    const note = t('sizes.BRAND_NOTE', { brand: 'Acme', note: 'runs small' });
+    expect(note).toBe('Acme: runs small');
+    // @ts-expect-error a data-only key is not catalogue copy
+    new HttpError(400, t('sizes.BRAND_NOTE', { brand: 'a', note: 'b' }));
+    // @ts-expect-error nor is its string a Translated
+    const copy: Translated = note;
+    expect(copy).toBe(note);
   });
 });
 

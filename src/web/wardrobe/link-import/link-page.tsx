@@ -1,9 +1,7 @@
 import { PostForm } from '../../form';
 import { FormField, inputAttributes } from '../../form-field';
 import { t } from '../../i18n';
-import { AppBar } from '../../layout/app-bar';
-import { Dock } from '../../layout/dock';
-import { Layout } from '../../layout/layout';
+import { PageShell } from '../../layout/page-shell';
 import { INSPIRATION_LINK_PATH } from '../../inspiration/urls';
 import type { ViewContext } from '../../view-context';
 import {
@@ -45,72 +43,71 @@ export function LinkPage(props: { ctx: ViewContext; model: LinkPageModel }) {
     wishlist ? 'wishlist.ADD_FROM_LINK_TITLE' : 'linkImport.TITLE',
   );
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar
-        ctx={ctx}
-        title={title}
-        back={wardrobeUrl(
+    <PageShell
+      ctx={ctx}
+      name="link-import"
+      bar={{
+        title,
+        back: wardrobeUrl(
           viewOwner,
           {},
           wishlist ? WISHLIST_PATH : '/wardrobe/new',
+        ),
+        formPage: true,
+      }}
+    >
+      <p class="text-sm text-muted mb-4">{t('linkImport.INTRO')}</p>
+      <PostForm
+        action={wardrobeUrl(
+          viewOwner,
+          destinationParams(destination),
+          LINK_IMPORT_PATH,
         )}
-        formPage
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        <p class="text-sm text-muted mb-4">{t('linkImport.INTRO')}</p>
-        <PostForm
-          action={wardrobeUrl(
-            viewOwner,
-            destinationParams(destination),
-            LINK_IMPORT_PATH,
-          )}
-          class="flex flex-col gap-4"
+        class="flex flex-col gap-4"
+      >
+        <FormField
+          id="link-url"
+          label={t('linkImport.URL_LABEL')}
+          messages={messages}
         >
-          <FormField
-            id="link-url"
-            label={t('linkImport.URL_LABEL')}
-            messages={messages}
-          >
-            {/* Text, not type="url": a pasted "Product title https://…" is
+          {/* Text, not type="url": a pasted "Product title https://…" is
                 valid input (linkIn finds the link), and the browser's URL
                 validation would refuse it before the post. */}
-            <input
-              {...inputAttributes('link-url', 'w-full', messages)}
-              type="text"
-              name="url"
-              inputmode="url"
-              value={model.link}
-              maxlength={LINK_INPUT_MAX}
-              placeholder={t('linkImport.URL_PLACEHOLDER')}
-              autocomplete="off"
-              required
-            />
-          </FormField>
-          <button type="submit" class="btn btn-primary">
-            {t('linkImport.FETCH')}
-          </button>
-          <p class="text-xs text-muted text-center">
-            {t('linkImport.FETCH_HINT')}
-          </p>
-          {offersInspiration && (
-            <>
-              {/* After Fetch, so Enter still fetches (the form's default
+          <input
+            {...inputAttributes('link-url', 'w-full', messages)}
+            type="text"
+            name="url"
+            inputmode="url"
+            value={model.link}
+            maxlength={LINK_INPUT_MAX}
+            placeholder={t('linkImport.URL_PLACEHOLDER')}
+            autocomplete="off"
+            required
+          />
+        </FormField>
+        <button type="submit" class="btn btn-primary">
+          {t('linkImport.FETCH')}
+        </button>
+        <p class="text-xs text-muted text-center">
+          {t('linkImport.FETCH_HINT')}
+        </p>
+        {offersInspiration && (
+          <>
+            {/* After Fetch, so Enter still fetches (the form's default
                   button is its first). */}
-              <button
-                type="submit"
-                formaction={INSPIRATION_LINK_PATH}
-                class="btn btn-outline"
-              >
-                {t('linkImport.SAVE_AS_INSPIRATION')}
-              </button>
-              <p class="text-xs text-muted text-center">
-                {t('linkImport.SAVE_AS_INSPIRATION_HINT')}
-              </p>
-            </>
-          )}
-        </PostForm>
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+            <button
+              type="submit"
+              formaction={INSPIRATION_LINK_PATH}
+              class="btn btn-outline"
+            >
+              {t('linkImport.SAVE_AS_INSPIRATION')}
+            </button>
+            <p class="text-xs text-muted text-center">
+              {t('linkImport.SAVE_AS_INSPIRATION_HINT')}
+            </p>
+          </>
+        )}
+      </PostForm>
+    </PageShell>
   );
 }

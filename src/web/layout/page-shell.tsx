@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { ViewContext } from '../view-context';
 import { AppBar, type AppBarProps } from './app-bar';
 import { Dock } from './dock';
-import { Layout } from './layout';
+import { Layout, type PageMeta } from './layout';
 
 /**
  * A `single` page's column width, by name, never a per-page `max-w-*` (the
@@ -84,11 +84,23 @@ export function regionId(name: string, region: PageRegion): string {
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
+ *
+ * `centred` is the standalone page (sign in, register, the invite landing,
+ * the offline page): its body is one column centred in the room the bar and
+ * the dock leave, from the top once it is taller than that, with no aside
+ * and no width (main.css, `.page-shell[data-layout="centred"]`). `AccountShell`
+ * is its preset.
  */
 export type PageLayout =
   | {
       layout?: 'single';
       width?: PageWidth;
+      aside?: never;
+      asideLabel?: never;
+    }
+  | {
+      layout: 'centred';
+      width?: never;
       aside?: never;
       asideLabel?: never;
     }
@@ -103,6 +115,9 @@ export type PageLayout =
 
 type ShellLayout = NonNullable<PageLayout['layout']>;
 
+/** The layouts that have a second region beside the body. */
+type AsideLayout = Exclude<ShellLayout, 'single' | 'centred'>;
+
 /**
  * Whether a layout's aside comes before the body. The DOM order is the
  * desktop's visual order (left to right), so keyboard, reader and the
@@ -110,6 +125,7 @@ type ShellLayout = NonNullable<PageLayout['layout']>;
  */
 const ASIDE_FIRST: Readonly<Record<ShellLayout, boolean>> = {
   single: false,
+  centred: false,
   split: true,
   panel: false,
   facets: true,
@@ -125,6 +141,8 @@ export type PageShellProps = PageLayout & {
    * the app's name (Layout's). Set it only where the two differ.
    */
   title?: string;
+  /** The page's own link preview (og tags), passed to `Layout`. */
+  meta?: PageMeta;
   bar: Omit<AppBarProps, 'ctx'>;
   body?: PageBodyFrame;
   /**
@@ -155,7 +173,7 @@ export type PageShellProps = PageLayout & {
  */
 export function PageShell(props: PageShellProps) {
   const { ctx, name, bar, layout = 'single' } = props;
-  const aside = layout !== 'single' && (
+  const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
       layout={layout}
@@ -164,10 +182,8 @@ export function PageShell(props: PageShellProps) {
       {props.aside}
     </PageAside>
   );
-  const title =
-    props.title ?? (typeof bar.title === 'string' ? bar.title : undefined);
   return (
-    <Layout ctx={ctx} title={title}>
+    <Layout ctx={ctx} title={documentTitle(props)} {...props.meta}>
       <AppBar ctx={ctx} {...bar} />
       <main
         class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
@@ -184,6 +200,12 @@ export function PageShell(props: PageShellProps) {
       <Dock ctx={ctx} />
     </Layout>
   );
+}
+
+/** The document's `<title>`: the page's own, else the bar's when it is a string. */
+function documentTitle(props: PageShellProps): string | undefined {
+  if (props.title !== undefined) return props.title;
+  return typeof props.bar.title === 'string' ? props.bar.title : undefined;
 }
 
 /**
@@ -208,7 +230,7 @@ export function PageBody(
 
 function PageAside(props: {
   id: string;
-  layout: ShellLayout;
+  layout: AsideLayout;
   label: string | undefined;
   children: Child;
 }) {

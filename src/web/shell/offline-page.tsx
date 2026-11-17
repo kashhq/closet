@@ -1,8 +1,7 @@
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
 import { OfflineIcon } from '../layout/app-status';
-import { Dock, sectionLabel } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { sectionLabel } from '../layout/dock';
+import { PageShell } from '../layout/page-shell';
 import { SECTION_HOME } from '../layout/sections';
 import { OPENS_STALE, PAGES_CACHE } from '../page-cache';
 import type { ViewContext } from '../view-context';
@@ -20,10 +19,14 @@ import type { ViewContext } from '../view-context';
  */
 export function OfflinePage({ ctx }: { ctx: ViewContext }) {
   return (
-    <Layout ctx={ctx}>
-      <AppBar ctx={ctx} title={t('OFFLINE_TITLE')} />
-      <main
-        class="p-20 gap-2 flex flex-col justify-center items-center h-full"
+    <PageShell
+      ctx={ctx}
+      name="offline"
+      layout="centred"
+      bar={{ title: t('OFFLINE_TITLE') }}
+    >
+      <div
+        class="px-16 gap-2 flex flex-col items-center"
         data-offline-fallback=""
       >
         <OfflineIcon class="size-6 text-error animate-pulse" />
@@ -48,8 +51,7 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
             </p>
           </>
         )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      </div>
+    </PageShell>
   );
 }

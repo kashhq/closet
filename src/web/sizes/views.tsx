@@ -9,9 +9,7 @@ import { PostForm } from '../form';
 import { profileSection } from '../auth/urls';
 import type { FieldErrors } from '../auth/validation';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { FormField, inputAttributes } from '../form-field';
 import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
@@ -132,70 +130,74 @@ export function SizesPage(props: { ctx: ViewContext; model: SizesPageModel }) {
   const { ctx, model } = props;
   const refused = model.refusedBrand;
   return (
-    <Layout ctx={ctx} title={t(SIZES_TITLE_KEY)}>
-      <AppBar
-        ctx={ctx}
-        title={t(SIZES_TITLE_KEY)}
-        back={profileSection(SIZES_SECTION_ID)}
-        formPage
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-6">
-        <p class="text-sm text-muted">{t('sizes.HINT')}</p>
-        <section
-          class="flex flex-col gap-3"
-          aria-labelledby="sizes-measurements-heading"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <h2 id="sizes-measurements-heading" class="text-lg font-semibold">
-              {t('sizes.MEASUREMENTS')}
-            </h2>
-            <UnitSwitch unit={model.unit} />
-          </div>
-          <MeasurementsForm model={model} />
-        </section>
-        <section
-          class="flex flex-col gap-3"
-          aria-labelledby="sizes-brands-heading"
-        >
-          <h2 id="sizes-brands-heading" class="text-lg font-semibold">
-            {t('sizes.BRANDS')}
-          </h2>
-          <p class="text-sm text-muted">{t('sizes.BRANDS_HINT')}</p>
-          {model.brands.map((brand) =>
-            refused?.target === brand.id ? (
-              <BrandForm
-                id={brand.id}
-                values={refused.values}
-                errors={refused.errors}
-              />
-            ) : (
-              <BrandForm
-                id={brand.id}
-                values={{
-                  brand: brand.brand,
-                  size: brand.size ?? '',
-                  note: brand.note ?? '',
-                }}
-              />
-            ),
+    <PageShell
+      ctx={ctx}
+      name="sizes"
+      bar={{
+        title: t(SIZES_TITLE_KEY),
+        back: profileSection(SIZES_SECTION_ID),
+        formPage: true,
+      }}
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {model.saved && (
+            <SavedToast id="sizes-toast" text={t(SAVED_TOASTS[model.saved])} />
           )}
-          <h3 class="font-medium">{t('sizes.ADD_BRAND')}</h3>
-          <BrandForm
-            values={
-              refused?.target === 'new'
-                ? refused.values
-                : { brand: '', size: '', note: '' }
-            }
-            errors={refused?.target === 'new' ? refused.errors : undefined}
-          />
-        </section>
-      </main>
-      {model.saved && (
-        <SavedToast id="sizes-toast" text={t(SAVED_TOASTS[model.saved])} />
-      )}
-      <StripFlags names={[SIZES_SAVED_FLAG]} />
-      <Dock ctx={ctx} />
-    </Layout>
+          <StripFlags names={[SIZES_SAVED_FLAG]} />
+        </>
+      }
+    >
+      <p class="text-sm text-muted">{t('sizes.HINT')}</p>
+      <section
+        class="flex flex-col gap-3"
+        aria-labelledby="sizes-measurements-heading"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <h2 id="sizes-measurements-heading" class="text-lg font-semibold">
+            {t('sizes.MEASUREMENTS')}
+          </h2>
+          <UnitSwitch unit={model.unit} />
+        </div>
+        <MeasurementsForm model={model} />
+      </section>
+      <section
+        class="flex flex-col gap-3"
+        aria-labelledby="sizes-brands-heading"
+      >
+        <h2 id="sizes-brands-heading" class="text-lg font-semibold">
+          {t('sizes.BRANDS')}
+        </h2>
+        <p class="text-sm text-muted">{t('sizes.BRANDS_HINT')}</p>
+        {model.brands.map((brand) =>
+          refused?.target === brand.id ? (
+            <BrandForm
+              id={brand.id}
+              values={refused.values}
+              errors={refused.errors}
+            />
+          ) : (
+            <BrandForm
+              id={brand.id}
+              values={{
+                brand: brand.brand,
+                size: brand.size ?? '',
+                note: brand.note ?? '',
+              }}
+            />
+          ),
+        )}
+        <h3 class="font-medium">{t('sizes.ADD_BRAND')}</h3>
+        <BrandForm
+          values={
+            refused?.target === 'new'
+              ? refused.values
+              : { brand: '', size: '', note: '' }
+          }
+          errors={refused?.target === 'new' ? refused.errors : undefined}
+        />
+      </section>
+    </PageShell>
   );
 }
 

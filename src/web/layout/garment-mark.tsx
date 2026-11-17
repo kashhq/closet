@@ -1,5 +1,5 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
-import { joinCopy, type StringKey, t, type Translated } from '../i18n';
+import { joinCopy, type CopyKey, t, type Translated } from '../i18n';
 
 /**
  * Each mark's one look and one string: the badge variant, the dot (its fill,
@@ -9,7 +9,7 @@ import { joinCopy, type StringKey, t, type Translated } from '../i18n';
  */
 const MARKS: Record<
   GarmentMarkKind,
-  { badge: string; dot: string; label: StringKey }
+  { badge: string; dot: string; label: CopyKey }
 > = {
   'to-buy': { badge: 'badge-accent', dot: 'bg-accent', label: 'mark.TO_BUY' },
   archived: {
