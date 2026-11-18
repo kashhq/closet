@@ -90,3 +90,44 @@ describe('forged copy', () => {
     expect(await forged(body)).toBe(0);
   });
 });
+
+// closet/no-hidden-control (scripts/lint/hidden-control.mjs, #674) reads every
+// class a control's JSX can produce, so a computed `class={...}` is judged as
+// a literal one (#1067's clear chip slipped past the grep it replaced). The
+// file must be a .tsx under src/web the project service knows; its text is
+// replaced.
+describe('hidden controls', () => {
+  const hidden = async (body: string) => {
+    const [result] = await eslint.lintText(`${body}\n`, {
+      filePath: resolve(root, 'src/web/form-field.tsx'),
+    });
+    return result.messages.filter(
+      (m) => m.ruleId === 'closet/no-hidden-control',
+    ).length;
+  };
+
+  it.each([
+    'export const a = <input type="radio" class="btn hidden" />;',
+    'export const a = <select class="hidden" />;',
+    'export const a = (on: boolean) => <input class={on ? "btn" : "btn hidden"} />;',
+    'export const a = (on: boolean) => <input class={`btn ${on ? "" : "hidden"}`} />;',
+    'export const a = (x: string) => <textarea class={`hidden ${x}`} />;',
+    'export const a = (on: boolean) => <input class={on && "hidden"} />;',
+    'export const a = (x: string) => <input class={"btn " + "hidden " + x} />;',
+    'const CHIP = "btn hidden";\nexport const a = <input class={CHIP} />;',
+    'export const a = (x: string) => <input class={[x, "hidden"].join(" ")} />;',
+  ])('refuses %s', async (body) => {
+    expect(await hidden(body)).toBe(1);
+  });
+
+  it.each([
+    'export const a = <input type="hidden" name="x" value="" />;',
+    'export const a = <input class="lg:hidden btn" />;',
+    'export const a = <input class="btn hidden-x" />;',
+    'export const a = (x: string) => <input class={`hidden${x}`} />;',
+    'export const a = <div class="hidden" />;',
+    'export const a = (x: string) => <input class={x === "hidden" ? "btn" : "btn-sm"} />;',
+  ])('lets %s through', async (body) => {
+    expect(await hidden(body)).toBe(0);
+  });
+});

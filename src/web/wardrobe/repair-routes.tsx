@@ -3,6 +3,7 @@ import { sessionUserId } from '../auth/require-session';
 import { todayIn } from '../../calendar-date';
 import type { WebOptions } from '../plugin';
 import { actorOf } from '../sharing/access';
+import { withShownPhoto } from './cutout-shown';
 import { garmentAddress } from './garment-access';
 import { garmentToMend, logRepair, removeRepair } from './garment-actions';
 import { renderGarmentForm } from './render-form';
@@ -26,7 +27,7 @@ import { storedFormValues } from './garment-input';
  */
 export const repairRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,
-  { db, config, logger },
+  { db, config, logger, cutouts },
   done,
 ) => {
   /** The edit page's editor, where the writes send the person back. */
@@ -61,6 +62,7 @@ export const repairRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           db,
           {
             mode: { kind: 'edit', garmentId: id, wishlist: false },
+            subject: withShownPhoto(garment, cutouts.enabled),
             suggestionsFrom: userId,
             viewOwner: undefined,
             values: storedFormValues(garment, { owner: true }),

@@ -29,7 +29,8 @@ import {
  * destination picked on the form and its forecast loaded into the page, the
  * week's Away row (#684), an outfit added for a day, the packing list's and the
  * extras' checkboxes saved on change (htmx, the summary swapped out of
- * band), "Wore it" and its Undo, nothing wider than the phone. With a
+ * band), at 1440 the packing list beside the days, in view and saving
+ * (queued offline too), "Wore it" and its Undo, nothing wider than the phone. With a
  * touch screen, the phone's sizing (#636) on the pages it passes: no field
  * under 16 px (login, the trip and garment forms, Profile) and no control
  * under 44 px (Today, the week, the trip, Profile). In the Safari projects
@@ -299,6 +300,34 @@ test.describe('Trips', () => {
       '1 of 1 packed',
     );
 
+    // At 1440 the packing list is the panel's aside (#1071): beside the
+    // days, still in view at the page's end, and a tick there saves.
+    await page.setViewportSize({ width: 1440, height: 600 });
+    const aside = page.locator('#trip-aside');
+    const days = page.locator(
+      'section[aria-labelledby="trip-outfits-heading"]',
+    );
+    const asideBox = (await aside.boundingBox())!;
+    const daysBox = (await days.boundingBox())!;
+    expect(asideBox.x).toBeGreaterThanOrEqual(daysBox.x + daysBox.width);
+    expect(asideBox.y).toBeLessThan(daysBox.y + daysBox.height);
+    const scrolled = await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      return window.scrollY;
+    });
+    expect(scrolled).toBeGreaterThan(0);
+    await expect(page.locator('#trip-packing-heading')).toBeInViewport();
+    const sneakers = aside.getByRole('checkbox', { name: /Travel sneakers/ });
+    await sneakers.check();
+    await expect(page.locator('#trip-packed-summary')).toContainText(
+      '3 of 3 packed',
+    );
+    await sneakers.uncheck();
+    await expect(page.locator('#trip-packed-summary')).toContainText(
+      '2 of 3 packed',
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+
     // What the server kept.
     await page.reload();
     await expect(
@@ -497,6 +526,18 @@ test.describe('Trips', () => {
             'section[aria-labelledby="trip-packing-heading"] [data-autosave-status]',
           ),
         ).not.toContainText('Saved');
+        // The aside beside the days at 1440 queues its ticks too (#1071).
+        await device.setViewportSize({ width: 1440, height: 900 });
+        await device
+          .locator('#trip-aside')
+          .getByRole('checkbox', { name: /Travel jeans/ })
+          .uncheck();
+        await expect(device.locator('#outbox-banner')).toHaveText(
+          '3 changes waiting to sync',
+        );
+        await expect(device.locator('#trip-packed-summary')).toContainText(
+          '1 of 3 packed',
+        );
       } finally {
         await closeSwitchedContext(context);
       }

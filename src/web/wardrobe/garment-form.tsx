@@ -7,10 +7,16 @@ import { CONDITIONS } from '../../wardrobe/properties';
 import type { FieldErrors } from '../auth/validation';
 import { t } from '../i18n';
 import { FormPage } from '../layout/form-page';
-import { FieldMessages, FormField, inputAttributes } from '../form-field';
+import {
+  FieldMessages,
+  FieldRow,
+  FormField,
+  inputAttributes,
+} from '../form-field';
 import type { ViewContext } from '../view-context';
 import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { categoryLabel, normalizeCategory } from './garment';
+import { GarmentPhotoView, type PhotoSubject } from './garment-photo';
 import { valueLabel } from './labels';
 import {
   LinkImportSection,
@@ -86,6 +92,12 @@ export function isWishlistForm(mode: GarmentFormMode): boolean {
 
 export interface GarmentFormModel {
   mode: GarmentFormMode;
+  /**
+   * The garment edited or cloned, its photo as shown (withShownPhoto): the
+   * page's subject from lg (#1069). A new garment has none (its pending
+   * photo is a field of the form, `link`).
+   */
+  subject?: PhotoSubject;
   values: GarmentFormValues;
   /** The category suggestions (built-in, then the wardrobe's own). */
   categories: string[];
@@ -161,7 +173,9 @@ function formAction({ mode, viewOwner }: GarmentFormModel): string {
  * re-render with the messages when a post is refused (400), in the shared
  * add/edit frame (`FormPage`: a native post, disabled offline, #411; a
  * batch's draft queue does not cover the save itself, only its Discard).
- * Field names are the ones the form has always posted (cached pages of the
+ * An edit or a clone shows the garment's photo beside the fields from lg
+ * (FormPage `aside`, #1069), with the cutout's state as the garment page
+ * draws it; a phone sees the form alone, as before. Field names are the ones the form has always posted (cached pages of the
  * installed app still send them), dateAquired included.
  */
 export function GarmentFormPage(props: {
@@ -181,6 +195,15 @@ export function GarmentFormPage(props: {
       back={back}
       action={formAction(model)}
       submitLabel={t('SAVE')}
+      aside={
+        model.subject && (
+          <GarmentPhotoView
+            garment={model.subject}
+            viewOwner={viewOwner}
+            place="form"
+          />
+        )
+      }
       intro={
         <>
           {draft && <DraftQueueSection queue={draft} viewOwner={viewOwner} />}
@@ -292,21 +315,23 @@ function BrandAndSize({ model }: { model: GarmentFormModel }) {
   const own = viewOwner === undefined;
   return (
     <>
-      <TextField
-        name="brand"
-        label={t('BRAND')}
-        value={values.brand}
-        maxlength={BRAND_MAX}
-        placeholder={t('BRAND_PLACEHOLDER')}
-        refresh={own ? BRAND_SIZE_HINT_TRIGGER : {}}
-      />
-      <TextField
-        name="size"
-        label={t('SIZE')}
-        value={values.size}
-        maxlength={SIZE_MAX}
-        placeholder={t('SIZE_PLACEHOLDER')}
-      />
+      <FieldRow>
+        <TextField
+          name="brand"
+          label={t('BRAND')}
+          value={values.brand}
+          maxlength={BRAND_MAX}
+          placeholder={t('BRAND_PLACEHOLDER')}
+          refresh={own ? BRAND_SIZE_HINT_TRIGGER : {}}
+        />
+        <TextField
+          name="size"
+          label={t('SIZE')}
+          value={values.size}
+          maxlength={SIZE_MAX}
+          placeholder={t('SIZE_PLACEHOLDER')}
+        />
+      </FieldRow>
       {own && <BrandSizeHint note={model.brandSize} />}
       {model.lookalikes && <LookalikesRegion panel={model.lookalikes} />}
     </>

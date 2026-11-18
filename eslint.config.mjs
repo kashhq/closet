@@ -9,10 +9,17 @@ import base, {
   sonarjsTestRules,
 } from './devkit/lint/eslint.base.mjs';
 import forgedCopy from './scripts/lint/forged-copy.mjs';
+import hiddenControl from './scripts/lint/hidden-control.mjs';
 import webImports from './scripts/lint/web-imports.mjs';
 
 // One plugin object for every block: flat config refuses a name bound twice.
-const closet = { rules: { ...webImports.rules, ...forgedCopy.rules } };
+const closet = {
+  rules: {
+    ...webImports.rules,
+    ...forgedCopy.rules,
+    ...hiddenControl.rules,
+  },
+};
 
 // esquery regexes (no `/` inside) for the theme rule in no-restricted-syntax.
 const PALETTE_CLASS =
@@ -143,6 +150,7 @@ export default tseslint.config(
       'eslint.config.mjs',
       'scripts/lint/web-imports.mjs',
       'scripts/lint/forged-copy.mjs',
+      'scripts/lint/hidden-control.mjs',
       './test/support/legacy-migrations/**/*',
       './test/fixtures/cutout-children/*.mjs',
     ],
@@ -280,6 +288,15 @@ export default tseslint.config(
     ignores: ['**/*.spec.{ts,tsx}', 'src/web/i18n.ts', 'src/web/errors.tsx'],
     plugins: { closet },
     rules: { 'closet/no-forged-copy': 'error' },
+  },
+  // A form control is never `display: none` (#674): scripts/lint/hidden-control.mjs reads every
+  // class a control's JSX can produce, computed ones included (it replaced guards.conf's
+  // @hidden-control grep, which a conditional `class={...}` slipped past, #1067). The two controls
+  // hidden by design say why at the site.
+  {
+    files: ['src/web/**/*.tsx'],
+    plugins: { closet },
+    rules: { 'closet/no-hidden-control': 'error' },
   },
   // devkit's sonarjs rule maps (devkit/lint/README.md "sonarjs"). The plugin must be registered
   // in the same files scope as its rules, so it is registered here for every linted file.

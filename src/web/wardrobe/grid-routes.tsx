@@ -252,9 +252,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   // Filtering and searching are navigation state: malformed values fall
   // back or are dropped, except a colour outside the built-in set (400,
   // GridQuery) and a capsule that is not the wardrobe's (404). An htmx
-  // fragment request (the scope row, the filter modal) gets #wardrobe-body
-  // and the ⋯ menu out of band; the first page only, always. `?pick=` (owner and MANAGE) is the
-  // capsule picker: select mode with the capsule's members checked.
+  // fragment request (the scope row, the facets) gets #wardrobe-body, and
+  // the facets and the ⋯ menu out of band; the first page only, always.
+  // `?pick=` (owner and MANAGE) is the capsule picker: select mode with the
+  // capsule's members checked.
   app.get(
     '/wardrobe',
     { schema: { querystring: GridQuery } },

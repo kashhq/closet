@@ -269,6 +269,7 @@
   --tile-outfit: 12rem;
   --tile-idea: 17rem;
   --tile-candidate: 13rem;
+  --tile-outfit-row: 18rem;
   --tile-card: 18rem;
 }
 
@@ -509,6 +510,40 @@ html {
   }
 }
 
+/* A form's Cancel and submit (layout/form-page.tsx, #1069; docs/plans/
+   2026-11-16-desktop-layout.md §3.7). Below lg the form's last row, as it
+   always was. From lg the row sticks at the window's foot while the form
+   runs past it, so Save is in reach on a long form, and rides up with the
+   form's end once that is in view (sticky keeps it inside its PostForm,
+   so it never covers the forms after it). Not the action bar: that is the
+   page's, outside the form and fixed above a phone's dock, where this row
+   must stay in the flow. Its height is `--form-actions-h` (its padding, its
+   border and a default btn's `--size-field * 10`), which focus scrolls clear
+   of; z-10, under a menu (z-20) opening over it. */
+:root {
+  --form-actions-h: calc(var(--size-field) * 10 + 1.5rem + 1px);
+}
+@layer components {
+  @media (min-width: 1024px) {
+    .form-actions {
+      position: sticky;
+      bottom: var(--spacing-dock);
+      z-index: 10;
+      padding-block: 0.75rem;
+      border-top: 1px solid var(--color-base-300);
+      background-color: var(--color-base-100);
+    }
+  }
+}
+/* Unlayered, after the dock's, as the scroll padding above is. */
+@media (min-width: 1024px) {
+  :root:has(.form-actions) {
+    scroll-padding-bottom: calc(
+      var(--spacing-dock) + var(--form-actions-h) + 0.5rem
+    );
+  }
+}
+
 /* The page frame (layout/page-shell.tsx, #1059; docs/plans/
    2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
    app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
@@ -538,25 +573,31 @@ html {
     padding: 0;
   }
   /* The body's named flow (page-shell.tsx's `gap`): a column that far apart,
-     in Tailwind's steps. */
-  .page-body[data-gap] {
+     in Tailwind's steps. A `panel` aside carries the body's (PageAside). */
+  .page-body[data-gap],
+  .page-aside[data-gap] {
     display: flex;
     flex-direction: column;
     gap: var(--page-gap);
   }
-  .page-body[data-gap="3"] {
+  .page-body[data-gap="3"],
+  .page-aside[data-gap="3"] {
     --page-gap: 0.75rem;
   }
-  .page-body[data-gap="4"] {
+  .page-body[data-gap="4"],
+  .page-aside[data-gap="4"] {
     --page-gap: 1rem;
   }
-  .page-body[data-gap="5"] {
+  .page-body[data-gap="5"],
+  .page-aside[data-gap="5"] {
     --page-gap: 1.25rem;
   }
-  .page-body[data-gap="6"] {
+  .page-body[data-gap="6"],
+  .page-aside[data-gap="6"] {
     --page-gap: 1.5rem;
   }
-  .page-body[data-gap="8"] {
+  .page-body[data-gap="8"],
+  .page-aside[data-gap="8"] {
     --page-gap: 2rem;
   }
   /* A split page on a phone is one column, the subject then the body: the
@@ -567,9 +608,30 @@ html {
   :where(.page-shell[data-layout="split"]) > .page-body {
     padding-top: var(--page-gap, 1rem);
   }
+  /* A panel page on a phone is one column, the body then the aside, which
+     continues the body's flow: its gap between them (PageAside). */
+  :where(.page-shell[data-layout="panel"]) > .page-aside {
+    padding-top: var(--page-gap, 1rem);
+  }
   /* On a phone the settings index is Profile itself. */
   .page-shell[data-layout="index"] > .page-aside {
     display: none;
+  }
+  /* On a phone the facets are a closed bottom sheet (§3.3), so their aside
+     takes no room above the body. */
+  @media (max-width: 1023.98px) {
+    .page-shell[data-layout="facets"] > .page-aside {
+      padding: 0;
+    }
+    /* A subject shown from lg only (`subjectBelowLg: 'hidden'`, FormPage's
+       aside, #1069): below lg the page is the narrow column a `single` page
+       is, pixel for pixel; the body's padding is already its 1rem. */
+    .page-shell[data-subject="lg"] {
+      max-width: var(--container-page-narrow);
+    }
+    .page-shell[data-subject="lg"] > .page-aside {
+      display: none;
+    }
   }
 
   @media (min-width: 1024px) {
@@ -597,21 +659,25 @@ html {
     .page-shell[data-layout="index"] > .page-body {
       max-width: var(--container-page-narrow);
     }
-    /* Side by side, the subject and the body start on one line. */
-    :where(.page-shell[data-layout="split"]) > .page-body {
+    /* Side by side, the two regions start on one line. */
+    :where(.page-shell[data-layout="split"]) > .page-body,
+    :where(.page-shell[data-layout="panel"]) > .page-aside {
       padding-top: 1rem;
     }
-    /* The subject is sticky only while it fits: taller than the window under
-       the bar, it scrolls inside itself, so its last row (the collage under
-       a long note) stays reachable. A non-sticky fallback is not expressible
-       in CSS alone; this keeps the subject in view. overflow-y: auto makes
-       the box clip on x too, so nothing may bleed out of it: the aside's own
-       1rem sides and top hold a focus ring (2px + 2px offset), the bottom
-       gets that room back by padding, taken out of the layout again by the
-       equal negative margin. The subject holds no anchored menu (the
-       garment menu lives in the app bar; Not for me is an inline details),
-       and a sheet is top-layer. */
-    .page-shell[data-layout="split"] > .page-aside {
+    /* A sticky region (split's subject, panel's aside: a trip's packing
+       list) is sticky only while it fits: taller than the window under the
+       bar, it scrolls inside itself, so its last row (the collage under a
+       long note, the extras under a long list) stays reachable. A non-sticky
+       fallback is not expressible in CSS alone; this keeps the region in
+       view. overflow-y: auto makes the box clip on x too, so nothing may
+       bleed out of it: the aside's own 1rem sides and top hold a focus ring
+       (2px + 2px offset), the bottom gets that room back by padding, taken
+       out of the layout again by the equal negative margin. Neither holds an
+       anchored menu (the garment menu lives in the app bar; Not for me is an
+       inline details; the extras' copy is a native select), and a sheet is
+       top-layer. */
+    .page-shell[data-layout="split"] > .page-aside,
+    .page-shell[data-layout="panel"] > .page-aside {
       max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
       overflow-y: auto;
       padding-bottom: 0.25rem;
@@ -630,6 +696,14 @@ html {
     }
     .page-shell[data-layout="index"] > .page-aside {
       display: block;
+    }
+    /* The facets scroll inside their sticky column, the aside itself the
+       scroller: a fragment swaps its content in place (PageFragment), so
+       the scroll survives an Apply. */
+    .page-shell[data-layout="facets"] > .page-aside {
+      max-height: calc(100dvh - var(--app-bar-h));
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
   }
 
@@ -718,6 +792,63 @@ html {
         width: 20rem;
         max-height: calc(100% - 1rem);
       }
+    }
+  }
+}
+
+/* A `filters` sheet docks in its `facets` aside from lg (layout/sheet.tsx,
+   #1067; docs/plans/2026-11-16-desktop-layout.md §3.3): the dialog, closed,
+   is shown in place as the facet column, so its one form is the phone's
+   bottom sheet and the desktop's filters, never rendered twice. This is the
+   one place CSS overrides a UA default (a closed dialog is display: none),
+   chosen over a script calling show() on resize, which would be layout in
+   script; a closed dialog shown by CSS is neither modal nor inert, and stays
+   named by its heading. Its opener (`dockedFiltersOpener`) and its
+   backdrop's Close go here; the box does not scroll, the aside does (the
+   page-shell block), with Clear and Apply kept at its foot. In utilities:
+   daisyUI's layers rank above components, and this overrides its modal. */
+@layer utilities {
+  @media (min-width: 1024px) {
+    .page-shell[data-layout="facets"]
+      > .page-aside
+      > .modal[data-sheet="filters"]:not([open]) {
+      position: static;
+      display: block;
+      visibility: visible;
+      pointer-events: auto;
+      opacity: 1;
+      z-index: auto;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      background-color: transparent;
+      transition: none;
+      & > .modal-box {
+        opacity: 1;
+        translate: none;
+        scale: none;
+        width: auto;
+        max-width: none;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+        transition: none;
+      }
+      & > .modal-backdrop {
+        display: none;
+      }
+      & .modal-action {
+        position: sticky;
+        bottom: 0;
+        margin-top: 0;
+        padding-block: 1rem;
+        background-color: var(--color-base-100);
+      }
+    }
+    .page-shell[data-layout="facets"] [data-filters-opener] {
+      display: none;
     }
   }
 }

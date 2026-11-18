@@ -77,14 +77,17 @@ export function regionId(name: string, region: PageRegion): string {
  * needs one, and the landmark it is follows from the layout:
  *  - `split`: a `<section>`, the subject (a photo, a collage), left from lg.
  *  - `panel`: an `<aside>`, the work's result, right from lg.
- *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a filter
- *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`).
+ *  - `facets`: an `<aside>`, a gallery's filters, left from lg (a `filters`
+ *    sheet docks here, §3.3: it goes in `aside`, never in `overlays`; on a
+ *    phone the aside takes no room, its sheet closed).
  *  - `index`: a `<nav>`, the settings index, left from lg, hidden below it
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
- * Only `single` takes an `actionBar` so far: a grid layout's place for one
- * (`panel`'s is the top of its aside, §3.4) arrives with its first page.
+ * `panel`'s aside follows the body, and on a phone continues its flow:
+ * the body's `gap` (`PageAside`). Only `single` takes an `actionBar` so
+ * far: a grid layout's place for one (`panel`'s is the top of its aside,
+ * §3.4) arrives with its first page.
  *
  * `centred` is the standalone page (sign in, register, the invite landing,
  * the offline page): its body is one column centred in the room the bar and
@@ -114,6 +117,13 @@ export type PageLayout =
       aside: Child;
       asideLabel?: never;
       actionBar?: never;
+      /**
+       * The subject below lg: `first`, stacked above the body (the default:
+       * the garment and outfit pages), or `hidden`, the page then the
+       * narrow column a `single` page is (FormPage's: a form the phone
+       * reached from its subject's page shows only the fields, #1069).
+       */
+      subjectBelowLg?: 'first' | 'hidden';
     }
   | {
       layout: 'panel' | 'facets' | 'index';
@@ -185,6 +195,11 @@ export function PageShell(props: PageShellProps) {
       <main
         class={`page-shell ${layout === 'single' ? WIDTH_CLASS[props.width ?? 'narrow'] : FRAME_CLASS}`}
         data-layout={layout}
+        data-subject={
+          props.layout === 'split' && props.subjectBelowLg === 'hidden'
+            ? 'lg'
+            : undefined
+        }
       >
         {mainRegions(props, layout)}
       </main>
@@ -205,16 +220,17 @@ export function PageShell(props: PageShellProps) {
  */
 function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   const { name } = props;
+  const asideFirst = ASIDE_FIRST[layout];
   const aside = layout !== 'single' && layout !== 'centred' && (
     <PageAside
       id={regionId(name, 'aside')}
       layout={layout}
       label={props.asideLabel}
+      gap={asideFirst ? undefined : props.body?.gap}
     >
       {props.aside}
     </PageAside>
   );
-  const asideFirst = ASIDE_FIRST[layout];
   return [
     asideFirst && aside,
     <PageBody name={name} {...props.body}>
@@ -225,6 +241,14 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   ];
 }
 
+/** A page's aside as its shell renders it: what `PageFragment` answers too. */
+export interface PageAsideFrame {
+  layout: AsideLayout;
+  /** The landmark's accessible name (`asideLabel`); `split`'s section has none. */
+  label?: string;
+  content: Child;
+}
+
 /**
  * The answer to an htmx request that swaps a page's body in place (the
  * Wardrobe's filtering targets `#<name>-body`, outerHTML): the body with the
@@ -233,20 +257,39 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
  * to no tiles drops the bar, back to some brings it, and its controls'
  * `form=` names the form in this answer. A page with a swapped body answers
  * through this, never a bare body, so no fragment leaves a stale bar.
+ *
+ * `aside` sends the aside region out of band too, its content only
+ * (`innerHTML`): the region element stays, so its scroll (a docked facet
+ * column scrolls inside itself) and the focus htmx restores by id survive,
+ * and its content always shows the state the answer's URL asks for. A
+ * history snapshot serialises attributes, never a checked radio's
+ * property, so an aside kept across a pushed answer restored Back with the
+ * wrong choices beside a grid filtered by the right ones (#1067).
  */
 export function PageFragment(
   props: PageBodyFrame & {
     name: string;
     actionBar: ActionBarProps | undefined;
+    aside?: PageAsideFrame;
     children?: Child;
   },
 ) {
-  const { name, actionBar, children, ...frame } = props;
+  const { name, actionBar, aside, children, ...frame } = props;
   return (
     <>
       <PageBody name={name} {...frame}>
         {children}
       </PageBody>
+      {aside && (
+        <PageAside
+          id={regionId(name, 'aside')}
+          layout={aside.layout}
+          label={aside.label}
+          oob
+        >
+          {aside.content}
+        </PageAside>
+      )}
       <ActionsRegion name={name} bar={actionBar} oob />
     </>
   );
@@ -283,28 +326,40 @@ function PageBody(props: PageBodyFrame & { name: string; children?: Child }) {
   );
 }
 
+/**
+ * The shell's second region, `#<name>-aside`. One that follows the body
+ * (`panel`'s) continues the body's flow on a phone, where it stacks under
+ * it: the body's `gap` inside it and before it (main.css), so a page whose
+ * last sections move into it keeps its phone pixel for pixel.
+ */
 function PageAside(props: {
   id: string;
   layout: AsideLayout;
   label: string | undefined;
+  /** In a fragment (PageFragment): its content swapped into the region in place. */
+  oob?: boolean;
+  /** `panel`'s: the body's, as its phone flow continues here (mainRegions). */
+  gap?: PageGap;
   children: Child;
 }) {
+  const region = {
+    id: props.id,
+    class: 'page-aside',
+    'data-gap': props.gap,
+    'hx-swap-oob': props.oob ? 'innerHTML' : undefined,
+  };
   switch (props.layout) {
     case 'split':
-      return (
-        <section id={props.id} class="page-aside">
-          {props.children}
-        </section>
-      );
+      return <section {...region}>{props.children}</section>;
     case 'index':
       return (
-        <nav id={props.id} class="page-aside" aria-label={props.label}>
+        <nav {...region} aria-label={props.label}>
           {props.children}
         </nav>
       );
     default:
       return (
-        <aside id={props.id} class="page-aside" aria-label={props.label}>
+        <aside {...region} aria-label={props.label}>
           {props.children}
         </aside>
       );

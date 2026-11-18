@@ -1,6 +1,7 @@
 import { Card } from '../card';
 import { tripPhase } from '../../wardrobe/packing';
 import { calendarTabs } from '../calendar/calendar-tabs';
+import { CARD_GRID } from '../layout/columns';
 import type { IsoDate } from '../../calendar-date';
 import { t } from '../i18n';
 import { PageShell } from '../layout/page-shell';
@@ -19,7 +20,8 @@ const PHASE_BADGE = {
 /**
  * GET /trips: the Calendar's Trips tab (#10). The owner's trips, those ahead
  * or under way first (soonest first), then the past ones, each a card with
- * its dates, destination and how many outfits and extras it holds.
+ * its dates, destination and how many outfits and extras it holds: one
+ * column on a phone, as many as fit from lg (`CARD_GRID`, #1071).
  */
 export function TripsPage(props: {
   ctx: ViewContext;
@@ -41,6 +43,7 @@ export function TripsPage(props: {
         ),
         tabs: calendarTabs('trips'),
       }}
+      width="wide"
       body={{ gap: 3 }}
     >
       {trips.length === 0 ? (
@@ -50,7 +53,7 @@ export function TripsPage(props: {
           </a>
         </EmptyState>
       ) : (
-        <ul class="flex flex-col gap-2" data-trips="">
+        <ul class={`${CARD_GRID} gap-2`} data-trips="">
           {trips.map((trip) => {
             const phase = tripPhase(trip, today);
             return (
@@ -58,7 +61,7 @@ export function TripsPage(props: {
                 <Card
                   as="a"
                   variant="content"
-                  class="hover:bg-base-200 transition-colors"
+                  class="h-full hover:bg-base-200 transition-colors"
                   bodyClass="p-4 gap-1"
                   href={tripUrl(trip.id)}
                   data-trip={trip.id}

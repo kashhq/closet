@@ -205,6 +205,12 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
   await shot(page, '10-demo-calendar-planned', '/calendar?week=2026-09-27');
   // The calendar's month of collages (R6, #86): August's history.
   await shot(page, '70-demo-calendar-month', '/calendar/month?month=2026-08');
+  // The plan page (#1070): its head a band from lg, the saved outfits a grid.
+  await shot(
+    page,
+    '71b-demo-calendar-plan-page',
+    '/calendar/plan?for=day:2026-09-29&occasion=evening',
+  );
   // The planned week's "+ Plan" on Tuesday: its sheet, the three ways.
   // Opened by the day's button or, while the week template leaves it open
   // slots (from today on), the first of those.
@@ -293,8 +299,9 @@ test.describe('desktop', () => {
     await shot(page, '82b-demo-styling-shuffled-desktop');
   });
 
-  // Density (#1064): the galleries auto-fill from lg, and the calendar's
-  // collages take their desktop step, so a month fits the 900 px fold.
+  // Density (#1064): the galleries auto-fill from lg, the week's collages
+  // take their desktop step, a month cell sets its collage beside the date
+  // and the plan page's outfits fill a grid (#1070).
   test('demo: Theo, the grids and the calendar at 1440', async ({ page }) => {
     await signInAs(page, 'demo');
     await shot(page, '83-demo-wardrobe-desktop', '/wardrobe');
@@ -312,6 +319,11 @@ test.describe('desktop', () => {
       '89-demo-calendar-month-desktop',
       '/calendar/month?month=2026-08',
     );
+    await shot(
+      page,
+      '89b-demo-calendar-plan-page-desktop',
+      '/calendar/plan?for=day:2026-09-29&occasion=evening',
+    );
   });
 
   // Section tabs in the app bar (#1061): each section's sibling pages not
@@ -324,6 +336,26 @@ test.describe('desktop', () => {
     await shot(page, '92-demo-ideas-desktop', '/outfits/ideas?seed=1');
     await shot(page, '93-demo-trips-desktop', '/trips');
     await shot(page, '94-demo-profile-desktop', '/auth/profile');
+  });
+
+  // The Wardrobe's facets (#1067): the filters docked beside the grid,
+  // applied (the chips in the scope row, the choices checked in the
+  // column), and the scope row's search focused by `/`.
+  test('demo: Theo, the Wardrobe facets at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe');
+    const facets = page.locator('#filter-modal');
+    await expect(facets).toBeVisible();
+    await facets.getByRole('radio', { name: 'Tops', exact: true }).click();
+    await facets.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page).toHaveURL(/category=tops/);
+    await shot(page, '83b-demo-wardrobe-facets-desktop');
+    await page.keyboard.press('/');
+    await expect(
+      page.getByRole('search').getByRole('textbox', { name: 'Search' }),
+    ).toBeFocused();
+    await page.keyboard.type('blue');
+    await shot(page, '83c-demo-wardrobe-search-desktop');
   });
 
   // The action bars (#1063) at the head of their column (Laundry's is 91
@@ -362,6 +394,14 @@ test.describe('desktop', () => {
     await signInAs(page, 'demo');
     await openRawSelvedgeJeans(page);
     await shot(page, '99-demo-garment-desktop');
+    // The garment form beside its photo (#1069), viewport-high: the sticky
+    // Cancel and Save at the window's foot is what it shows.
+    await page.goto(`${page.url().split('?')[0]}/edit`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: `${DIR}/99c-demo-garment-form-desktop.png`,
+      animations: 'disabled',
+    });
     await page.goto('/outfits');
     await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
     await shot(page, '99b-demo-outfit-desktop');
@@ -385,9 +425,13 @@ async function sheetShots(page: Page, suffix: string): Promise<void> {
     });
   };
   await signInAs(page, 'demo');
-  await page.goto('/wardrobe');
-  await page.getByRole('button', { name: 'Filters' }).click();
-  await open('filters', '#filter-modal');
+  // From lg the filters are docked beside the grid, never opened (#1067):
+  // the facets block above shoots them there.
+  if (page.viewportSize()!.width < 1024) {
+    await page.goto('/wardrobe');
+    await page.getByRole('button', { name: 'Filters' }).click();
+    await open('filters', '#filter-modal');
+  }
   await page.goto('/wardrobe');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await open('add', '#add-sheet');

@@ -12,6 +12,7 @@ import type { IsoDate } from '../../calendar-date';
 import { occasionLabel } from '../date-labels';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
+import { OUTFIT_ROW_GRID } from '../layout/columns';
 import { DayHeading } from '../layout/day-heading';
 import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
@@ -39,15 +40,19 @@ import {
 import { TRIP_ITEM_MAX } from './validation';
 
 /**
- * GET /trips/:id (#10): a trip, phone first. The header (dates,
- * destination), the destination's weather (a fragment loaded after the page,
- * GET /trips/:id/weather, with the search that finds the place on the map),
- * a section per day with its outfits (and "Any day"), each with "+ Add" (a
- * saved outfit) and Ideas (the gallery for that day, with the destination's
- * forecast), "Wore it" (and its Undo) while the trip is on, the packing list
+ * GET /trips/:id (#10): a trip, phone first, a `panel` page (#1071). The
+ * body: the header (dates, destination), the destination's weather (a
+ * fragment loaded after the page, GET /trips/:id/weather, with the search
+ * that finds the place on the map), a section per day with its outfits (and
+ * "Any day"; from lg as many to a row as fit), each with "+ Add" (a saved
+ * outfit) and Ideas (the gallery for that day, with the destination's
+ * forecast), "Wore it" (and its Undo) while the trip is on. The aside, after
+ * the outfits on a phone and sticky beside them from lg: the packing list
  * (the garments by role with the copies to pack and warnings, checkboxes
- * saved on change) and the extras (checkboxes, add, copy from a previous
- * trip). Network first like every page but the tab roots; offline the
+ * saved on change), the extras (checkboxes, add, copy from a previous trip)
+ * and the notes. Every swap there is by id (the summaries out of band) and
+ * the outbox finds a tick's counter by its `section`, so neither knows the
+ * region. Network first like every page but the tab roots; offline the
  * worker's copy shows with its writes disabled.
  */
 
@@ -99,6 +104,9 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
           </a>
         ),
       }}
+      layout="panel"
+      aside={<PackingAside model={model} />}
+      asideLabel={t('trips.PACKING')}
       body={{ gap: 6 }}
       overlays={
         <>
@@ -135,17 +143,31 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
       </p>
       {ctx.weatherEnabled && <TripWeatherSection model={model} />}
       <OutfitsSection model={model} />
+    </PageShell>
+  );
+}
+
+/**
+ * What to pack, beside the outfits that need it from lg (`panel`'s aside,
+ * sticky; docs/plans/2026-11-16-desktop-layout.md §4) and after them on a
+ * phone, in the body's flow. The notes come with it: the phone has always
+ * shown them last, and the aside follows the body, so they are the aside's.
+ */
+function PackingAside({ model }: { model: TripPageModel }) {
+  const { notes } = model.trip;
+  return (
+    <>
       <PackingSection model={model} />
       <ExtrasSection model={model} />
-      {trip.notes && (
+      {notes && (
         <section>
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted mb-1">
             {t('NOTES')}
           </h2>
-          <p class="text-sm whitespace-pre-line">{trip.notes}</p>
+          <p class="text-sm whitespace-pre-line">{notes}</p>
         </section>
       )}
-    </PageShell>
+    </>
   );
 }
 
@@ -273,9 +295,13 @@ function DayBlock(props: {
       {outfits.length === 0 && day !== null && (
         <p class="text-xs text-muted">{t('trips.DAY_EMPTY')}</p>
       )}
-      {outfits.map((outfit) => (
-        <TripOutfitRow model={model} outfit={outfit} />
-      ))}
+      {outfits.length > 0 && (
+        <div class={OUTFIT_ROW_GRID}>
+          {outfits.map((outfit) => (
+            <TripOutfitRow model={model} outfit={outfit} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
