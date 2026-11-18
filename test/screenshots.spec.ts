@@ -371,6 +371,14 @@ test.describe('desktop', () => {
     await signInAs(page, 'demo');
     await openRawSelvedgeJeans(page);
     await shot(page, '99-demo-garment-desktop');
+    // The garment form beside its photo (#1069), viewport-high: the sticky
+    // Cancel and Save at the window's foot is what it shows.
+    await page.goto(`${page.url().split('?')[0]}/edit`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: `${DIR}/99c-demo-garment-form-desktop.png`,
+      animations: 'disabled',
+    });
     await page.goto('/outfits');
     await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
     await shot(page, '99b-demo-outfit-desktop');
@@ -463,6 +471,8 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   await shot(page, name('style'), '/auth/profile/style');
   await shot(page, name('sizes'), '/auth/profile/sizes');
   await shot(page, name('tokens'), '/auth/tokens');
+  await shot(page, name('sharing'), '/auth/profile/sharing');
+  await shot(page, name('week'), '/auth/profile/week');
   await shot(page, name('link-import'), '/wardrobe/new/from-link');
   await shot(page, name('plan'), `/calendar/plan?for=day:${ANCHOR}`);
   await shot(page, name('recap'), `/wardrobe/recap?year=${ANCHOR.slice(0, 4)}`);

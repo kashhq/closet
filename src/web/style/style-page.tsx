@@ -2,11 +2,11 @@ import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { BUDGET_BANDS, STYLES } from '../../wardrobe/style';
 import type { RhythmEntry } from '../../wardrobe/week';
 import { PostForm } from '../form';
-import { profileSection, STYLE_SECTION_ID } from '../auth/urls';
+import { STYLE_SECTION_ID } from '../auth/urls';
 import { occasionLabel } from '../date-labels';
 import { ChipGroup } from '../form-field';
 import { type StringKey, t } from '../i18n';
-import { PageShell } from '../layout/page-shell';
+import { SettingsPage } from '../layout/settings-page';
 import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { WEEK_SETTINGS_PATH } from '../week-plan/urls';
@@ -58,14 +58,12 @@ export function StyleProfilePage(props: {
   const { ctx, model } = props;
   const { values } = model;
   return (
-    <PageShell
+    <SettingsPage
       ctx={ctx}
-      name="style"
-      bar={{
-        title: t('style.TITLE'),
-        back: profileSection(STYLE_SECTION_ID),
-        formPage: true,
-      }}
+      title={t('style.TITLE')}
+      section={STYLE_SECTION_ID}
+      formPage
+      body={{}}
       overlays={
         <>
           {model.saved && (
@@ -143,7 +141,7 @@ export function StyleProfilePage(props: {
         </button>
       </PostForm>
       <OutfitRulesSection model={model.rules} />
-    </PageShell>
+    </SettingsPage>
   );
 }
 

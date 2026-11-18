@@ -378,6 +378,27 @@ test.describe('Trips', () => {
     await expect(
       page.getByRole('button', { name: 'Sign out', exact: true }),
     ).toBeVisible();
+    // A setting's page (D14, #1072): the nav of Profile's own rows is hidden
+    // on a phone, and from lg sits beside the page with its row current.
+    const profileRows = await page
+      .locator('li[id] .font-medium')
+      .allInnerTexts();
+    expect(profileRows.length).toBeGreaterThan(0);
+    const settingsNav = page.getByRole('navigation', { name: 'Settings' });
+    for (const [path, current] of [
+      ['/auth/profile/sizes', 'Sizes'],
+      ['/auth/devices', 'Devices'],
+    ]) {
+      await page.goto(path);
+      await expect(settingsNav).toBeHidden();
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(settingsNav).toBeVisible();
+      await expect(settingsNav.getByRole('link')).toHaveText(profileRows);
+      await expect(settingsNav.locator('[aria-current="page"]')).toHaveText(
+        current,
+      );
+      await page.setViewportSize({ width: 390, height: 844 });
+    }
     // The app bar's menus close on Escape, focus back on the summary (#730).
     await page.goto(`/outfits/${outfit}`);
     const menu = page.locator('#outfit-menu');

@@ -6,11 +6,11 @@ import {
 } from '../../push/reminders';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { profileSection } from '../auth/urls';
 import { SettingsPage } from '../layout/settings-page';
 import type { ViewContext } from '../view-context';
 import type { ReminderSettings } from './queries';
 import type { SendReport } from './sender';
+import { PUSH_SETTINGS_ID } from './urls';
 
 /** Where the reminders' fragment goes; push.js loads it once the device is on. */
 const REMINDERS_ID = 'push-reminders';
@@ -29,16 +29,12 @@ const REMINDERS_ID = 'push-reminders';
  * (permission denied), unsupported, install (iOS/iPadOS outside the
  * installed app, where there is no push at all), error.
  */
-/** Profile's Notifications row (`/auth/profile#notifications` lands on it), and its page. */
-export const PUSH_SETTINGS_ID = 'notifications';
-export const PUSH_SETTINGS_PATH = '/auth/profile/notifications';
-
 export function PushSettingsPage(props: { ctx: ViewContext }) {
   return (
     <SettingsPage
       ctx={props.ctx}
       title={t('PUSH_HEADING')}
-      back={profileSection(PUSH_SETTINGS_ID)}
+      section={PUSH_SETTINGS_ID}
     >
       <push-settings class="flex flex-col gap-2">
         <p data-show="checking">{t('PUSH_CHECKING')}</p>
