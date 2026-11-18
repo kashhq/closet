@@ -12,7 +12,6 @@ import { dayAnchor, dayUrl } from '../calendar/urls';
 import { joinCopy, t, type Translated } from '../i18n';
 import { SavedToast, StripFlags } from '../layout/parts';
 import { SettingsPage } from '../layout/settings-page';
-import { profileSection } from '../auth/urls';
 import type { ViewContext } from '../view-context';
 import { collagePieces, OutfitCollage } from '../outfits/collage';
 import type { PlannedBanner } from './plan';
@@ -196,7 +195,7 @@ export function WeekTemplatePage(props: {
     <SettingsPage
       ctx={props.ctx}
       title={t('weekPlan.template.HEADING')}
-      back={profileSection(WEEK_SETTINGS_ID)}
+      section={WEEK_SETTINGS_ID}
       formPage
     >
       <p class="text-sm text-muted">{t('weekPlan.template.HINT')}</p>

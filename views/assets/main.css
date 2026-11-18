@@ -613,9 +613,15 @@ html {
   :where(.page-shell[data-layout="panel"]) > .page-aside {
     padding-top: var(--page-gap, 1rem);
   }
-  /* On a phone the settings index is Profile itself. */
+  /* On a phone the settings index is Profile itself, and a setting's page is
+     the narrow column it was before it had a nav beside it. */
   .page-shell[data-layout="index"] > .page-aside {
     display: none;
+  }
+  @media (max-width: 1023.98px) {
+    .page-shell[data-layout="index"] {
+      max-width: var(--container-page-narrow);
+    }
   }
   /* On a phone the facets are a closed bottom sheet (§3.3), so their aside
      takes no room above the body. */

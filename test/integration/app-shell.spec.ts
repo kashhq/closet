@@ -131,14 +131,14 @@ describe('app shell', () => {
         ['style', '/auth/profile/style'],
         ['sizes', '/auth/profile/sizes'],
         ['agent-access', '/auth/tokens'],
+        // Always a row: it reads no data, as the settings nav lists it too.
+        ['devices', '/auth/devices'],
       ];
       for (const [id, href] of rows) {
         expect(body).toMatch(new RegExp(`<li id="${id}"><a href="${href}"`));
       }
       expect(body).not.toContain('id="notifications"');
       expect(body).not.toContain('id="weather"');
-      // No device signed in: no Devices row.
-      expect(body).not.toContain('id="devices"');
       for (const id of ['account', 'export', 'sign-out']) {
         expect(body).toMatch(new RegExp(`<section[^>]* id="${id}"`));
       }
