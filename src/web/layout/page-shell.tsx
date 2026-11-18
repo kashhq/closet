@@ -84,10 +84,11 @@ export function regionId(name: string, region: PageRegion): string {
  *    (on a phone the index is Profile itself).
  * Only `single` takes a `width`: the others are wide frames whose columns
  * main.css sizes, so a split body cannot be squeezed into a narrow one.
- * `panel`'s aside follows the body, and on a phone continues its flow:
- * the body's `gap` (`PageAside`). Only `single` takes an `actionBar` so
- * far: a grid layout's place for one (`panel`'s is the top of its aside,
- * §3.4) arrives with its first page.
+ * `panel`'s aside follows the body; on a phone it continues the body's
+ * flow (`asideBelowLg: 'after'`, the body's `gap`, `PageAside`: a trip's
+ * packing list) or is the bar riding on the dock (`'bar'`: Styling's
+ * outfit, Shuffle and Save). Only `single` takes an `actionBar`: a panel's
+ * controls live in its aside, which is already in reach at both sizes.
  *
  * `centred` is the standalone page (sign in, register, the invite landing,
  * the offline page): its body is one column centred in the room the bar and
@@ -126,7 +127,24 @@ export type PageLayout =
       subjectBelowLg?: 'first' | 'hidden';
     }
   | {
-      layout: 'panel' | 'facets' | 'index';
+      layout: 'panel';
+      width?: never;
+      aside: Child;
+      /** The landmark's accessible name. */
+      asideLabel: string;
+      actionBar?: never;
+      /**
+       * The aside below lg: `after`, the body's flow continued under it
+       * (the default: a trip's packing list), or `bar`, the bar above the
+       * dock (#664's sticky stack, main.css `[data-aside="bar"]`): sticky
+       * in the flow after the body, so it rides on the dock while the body
+       * scrolls and lands below its end, covering nothing whatever its
+       * height. For an aside the phone keeps in reach (Styling, #1073).
+       */
+      asideBelowLg?: 'after' | 'bar';
+    }
+  | {
+      layout: 'facets' | 'index';
       width?: never;
       aside: Child;
       /** The landmark's accessible name. */
@@ -200,6 +218,7 @@ export function PageShell(props: PageShellProps) {
             ? 'lg'
             : undefined
         }
+        data-aside={asideBar(props) ? 'bar' : undefined}
       >
         {mainRegions(props, layout)}
       </main>
@@ -212,11 +231,10 @@ export function PageShell(props: PageShellProps) {
 /**
  * `<main>`'s regions in DOM order: a left aside precedes the body and a
  * right one follows it (the desktop's left to right, also the phone's
- * stack), and the action bar comes last, the phone's visual order (a `row`
- * fixed above the dock, a `stack` riding on it in the body's flow), so Tab
- * reaches the content before the controls acting on it. From lg main.css
- * places the bar (a `row` by `order` at the head of the column, a `stack`
- * in the grid column beside the body), never the markup.
+ * stack), and the action bar comes last, the phone's visual order (fixed
+ * above the dock), so Tab reaches the content before the controls acting on
+ * it. From lg main.css lifts the bar to the head of the column by `order`,
+ * never the markup.
  */
 function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
   const { name } = props;
@@ -226,7 +244,7 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
       id={regionId(name, 'aside')}
       layout={layout}
       label={props.asideLabel}
-      gap={asideFirst ? undefined : props.body?.gap}
+      gap={asideFirst || asideBar(props) ? undefined : props.body?.gap}
     >
       {props.aside}
     </PageAside>
@@ -239,6 +257,11 @@ function mainRegions(props: PageShellProps, layout: ShellLayout): Child[] {
     !asideFirst && aside,
     <ActionsRegion name={name} bar={props.actionBar} />,
   ];
+}
+
+/** A `panel` whose aside is the phone's bar above the dock (`asideBelowLg`). */
+function asideBar(props: PageShellProps): boolean {
+  return props.layout === 'panel' && props.asideBelowLg === 'bar';
 }
 
 /** A page's aside as its shell renders it: what `PageFragment` answers too. */
@@ -338,7 +361,7 @@ function PageAside(props: {
   label: string | undefined;
   /** In a fragment (PageFragment): its content swapped into the region in place. */
   oob?: boolean;
-  /** `panel`'s: the body's, as its phone flow continues here (mainRegions). */
+  /** `panel`'s: the body's, as its phone flow continues here (mainRegions); none for a bar. */
   gap?: PageGap;
   children: Child;
 }) {

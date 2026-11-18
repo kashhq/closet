@@ -35,22 +35,15 @@ const SIZES = {
     ends: 'before:w-[calc(50%-4.25rem)] after:w-[calc(50%-4.25rem)] before:shrink-0 after:shrink-0',
   },
   // Styling's accessory rows: smaller tiles on a phone, where the outfit
-  // leads; from `lg` the same tile and spacers as `roomy`, so every row on
-  // the page has one tile size and one origin (#732).
+  // leads; from `lg` the `regular` tile and spacers its garment rows keep,
+  // so every row on the page has one tile size and one origin there (#732)
+  // and never larger than the phone draws a garment (#1073: it was w-40).
   small: {
     item: 'w-20',
-    lgItem: 'lg:w-40',
+    lgItem: 'lg:w-28',
     gap: 'gap-3',
     ends: 'before:w-[calc(50%-3.25rem)] after:w-[calc(50%-3.25rem)] before:shrink-0 after:shrink-0',
-    lgEnds: 'lg:before:w-[calc(50%-5.75rem)] lg:after:w-[calc(50%-5.75rem)]',
-  },
-  // Styling's garment rows: `regular` on a phone, larger from `lg`.
-  roomy: {
-    item: 'w-28',
-    lgItem: 'lg:w-40',
-    gap: 'gap-3',
-    ends: 'before:w-[calc(50%-4.25rem)] after:w-[calc(50%-4.25rem)] before:shrink-0 after:shrink-0',
-    lgEnds: 'lg:before:w-[calc(50%-5.75rem)] lg:after:w-[calc(50%-5.75rem)]',
+    lgEnds: 'lg:before:w-[calc(50%-4.25rem)] lg:after:w-[calc(50%-4.25rem)]',
   },
   // An idea card (#321): the strip's whole width on a phone (no spacers: the
   // negative margins cancel the gap beside the zero-width pseudo-element),

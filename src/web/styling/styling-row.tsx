@@ -39,9 +39,12 @@ export function ridesAlong(role: GarmentRole): boolean {
   return SMALL.includes(role);
 }
 
-/** The strip's item size; see `SnapSize` for how it and the end spacers go together. */
+/**
+ * The strip's item size; see `SnapSize` for how it and the end spacers go
+ * together. From `lg` both are the `regular` tile (`small`'s step).
+ */
 function sizing(role: GarmentRole): SnapSize {
-  return ridesAlong(role) ? 'small' : 'roomy';
+  return ridesAlong(role) ? 'small' : 'regular';
 }
 
 /**

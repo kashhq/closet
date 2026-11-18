@@ -396,33 +396,26 @@ html {
 /* The action bar (layout/action-bar.tsx, #1063; docs/plans/
    2026-11-16-desktop-layout.md §3.4), placed by PageShell's `actionBar` as a
    child of `<main>`: its box, its places and the room it takes, all here.
-   A `row`'s height is `--action-bar-h`: its padding, its 1px border and a
+   Its height is `--action-bar-h`: its padding, its 1px border and a
    btn-sm (daisyUI's --size-field * 8, which grows on a coarse pointer), in
    rem, so it grows with the text. The row is that tall by construction (it
    never wraps; text too large for the screen scrolls it sideways), so the
    room reserved for it, which reads the same token, is its real height at
    any text size or pointer (#1030: a hand-copied 3.5rem was short of it on
-   a phone and hid focus once the row wrapped). Below lg a row is fixed
+   a phone and hid focus once the row wrapped). Below lg it is fixed
    above the dock: focus scrolls clear of it and the page's end leaves its
    height. From lg it sticks at the head of `<main>` under the app bar,
    aligned to the content column: focus scrolls clear of it at the top.
    Every bar follows the body in the DOM, the phone's visual order, so Tab
-   reaches the rows first; from lg `order` lifts a row to the head of a
-   flex column, where it sticks against the whole of `<main>`. A
-   `stack` (varying height, #664) is sticky above the dock in the flow after
-   the body, so it reserves nothing: the page leaves only the dock below it;
-   from lg it is the 20rem column beside the body. Page content is z-20 at
-   most: a row is z-20, a stack z-10 (a menu opening in the body, Styling's
-   "Add row", is z-20 over it). */
+   reaches the rows first; from lg `order` lifts it to the head of a flex
+   column, where it sticks against the whole of `<main>`. Content whose
+   height varies is a panel's bar aside instead (the page frame below). Page
+   content is z-20 at most: the bar is z-20. */
 :root {
   --action-bar-h: calc(var(--size-field) * 8 + 1.5rem + 1px);
 }
 @layer components {
   .action-bar {
-    background-color: var(--color-base-100);
-    border-top: 1px solid var(--color-base-300);
-  }
-  .action-bar[data-kind="row"] {
     position: fixed;
     left: var(--rail-width);
     right: 0;
@@ -435,6 +428,8 @@ html {
     padding: 0.75rem 1rem;
     white-space: nowrap;
     overflow-x: auto;
+    background-color: var(--color-base-100);
+    border-top: 1px solid var(--color-base-300);
   }
   /* `safe`: a row too wide for the screen starts at its start edge, where
      the scroller reaches it (space-between does so of itself). */
@@ -444,32 +439,19 @@ html {
   .action-bar[data-align="between"] {
     justify-content: space-between;
   }
-  .action-bar[data-kind="stack"] {
-    position: sticky;
-    bottom: var(--spacing-dock);
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
-    /* The flow step it had inside the body (Styling's gap-3). */
-    margin-top: 0.75rem;
-  }
-  .page-shell:has(> .action-bar[data-kind="stack"]) {
-    padding-bottom: max(var(--spacing-dock), 2rem);
-  }
 
   @media (max-width: 1023.98px) {
-    .page-shell:has(> .action-bar[data-kind="row"]) {
+    .page-shell:has(> .action-bar) {
       padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 2rem);
     }
   }
 
   @media (min-width: 1024px) {
-    .page-shell:has(> .action-bar[data-kind="row"]) {
+    .page-shell:has(> .action-bar) {
       display: flex;
       flex-direction: column;
     }
-    .page-shell > .action-bar[data-kind="row"] {
+    .page-shell > .action-bar {
       order: -1;
       position: sticky;
       top: var(--app-bar-h);
@@ -477,35 +459,18 @@ html {
       border-top: 0;
       border-bottom: 1px solid var(--color-base-300);
     }
-    .page-shell:has(> .action-bar[data-kind="stack"]) {
-      display: grid;
-      grid-template: "body bar" auto / 1fr 20rem;
-      column-gap: 1.5rem;
-      align-items: start;
-    }
-    .page-shell > .action-bar[data-kind="stack"] {
-      grid-area: bar;
-      top: calc(var(--app-bar-h) + 1rem);
-      bottom: auto;
-      z-index: auto;
-      gap: 1rem;
-      max-height: none;
-      margin: 1rem 1rem 0 0;
-      border-top: 0;
-      background-color: transparent;
-    }
   }
 }
 /* Unlayered, as the scroll padding above is. */
 @media (max-width: 1023.98px) {
-  :root:has(.page-shell > .action-bar[data-kind="row"]) {
+  :root:has(.page-shell > .action-bar) {
     scroll-padding-bottom: calc(
       var(--spacing-dock) + var(--action-bar-h) + 0.5rem
     );
   }
 }
 @media (min-width: 1024px) {
-  :root:has(.page-shell > .action-bar[data-kind="row"]) {
+  :root:has(.page-shell > .action-bar) {
     scroll-padding-top: calc(var(--app-bar-h) + var(--action-bar-h) + 0.5rem);
   }
 }
@@ -613,6 +578,34 @@ html {
   :where(.page-shell[data-layout="panel"]) > .page-aside {
     padding-top: var(--page-gap, 1rem);
   }
+  /* A panel whose aside is the phone's bar (`asideBelowLg: 'bar'`, Styling's
+     outfit, Shuffle and Save; #664, #1073): its content pads itself, a column
+     at every width. Below lg it is sticky above the dock in the flow after
+     the body (the body's gap-3 step above it), so it rides on the dock while
+     the body scrolls and lands below its end: it covers nothing however tall
+     it grows, so the page leaves only the dock's room, never a reservation.
+     Capped to the room between the app bar and the dock, a child that may
+     grow (`min-h-0`) scrolls inside it. z-10, under a menu (z-20) opening in
+     the body. From lg it is the panel's column like any other (below). */
+  .page-shell[data-aside="bar"] > .page-aside {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  @media (max-width: 1023.98px) {
+    .page-shell[data-aside="bar"] {
+      padding-bottom: max(var(--spacing-dock), 2rem);
+    }
+    .page-shell[data-aside="bar"] > .page-aside {
+      position: sticky;
+      bottom: var(--spacing-dock);
+      z-index: 10;
+      max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
+      margin-top: 0.75rem;
+      background-color: var(--color-base-100);
+      border-top: 1px solid var(--color-base-300);
+    }
+  }
   /* On a phone the settings index is Profile itself. */
   .page-shell[data-layout="index"] > .page-aside {
     display: none;
@@ -687,6 +680,12 @@ html {
     .page-shell[data-layout="panel"] {
       grid-template:
         "body aside" auto / 1fr 20rem;
+    }
+    /* A bar aside's content pads its own sides (the phone's bar); its top
+       and its steps are here, so it starts on the body's line. */
+    .page-shell[data-aside="bar"] > .page-aside {
+      padding-top: 0.5rem;
+      gap: 0.5rem;
     }
     /* A filtered gallery: the filters left (§3.3 docks its sheet here). */
     .page-shell[data-layout="facets"],
@@ -1273,6 +1272,21 @@ body {
    show only where the primary input hovers and is precise: a mouse, not a
    phone. One markup for every device. */
 @custom-variant fine (@media (hover: hover) and (pointer: fine));
+
+/* Styling's preview whole (src/web/styling/styling-page.tsx, PREVIEW_*;
+   #468, #664): the phone's bar draws the outfit as a strip until its
+   `<details>` (a `group`) opens, and from lg the aside always shows it
+   whole. One variant for both, so each class of the whole shape is spelled
+   once and the two can never drift apart (#1073: they were `group-open:`
+   and `lg:` twins). */
+@custom-variant preview-whole {
+  &:is(:where(.group)[open] *) {
+    @slot;
+  }
+  @media (width >= 64rem) {
+    @slot;
+  }
+}
 
 /* The shared photo viewer (src/web/files/photo-viewer.tsx, public/js/
    photo-viewer.js, #313): a full-screen scroll-snap row of slides. A zoomed

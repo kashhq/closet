@@ -330,7 +330,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.goto('/');
     await page.goto('/styling');
 
-    const bar = page.locator('#styling-actions');
+    const bar = page.locator('#styling-aside');
     const layerSlot = bar.locator('#styling-preview [data-preview-slot="0"]');
     const fit = bar.locator('#styling-fit-line');
     // Opens empty (#665): the bar says so and judges nothing; choosing the
@@ -420,7 +420,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     for (let i = 0; i < 12; i++) {
       socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
     }
-    await test.step('from lg every row has one tile size and one origin (#732)', async () => {
+    await test.step('from lg every row has one tile size and one origin (#732), the regular tile (#1073)', async () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`/styling?with=${socks[0]}`);
       await expect(row(page, 'accessory')).toBeVisible();
@@ -441,9 +441,41 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
       expect(firstTiles.length).toBeGreaterThanOrEqual(4);
       expect(new Set(firstTiles.map((tile) => tile.left)).size).toBe(1);
       expect(new Set(firstTiles.map((tile) => tile.width))).toEqual(
-        new Set([160]),
+        new Set([112]),
       );
       expect(new Set(firstTiles.map((tile) => tile.strip)).size).toBe(1);
+    });
+    await test.step('from lg the outfit is the panel beside the rows, in view at their end, and follows a choice (#1073)', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/styling');
+      const aside = page.locator('#styling-aside');
+      await expect(row(page, 'accessory')).toBeVisible();
+      await expect(aside).toBeVisible();
+      // One task, so both boxes are of the same layout.
+      const { rowsBox, asideBox } = await page.evaluate(() => {
+        const box = (selector: string) =>
+          document
+            .querySelector(selector)!
+            .getBoundingClientRect()
+            .toJSON() as DOMRect;
+        return {
+          rowsBox: box('#styling-rows'),
+          asideBox: box('#styling-aside'),
+        };
+      });
+      expect(asideBox.left).toBeGreaterThanOrEqual(rowsBox.right);
+      expect(asideBox.top).toBeLessThan(rowsBox.bottom);
+      const save = aside.getByRole('button', { name: 'Save', exact: true });
+      await expect(save).toBeInViewport();
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      await expect(aside.locator('#styling-preview')).toBeInViewport();
+      await expect(save).toBeInViewport();
+      await tap(page, row(page, 'accessory'), String(socks[11]));
+      await expect(
+        aside.locator(`[data-preview-garment="${socks[11]}"]`),
+      ).toBeVisible();
     });
     await page.setViewportSize({ width: 390, height: 844 });
     const accessories = row(page, 'accessory');

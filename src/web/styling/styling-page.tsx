@@ -11,7 +11,7 @@ import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
-import { PageShell } from '../layout/page-shell';
+import { type PageLayout, PageShell } from '../layout/page-shell';
 import { BackLink, EmptyState } from '../layout/parts';
 import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import {
@@ -111,6 +111,7 @@ export interface SaveDraft {
 
 const ALL_GARMENTS_KEY = 'ALL_GARMENTS' satisfies StringKey;
 const SAVE_CHANGES_KEY = 'styling.SAVE_CHANGES' satisfies StringKey;
+const PREVIEW_KEY = 'styling.PREVIEW' satisfies StringKey;
 
 // The page's own script (public/js/styling.js, through the importmap): an
 // inline module, so it runs again after a boosted navigation brings a new
@@ -145,17 +146,9 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
           />
         ),
       }}
-      width="wide"
       // The strips reach the screen's edges; the header pads its own text.
       body={{ gutter: 'bleed', gap: 3 }}
-      actionBar={
-        model.rows.length > 0
-          ? {
-              kind: 'stack',
-              children: <StylingAside ctx={ctx} model={model} />,
-            }
-          : undefined
-      }
+      {...stylingLayout(ctx, model)}
       overlays={
         model.rows.length > 0 && !model.shared && <SaveSheet model={model} />
       }
@@ -187,6 +180,21 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
       )}
     </PageShell>
   );
+}
+
+/**
+ * The page's frame (#1073): `panel`, the outfit beside the rows from lg and
+ * the bar above the dock on a phone (StylingAside), once there are rows; the
+ * empty state is a `wide` single column, as there is no outfit to show.
+ */
+function stylingLayout(ctx: ViewContext, model: StylingModel): PageLayout {
+  if (model.rows.length === 0) return { width: 'wide' };
+  return {
+    layout: 'panel',
+    aside: <StylingAside ctx={ctx} model={model} />,
+    asideLabel: t(PREVIEW_KEY),
+    asideBelowLg: 'bar',
+  };
 }
 
 /**
@@ -232,17 +240,18 @@ export function StylingRows(props: {
 
 /**
  * The outfit as it stands and the way to keep it: the preview and the fit
- * line, then Shuffle and Save, the page's `stack` action bar
- * (layout/action-bar.tsx, `#styling-actions`). On a phone (#664) it is the
- * bar above the dock, sticky in the flow after the rows and "Add row": it
- * rides on the dock while they scroll and lands below the last one at their
- * end, so it never covers a row whatever its height (the fit's chips wrap,
- * the preview opens). Over the rows (a strip's step buttons are z-10 and
- * come first), under "Add row"'s z-20 menu. From lg (#468) it is the
- * column beside the rows, sticky under the app bar. In DOM order after the
- * rows, so Tab reaches Shuffle and Save last on both. `group/bar` (a box-less
- * wrapper inside the bar's flex column) is what Shuffle and Save read the
- * preview's state from.
+ * line, then Shuffle and Save, the panel's aside (`#styling-aside`,
+ * `asideBelowLg: 'bar'`). On a phone (#664) it is the bar above the dock,
+ * sticky in the flow after the rows and "Add row": it rides on the dock
+ * while they scroll and lands below the last one at their end, so it never
+ * covers a row whatever its height (the fit's chips wrap, the preview
+ * opens). Over the rows (a strip's step buttons are z-10 and come first),
+ * under "Add row"'s z-20 menu. From lg (#468) it is the column beside the
+ * rows, sticky under the app bar; there as on the phone the preview gives
+ * way (`min-h-0`, scrolling inside) before the fit line and the buttons
+ * leave the window. In DOM order after the rows, so Tab reaches Shuffle and
+ * Save last on both. `group/bar` (a box-less wrapper inside the aside's
+ * flex column) is what Shuffle and Save read the preview's state from.
  */
 function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
   const { model } = props;
@@ -251,18 +260,15 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
       {/* A tap opens the strip into the whole outfit (CSS off `open`, the
           PREVIEW_* classes). The open panel scrolls inside the space between
           the app bar (`--app-bar-h`) and the dock, so a tall outfit never
-          slides under either. From lg the outfit is always whole (every
-          `group-open:` class has its `lg:` twin, so `open` is never touched
-          there); styling.js takes the summary out of the tab order
-          (`syncPreviewToggle`). The summary is named by its sr-only text, as
-          the preview inside is aria-hidden (each strip says its choice). The
-          fit line stays outside it, so it is read on its own. */}
-      <details
-        class="group min-h-0 overflow-y-auto lg:overflow-visible"
-        data-preview-toggle=""
-      >
-        <summary class="relative flex cursor-pointer list-none flex-col px-4 pt-2 lg:cursor-auto lg:p-0 [&::-webkit-details-marker]:hidden">
-          <span class="sr-only">{t('styling.PREVIEW')}</span>
+          slides under either. From lg the outfit is always whole (the
+          `preview-whole:` variant, main.css, so `open` is never touched
+          there); styling.js makes the summary inert (`syncPreviewToggle`).
+          The summary is named by its sr-only text, as the preview inside is
+          aria-hidden (each strip says its choice). The fit line stays
+          outside it, so it is read on its own. */}
+      <details class="group min-h-0 overflow-y-auto" data-preview-toggle="">
+        <summary class="relative flex cursor-pointer list-none flex-col px-4 pt-2 [&::-webkit-details-marker]:hidden">
+          <span class="sr-only">{t(PREVIEW_KEY)}</span>
           <StylingPreview rows={model.rows} />
           <span
             class="absolute right-4 top-4 text-muted group-open:rotate-180 lg:hidden"
@@ -273,7 +279,7 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
         </summary>
       </details>
       {props.ctx.weatherEnabled && !model.shared && (
-        <div class="px-4 pt-1 lg:p-0">
+        <div class="px-4 pt-1">
           <StylingFit />
         </div>
       )}
@@ -352,21 +358,19 @@ const emphasis = (primary: boolean) =>
  * The preview's two shapes, from one markup (#664): the phone's closed bar
  * draws it as a strip, every piece in one line top to toe (a long outfit
  * scrolls inside it); open, and always from lg, it is the whole outfit
- * stacked (#468). Each class pair below is that shape, spelled twice
- * because `group-open:` (the bar's <details>) and `lg:` are separate
- * variants; they agree, so neither wins over the other.
+ * stacked (#468): the `preview-whole:` variant (main.css), one class per
+ * declaration for both.
  */
 const PREVIEW_FRAME =
-  'flex min-w-0 items-center gap-1 overflow-x-auto pr-8 group-open:flex-col group-open:items-stretch group-open:gap-2 group-open:overflow-visible group-open:rounded-box group-open:bg-base-200 group-open:p-4 lg:flex-col lg:items-stretch lg:gap-2 lg:overflow-visible lg:rounded-box lg:bg-base-200 lg:p-4';
+  'flex min-w-0 items-center gap-1 overflow-x-auto pr-8 preview-whole:flex-col preview-whole:items-stretch preview-whole:gap-2 preview-whole:overflow-visible preview-whole:rounded-box preview-whole:bg-base-200 preview-whole:p-4';
 const PREVIEW_HEADING =
-  'hidden text-xs font-semibold uppercase tracking-wide text-muted group-open:block lg:block';
+  'hidden text-xs font-semibold uppercase tracking-wide text-muted preview-whole:block';
 const PREVIEW_WORN =
-  'flex items-center gap-1 group-open:flex-col group-open:gap-2 lg:flex-col lg:gap-2';
-const PREVIEW_WORN_SLOT =
-  'size-12 group-open:h-24 group-open:w-full lg:h-24 lg:w-full';
+  'flex items-center gap-1 preview-whole:flex-col preview-whole:gap-2';
+const PREVIEW_WORN_SLOT = 'size-12 preview-whole:h-24 preview-whole:w-full';
 const PREVIEW_ALONG =
-  'flex gap-1 group-open:flex-wrap group-open:justify-center group-open:gap-2 lg:flex-wrap lg:justify-center lg:gap-2';
-const PREVIEW_ALONG_SLOT = 'size-10 group-open:size-16 lg:size-16';
+  'flex gap-1 preview-whole:flex-wrap preview-whole:justify-center preview-whole:gap-2';
+const PREVIEW_ALONG_SLOT = 'size-10 preview-whole:size-16';
 
 /**
  * The outfit as it stands (#468), top to toe: a slot per row in row order
@@ -394,7 +398,7 @@ export function StylingPreview(props: {
       class={PREVIEW_FRAME}
       aria-hidden="true"
     >
-      <p class={PREVIEW_HEADING}>{t('styling.PREVIEW')}</p>
+      <p class={PREVIEW_HEADING}>{t(PREVIEW_KEY)}</p>
       {/* Shown only while no slot holds a garment (the bare page, #665): CSS
           off `data-preview-garment`, the one chosen-state attribute the
           server draws, a rows answer redraws and styling.js keeps, so it
@@ -679,13 +683,13 @@ function AddRow({ model }: { model: StylingModel }) {
 
 /**
  * Shuffle, which leads while the preview holds no garment, then Save
- * (the sheet), which takes over once it does (the `group/bar` classes), or over a shared wardrobe the reason there
- * is no Save: in a line at the foot of the phone's bar (StylingAside), and
- * from lg under the preview, its buttons stacked full width.
+ * (the sheet), which takes over once it does (the `group/bar` classes), or
+ * over a shared wardrobe the reason there is no Save: one line at the foot
+ * of the aside at both sizes (StylingAside), Save taking the rest of it.
  */
 function StylingActions({ model }: { model: StylingModel }) {
   return (
-    <div class="flex w-full items-center gap-2 px-4 py-2 max-w-page-narrow mx-auto lg:flex-col lg:items-stretch lg:p-0 lg:max-w-none">
+    <div class="flex w-full items-center gap-2 px-4 py-2 max-w-page-narrow mx-auto">
       <button
         type="button"
         class="btn btn-primary group-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
@@ -703,7 +707,7 @@ function StylingActions({ model }: { model: StylingModel }) {
       ) : (
         <button
           type="button"
-          class="btn btn-primary flex-1 lg:flex-none group-not-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
+          class="btn btn-primary flex-1 group-not-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
           {...sheetOpener(SAVE_SHEET_ID)}
         >
           {t(model.outfit ? SAVE_CHANGES_KEY : 'SAVE')}
