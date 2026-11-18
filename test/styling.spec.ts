@@ -1,6 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
-import { createGarment } from './support/e2e-data';
+import { createGarment, createOutfitOf } from './support/e2e-data';
 import { SAME_ORIGIN, signIn } from './support/e2e-session';
 import { blockingScrollListeners } from './support/scroll-listeners';
 import { pageErrors } from './support/page-errors';
@@ -330,7 +330,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.goto('/');
     await page.goto('/styling');
 
-    const bar = page.locator('#styling-actions');
+    const bar = page.locator('#styling-aside');
     const layerSlot = bar.locator('#styling-preview [data-preview-slot="0"]');
     const fit = bar.locator('#styling-fit-line');
     // Opens empty (#665): the bar says so and judges nothing; choosing the
@@ -420,7 +420,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     for (let i = 0; i < 12; i++) {
       socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
     }
-    await test.step('from lg every row has one tile size and one origin (#732)', async () => {
+    await test.step('from lg every row has one tile size and one origin (#732), the regular tile (#1073)', async () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`/styling?with=${socks[0]}`);
       await expect(row(page, 'accessory')).toBeVisible();
@@ -441,9 +441,81 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
       expect(firstTiles.length).toBeGreaterThanOrEqual(4);
       expect(new Set(firstTiles.map((tile) => tile.left)).size).toBe(1);
       expect(new Set(firstTiles.map((tile) => tile.width))).toEqual(
-        new Set([160]),
+        new Set([112]),
       );
       expect(new Set(firstTiles.map((tile) => tile.strip)).size).toBe(1);
+    });
+    await test.step('from lg the outfit is the panel beside the rows, in view at their end, and follows a choice (#1073)', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/styling');
+      const aside = page.locator('#styling-aside');
+      await expect(row(page, 'accessory')).toBeVisible();
+      await expect(aside).toBeVisible();
+      // One task, so both boxes are of the same layout.
+      const { rowsBox, asideBox } = await page.evaluate(() => {
+        const box = (selector: string) =>
+          document
+            .querySelector(selector)!
+            .getBoundingClientRect()
+            .toJSON() as DOMRect;
+        return {
+          rowsBox: box('#styling-rows'),
+          asideBox: box('#styling-aside'),
+        };
+      });
+      expect(asideBox.left).toBeGreaterThanOrEqual(rowsBox.right);
+      expect(asideBox.top).toBeLessThan(rowsBox.bottom);
+      const save = aside.getByRole('button', { name: 'Save', exact: true });
+      await expect(save).toBeInViewport();
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      await expect(aside.locator('#styling-preview')).toBeInViewport();
+      await expect(save).toBeInViewport();
+      await tap(page, row(page, 'accessory'), String(socks[11]));
+      await expect(
+        aside.locator(`[data-preview-garment="${socks[11]}"]`),
+      ).toBeVisible();
+
+      // An outfit taller than a short window: the preview scrolls inside
+      // the aside, whose cap it never pushes past, and Shuffle and Save
+      // stay in view.
+      const layered = await createOutfitOf(page, 'Layered', [
+        ...[g.oldTee, g.newTee, await createGarment(page, 'Cami', 'tops')].map(
+          (id) => ({ id, category: 'tops' }),
+        ),
+        { id: await createGarment(page, 'Vest', 'tops'), category: 'tops' },
+        { id: g.jeans, category: 'bottoms' },
+        { id: g.boots, category: 'footwear' },
+      ]);
+      await page.setViewportSize({ width: 1440, height: 700 });
+      await page.goto(`/styling?outfit=${layered}`);
+      const details = aside.locator('[data-preview-toggle]');
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeVisible();
+      const scrolls = await page.evaluate(() => {
+        const of = (el: Element) => ({
+          overflow: el.scrollHeight - el.clientHeight,
+        });
+        return {
+          details: of(document.querySelector('[data-preview-toggle]')!),
+          aside: of(document.querySelector('#styling-aside')!),
+        };
+      });
+      expect(scrolls.details.overflow).toBeGreaterThan(0);
+      expect(scrolls.aside.overflow).toBeLessThanOrEqual(1);
+      const shuffle = aside.locator('[data-styling-shuffle]');
+      const saveChanges = aside.getByRole('button', { name: 'Save changes' });
+      await expect(shuffle).toBeInViewport({ ratio: 1 });
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
+      await details.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeInViewport();
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
     });
     await page.setViewportSize({ width: 390, height: 844 });
     const accessories = row(page, 'accessory');
