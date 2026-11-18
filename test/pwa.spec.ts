@@ -1,3 +1,4 @@
+import { type Page, type Route } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 import { CACHED_AT_TIMING_NAME, PAGES_CACHE } from '../src/web/page-cache';
 import { APP_ORIGIN, signIn } from './support/e2e-session';
@@ -11,6 +12,9 @@ import { WEBKIT_CANNOT_NAVIGATE_OFFLINE } from './support/webkit-limits';
 
 /** Long past a claim's few milliseconds, well inside the test's timeout. */
 const CLAIM_BOUND_MS = 10_000;
+
+/** A build id no worker has: a page rendered by another deploy. */
+const OTHER_BUILD = 'another-build';
 
 /**
  * What only a browser can show about the installed app: online, the worker
@@ -44,6 +48,7 @@ test.describe('installed app delivery', () => {
   test('navigations use the preload online and the cache or offline page offline', async ({
     page,
     context,
+    browser,
     browserName,
   }) => {
     test.skip(browserName === 'webkit', WEBKIT_CANNOT_NAVIGATE_OFFLINE);
@@ -143,69 +148,94 @@ test.describe('installed app delivery', () => {
       page.getByRole('heading', { level: 1, name: 'Offline' }),
     ).toBeVisible();
     await context.setOffline(false);
-  });
-});
 
-/**
- * A page whose navigation started while the first worker installed is still
- * a reserved client when the activation claims (clientsClaim), so the claim
- * skips it and it commits uncontrolled: no controllerchange, no warm, every
- * boosted tap past the worker until a reload (#1140; on a loaded box, the
- * trips scenario's second device hung in waitForServiceWorker this way).
- * pwa.js asks the active worker to claim such a page (CLAIM_CLIENTS). The
- * second tab constructs the race: its navigation is held from before the
- * registration until the first tab's worker has claimed.
- */
-test('a page that loads after the first worker claimed is claimed too', async ({
-  browser,
-  browserName,
-}) => {
-  test.skip(
-    process.env.PWA_ENABLED !== 'true',
-    'needs a server started with PWA_ENABLED=true',
-  );
-  test.skip(
-    browserName === 'firefox',
-    'service workers are untested in Firefox here',
-  );
-  const context = await browser.newContext({
-    baseURL: APP_ORIGIN,
-    serviceWorkers: 'allow',
-  });
-  try {
-    const late = await context.newPage();
-    let release = () => {};
-    const released = new Promise<void>((resolve) => (release = resolve));
-    let asked = () => {};
-    const requested = new Promise<void>((resolve) => (asked = resolve));
-    await late.route('**/auth/login', async (route) => {
-      asked();
-      await released;
-      await route.fallback();
+    // A page whose navigation started while the first worker installed is a
+    // reserved client when the activation claims (clientsClaim), so it
+    // commits uncontrolled: no controllerchange, no warm, every boosted tap
+    // past the worker until a reload (#1140; on a loaded box the trips
+    // scenario's second device hung in waitForServiceWorker this way). It
+    // asks for a claim naming its build (CLAIM_CLIENTS), which the worker
+    // grants only to its own: a hard reload after a deploy holds the next
+    // build's assets. Two tabs held from before the registration until the
+    // first tab's worker has claimed construct the race; the second is
+    // rendered as another build.
+    await test.step("a page left out of the first worker's claim is claimed, of its own build only", async () => {
+      const device = await browser.newContext({
+        baseURL: APP_ORIGIN,
+        serviceWorkers: 'allow',
+      });
+      try {
+        const hold = async (
+          held: Page,
+          answer: (route: Route) => Promise<void>,
+        ) => {
+          let asked = () => {};
+          const requested = new Promise<void>((resolve) => (asked = resolve));
+          let release = () => {};
+          const released = new Promise<void>((resolve) => (release = resolve));
+          await held.route('**/auth/login', async (route) => {
+            asked();
+            await released;
+            await answer(route);
+          });
+          // Wrapped: an async function's returned promise would be awaited
+          // here, before the navigation it waits for has started.
+          return { requested, release };
+        };
+        const late = await device.newPage();
+        const lateHold = await hold(late, (route) => route.fallback());
+        const other = await device.newPage();
+        const otherHold = await hold(other, async (route) => {
+          const response = await route.fetch();
+          const body = (await response.text()).replace(
+            /data-asset-version="[^"]*"/,
+            `data-asset-version="${OTHER_BUILD}"`,
+          );
+          expect(body).toContain(`data-asset-version="${OTHER_BUILD}"`);
+          await route.fulfill({ response, body });
+        });
+        // Started before any registration: never the worker's navigations.
+        const lateLoad = late.goto('/auth/login');
+        const otherLoad = other.goto('/auth/login');
+        await Promise.all([lateHold.requested, otherHold.requested]);
+
+        const first = await device.newPage();
+        await first.goto('/auth/login');
+        await first.evaluate(() => navigator.serviceWorker.ready);
+        // Running when the activation claimed: taken at once.
+        await first.waitForFunction(() => !!navigator.serviceWorker.controller);
+
+        lateHold.release();
+        await lateLoad;
+        let bound: NodeJS.Timeout | undefined;
+        const outcome = await Promise.race([
+          late
+            .waitForFunction(() => !!navigator.serviceWorker.controller)
+            .then(() => 'controlled'),
+          new Promise<string>((stuck) => {
+            bound = setTimeout(() => stuck('never controlled'), CLAIM_BOUND_MS);
+          }),
+        ]).finally(() => clearTimeout(bound));
+        expect(outcome).toBe('controlled');
+
+        // Another build's page asks too, and is refused: the next build's
+        // update flow, never this worker, takes it.
+        const refused = device.waitForEvent('console', (message) =>
+          message
+            .text()
+            .startsWith(
+              `[sw] CLAIM_CLIENTS from build ${OTHER_BUILD}: nothing claimed`,
+            ),
+        );
+        otherHold.release();
+        await otherLoad;
+        await refused;
+        expect(
+          await other.evaluate(() => navigator.serviceWorker.controller),
+        ).toBeNull();
+      } finally {
+        await device.close();
+      }
     });
-    // Started before any registration: never the worker's navigation.
-    const lateLoad = late.goto('/auth/login');
-    await requested;
-
-    const first = await context.newPage();
-    await first.goto('/auth/login');
-    await first.evaluate(() => navigator.serviceWorker.ready);
-    // Running when the activation claimed: taken at once.
-    await first.waitForFunction(() => !!navigator.serviceWorker.controller);
-
-    release();
-    await lateLoad;
-    let bound: NodeJS.Timeout | undefined;
-    const outcome = await Promise.race([
-      late
-        .waitForFunction(() => !!navigator.serviceWorker.controller)
-        .then(() => 'controlled'),
-      new Promise<string>((stuck) => {
-        bound = setTimeout(() => stuck('never controlled'), CLAIM_BOUND_MS);
-      }),
-    ]).finally(() => clearTimeout(bound));
-    expect(outcome).toBe('controlled');
-  } finally {
-    await context.close();
-  }
+  });
 });

@@ -79,18 +79,29 @@ function registerServiceWorker() {
   };
   document.addEventListener('connectivity:change', guardReload);
 
-  wb.addEventListener('waiting', () => {
+  // The worker this window saw waiting: only it taking the page is the update.
+  let waitingWorker = null;
+  wb.addEventListener('waiting', (event) => {
     update = 'waiting';
+    waitingWorker = event.sw ?? null;
     console.info('[pwa] update waiting');
     showUpdateToast();
   });
-  // A new controller is the update only once this window has seen it
-  // waiting; before that it is the first worker taking the page (the app's
-  // first visit, clientsClaim). Not Workbox's `isUpdate`: that says whether
-  // a worker controlled the page when pwa.js registered, so a page opened
-  // before the first worker never reloaded onto a later update.
+  // A new controller is the update only when it is the worker this window
+  // saw waiting; any other is the active worker taking the page (the app's
+  // first visit, clientsClaim, or its claim on request: claimIfUncontrolled).
+  // Workbox fires `controlling` on every controllerchange. Not Workbox's
+  // `isUpdate`: that says whether a worker controlled the page when pwa.js
+  // registered, so a page opened before the first worker never reloaded onto
+  // a later update.
   wb.addEventListener('controlling', () => {
     if (update === 'none') return;
+    if (
+      update === 'waiting' &&
+      navigator.serviceWorker.controller !== waitingWorker
+    ) {
+      return;
+    }
     if (reloadRequested) {
       window.location.reload();
       return;
@@ -123,18 +134,21 @@ function registerServiceWorker() {
 // uncontrolled, and nothing would claim it later: no controllerchange, so no
 // warm, and every boosted tap of the session past the worker, offline
 // included, until a full reload (#1140). Once a worker is active, a page it
-// does not control asks to be claimed. Never with an update installing or
-// waiting (an uncontrolled page then is a hard reload): Workbox fires
-// `controlling` on every controllerchange, and the old worker's claim would
-// pass for the update activated elsewhere, leaving Reload nothing to
-// activate. With none, `update` is 'none' and `controlling` ignores it.
+// does not control asks to be claimed, naming the build it was rendered with
+// (<html data-asset-version>, what X-Asset-Version says). The worker claims
+// only when every uncontrolled page named its own build (claimOwnBuildPages):
+// a hard reload after a deploy holds the next build's assets, and the update
+// flow, never the old worker, takes that page.
 function claimIfUncontrolled() {
+  const build = document.documentElement.dataset.assetVersion;
+  if (!build) return;
   navigator.serviceWorker.ready
     .then((registration) => {
       if (navigator.serviceWorker.controller) return;
-      if (registration.installing || registration.waiting) return;
-      console.info('[pwa] page not controlled: asking the worker to claim it');
-      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
+      console.info(
+        `[pwa] page of build ${build} not controlled: asking the worker to claim it`,
+      );
+      registration.active?.postMessage({ type: 'CLAIM_CLIENTS', build });
     })
     .catch((error) =>
       console.warn('[pwa] could not ask the worker to claim the page', error),

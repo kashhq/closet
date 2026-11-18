@@ -144,7 +144,7 @@ declare const self: ServiceWorkerGlobalScope;
 // pwa.js can reload. It claims only pages already running: one whose
 // navigation started while the first worker installed commits after this
 // claim and is skipped (still a reserved client), so pwa.js asks for its
-// own (CLAIM_CLIENTS below, #1140).
+// own, naming its build (CLAIM_CLIENTS below, #1140).
 clientsClaim();
 
 // https://developer.chrome.com/docs/workbox/modules/workbox-navigation-preload
@@ -1855,6 +1855,57 @@ function formatBytes(bytes: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
 }
 
+/**
+ * The build each uncontrolled page said it was rendered with (CLAIM_CLIENTS,
+ * pwa.js), by client id. In memory: a restarted worker has heard from no
+ * page, so it claims nothing until each asks again (a reload), which is the
+ * behaviour before #1140.
+ */
+const uncontrolledBuilds = new Map<string, unknown>();
+
+/**
+ * Claims the uncontrolled pages only when every one of them said it is of
+ * this worker's build. `clients.claim()` takes every uncontrolled page in
+ * scope, so one of another build (a hard reload after a deploy, holding the
+ * next build's assets) holds back the claim of all: the update flow takes
+ * it, never this worker. A page that has not asked (one without pwa.js) is
+ * of no known build and holds it back too. Reserved clients (navigations not
+ * committed) are not in `matchAll`; each asks once it runs.
+ */
+async function claimOwnBuildPages(
+  clientId: string,
+  build: unknown,
+): Promise<void> {
+  uncontrolledBuilds.set(clientId, build);
+  const [windows, controlled] = await Promise.all([
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+    self.clients.matchAll({ type: 'window' }),
+  ]);
+  const controlledIds = new Set(controlled.map((client) => client.id));
+  const uncontrolled = windows.filter(
+    (client) => !controlledIds.has(client.id),
+  );
+  const open = new Set(uncontrolled.map((client) => client.id));
+  for (const id of uncontrolledBuilds.keys()) {
+    if (!open.has(id)) uncontrolledBuilds.delete(id);
+  }
+  const foreign = uncontrolled.filter(
+    (client) => uncontrolledBuilds.get(client.id) !== STATIC_BUILD,
+  );
+  if (foreign.length > 0) {
+    console.info(
+      `[sw] CLAIM_CLIENTS from build ${String(build)}: nothing claimed, ` +
+        `${foreign.length} of ${uncontrolled.length} uncontrolled page(s) not of build ${STATIC_BUILD}`,
+    );
+    return;
+  }
+  if (uncontrolled.length === 0) return;
+  await self.clients.claim();
+  console.info(
+    `[sw] CLAIM_CLIENTS: claimed ${uncontrolled.length} uncontrolled page(s) of build ${STATIC_BUILD}`,
+  );
+}
+
 // Update flow: pwa.js shows a toast when a new worker is waiting and sends
 // SKIP_WAITING when the user taps Reload. No skipWaiting() on install: a
 // worker that seizes control mid-session leaves pages holding stale asset
@@ -1873,8 +1924,9 @@ self.addEventListener('message', (event) => {
   } else if (type === 'CLAIM_CLIENTS') {
     // A page this active worker does not control (pwa.js): left out of the
     // activation's claim, it would stay out of the worker until a reload.
-    console.info('[sw] CLAIM_CLIENTS: claiming an uncontrolled page');
-    event.waitUntil(self.clients.claim());
+    if (event.source instanceof Client) {
+      event.waitUntil(claimOwnBuildPages(event.source.id, event.data.build));
+    }
   } else if (type === 'REVALIDATE_PAGE' && port) {
     event.waitUntil(
       revalidateForPage(

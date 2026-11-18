@@ -134,7 +134,13 @@ export function Layout({
   return (
     // data-signed-in: pwa.js starts Web Push (push.js) only on signed-in
     // pages; the session cookie is httpOnly, so scripts cannot tell.
-    <html lang="en" data-signed-in={ctx.user ? '' : undefined}>
+    // data-asset-version: the build this page was rendered with, which the
+    // worker checks before claiming it (pwa.js, claimIfUncontrolled).
+    <html
+      lang="en"
+      data-signed-in={ctx.user ? '' : undefined}
+      data-asset-version={ctx.appVersion}
+    >
       <head>
         <meta charset="UTF-8" />
         {/* No viewport-fit=cover: iOS standalone handles the safe areas
