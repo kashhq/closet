@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { t } from './i18n';
+import { FIELD_ROW } from './layout/columns';
 
 /**
  * A post form's labelled field: the garment, capsule, trip, "Bought it",
@@ -66,6 +67,17 @@ export function FormField(props: {
       <FieldMessages id={id} messages={props.messages} />
     </div>
   );
+}
+
+/**
+ * Two short FormFields side by side from lg (the garment form's brand and
+ * size; docs/plans/2026-11-16-desktop-layout.md §3.7), stacked below it
+ * exactly as two fields in the form's column are. A pair that fits a phone
+ * side by side (a trip's dates, a repair's day and cost) is `FIELD_GRID`
+ * at every size instead.
+ */
+export function FieldRow(props: { children: Child }) {
+  return <div class={FIELD_ROW}>{props.children}</div>;
 }
 
 /**
