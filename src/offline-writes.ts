@@ -933,3 +933,25 @@ export async function discardStuck<R extends ReplayRecord>(
     return (await store.discard(record)) ? record : undefined;
   });
 }
+
+/**
+ * Sign-out's discard of what the drain left (outbox.ts, drainBeforeLeaving):
+ * the named records dropped to their tombstones (`drop`, dropQueuedWrites)
+ * inside the drain's turn, like the notice's Discard. A replay still in
+ * flight past SIGN_OUT_DRAIN_MS settles first, within its own deadline
+ * (REPLAY_TIMEOUT_MS): landed, its record is gone and nothing is reverted;
+ * failed, it is tombstoned. Without the turn the server could save a write
+ * the page already shows reverted. How many were dropped.
+ */
+export async function discardAtSignOut(
+  exclusively: Exclusively,
+  ids: readonly string[],
+  drop: (
+    goes: (record: { id: string }) => boolean,
+  ) => Promise<{ dropped: number }>,
+): Promise<number> {
+  const named = new Set(ids);
+  return exclusively(
+    async () => (await drop((record) => named.has(record.id))).dropped,
+  );
+}

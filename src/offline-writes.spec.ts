@@ -29,6 +29,7 @@ import {
   actionBusyAttributes,
   createTurns,
   discardStuck,
+  discardAtSignOut,
   retryStuck,
   type StuckActionStore,
   isStuck,
@@ -718,6 +719,54 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       const turn = createTurns();
       expect(await retryStuck(actions(w), turn, 'fresh')).toBeUndefined();
       expect(await discardStuck(actions(w), turn, 'nope')).toBeUndefined();
+    });
+
+    /** dropQueuedWrites over the world's rows: the named unsent ones to tombstones. */
+    const dropIn =
+      (w: ReturnType<typeof world>) =>
+      (goes: (r: { id: string }) => boolean) => {
+        let dropped = 0;
+        for (const r of w.stored.values()) {
+          if (r.state === 'discarded' || !goes(r)) continue;
+          w.stored.set(r.id, discardedRecord(r, w.clock.now));
+          dropped += 1;
+        }
+        return Promise.resolve({ dropped });
+      };
+
+    it('sign-out’s discard waits for the replay in flight: one that lands is not tombstoned, the rest are', async () => {
+      const w = world([row('landing'), row('left')], (id) =>
+        id === 'landing' ? OK : SERVER,
+      );
+      const gate = held(w);
+      const turn = createTurns();
+      const drain = turn(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(turn, ['landing', 'left'], dropIn(w));
+      await Promise.resolve();
+      // Nothing is tombstoned while the replay is still out.
+      expect([...w.stored.values()].map((r) => r.state)).toEqual([
+        'pending',
+        'pending',
+      ]);
+      gate.release(OK);
+      await drain;
+      expect(await discard).toBe(1);
+      expect(w.stored.has('landing')).toBe(false);
+      expect(w.stored.get('left')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('sign-out’s discard tombstones a replay in flight that fails', async () => {
+      const w = world([row('failing')], () => SERVER);
+      const gate = held(w);
+      const turn = createTurns();
+      const drain = turn(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(turn, ['failing'], dropIn(w));
+      gate.release(SERVER);
+      await drain;
+      expect(await discard).toBe(1);
+      expect(w.stored.get('failing')).toMatchObject({ state: 'discarded' });
     });
   });
 

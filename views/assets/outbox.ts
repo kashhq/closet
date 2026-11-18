@@ -91,6 +91,7 @@ import {
   createTurns,
   type Exclusively,
   discardStuck,
+  discardAtSignOut,
   retryStuck,
   type StuckActionStore,
 } from '../../src/offline-writes';
@@ -1222,8 +1223,12 @@ async function drainBeforeLeaving(
   if (!discard) return false;
   // Tombstones, not deletions (#1042): another tab of this account still
   // showing one of these ticks reverts it instead of taking it for saved.
-  const named = new Set(left.map((record) => record.id));
-  const { dropped } = await drop((record) => named.has(record.id));
+  // In the drain's turn, after any replay still in flight (discardAtSignOut).
+  const dropped = await discardAtSignOut(
+    exclusively,
+    left.map((record) => record.id),
+    drop,
+  );
   console.info(`[outbox] ${dropped} unsynced change(s) discarded at sign-out`);
   return true;
 }
