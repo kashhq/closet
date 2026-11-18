@@ -1,6 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
-import { createGarment } from './support/e2e-data';
+import { createGarment, createOutfitOf } from './support/e2e-data';
 import { SAME_ORIGIN, signIn } from './support/e2e-session';
 import { blockingScrollListeners } from './support/scroll-listeners';
 import { pageErrors } from './support/page-errors';
@@ -476,6 +476,46 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
       await expect(
         aside.locator(`[data-preview-garment="${socks[11]}"]`),
       ).toBeVisible();
+
+      // An outfit taller than a short window: the preview scrolls inside
+      // the aside, whose cap it never pushes past, and Shuffle and Save
+      // stay in view.
+      const layered = await createOutfitOf(page, 'Layered', [
+        ...[g.oldTee, g.newTee, await createGarment(page, 'Cami', 'tops')].map(
+          (id) => ({ id, category: 'tops' }),
+        ),
+        { id: await createGarment(page, 'Vest', 'tops'), category: 'tops' },
+        { id: g.jeans, category: 'bottoms' },
+        { id: g.boots, category: 'footwear' },
+      ]);
+      await page.setViewportSize({ width: 1440, height: 700 });
+      await page.goto(`/styling?outfit=${layered}`);
+      const details = aside.locator('[data-preview-toggle]');
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeVisible();
+      const scrolls = await page.evaluate(() => {
+        const of = (el: Element) => ({
+          overflow: el.scrollHeight - el.clientHeight,
+        });
+        return {
+          details: of(document.querySelector('[data-preview-toggle]')!),
+          aside: of(document.querySelector('#styling-aside')!),
+        };
+      });
+      expect(scrolls.details.overflow).toBeGreaterThan(0);
+      expect(scrolls.aside.overflow).toBeLessThanOrEqual(1);
+      const shuffle = aside.locator('[data-styling-shuffle]');
+      const saveChanges = aside.getByRole('button', { name: 'Save changes' });
+      await expect(shuffle).toBeInViewport({ ratio: 1 });
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
+      await details.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeInViewport();
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
     });
     await page.setViewportSize({ width: 390, height: 844 });
     const accessories = row(page, 'accessory');

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createOutboxConnection } from '../views/assets/outbox-store';
+import {
+  createOutboxConnection,
+  dropQueuedWrites,
+  type DroppableRecord,
+} from '../views/assets/outbox-store';
+import { DISCARD_TOMBSTONE_MS } from './offline-writes';
 
 /**
  * A minimal IndexedDB: one store shared by every handle of the "database"
@@ -172,5 +177,107 @@ describe('createOutboxConnection', () => {
     expect(handles[0].closed).toBe(true);
     expect(await read(connection)).toEqual(['a']);
     expect(handles).toHaveLength(2);
+  });
+});
+
+describe('dropQueuedWrites', () => {
+  const record = (
+    id: string,
+    account: string,
+    extra: Partial<DroppableRecord> = {},
+  ): DroppableRecord => ({
+    id,
+    account,
+    key: `wash:${id}`,
+    state: 'pending',
+    attempts: 0,
+    label: 'Navy chinos',
+    ...extra,
+  });
+
+  /** The store's rows behind getAll and a cursor, with every transaction's mode. */
+  function fakeTransact(initial: DroppableRecord[]) {
+    let rows = [...initial];
+    const modes: IDBTransactionMode[] = [];
+    const transact = (
+      mode: IDBTransactionMode,
+      work: (store: IDBObjectStore) => void,
+    ) => {
+      modes.push(mode);
+      const store = {
+        getAll: () => {
+          const request = {
+            result: [...rows],
+            onsuccess: undefined as undefined | (() => void),
+          };
+          queueMicrotask(() => request.onsuccess?.());
+          return request;
+        },
+        openCursor: () => {
+          const snapshot = [...rows];
+          let at = 0;
+          const request = {
+            result: undefined as unknown,
+            onsuccess: undefined as undefined | (() => void),
+          };
+          const step = () => {
+            const value = snapshot[at];
+            request.result = value && {
+              value,
+              update: (next: DroppableRecord) => {
+                rows = rows.map((r) => (r.id === value.id ? next : r));
+              },
+              delete: () => {
+                rows = rows.filter((r) => r.id !== value.id);
+              },
+              continue: () => {
+                at += 1;
+                queueMicrotask(step);
+              },
+            };
+            request.onsuccess?.();
+          };
+          queueMicrotask(step);
+          return request;
+        },
+      };
+      work(store as unknown as IDBObjectStore);
+      // Settles after the microtasks the work queued (the cursor's steps).
+      return new Promise<void>((resolve) => setTimeout(resolve, 0));
+    };
+    return { transact, modes, rows: () => rows };
+  }
+
+  it('a claim with nothing to drop or prune opens no readwrite transaction', async () => {
+    const own = record('a', '1');
+    const fresh = record('b', '2', { state: 'discarded', discardedAt: 1_000 });
+    const { transact, modes, rows } = fakeTransact([own, fresh]);
+    // Account 1's claim: 2's only record is a tombstone too fresh to prune.
+    const counts = await dropQueuedWrites(
+      transact,
+      (r) => r.account !== '1',
+      2_000,
+    );
+    expect(counts).toEqual({ dropped: 0, pruned: 0 });
+    expect(modes).toEqual(['readonly']);
+    expect(rows()).toEqual([own, fresh]);
+  });
+
+  it('tombstones what it names and prunes expired tombstones in one readwrite', async () => {
+    const own = record('a', '1');
+    const other = record('b', '2');
+    const expired = record('c', '3', { state: 'discarded', discardedAt: 0 });
+    const { transact, modes, rows } = fakeTransact([own, other, expired]);
+    const counts = await dropQueuedWrites(
+      transact,
+      (r) => r.account !== '1',
+      DISCARD_TOMBSTONE_MS,
+    );
+    expect(counts).toEqual({ dropped: 1, pruned: 1 });
+    expect(modes).toEqual(['readonly', 'readwrite']);
+    expect(rows()).toMatchObject([
+      own,
+      { id: 'b', state: 'discarded', label: '' },
+    ]);
   });
 });

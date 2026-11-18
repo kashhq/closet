@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { type Cookie, type Page } from '@playwright/test';
 import { expect } from './support/fixtures';
 import sharp from 'sharp';
@@ -116,6 +116,28 @@ async function openRawSelvedgeJeans(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The planned week (2026-09-27) with Tuesday's "+ Plan" sheet open, the page
+ * behind it at one place every run (#1087). The week opens at the top
+ * (nothing in the app scrolls it); the place behind the sheet is where this
+ * spec scrolls the button. So the page settles first (the weather line
+ * replaces its 20 px slot with its 52 px, fonts), then the spec centres the
+ * button itself, leaving the click nothing to scroll.
+ */
+async function openTuesdayPlanSheet(page: Page): Promise<void> {
+  await page.goto('/calendar?week=2026-09-27');
+  await page.waitForLoadState('networkidle');
+  // The summary's placeholder is a div; its answer replaces it.
+  await expect(page.locator('div#weather-line')).toHaveCount(0);
+  const plan = page.locator('[data-plan^="plan-2026-09-29-"]').first();
+  await plan.evaluate(async (button) => {
+    await document.fonts.ready;
+    button.scrollIntoView({ block: 'center', behavior: 'instant' });
+  });
+  await plan.click();
+  await expect(page.locator('#plan-sheet-2026-09-29')).toBeVisible();
+}
+
 /** Styling with its top row locked: frozen, ringed in the accent (#106). */
 async function lockTopRow(page: Page): Promise<void> {
   const top = page.locator('[data-styling-row="top"]');
@@ -192,14 +214,15 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
   // The planned week's "+ Plan" on Tuesday: its sheet, the three ways.
   // Opened by the day's button or, while the week template leaves it open
   // slots (from today on), the first of those.
-  await page.goto('/calendar?week=2026-09-27');
-  await page.locator('[data-plan^="plan-2026-09-29-"]').first().click();
-  await expect(page.locator('#plan-sheet-2026-09-29')).toBeVisible();
-  // The viewport alone: a full-page shot stitches the modal mid-page.
-  await page.screenshot({
-    path: `${DIR}/71-demo-calendar-plan-sheet.png`,
-    animations: 'disabled',
-  });
+  // The viewport alone: a full-page shot stitches the modal mid-page. Taken
+  // twice from two loads, which must match (#1087).
+  const planSheet = async () => {
+    await openTuesdayPlanSheet(page);
+    return page.screenshot({ animations: 'disabled' });
+  };
+  const first = await planSheet();
+  expect((await planSheet()).equals(first), 'the same shot twice').toBe(true);
+  writeFileSync(`${DIR}/71-demo-calendar-plan-sheet.png`, first);
   // Sharing is its own settings page since #728 (65 is Profile's index).
   await shot(page, '11-demo-shares', '/auth/profile/sharing');
   await shot(page, '65-demo-profile', '/auth/profile');
@@ -436,8 +459,7 @@ async function sheetShots(page: Page, suffix: string): Promise<void> {
   await lockTopRow(page);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await open('styling-save', '#styling-save');
-  await page.goto('/calendar?week=2026-09-27');
-  await page.locator('[data-plan^="plan-2026-09-29-"]').first().click();
+  await openTuesdayPlanSheet(page);
   await open('calendar-plan', '#plan-sheet-2026-09-29');
 }
 
@@ -471,6 +493,8 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   await shot(page, name('style'), '/auth/profile/style');
   await shot(page, name('sizes'), '/auth/profile/sizes');
   await shot(page, name('tokens'), '/auth/tokens');
+  await shot(page, name('sharing'), '/auth/profile/sharing');
+  await shot(page, name('week'), '/auth/profile/week');
   await shot(page, name('link-import'), '/wardrobe/new/from-link');
   await shot(page, name('plan'), `/calendar/plan?for=day:${ANCHOR}`);
   await shot(page, name('recap'), `/wardrobe/recap?year=${ANCHOR.slice(0, 4)}`);

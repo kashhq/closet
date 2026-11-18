@@ -1,7 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { profileSection } from '../auth/urls';
 import { SettingsPage } from '../layout/settings-page';
 import type { ViewContext } from '../view-context';
 import {
@@ -68,7 +67,7 @@ export function WeatherSettingsPage(props: {
     <SettingsPage
       ctx={ctx}
       title={t('weather.SETTINGS_HEADING')}
-      back={profileSection(WEATHER_SETTINGS_ID)}
+      section={WEATHER_SETTINGS_ID}
       formPage
     >
       <WeatherLocation {...location} />

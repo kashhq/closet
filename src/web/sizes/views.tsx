@@ -6,10 +6,9 @@ import {
   MEASUREMENTS,
 } from '../../wardrobe/measurements';
 import { PostForm } from '../form';
-import { profileSection } from '../auth/urls';
 import type { FieldErrors } from '../auth/validation';
 import { type StringKey, t } from '../i18n';
-import { PageShell } from '../layout/page-shell';
+import { SettingsPage } from '../layout/settings-page';
 import { FormField, inputAttributes } from '../form-field';
 import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
@@ -130,14 +129,11 @@ export function SizesPage(props: { ctx: ViewContext; model: SizesPageModel }) {
   const { ctx, model } = props;
   const refused = model.refusedBrand;
   return (
-    <PageShell
+    <SettingsPage
       ctx={ctx}
-      name="sizes"
-      bar={{
-        title: t(SIZES_TITLE_KEY),
-        back: profileSection(SIZES_SECTION_ID),
-        formPage: true,
-      }}
+      title={t(SIZES_TITLE_KEY)}
+      section={SIZES_SECTION_ID}
+      formPage
       body={{ gap: 6 }}
       overlays={
         <>
@@ -197,7 +193,7 @@ export function SizesPage(props: { ctx: ViewContext; model: SizesPageModel }) {
           errors={refused?.target === 'new' ? refused.errors : undefined}
         />
       </section>
-    </PageShell>
+    </SettingsPage>
   );
 }
 

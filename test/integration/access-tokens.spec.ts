@@ -513,11 +513,13 @@ describe('agent access tokens', () => {
       expect(ids).toEqual(expect.arrayContaining([a.evictedId, b.evictedId]));
     });
 
-    it('Profile › Devices lists the user’s own by name and last use, never the token; its row hides while there are none', async () => {
+    it('Profile › Devices lists the user’s own by name and last use, never the token; its row says none while there are none', async () => {
       const { cookie, id } = await signedUp('devices@example.com');
       const get = (url: string) =>
         t.inject({ method: 'GET', url, headers: { cookie } });
-      expect((await get('/auth/profile')).body).not.toContain('id="devices"');
+      const none = await get('/auth/profile');
+      expect(none.body).toContain('<li id="devices"><a href="/auth/devices"');
+      expect(none.body).toContain('No apps are signed in.');
 
       const phone = await minted(id, 'Pixel 9');
       await minted(id, 'Claude Code', 'mcp');
@@ -580,14 +582,14 @@ describe('agent access tokens', () => {
         headers: { cookie },
       });
       expect(landed.body).toContain('Device signed out.');
-      // The last one gone: the page says none, and Profile drops the row.
+      // The last one gone: the page says none, and Profile's row says so.
       expect(landed.body).toContain('No apps are signed in.');
       const profile = await t.inject({
         method: 'GET',
         url: '/auth/profile',
         headers: { cookie },
       });
-      expect(profile.body).not.toContain('id="devices"');
+      expect(profile.body).toContain('No apps are signed in.');
 
       for (const stale of [phone.id, theirs.id, agent.id]) {
         const res = await revoke(stale);

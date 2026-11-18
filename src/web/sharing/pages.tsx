@@ -2,7 +2,6 @@ import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
-import { profileSection } from '../auth/urls';
 import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
 import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
@@ -132,7 +131,7 @@ export function SharingPage(props: { ctx: ViewContext; model: SharingModel }) {
     <SettingsPage
       ctx={props.ctx}
       title={t('WARDROBE_SHARING')}
-      back={profileSection(SHARING_SECTION_ID)}
+      section={SHARING_SECTION_ID}
       formPage
     >
       {model.refusal && (
