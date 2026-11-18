@@ -384,16 +384,21 @@ test.describe('Trips', () => {
       .locator('li[id] .font-medium')
       .allInnerTexts();
     expect(profileRows.length).toBeGreaterThan(0);
-    await page.goto('/auth/profile/sizes');
     const settingsNav = page.getByRole('navigation', { name: 'Settings' });
-    await expect(settingsNav).toBeHidden();
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await expect(settingsNav).toBeVisible();
-    await expect(settingsNav.getByRole('link')).toHaveText(profileRows);
-    await expect(settingsNav.locator('[aria-current="page"]')).toHaveText(
-      'Sizes',
-    );
-    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [path, current] of [
+      ['/auth/profile/sizes', 'Sizes'],
+      ['/auth/devices', 'Devices'],
+    ]) {
+      await page.goto(path);
+      await expect(settingsNav).toBeHidden();
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(settingsNav).toBeVisible();
+      await expect(settingsNav.getByRole('link')).toHaveText(profileRows);
+      await expect(settingsNav.locator('[aria-current="page"]')).toHaveText(
+        current,
+      );
+      await page.setViewportSize({ width: 390, height: 844 });
+    }
     // The app bar's menus close on Escape, focus back on the summary (#730).
     await page.goto(`/outfits/${outfit}`);
     const menu = page.locator('#outfit-menu');

@@ -19,14 +19,16 @@ interface SettingsRowDefinition {
   id: string;
   href: string;
   label: StringKey;
-  when?: (ctx: ViewContext, hasDevices: boolean) => boolean;
+  when?: (ctx: ViewContext) => boolean;
 }
 
 /**
  * Profile's settings, in the order Profile lists them: the one list behind
  * both the index (`ProfilePage`, a row with a summary each) and the nav
  * beside every setting's page (`SettingsNav`, labels only), so a new setting
- * is added once. A row with a `when` exists only under that condition.
+ * is added once. A row with a `when` exists only under that condition, which
+ * reads the deployment's config and never a row of data: the nav is on every
+ * settings page and reads nothing, so Profile and the nav always agree.
  */
 const SETTINGS_ROWS = [
   { id: SHARING_SECTION_ID, href: SHARING_PATH, label: 'WARDROBE_SHARING' },
@@ -55,13 +57,7 @@ const SETTINGS_ROWS = [
     href: TOKENS_PATH,
     label: 'agentAccess.TITLE',
   },
-  {
-    // Only while a native client is signed in: nothing on the web mints a device token.
-    id: DEVICES_SECTION_ID,
-    href: DEVICES_PATH,
-    label: 'devices.TITLE',
-    when: (_ctx, hasDevices) => hasDevices,
-  },
+  { id: DEVICES_SECTION_ID, href: DEVICES_PATH, label: 'devices.TITLE' },
 ] as const satisfies readonly SettingsRowDefinition[];
 
 /** The ids, as literals: a table keyed by them (Profile's summaries) must cover every row. */
@@ -75,25 +71,20 @@ export interface SettingsRowSpec {
 }
 
 /** The settings that exist for this deployment and account. */
-export function settingsRows(
-  ctx: ViewContext,
-  hasDevices: boolean,
-): SettingsRowSpec[] {
+export function settingsRows(ctx: ViewContext): SettingsRowSpec[] {
   return SETTINGS_ROWS.filter(
-    (row: SettingsRowDefinition) => row.when?.(ctx, hasDevices) ?? true,
+    (row: SettingsRowDefinition) => row.when?.(ctx) ?? true,
   );
 }
 
 /**
  * The settings' siblings, beside a setting's page from lg (the `index`
  * layout's aside, a `<nav aria-label>` its shell renders): Profile's rows as
- * labels only, the page's own `aria-current`. It reads nothing, so the
- * Devices row, which Profile shows only while a device is signed in, is
- * listed only on the Devices page itself (a page that is there has a device
- * to list).
+ * labels only, the page's own `aria-current`. It reads nothing, so it lists
+ * exactly what `settingsRows` gives Profile.
  */
 export function SettingsNav(props: { ctx: ViewContext; current: string }) {
-  const rows = settingsRows(props.ctx, props.current === DEVICES_SECTION_ID);
+  const rows = settingsRows(props.ctx);
   return (
     <ul class="menu w-full p-0">
       {rows.map((row) => (

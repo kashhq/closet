@@ -259,7 +259,7 @@ export interface ProfileProps {
   weather?: Settings;
   /** Agent access's summary: the `mcp` tokens in force. */
   tokens: TokenListing[];
-  /** The Devices row (#189), shown only while a native client is signed in. */
+  /** The Devices row's summary (#189): the native clients signed in. */
   devices: TokenListing[];
 }
 
@@ -340,7 +340,9 @@ const SETTING_SUMMARIES: Readonly<
       ? t('agentAccess.NONE')
       : t('agentAccess.SUMMARY', { count: props.tokens.length }),
   [DEVICES_SECTION_ID]: (props) =>
-    t('devices.SUMMARY', { count: props.devices.length }),
+    props.devices.length === 0
+      ? t('devices.NONE')
+      : t('devices.SUMMARY', { count: props.devices.length }),
 };
 
 /**
@@ -369,7 +371,7 @@ export function ProfilePage(props: ProfileProps) {
         aria-label={t('profile.SETTINGS')}
       >
         <ul class="card-body py-1 gap-0 divide-y divide-base-300">
-          {settingsRows(ctx, props.devices.length > 0).map((row) => (
+          {settingsRows(ctx).map((row) => (
             <SettingsRow
               id={row.id}
               href={row.href}
@@ -459,8 +461,9 @@ function AccountSection({ ctx }: { ctx: ViewContext }) {
  * Profile › Devices (#189; a Profile section until #728, DEVICES_PATH
  * since): the native clients signed in, by the name they gave and their
  * last use, each revocable here without the password (revoking only
- * narrows access). Profile shows its row only while there is one: nothing
- * on the web mints a device token. Never the token or its prefix. Its
+ * narrows access). Profile and the settings nav list it always (their rows
+ * read no data), and the page says when none is signed in: nothing on the
+ * web mints a device token. Never the token or its prefix. Its
  * revokes land back here, so a `formPage`.
  */
 export function DevicesPage(props: {
