@@ -134,21 +134,30 @@ function registerServiceWorker() {
 // uncontrolled, and nothing would claim it later: no controllerchange, so no
 // warm, and every boosted tap of the session past the worker, offline
 // included, until a full reload (#1140). Once a worker is active, a page it
-// does not control asks to be claimed, naming the build it was rendered with
-// (<html data-asset-version>, what X-Asset-Version says). The worker claims
-// only when every uncontrolled page named its own build (claimOwnBuildPages):
-// a hard reload after a deploy holds the next build's assets, and the update
-// flow, never the old worker, takes that page.
+// does not control asks to be claimed. The worker then asks every
+// uncontrolled page for its build (BUILD_QUERY, answered here with
+// <html data-asset-version>, what X-Asset-Version says) and claims only when
+// all are its own (claimOwnBuildPages): a hard reload after a deploy holds
+// the next build's assets, and the update flow, never the old worker, takes
+// that page. Answered whenever asked, controlled or not: another page's
+// request asks this one too.
 function claimIfUncontrolled() {
   const build = document.documentElement.dataset.assetVersion;
   if (!build) return;
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type !== 'BUILD_QUERY') return;
+    event.ports[0]?.postMessage({ build });
+  });
+  // The worker's query reaches a page before DOMContentLoaded only once
+  // its messages are started.
+  navigator.serviceWorker.startMessages();
   navigator.serviceWorker.ready
     .then((registration) => {
       if (navigator.serviceWorker.controller) return;
       console.info(
         `[pwa] page of build ${build} not controlled: asking the worker to claim it`,
       );
-      registration.active?.postMessage({ type: 'CLAIM_CLIENTS', build });
+      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
     })
     .catch((error) =>
       console.warn('[pwa] could not ask the worker to claim the page', error),
