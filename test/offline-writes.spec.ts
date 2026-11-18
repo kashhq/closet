@@ -350,7 +350,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await signIn(page, 'outbox-other');
     attempted.length = 0;
     const deleted = page.waitForEvent('console', (message) =>
-      message.text().includes('of another account deleted unsent'),
+      message.text().includes('of another account dropped unsent'),
     );
     await page.goto('/wardrobe');
     expect((await deleted).text()).toContain('[outbox] 1 queued change(s)');

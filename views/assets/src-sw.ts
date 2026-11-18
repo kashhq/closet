@@ -61,6 +61,10 @@ import {
 } from '../../src/web/shell/offline-warm';
 import { WARM_REQUEST_HEADER } from '../../src/warm-request';
 import {
+  createStoreFlights,
+  dropCacheAndRows,
+} from '../../src/web/shell/cache-drop';
+import {
   ACTIVATED_KEY,
   answerContentHashed,
   answerVersionedAsset,
@@ -84,7 +88,12 @@ import {
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
-import { openOutboxChannel, outbox, type OutboxChange } from './outbox-store';
+import {
+  dropQueuedWrites,
+  openOutboxChannel,
+  outbox,
+  type OutboxChange,
+} from './outbox-store';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
@@ -224,30 +233,27 @@ const MAX_ENTRIES: Readonly<Record<string, number>> = {
 };
 
 /**
- * Deletes a cache and Workbox's expiration rows for it: every URL an
- * ExpirationPlugin saw stored there is a row in the `workbox-expiration`
- * IndexedDB, which `caches.delete` alone leaves behind (the previous
- * account's URLs, search queries included, still counted toward maxEntries,
- * #731). Every whole-cache delete in this worker goes through here.
+ * Deletes a cache and Workbox's expiration rows for it (`cache-drop.ts`:
+ * rows, cache, rows, then a row for every entry stored meanwhile). Every
+ * whole-cache delete in this worker goes through here.
  * Not ExpirationPlugin.deleteCacheAndMetadata: it forgets only the caches
  * its plugin touched since this worker started, so a cold worker's drop
  * would forget nothing. CacheExpiration asks for a limit (asserted in
  * development builds); delete() reads none, so a retired cache's is nominal.
- * Rows, the cache, then the rows again: the two deletes cannot be atomic, so
- * a store landing between them leaves a row with no entry, which the second
- * pass sweeps (the first pass alone would miss it; the cache alone would
- * leave the first pass's rows). A store landing after the last step writes
- * an entry and its row into a fresh cache, consistent with each other; whether
- * that store may happen at all is the generation and owner checks' business
- * (pageStore's claim, imageStore), not this delete's.
  */
 async function deleteCacheAndMetadata(name: string): Promise<boolean> {
-  const expiration = new CacheExpiration(name, {
-    maxEntries: MAX_ENTRIES[name] ?? 1,
-  });
-  await expiration.delete();
-  const deleted = await self.caches.delete(name);
-  await expiration.delete();
+  const { deleted, adopted } = await dropCacheAndRows(
+    self.caches,
+    name,
+    new CacheExpiration(name, { maxEntries: MAX_ENTRIES[name] ?? 1 }),
+    // A stale image store's cacheDidUpdate deletes its entry: no row for it.
+    (url) => outsideExpiration(url) || imageFlights.endedStore(url, generation),
+  );
+  if (adopted > 0) {
+    console.info(
+      `[sw] ${name}: ${adopted} entr(ies) stored during the drop given their expiration row`,
+    );
+  }
   return deleted;
 }
 
@@ -350,6 +356,16 @@ const REFRESHED_AT_KEY = 'https://page-cache.invalid/refreshed-at';
 const REFRESH_BACKOFF_PREFIX =
   'https://page-cache.invalid/refresh-backoff?key=';
 
+/**
+ * The pages cache's entries no ExpirationPlugin stores: the records above
+ * (off-origin keys) and the offline page (offlinePage, kept out of the
+ * expiration so no warm evicts it). A drop never gives one a row.
+ */
+function outsideExpiration(url: string): boolean {
+  const { origin, pathname } = new URL(url);
+  return origin !== self.location.origin || pathname === FALLBACK_HTML_URL;
+}
+
 async function readRecord(key: string): Promise<string | undefined> {
   const cache = await self.caches.open(PAGES_CACHE);
   return (await cache.match(key))?.text();
@@ -397,6 +413,13 @@ const runOf = new WeakMap<Request, number>();
 function generationFor(request: Request): number {
   return runOf.get(request) ?? generation;
 }
+
+/**
+ * The image stores in flight (imageStore), so a drop's restamp gives no
+ * expiration row to an entry an ended generation's store is about to
+ * delete (cache-drop.ts, createStoreFlights).
+ */
+const imageFlights = createStoreFlights();
 
 /** The generation a request recorded in its handlerWillStart. */
 function startedIn(state: { generation?: unknown } | undefined): number {
@@ -537,7 +560,7 @@ function claimPageCache(
     const gone = queuedWritesGoneAtClaim(owner, account);
     if (gone) {
       event.waitUntil(
-        deleteQueuedWrites('a page for another account arrived', gone),
+        dropQueuedWritesOf('a page for another account arrived', gone),
       );
     }
     if (owner !== undefined) {
@@ -947,39 +970,34 @@ async function dropPushSubscription(): Promise<void> {
 }
 
 // The outbox's records (#178, views/assets/outbox-store.ts): only ever
-// deleted here, never sent. The open tabs re-read the store on the channel's
+// dropped here, never sent. The open tabs re-read the store on the channel's
 // message and draw what is left.
 const outboxChannel = openOutboxChannel();
 
 /**
- * Deletes the queued writes whose `account` field `goes` accepts. Never
- * throws: a store that cannot be opened (private mode) holds nothing to
- * delete, and a session boundary must not fail on it.
+ * Drops the queued writes whose `account` field `goes` accepts, each to its
+ * tombstone (dropQueuedWrites, #1042: a tab still open on that account
+ * reverts the intent rather than showing it saved). Never throws: a store
+ * that cannot be opened (private mode) holds nothing to drop, and a session
+ * boundary must not fail on it.
  */
-async function deleteQueuedWrites(
+async function dropQueuedWritesOf(
   reason: string,
   goes: (recordAccount: unknown) => boolean,
 ): Promise<void> {
   try {
-    let deleted = 0;
-    await outbox.transact('readwrite', (store) => {
-      const cursor = store.openCursor();
-      cursor.onsuccess = () => {
-        const row = cursor.result;
-        if (!row) return;
-        const { account } = row.value as { account?: unknown };
-        if (goes(account)) {
-          row.delete();
-          deleted += 1;
-        }
-        row.continue();
-      };
-    });
-    if (deleted === 0) return;
+    const { dropped, pruned } = await dropQueuedWrites(
+      (mode, work) => outbox.transact(mode, work),
+      (record) => goes(record.account),
+      Date.now(),
+    );
+    if (dropped + pruned === 0) return;
     outboxChannel?.postMessage({ drain: false } satisfies OutboxChange);
-    console.info(`[sw] ${reason}: ${deleted} queued change(s) deleted unsent`);
+    console.info(
+      `[sw] ${reason}: ${dropped} queued change(s) dropped unsent, ${pruned} tombstone(s) pruned`,
+    );
   } catch (error) {
-    console.warn('[sw] could not delete the queued changes', error);
+    console.warn('[sw] could not drop the queued changes', error);
   }
 }
 
@@ -998,7 +1016,12 @@ registerRoute(isPageRequest, pages);
 // deletes it with the cache.
 const imageStore: WorkboxPlugin = {
   handlerWillStart: async ({ request, state }) => {
-    if (state) state.generation = generationFor(request);
+    if (!state) return;
+    state.generation = generationFor(request);
+    imageFlights.begin(state, request.url, startedIn(state));
+  },
+  handlerDidComplete: async ({ state }) => {
+    if (state) imageFlights.end(state);
   },
   cacheWillUpdate: async ({ request, response, state }) =>
     isStale(startedIn(state), new URL(request.url).pathname) ? null : response,
