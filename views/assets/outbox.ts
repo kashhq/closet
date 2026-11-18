@@ -95,10 +95,12 @@ import {
   type StuckActionStore,
 } from '../../src/offline-writes';
 import {
+  type DroppableRecord,
   dropQueuedWrites,
   openOutboxChannel,
   outbox,
   type OutboxChange,
+  recordsOfAccount,
 } from './outbox-store';
 
 type Fields = Record<string, string | string[]>;
@@ -228,33 +230,37 @@ const channel = openOutboxChannel();
 
 /**
  * A committed write: re-rendered here, announced to the other tabs. Every
- * readwrite transaction goes through it, so no tab shows a store it has
- * not re-read.
+ * readwrite transaction goes through it, or (a drop, which writes only
+ * when it has something to change: dropQueuedWrites) announces itself
+ * after, so no tab shows a store it has not re-read.
  */
 async function write(
   work: (store: IDBObjectStore) => void,
   { drain = false } = {},
 ): Promise<void> {
   await transact('readwrite', work);
-  channel?.postMessage({ drain } satisfies OutboxChange);
+  announce({ drain });
+}
+
+function announce(change: OutboxChange): void {
+  channel?.postMessage(change);
   void refresh();
 }
 
-async function readAll(): Promise<OutboxRecord[]> {
-  let records: OutboxRecord[] = [];
-  await transact('readonly', (store) => {
-    const request = store.getAll();
-    request.onsuccess = () => {
-      records = request.result;
-    };
-  });
-  return records.sort((a, b) => a.queuedAt - b.queuedAt);
+/**
+ * A drop over the store (dropQueuedWrites, #1042), announced only when it
+ * changed something.
+ */
+async function drop(
+  goes: (record: DroppableRecord) => boolean,
+): Promise<{ dropped: number; pruned: number }> {
+  const counts = await dropQueuedWrites(transact, goes, Date.now());
+  if (counts.dropped + counts.pruned > 0) announce({ drain: false });
+  return counts;
 }
 
 const store: OutboxStore<OutboxRecord> = {
-  async records(account) {
-    return (await readAll()).filter((record) => record.account === account);
-  },
+  records: (account) => recordsOfAccount(transact, account),
   putCollapsed(records) {
     return write(
       (objects) => {
@@ -338,10 +344,8 @@ const remove = (records: OutboxRecord[]) =>
  */
 async function claimForAccount(): Promise<void> {
   const account = pageAccount();
-  const { dropped, pruned } = await dropQueuedWrites(
-    write,
+  const { dropped, pruned } = await drop(
     (record) => record.account !== account,
-    Date.now(),
   );
   if (dropped > 0) {
     console.info(
@@ -371,12 +375,12 @@ const isUnsaved = (record: OutboxRecord) => record.state !== 'discarded';
 const refresh = singleFlight(async () => {
   const account = pageAccount();
   if (!account) return;
-  render(await recordsOf(account));
+  render(account, await recordsOf(account));
 });
 
-function render(records: OutboxRecord[]): void {
+function render(account: string, records: OutboxRecord[]): void {
   const waiting = records.filter(isPending).length;
-  renderRegions(records);
+  renderRegions(account, records);
   renderPackedCounts(records);
   // Online with a record that has been tried and not saved: the drain is
   // waiting out its backoff (a 5xx, a timeout), which nothing else shows.
@@ -446,7 +450,7 @@ const intentOf = (record: OutboxRecord | undefined) =>
  * (regionEnd): Discard, and a session or account drop, leave a tombstone
  * (#1042), so a record gone means saved whichever tab reads first.
  */
-function renderRegions(records: OutboxRecord[]): void {
+function renderRegions(account: string, records: OutboxRecord[]): void {
   const waiting = new Map(
     records.filter(isPending).map((record) => [record.key, record]),
   );
@@ -460,7 +464,7 @@ function renderRegions(records: OutboxRecord[]): void {
       continue;
     }
     delete region.dataset.outbox;
-    const end = regionEnd(key, records);
+    const end = regionEnd(account, key, records);
     if (end !== 'pending') endIntent(region, end);
   }
 }
@@ -1219,11 +1223,7 @@ async function drainBeforeLeaving(
   // Tombstones, not deletions (#1042): another tab of this account still
   // showing one of these ticks reverts it instead of taking it for saved.
   const named = new Set(left.map((record) => record.id));
-  const { dropped } = await dropQueuedWrites(
-    write,
-    (record) => named.has(record.id),
-    Date.now(),
-  );
+  const { dropped } = await drop((record) => named.has(record.id));
   console.info(`[outbox] ${dropped} unsynced change(s) discarded at sign-out`);
   return true;
 }

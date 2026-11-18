@@ -476,20 +476,26 @@ export function showsSyncedWrite(
 export type IntentEnd = 'saved' | 'failed' | 'discarded';
 
 /**
- * Where a region's write stands, read from the store as committed (the
- * account's records): pending while a record of its key waits, `failed` or
- * `discarded` as its record says, and `saved` only when no record of its
- * key is left. Discard leaves a tombstone in the same transaction that
- * ends the record (`discardedRecord`), so a read can never see a discarded
- * write as gone, and so as saved, whichever tab reads first or whenever the
- * channel's message arrives (#900).
+ * Where a region's write stands, read from the store as committed: pending
+ * while a record of the page's account and the region's key waits, `failed`
+ * or `discarded` as its record says, and `saved` only when no such record is
+ * left. Discard leaves a tombstone in the same transaction that ends the
+ * record (`discardedRecord`), so a read can never see a discarded write as
+ * gone, and so as saved, whichever tab reads first or whenever the
+ * channel's message arrives (#900). A record is the account's and the
+ * key's together: a dropped account's tombstone keeps its key for a day
+ * (#1042), the same key as the next account's tick on a shared trip, and
+ * must never revert that tick.
  */
 export function regionEnd(
+  account: string,
   key: string,
   records: readonly StoredRecord[],
 ): 'pending' | IntentEnd {
   const states = new Set(
-    records.filter((record) => record.key === key).map((r) => r.state),
+    records
+      .filter((record) => record.account === account && record.key === key)
+      .map((r) => r.state),
   );
   if (states.has('pending')) return 'pending';
   if (states.has('failed')) return 'failed';

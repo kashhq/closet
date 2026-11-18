@@ -820,7 +820,7 @@ describe('regionEnd: a Discard is never read as a save (#900)', () => {
     let mark: string | undefined = 'ticked';
     const done: string[] = [];
     for (const records of reads) {
-      const end = regionEnd('packed:7:41', records);
+      const end = regionEnd('1', 'packed:7:41', records);
       if (end === 'pending') {
         mark = 'ticked';
         continue;
@@ -832,13 +832,13 @@ describe('regionEnd: a Discard is never read as a save (#900)', () => {
   }
 
   it('reads each state from the store, and saved only from a record gone', () => {
-    expect(regionEnd('packed:7:41', [record('pending')])).toBe('pending');
-    expect(regionEnd('packed:7:41', [record('failed')])).toBe('failed');
-    expect(regionEnd('packed:7:41', [discard()])).toBe('discarded');
-    expect(regionEnd('packed:7:41', [record('pending', 'other')])).toBe(
+    expect(regionEnd('1', 'packed:7:41', [record('pending')])).toBe('pending');
+    expect(regionEnd('1', 'packed:7:41', [record('failed')])).toBe('failed');
+    expect(regionEnd('1', 'packed:7:41', [discard()])).toBe('discarded');
+    expect(regionEnd('1', 'packed:7:41', [record('pending', 'other')])).toBe(
       'saved',
     );
-    expect(regionEnd('packed:7:41', [])).toBe('saved');
+    expect(regionEnd('1', 'packed:7:41', [])).toBe('saved');
   });
 
   it('reverts once and never confirms, whether a tab reads before the Discard commits or after', () => {
@@ -881,7 +881,7 @@ describe('regionEnd: a Discard is never read as a save (#900)', () => {
       false,
     );
     await enqueue(store, '1', [record('pending')]);
-    expect(regionEnd('packed:7:41', rows)).toBe('pending');
+    expect(regionEnd('1', 'packed:7:41', rows)).toBe('pending');
   });
 });
 
@@ -924,7 +924,7 @@ describe('atDrop: a session or account drop leaves tombstones (#1042)', () => {
   it('a tab still open on the dropped account reverts its tick instead of confirming it', () => {
     // Before #1042 the drop deleted the record and this read said saved.
     const after = dropped([pending], true, 1_000);
-    expect(regionEnd('packed:7:41', after)).toBe('discarded');
+    expect(regionEnd('7', 'packed:7:41', after)).toBe('discarded');
     expect(intentEnding('ticked', 'discarded')).toBe('revert');
   });
 
@@ -940,6 +940,34 @@ describe('atDrop: a session or account drop leaves tombstones (#1042)', () => {
     }
     // A second drop re-stamps nothing: the prune clock is the first one's.
     expect(dropped([tombstone], true, 5_000)).toEqual([tombstone]);
+  });
+
+  it('another account’s tick on the same key of a shared trip reads its own state, never the dropped account’s tombstone', async () => {
+    // Account 7 queued a tick on shared trip 7 offline; account 8 signs in
+    // on the device, its claim drops 7's record to a tombstone, and 8 ticks
+    // the same item. The store, unfiltered, holds both under one key.
+    let rows: StoredRecord[] = dropped([pending], true, 1_000);
+    const store: OutboxStore<StoredRecord> = {
+      records: () => Promise.resolve(rows),
+      putCollapsed(incoming) {
+        const replaced = (r: StoredRecord) =>
+          incoming.some((n) => n.account === r.account && n.key === r.key);
+        rows = [...rows.filter((r) => !replaced(r)), ...incoming];
+        return Promise.resolve();
+      },
+    };
+    await enqueue(store, '8', [
+      { account: '8', key: 'packed:7:41', state: 'pending' },
+    ]);
+    expect(rows.map((r) => [r.account, r.state])).toEqual([
+      ['7', 'discarded'],
+      ['8', 'pending'],
+    ]);
+    expect(regionEnd('8', 'packed:7:41', rows)).toBe('pending');
+    // 8's tick saves (its record goes); 7's tombstone stays for its tabs.
+    rows = rows.filter((r) => r.account !== '8');
+    expect(regionEnd('8', 'packed:7:41', rows)).toBe('saved');
+    expect(regionEnd('7', 'packed:7:41', rows)).toBe('discarded');
   });
 });
 

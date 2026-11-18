@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createStoreFlights,
   dropCacheAndRows,
   type DroppableCaches,
   type ExpirationRows,
@@ -137,5 +138,31 @@ describe('dropCacheAndRows', () => {
     expect(await drop(storage)).toEqual({ deleted: true, adopted: 1 });
     expect(storage.rows).toEqual(new Set([`${ORIGIN}/c`]));
     consistent(storage);
+  });
+
+  it('gives no row to an entry a store of an ended generation is about to delete', async () => {
+    const flights = createStoreFlights();
+    const stale = {};
+    const current = {};
+    // One store began before the drop (generation 1), one after (2): both
+    // land during it; only the stale one's cacheDidUpdate deletes its entry.
+    flights.begin(stale, `${ORIGIN}/file/thumb/old`, 1);
+    flights.begin(current, `${ORIGIN}/file/thumb/new`, 2);
+    const storage = new FakeStorage();
+    const stored = storage.delete.bind(storage);
+    storage.delete = async (name) => {
+      const deleted = await stored(name);
+      storage.store('pages-v2', `${ORIGIN}/file/thumb/old`);
+      storage.store('pages-v2', `${ORIGIN}/file/thumb/new`);
+      return deleted;
+    };
+    const rowless = (url: string) =>
+      outsideExpiration(url) || flights.endedStore(url, 2);
+    expect(
+      await dropCacheAndRows(storage, 'pages-v2', storage.expiration, rowless),
+    ).toEqual({ deleted: false, adopted: 1 });
+    expect(storage.rows).toEqual(new Set([`${ORIGIN}/file/thumb/new`]));
+    flights.end(stale);
+    expect(flights.endedStore(`${ORIGIN}/file/thumb/old`, 2)).toBe(false);
   });
 });

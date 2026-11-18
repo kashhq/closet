@@ -60,7 +60,10 @@ import {
   type WarmList,
 } from '../../src/web/shell/offline-warm';
 import { WARM_REQUEST_HEADER } from '../../src/warm-request';
-import { dropCacheAndRows } from '../../src/web/shell/cache-drop';
+import {
+  createStoreFlights,
+  dropCacheAndRows,
+} from '../../src/web/shell/cache-drop';
 import {
   ACTIVATED_KEY,
   answerContentHashed,
@@ -243,7 +246,8 @@ async function deleteCacheAndMetadata(name: string): Promise<boolean> {
     self.caches,
     name,
     new CacheExpiration(name, { maxEntries: MAX_ENTRIES[name] ?? 1 }),
-    outsideExpiration,
+    // A stale image store's cacheDidUpdate deletes its entry: no row for it.
+    (url) => outsideExpiration(url) || imageFlights.endedStore(url, generation),
   );
   if (adopted > 0) {
     console.info(
@@ -409,6 +413,13 @@ const runOf = new WeakMap<Request, number>();
 function generationFor(request: Request): number {
   return runOf.get(request) ?? generation;
 }
+
+/**
+ * The image stores in flight (imageStore), so a drop's restamp gives no
+ * expiration row to an entry an ended generation's store is about to
+ * delete (cache-drop.ts, createStoreFlights).
+ */
+const imageFlights = createStoreFlights();
 
 /** The generation a request recorded in its handlerWillStart. */
 function startedIn(state: { generation?: unknown } | undefined): number {
@@ -976,7 +987,7 @@ async function dropQueuedWritesOf(
 ): Promise<void> {
   try {
     const { dropped, pruned } = await dropQueuedWrites(
-      (work) => outbox.transact('readwrite', work),
+      (mode, work) => outbox.transact(mode, work),
       (record) => goes(record.account),
       Date.now(),
     );
@@ -1005,7 +1016,12 @@ registerRoute(isPageRequest, pages);
 // deletes it with the cache.
 const imageStore: WorkboxPlugin = {
   handlerWillStart: async ({ request, state }) => {
-    if (state) state.generation = generationFor(request);
+    if (!state) return;
+    state.generation = generationFor(request);
+    imageFlights.begin(state, request.url, startedIn(state));
+  },
+  handlerDidComplete: async ({ state }) => {
+    if (state) imageFlights.end(state);
   },
   cacheWillUpdate: async ({ request, response, state }) =>
     isStale(startedIn(state), new URL(request.url).pathname) ? null : response,

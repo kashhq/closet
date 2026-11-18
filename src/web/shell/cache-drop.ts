@@ -38,8 +38,10 @@ export interface ExpirationRows {
  *    lost its row to that pass, and would otherwise escape maxEntries until
  *    the next drop. Restamping a store that kept its row is harmless (it is
  *    seconds old), and a store whose own row lands after ours writes the
- *    same row. `outsideExpiration` names the entries no ExpirationPlugin
- *    governs (the worker's records, the offline page), which never get one.
+ *    same row. `rowless` names the entries that must get none: those no
+ *    ExpirationPlugin governs (the worker's records, the offline page),
+ *    and those a store of an ended generation is about to delete
+ *    (`createStoreFlights`), whose row would outlive its entry.
  *
  * Which stores may happen at all is the generation and owner checks'
  * business (pageStore's claim, imageStore), not this delete's. Whether the
@@ -49,7 +51,7 @@ export async function dropCacheAndRows(
   caches: DroppableCaches,
   name: string,
   rows: ExpirationRows,
-  outsideExpiration: (url: string) => boolean,
+  rowless: (url: string) => boolean,
 ): Promise<{ deleted: boolean; adopted: number }> {
   await rows.delete();
   const deleted = await caches.delete(name);
@@ -57,9 +59,36 @@ export async function dropCacheAndRows(
   // Never open a cache nothing recreated: open() would create it.
   if (!(await caches.has(name))) return { deleted, adopted: 0 };
   const keys = await (await caches.open(name)).keys();
-  const unruled = keys
+  const ruled = keys
     .map((request) => request.url)
-    .filter((url) => !outsideExpiration(url));
-  for (const url of unruled) await rows.updateTimestamp(url);
-  return { deleted, adopted: unruled.length };
+    .filter((url) => !rowless(url));
+  for (const url of ruled) await rows.updateTimestamp(url);
+  return { deleted, adopted: ruled.length };
+}
+
+/**
+ * The stores in flight and the generation each started in (src-sw.ts,
+ * imageStore): one begun in handlerWillStart, ended in handlerDidComplete,
+ * which Workbox runs after the store's cacheDidUpdate. A store of an ended
+ * generation deletes its entry in cacheDidUpdate, so a drop's restamp
+ * (`dropCacheAndRows`) must give that entry no row (`endedStore`, the same
+ * test imageStore's cacheDidUpdate makes). `token` is the plugin's
+ * per-request state object.
+ */
+export function createStoreFlights() {
+  const flights = new Map<object, { url: string; generation: number }>();
+  return {
+    begin(token: object, url: string, generation: number): void {
+      flights.set(token, { url, generation });
+    },
+    end(token: object): void {
+      flights.delete(token);
+    },
+    endedStore(url: string, current: number): boolean {
+      for (const flight of flights.values()) {
+        if (flight.url === url && flight.generation !== current) return true;
+      }
+      return false;
+    },
+  };
 }
