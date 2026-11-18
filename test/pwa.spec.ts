@@ -1,6 +1,6 @@
 import { expect, test } from './support/fixtures';
 import { CACHED_AT_TIMING_NAME, PAGES_CACHE } from '../src/web/page-cache';
-import { signIn } from './support/e2e-session';
+import { APP_ORIGIN, signIn } from './support/e2e-session';
 import {
   cachedPaths,
   cachePage,
@@ -8,6 +8,9 @@ import {
   withoutWarming,
 } from './support/service-worker';
 import { WEBKIT_CANNOT_NAVIGATE_OFFLINE } from './support/webkit-limits';
+
+/** Long past a claim's few milliseconds, well inside the test's timeout. */
+const CLAIM_BOUND_MS = 10_000;
 
 /**
  * What only a browser can show about the installed app: online, the worker
@@ -141,4 +144,68 @@ test.describe('installed app delivery', () => {
     ).toBeVisible();
     await context.setOffline(false);
   });
+});
+
+/**
+ * A page whose navigation started while the first worker installed is still
+ * a reserved client when the activation claims (clientsClaim), so the claim
+ * skips it and it commits uncontrolled: no controllerchange, no warm, every
+ * boosted tap past the worker until a reload (#1140; on a loaded box, the
+ * trips scenario's second device hung in waitForServiceWorker this way).
+ * pwa.js asks the active worker to claim such a page (CLAIM_CLIENTS). The
+ * second tab constructs the race: its navigation is held from before the
+ * registration until the first tab's worker has claimed.
+ */
+test('a page that loads after the first worker claimed is claimed too', async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    process.env.PWA_ENABLED !== 'true',
+    'needs a server started with PWA_ENABLED=true',
+  );
+  test.skip(
+    browserName === 'firefox',
+    'service workers are untested in Firefox here',
+  );
+  const context = await browser.newContext({
+    baseURL: APP_ORIGIN,
+    serviceWorkers: 'allow',
+  });
+  try {
+    const late = await context.newPage();
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let asked = () => {};
+    const requested = new Promise<void>((resolve) => (asked = resolve));
+    await late.route('**/auth/login', async (route) => {
+      asked();
+      await released;
+      await route.fallback();
+    });
+    // Started before any registration: never the worker's navigation.
+    const lateLoad = late.goto('/auth/login');
+    await requested;
+
+    const first = await context.newPage();
+    await first.goto('/auth/login');
+    await first.evaluate(() => navigator.serviceWorker.ready);
+    // Running when the activation claimed: taken at once.
+    await first.waitForFunction(() => !!navigator.serviceWorker.controller);
+
+    release();
+    await lateLoad;
+    let bound: NodeJS.Timeout | undefined;
+    const outcome = await Promise.race([
+      late
+        .waitForFunction(() => !!navigator.serviceWorker.controller)
+        .then(() => 'controlled'),
+      new Promise<string>((stuck) => {
+        bound = setTimeout(() => stuck('never controlled'), CLAIM_BOUND_MS);
+      }),
+    ]).finally(() => clearTimeout(bound));
+    expect(outcome).toBe('controlled');
+  } finally {
+    await context.close();
+  }
 });

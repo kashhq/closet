@@ -22,6 +22,7 @@ Delivery model (audit fixes, see `src-sw.ts`, `public/js/pwa.js`, `public/js/con
 ## Gotchas
 
 - **The worker never sends a navigation post to the server** (#542): it cannot tell ours from a cross-site one, and its fetch would carry our Origin and cookie past the CSRF check. A listener above every route stops each (`navigationPostAnswer`, unit-tested) and answers only the share target, on the device (`receiveShare`: a stash in `shares-v1`, a session cache, a 303, no fetch). What it must learn of a post, our page messages it as it leaves (`SESSION_ENDING`; `session-caches.md`).
+- **The activation's claim skips a page still loading** (#1140): `clientsClaim()` runs at `activate`, and a navigation that began while the first worker installed is a reserved client then, so it commits uncontrolled with no `controllerchange` to come. `pwa.js` asks for its claim (`CLAIM_CLIENTS`, `claimIfUncontrolled`), never with an update installing or waiting; `pwa.spec.ts` constructs it.
 - **WebKit never settles a fetch whose opaque redirect carries `Clear-Site-Data`** (#239): the worker must not `fetch()` a navigation's own request (redirect mode `manual`) where that can be the answer. GET navigations use the navigation preload, which is unaffected.
 
 - **Chromium hides `Clear-Site-Data` from the response it applies**, the worker's own `fetch` included, so the worker cannot read it: `endSession` also sends `X-Session-Ended` (`SESSION_ENDED_HEADER`, `page-cache.ts`), which it reads (#131).

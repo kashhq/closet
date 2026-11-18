@@ -114,6 +114,31 @@ function registerServiceWorker() {
     .catch((error) =>
       console.warn('[pwa] service worker registration failed', error),
     );
+  claimIfUncontrolled();
+}
+
+// The first worker's activation claims only the pages already running
+// (clientsClaim, src-sw.ts). A navigation that started while it installed
+// (the page after a quick sign-in on a slow phone) commits after that claim,
+// uncontrolled, and nothing would claim it later: no controllerchange, so no
+// warm, and every boosted tap of the session past the worker, offline
+// included, until a full reload (#1140). Once a worker is active, a page it
+// does not control asks to be claimed. Never with an update installing or
+// waiting (an uncontrolled page then is a hard reload): Workbox fires
+// `controlling` on every controllerchange, and the old worker's claim would
+// pass for the update activated elsewhere, leaving Reload nothing to
+// activate. With none, `update` is 'none' and `controlling` ignores it.
+function claimIfUncontrolled() {
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      if (navigator.serviceWorker.controller) return;
+      if (registration.installing || registration.waiting) return;
+      console.info('[pwa] page not controlled: asking the worker to claim it');
+      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
+    })
+    .catch((error) =>
+      console.warn('[pwa] could not ask the worker to claim the page', error),
+    );
 }
 
 // The session cookie is httpOnly, so the layout says whether this page is

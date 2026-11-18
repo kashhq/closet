@@ -141,7 +141,10 @@ declare const self: ServiceWorkerGlobalScope;
 // https://developer.chrome.com/docs/workbox/modules/workbox-core#clients_claim
 // Top level on purpose: once the user accepts an update (SKIP_WAITING below)
 // the new worker must take the open pages so `controlling` fires and
-// pwa.js can reload.
+// pwa.js can reload. It claims only pages already running: one whose
+// navigation started while the first worker installed commits after this
+// claim and is skipped (still a reserved client), so pwa.js asks for its
+// own (CLAIM_CLIENTS below, #1140).
 clientsClaim();
 
 // https://developer.chrome.com/docs/workbox/modules/workbox-navigation-preload
@@ -1857,8 +1860,8 @@ function formatBytes(bytes: number): string {
 // worker that seizes control mid-session leaves pages holding stale asset
 // URLs, which is the black-screen bug the old hard-navigate hack papered over.
 // The page's own questions come from public/js/freshness.js, each with a
-// MessagePort for the answer; WARM_PAGES and SESSION_ENDING from
-// public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. Only this
+// MessagePort for the answer; WARM_PAGES, SESSION_ENDING and CLAIM_CLIENTS
+// from public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. Only this
 // site's own pages can post here (a page reaches a worker only through its
 // own origin's registration).
 self.addEventListener('message', (event) => {
@@ -1867,6 +1870,11 @@ self.addEventListener('message', (event) => {
   if (type === 'SKIP_WAITING') {
     console.log('[sw] SKIP_WAITING received');
     void self.skipWaiting();
+  } else if (type === 'CLAIM_CLIENTS') {
+    // A page this active worker does not control (pwa.js): left out of the
+    // activation's claim, it would stay out of the worker until a reload.
+    console.info('[sw] CLAIM_CLIENTS: claiming an uncontrolled page');
+    event.waitUntil(self.clients.claim());
   } else if (type === 'REVALIDATE_PAGE' && port) {
     event.waitUntil(
       revalidateForPage(
