@@ -744,7 +744,9 @@ export interface ReplayDriver<R> {
 export type ReplayEnd =
   | { end: 'done' }
   | { end: 'no-session' }
-  | { end: 'backoff'; retryInMs: number };
+  | { end: 'backoff'; retryInMs: number }
+  /** `signal` aborted: the records not yet sent are left as they are. */
+  | { end: 'stopped' };
 
 /**
  * One drain over the pending records, oldest first (the outbox's replayAll).
@@ -766,11 +768,16 @@ export type ReplayEnd =
  *   stuck record in its turn.
  * - The network, a timeout, 408, 429, 502, 503 and 504 stop the drain and
  *   spend nothing; a 401 stops it and keeps everything.
+ * - `signal` (sign-out's discard, discardAtSignOut) stops it between
+ *   records: the replay in flight settles, nothing after it is sent.
  */
 export async function replayQueue<R extends ReplayRecord>(
   queued: readonly R[],
   driver: ReplayDriver<R>,
-  { serverAnswering = false } = {},
+  {
+    serverAnswering = false,
+    signal,
+  }: { serverAnswering?: boolean; signal?: AbortSignal } = {},
 ): Promise<ReplayEnd> {
   let held = new Set<string>();
   let anySaved = false;
@@ -842,6 +849,7 @@ export async function replayQueue<R extends ReplayRecord>(
         continue;
       }
     }
+    if (signal?.aborted) return { end: 'stopped' };
     if (await driver.skip(record)) continue;
     const end = await attempt(record);
     if (end) return end;
@@ -852,6 +860,7 @@ export async function replayQueue<R extends ReplayRecord>(
     held = new Set();
     for (const record of parked) {
       if (held.has(record.key)) continue;
+      if (signal?.aborted) return { end: 'stopped' };
       waiting.delete(record);
       if (await driver.skip(record)) continue;
       const end = await attempt(record);
@@ -937,11 +946,13 @@ export async function discardStuck<R extends ReplayRecord>(
 /**
  * Sign-out's discard of what the drain left (outbox.ts, drainBeforeLeaving):
  * the named records dropped to their tombstones (`drop`, dropQueuedWrites)
- * inside the drain's turn, like the notice's Discard. A replay still in
- * flight past SIGN_OUT_DRAIN_MS settles first, within its own deadline
- * (REPLAY_TIMEOUT_MS): landed, its record is gone and nothing is reverted;
- * failed, it is tombstoned. Without the turn the server could save a write
- * the page already shows reverted. How many were dropped.
+ * inside the drain's turn, like the notice's Discard. `stopDrain` first tells
+ * a drain still running to send nothing more (replayQueue's `signal`, #1157),
+ * so the wait is for the one replay in flight, within its own deadline
+ * (REPLAY_TIMEOUT_MS), not for every leftover in turn: landed, its record is
+ * gone and nothing is reverted; failed, it is tombstoned. Without the turn
+ * the server could save a write the page already shows reverted. How many
+ * were dropped.
  */
 export async function discardAtSignOut(
   exclusively: Exclusively,
@@ -949,8 +960,10 @@ export async function discardAtSignOut(
   drop: (
     goes: (record: { id: string }) => boolean,
   ) => Promise<{ dropped: number }>,
+  stopDrain: () => void,
 ): Promise<number> {
   const named = new Set(ids);
+  stopDrain();
   return exclusively(
     async () => (await drop((record) => named.has(record.id))).dropped,
   );

@@ -1075,7 +1075,12 @@ async function replayAll(
     // The heartbeat saw the server answer again: the stuck ones get their turn.
     const end = await replayQueue(queued, driver, {
       serverAnswering: reason === 'online',
+      signal: drainStop.signal,
     });
+    if (end.end === 'stopped') {
+      console.info(`[outbox] sync (${reason}) stopped for sign-out's discard`);
+      return result;
+    }
     if (end.end !== 'backoff') signedOut = end.end === 'no-session';
     if (end.end === 'backoff') {
       result.retryInMs = end.retryInMs;
@@ -1091,6 +1096,13 @@ async function replayAll(
 }
 
 const tabTurns = createTurns();
+
+/**
+ * Aborted by sign-out's discard (discardAtSignOut) so a drain running or
+ * waiting for its turn in this tab sends nothing past the replay in flight;
+ * renewed inside the discard's turn, once the leftovers are tombstones.
+ */
+let drainStop = new AbortController();
 
 /**
  * The drain's turn: across tabs `navigator.locks`, in this tab a queue of
@@ -1223,11 +1235,19 @@ async function drainBeforeLeaving(
   if (!discard) return false;
   // Tombstones, not deletions (#1042): another tab of this account still
   // showing one of these ticks reverts it instead of taking it for saved.
-  // In the drain's turn, after any replay still in flight (discardAtSignOut).
+  // In the drain's turn, after only the replay in flight: the drain sends
+  // nothing more once asked to stop (discardAtSignOut, #1157).
   const dropped = await discardAtSignOut(
     exclusively,
     left.map((record) => record.id),
-    drop,
+    async (goes) => {
+      try {
+        return await drop(goes);
+      } finally {
+        drainStop = new AbortController();
+      }
+    },
+    () => drainStop.abort(),
   );
   console.info(`[outbox] ${dropped} unsynced change(s) discarded at sign-out`);
   return true;

@@ -742,7 +742,12 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       const turn = createTurns();
       const drain = turn(() => w.drain());
       await gate.started;
-      const discard = discardAtSignOut(turn, ['landing', 'left'], dropIn(w));
+      const discard = discardAtSignOut(
+        turn,
+        ['landing', 'left'],
+        dropIn(w),
+        () => undefined,
+      );
       await Promise.resolve();
       // Nothing is tombstoned while the replay is still out.
       expect([...w.stored.values()].map((r) => r.state)).toEqual([
@@ -762,11 +767,42 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       const turn = createTurns();
       const drain = turn(() => w.drain());
       await gate.started;
-      const discard = discardAtSignOut(turn, ['failing'], dropIn(w));
+      const discard = discardAtSignOut(
+        turn,
+        ['failing'],
+        dropIn(w),
+        () => undefined,
+      );
       gate.release(SERVER);
       await drain;
       expect(await discard).toBe(1);
       expect(w.stored.get('failing')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('sign-out’s discard stops the drain: it waits for the replay in flight only, the rest are tombstoned unsent (#1157)', async () => {
+      const w = world([row('first'), row('second'), row('third')], () => OK);
+      const gate = held(w);
+      const turn = createTurns();
+      const stop = new AbortController();
+      const drain = turn(() =>
+        replayQueue([...w.stored.values()], w.driver, {
+          signal: stop.signal,
+        }),
+      );
+      await gate.started;
+      const discard = discardAtSignOut(
+        turn,
+        ['first', 'second', 'third'],
+        dropIn(w),
+        () => stop.abort(),
+      );
+      gate.release(OK);
+      expect(await drain).toEqual({ end: 'stopped' });
+      expect(await discard).toBe(2);
+      expect(w.sent).toEqual(['first']);
+      expect(w.stored.has('first')).toBe(false);
+      expect(w.stored.get('second')).toMatchObject({ state: 'discarded' });
+      expect(w.stored.get('third')).toMatchObject({ state: 'discarded' });
     });
   });
 
