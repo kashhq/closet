@@ -369,12 +369,22 @@
     flex-basis: 100%;
   }
 }
+/* From lg the tabs keep their natural width (they grow, pushing the actions
+   to the end, and never shrink) and the title gives way instead: one line,
+   cut with an ellipsis, its full text in the h1's `title` (#1110). A long
+   title (a shared wardrobe's owner, large text at 1024 px) squeezed the row
+   to nothing when the tabs took only the room the title left. */
 @media (min-width: 1024px) {
   .app-bar:has(> .app-bar-tabs) > .app-bar-title {
     flex: 0 1 auto;
   }
+  .app-bar:has(> .app-bar-tabs) h1 {
+    min-width: 0;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
   .app-bar-tabs {
-    flex: 1 1 0%;
+    flex: 1 0 auto;
   }
 }
 .dock {

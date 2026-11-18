@@ -76,7 +76,10 @@ export function AppBar(props: AppBarProps) {
           {props.titleMenu ? (
             <TitleMenu title={props.title}>{props.titleMenu}</TitleMenu>
           ) : (
-            <h1 class="text-xl font-semibold leading-tight line-clamp-2 break-words">
+            <h1
+              class="text-xl font-semibold leading-tight line-clamp-2 break-words"
+              title={fullTitle(props.title)}
+            >
               {props.title}
             </h1>
           )}
@@ -110,6 +113,15 @@ export function AppBar(props: AppBarProps) {
 }
 
 /**
+ * The h1's tooltip: the whole title, which the bar clamps (two lines, one
+ * from lg beside a section's tabs, main.css; #1110). Only a plain string
+ * has a text to repeat.
+ */
+function fullTitle(title: Child): string | undefined {
+  return typeof title === 'string' ? title : undefined;
+}
+
+/**
  * The title that opens a menu: the h1 inside the summary (a summary may
  * hold one heading), so the page keeps its one h1 and the tap target is
  * the title itself. The menu draws over the content from inside the bar.
@@ -118,7 +130,10 @@ function TitleMenu(props: { title: Child; children: Child }) {
   return (
     <details class="dropdown min-w-0" id="title-menu">
       <summary class="btn btn-ghost btn-sm h-auto min-h-8 px-1 gap-1 flex-nowrap max-w-full text-start">
-        <h1 class="text-xl font-semibold leading-tight line-clamp-2 break-words">
+        <h1
+          class="text-xl font-semibold leading-tight line-clamp-2 break-words"
+          title={fullTitle(props.title)}
+        >
           {props.title}
         </h1>
         <svg

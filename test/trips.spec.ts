@@ -85,7 +85,8 @@ async function expectPhoneWidth(page: Page): Promise<void> {
  * second row, under the title, and the page starts below them. At 1440
  * they sit inline after the title and hold still between sibling pages
  * (they jumped with each page's width before), and Profile is the rail's
- * foot, the bar's avatar hidden. Leaves the phone on the page it found.
+ * foot, the bar's avatar hidden; at 1024 a long title truncates, never the
+ * tabs. Leaves the phone on the page it found.
  */
 async function expectSectionTabs(page: Page): Promise<void> {
   const start = page.url();
@@ -211,6 +212,44 @@ async function expectSectionTabs(page: Page): Promise<void> {
   await expect(
     page.locator('.dock').getByRole('link', { name: 'Profile' }),
   ).toBeVisible();
+
+  // At 1024 a 60-character title (a shared wardrobe's owner) gives way to
+  // the tabs: every tab whole inside the row's box, the row unscrolled, and
+  // the title cut to one line (#1110). The Wardrobe's is the switcher's.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  for (const { label, paths } of sections) {
+    await page.goto(paths[0]);
+    const fit = await page.evaluate((name) => {
+      const h1 = document.querySelector('.app-bar h1');
+      if (h1) h1.textContent = 'W'.repeat(30) + ' ' + 'x'.repeat(29);
+      const row = document.querySelector(`.app-bar nav[aria-label="${name}"]`);
+      if (!row || !h1) return null;
+      const box = row.getBoundingClientRect();
+      const cut = Array.from(row.querySelectorAll('a')).filter((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return rect.left < box.left - 0.5 || rect.right > box.right + 0.5;
+      });
+      const bar = row.closest('header')!.getBoundingClientRect();
+      return {
+        clipped: cut.length,
+        scrolls: row.scrollWidth > row.clientWidth,
+        inBar: box.left >= bar.left && box.right <= bar.right,
+        titleLines: Math.round(
+          h1.getBoundingClientRect().height /
+            parseFloat(getComputedStyle(h1).lineHeight),
+        ),
+        titleCut:
+          h1.scrollWidth > h1.clientWidth || h1.scrollHeight > h1.clientHeight,
+      };
+    }, label);
+    expect(fit, paths[0]).toEqual({
+      clipped: 0,
+      scrolls: false,
+      inBar: true,
+      titleLines: 1,
+      titleCut: true,
+    });
+  }
   await page.setViewportSize(viewport);
   await page.goto(start);
 }
