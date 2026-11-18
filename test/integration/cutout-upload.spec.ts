@@ -140,6 +140,37 @@ describe('cutouts: upload, page and polling', () => {
     expect(add).not.toContain('id="garment-photo"');
   });
 
+  // Every route that draws a garment's form hands it its subject: the
+  // clone form, and the refused edit and clone, whose 400 re-renders the
+  // form (garment-routes.tsx); a route that stopped passing it would drop
+  // the photo from that page alone.
+  it('keeps the photo subject on the clone form and on a refused edit or clone', async () => {
+    const id = await createGarment(t, { name: 'Refused shirt' });
+    await uploadPhoto(t, id, await jpegPhoto());
+    const refused = new URLSearchParams({
+      name: 'Refused shirt',
+      category: '',
+    });
+    const post = (url: string) =>
+      t.inject({
+        method: 'POST',
+        url,
+        payload: refused.toString(),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      });
+
+    for (const [res, status] of [
+      [await t.inject({ method: 'GET', url: `/wardrobe/${id}/clone` }), 200],
+      [await post(`/wardrobe/${id}`), 400],
+      [await post(`/wardrobe/${id}/clone`), 400],
+    ] as const) {
+      expect(res.statusCode).toBe(status);
+      expect(unescapeHtml(res.body)).toMatch(
+        /<section id="form-aside" [^>]*>\s*<div id="garment-photo"[^>]*>\s*<figure /,
+      );
+    }
+  });
+
   // #689: a queue that cannot run its model leaves the photo pending for
   // as long as that lasts; an open page must not poll it every 2 s forever.
   // A busy but working queue (a bulk upload) must keep polling, so the
