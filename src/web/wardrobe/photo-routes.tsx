@@ -12,8 +12,8 @@ import {
   saveEditedGarmentCutout,
   turnGarmentPhoto,
 } from './garment-actions';
-import { shownPhoto } from './cutout-shown';
-import { GarmentPhotoView, pollCount } from './garment-page';
+import { withShownPhoto } from './cutout-shown';
+import { GarmentPhotoView, photoPlace, pollCount } from './garment-photo';
 import { batchEnd } from './draft-redirects';
 import { nextDraft } from './draft-queue';
 import { refuseOtherWardrobesDraft } from './render-form';
@@ -136,14 +136,10 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       return renderFragment(
         reply,
         <GarmentPhotoView
-          garment={{
-            ...garment,
-            photo:
-              garment.photo &&
-              shownPhoto(garment.photo, options.cutouts.enabled),
-          }}
+          garment={withShownPhoto(garment, options.cutouts.enabled)}
           viewOwner={viewOwner}
           canEdit={access.canManage}
+          place={photoPlace(request.query.place)}
           poll={pollCount(request.query.poll)}
           modelUnavailable={options.cutouts.state.name === 'waiting-for-model'}
         />,

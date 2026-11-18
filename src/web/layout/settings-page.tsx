@@ -1,5 +1,5 @@
 import type { Child } from 'hono/jsx';
-import { SettingsNav } from '../auth/settings-rows';
+import { type SettingsRowId, SettingsNav } from '../auth/settings-rows';
 import { profileSection } from '../auth/urls';
 import { t } from '../i18n';
 import type { ViewContext } from '../view-context';
@@ -19,7 +19,7 @@ import { type PageBodyFrame, PageShell } from './page-shell';
 export function SettingsPage(props: {
   ctx: ViewContext;
   title: string;
-  section: string;
+  section: SettingsRowId;
   formPage?: boolean;
   /** The body's flow; the default is the settings' 1rem stack. */
   body?: PageBodyFrame;

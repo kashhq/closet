@@ -30,7 +30,7 @@ import {
   setGarmentCondition,
   updateGarment,
 } from './garment-actions';
-import { shownPhoto } from './cutout-shown';
+import { withShownPhoto } from './cutout-shown';
 import { GarmentPage } from './garment-page';
 import { afterDraft } from './draft-redirects';
 import { pendingPhotoView } from './link-import/photo-choice';
@@ -315,12 +315,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         <GarmentPage
           ctx={viewContext(reply)}
           model={{
-            garment: {
-              ...garment,
-              photo:
-                garment.photo &&
-                shownPhoto(garment.photo, options.cutouts.enabled),
-            },
+            garment: withShownPhoto(garment, options.cutouts.enabled),
             capsules: context.capsules,
             viewOwner,
             wear: own && { summary: own.wear },
@@ -396,6 +391,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           garmentId: garment.id,
           wishlist: garment.status === 'wishlist',
         },
+        subject: withShownPhoto(garment, options.cutouts.enabled),
         suggestionsFrom: access.ownerId,
         viewOwner,
         values: storedFormValues(garment, { owner: access.isOwner }),
@@ -439,6 +435,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
             garmentId: id,
             wishlist: stored.status === 'wishlist',
           },
+          subject: withShownPhoto(stored, options.cutouts.enabled),
           suggestionsFrom: access.ownerId,
           viewOwner,
           values: form.values,
@@ -480,6 +477,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           garmentId: source.id,
           wishlist: source.status === 'wishlist',
         },
+        subject: withShownPhoto(source, options.cutouts.enabled),
         suggestionsFrom: sessionUserId(request),
         viewOwner,
         values: {
@@ -515,6 +513,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       if (!form.ok) {
         return refuseForm(reply, {
           mode,
+          subject: withShownPhoto(source, options.cutouts.enabled),
           suggestionsFrom: userId,
           viewOwner,
           values: form.values,

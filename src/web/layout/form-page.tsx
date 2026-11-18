@@ -1,16 +1,19 @@
 import type { Child } from 'hono/jsx';
 import { PostForm } from '../form';
 import type { ViewContext } from '../view-context';
-import { PageShell } from './page-shell';
+import { type PageLayout, PageShell } from './page-shell';
 import { CancelLink } from './parts';
 
 /**
  * The frame of an add or edit page that is one native post (#411): the
  * garment, capsule and trip forms, "Bought it" and the share confirmation.
- * A preset of `PageShell` (`single`, narrow: a form is one reading column
- * at every width). The app bar marks it a `formPage`, the fields post
- * through one `PostForm`, and Cancel (back past the form) sits beside the
- * submit.
+ * A preset of `PageShell`: a form is one narrow reading column at every
+ * width (`single`), or, with an `aside`, that column beside its subject
+ * from lg (`split`, #1069: the garment form's photo), the subject hidden
+ * below lg, so a phone sees the form it always did. The app bar marks it a
+ * `formPage`, the fields post through one `PostForm`, and Cancel (back past
+ * the form) sits beside the submit; from lg that row sticks at the foot of
+ * the window while the form runs past it (main.css, `.form-actions`).
  *
  * Disabled offline: the form like every PostForm, and the edit page's
  * Delete, an `hx-delete` outside it, by its own `data-needs-network`. A copy
@@ -33,6 +36,12 @@ export function FormPage(props: {
    * is something to post (the share confirmation's photo, read on the device).
    */
   submitDisabled?: boolean;
+  /**
+   * What the form edits, beside it from lg (the garment's photo); outside
+   * the form, so it posts nothing. A form without a subject (trip, capsule,
+   * "Bought it") passes none.
+   */
+  aside?: Child;
   /** Above the form: an intro line, the garment form's draft queue. */
   intro?: Child;
   /** The edit page's Delete (an `hx-delete`, confirmed first). */
@@ -42,12 +51,14 @@ export function FormPage(props: {
   children: Child;
 }) {
   const { ctx, title, back, remove } = props;
+  const frame: PageLayout = props.aside
+    ? { layout: 'split', aside: props.aside, subjectBelowLg: 'hidden' }
+    : { layout: 'single', width: 'narrow' };
   return (
     <PageShell
       ctx={ctx}
       name="form"
-      layout="single"
-      width="narrow"
+      {...frame}
       bar={{ title, back, formPage: true }}
     >
       {props.intro}
@@ -57,7 +68,7 @@ export function FormPage(props: {
         class="flex flex-col gap-4"
       >
         {props.children}
-        <div class="flex gap-2 mt-2">
+        <div class="form-actions flex gap-2 mt-2">
           <CancelLink href={back} class="flex-1" />
           <button
             type="submit"

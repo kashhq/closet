@@ -83,7 +83,10 @@ export function settingsRows(ctx: ViewContext): SettingsRowSpec[] {
  * labels only, the page's own `aria-current`. It reads nothing, so it lists
  * exactly what `settingsRows` gives Profile.
  */
-export function SettingsNav(props: { ctx: ViewContext; current: string }) {
+export function SettingsNav(props: {
+  ctx: ViewContext;
+  current: SettingsRowId;
+}) {
   const rows = settingsRows(props.ctx);
   return (
     <ul class="menu w-full p-0">

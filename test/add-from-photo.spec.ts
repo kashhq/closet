@@ -98,7 +98,52 @@ async function checkSplitAtDesktop(page: Page) {
   expect(after.y + after.height).toBeLessThanOrEqual(560);
   await checkTallSubjectScrolls(page, id);
   await checkSubjectFocusRing(page);
+  await checkFormAtDesktop(page, id);
   await page.setViewportSize({ width: 390, height: 844 });
+}
+
+/**
+ * The garment form at 1440 (#1069, FormPage `aside`): the photo beside the
+ * fields and in view while they scroll, brand and size on one row, and Save
+ * in the window on a form that runs past it (its sticky foot).
+ */
+async function checkFormAtDesktop(page: Page, id: number) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/wardrobe/${id}/edit`);
+  const photo = page.locator('#form-aside #garment-photo');
+  await expect(photo.locator('img')).toBeVisible();
+  await page.locator('summary', { hasText: 'More details' }).click();
+  const name = (await page.locator('#garment-name').boundingBox())!;
+  const before = (await photo.boundingBox())!;
+  expect(before.x + before.width).toBeLessThanOrEqual(name.x);
+
+  const brand = (await page.locator('#garment-brand').boundingBox())!;
+  const size = (await page.locator('#garment-size').boundingBox())!;
+  expect(size.y).toBeCloseTo(brand.y, 0);
+  expect(size.x).toBeGreaterThan(brand.x + brand.width);
+
+  // The form runs past the window once "More details" has opened (daisyUI's
+  // collapse animates), so only the sticky foot keeps Save in it.
+  const form = page.locator('#form-body > form').first();
+  await expect
+    .poll(async () => {
+      const box = (await form.boundingBox())!;
+      return box.y + box.height;
+    })
+    .toBeGreaterThan(900);
+  const save = page.getByRole('button', { name: 'Save', exact: true });
+  const inReach = async () => {
+    const box = (await save.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(900);
+  };
+  await inReach();
+
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await inReach();
+  const after = (await photo.boundingBox())!;
+  expect(after.y).toBeCloseTo(before.y, 0);
+  expect(after.y + after.height).toBeLessThanOrEqual(900);
 }
 
 /**
