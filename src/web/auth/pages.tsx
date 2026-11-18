@@ -6,27 +6,25 @@ import { PageShell } from '../layout/page-shell';
 import { ProfileSection } from '../layout/parts';
 import { SettingsPage } from '../layout/settings-page';
 import { wardrobeExportPath } from '../page-cache';
-import { STYLE_PROFILE_PATH } from '../style/urls';
-import {
-  PUSH_SETTINGS_ID,
-  PUSH_SETTINGS_PATH,
-  PushEndpointField,
-  PushSignedOut,
-} from '../push/settings';
+import { PushEndpointField, PushSignedOut } from '../push/settings';
+import { PUSH_SETTINGS_ID } from '../push/urls';
 import {
   PermissionBadge,
   type SharingModel,
   sharingSummary,
 } from '../sharing/pages';
 import type { ShareView } from '../sharing/queries';
-import { SHARING_PATH, SHARING_SECTION_ID } from '../sharing/urls';
-import { SIZES_PATH, SIZES_SECTION_ID } from '../sizes/urls';
+import { SHARING_SECTION_ID } from '../sharing/urls';
+import { SIZES_SECTION_ID } from '../sizes/urls';
 import type { ViewContext } from '../view-context';
 import type { TemplateSlot } from '../../wardrobe/week';
-import type { WeatherSettings as Settings } from '../weather/queries';
+import {
+  NO_WEATHER_SETTINGS,
+  type WeatherSettings as Settings,
+} from '../weather/queries';
 import { weatherSummary } from '../weather/settings';
-import { WEATHER_SETTINGS_ID, WEATHER_SETTINGS_PATH } from '../weather/urls';
-import { WEEK_SETTINGS_ID, WEEK_SETTINGS_PATH } from '../week-plan/urls';
+import { WEATHER_SETTINGS_ID } from '../weather/urls';
+import { WEEK_SETTINGS_ID } from '../week-plan/urls';
 import { weekTemplateSummary } from '../week-plan/views';
 import { AccountShell } from './account-shell';
 import { PostForm } from '../form';
@@ -38,6 +36,7 @@ import {
   UsernameTwin,
 } from './form';
 import { SignOutForm } from './logout';
+import { type SettingsRowId, settingsRows } from './settings-rows';
 import { RETURN_TO_PARAM } from './return-to';
 import {
   DEVICE_IDLE_DAYS,
@@ -54,7 +53,6 @@ import {
   SIGN_OUT_EVERYWHERE_PATH,
   SIGN_OUT_SECTION_ID,
   STYLE_SECTION_ID,
-  TOKENS_PATH,
 } from './urls';
 import type {
   ChangePasswordBody,
@@ -326,6 +324,25 @@ function SettingsRow(props: {
   );
 }
 
+/** What each row of `settingsRows` says its setting is set to. */
+const SETTING_SUMMARIES: Readonly<
+  Record<SettingsRowId, (props: ProfileProps) => string>
+> = {
+  [SHARING_SECTION_ID]: (props) => sharingSummary(props.sharing),
+  [PUSH_SETTINGS_ID]: () => t('profile.NOTIFICATIONS_SUMMARY'),
+  [WEATHER_SETTINGS_ID]: (props) =>
+    weatherSummary(props.weather ?? NO_WEATHER_SETTINGS),
+  [WEEK_SETTINGS_ID]: (props) => weekTemplateSummary(props.week),
+  [STYLE_SECTION_ID]: () => t('profile.STYLE_HINT'),
+  [SIZES_SECTION_ID]: () => t('profile.SIZES_SUMMARY'),
+  [AGENT_ACCESS_SECTION_ID]: (props) =>
+    props.tokens.length === 0
+      ? t('agentAccess.NONE')
+      : t('agentAccess.SUMMARY', { count: props.tokens.length }),
+  [DEVICES_SECTION_ID]: (props) =>
+    t('devices.SUMMARY', { count: props.devices.length }),
+};
+
 /**
  * Profile, the avatar's page (docs/plans/2026-09-26-redesign.md, "The app
  * bar"), an index since #728: the account, then a row per setting opening
@@ -352,66 +369,14 @@ export function ProfilePage(props: ProfileProps) {
         aria-label={t('profile.SETTINGS')}
       >
         <ul class="card-body py-1 gap-0 divide-y divide-base-300">
-          <SettingsRow
-            id={SHARING_SECTION_ID}
-            href={SHARING_PATH}
-            label={t('WARDROBE_SHARING')}
-            summary={sharingSummary(props.sharing)}
-          />
-          {/* Web Push needs the service worker, which only PWA_ENABLED serves. */}
-          {ctx.pwaEnabled && (
+          {settingsRows(ctx, props.devices.length > 0).map((row) => (
             <SettingsRow
-              id={PUSH_SETTINGS_ID}
-              href={PUSH_SETTINGS_PATH}
-              label={t('PUSH_HEADING')}
-              summary={t('profile.NOTIFICATIONS_SUMMARY')}
+              id={row.id}
+              href={row.href}
+              label={t(row.label)}
+              summary={SETTING_SUMMARIES[row.id](props)}
             />
-          )}
-          {props.weather && (
-            <SettingsRow
-              id={WEATHER_SETTINGS_ID}
-              href={WEATHER_SETTINGS_PATH}
-              label={t('weather.SETTINGS_HEADING')}
-              summary={weatherSummary(props.weather)}
-            />
-          )}
-          <SettingsRow
-            id={WEEK_SETTINGS_ID}
-            href={WEEK_SETTINGS_PATH}
-            label={t('weekPlan.template.HEADING')}
-            summary={weekTemplateSummary(props.week)}
-          />
-          <SettingsRow
-            id={STYLE_SECTION_ID}
-            href={STYLE_PROFILE_PATH}
-            label={t('style.TITLE')}
-            summary={t('profile.STYLE_HINT')}
-          />
-          <SettingsRow
-            id={SIZES_SECTION_ID}
-            href={SIZES_PATH}
-            label={t('sizes.TITLE')}
-            summary={t('profile.SIZES_SUMMARY')}
-          />
-          <SettingsRow
-            id={AGENT_ACCESS_SECTION_ID}
-            href={TOKENS_PATH}
-            label={t('agentAccess.TITLE')}
-            summary={
-              props.tokens.length === 0
-                ? t('agentAccess.NONE')
-                : t('agentAccess.SUMMARY', { count: props.tokens.length })
-            }
-          />
-          {/* Only while there is one: nothing on the web mints a device token. */}
-          {props.devices.length > 0 && (
-            <SettingsRow
-              id={DEVICES_SECTION_ID}
-              href={DEVICES_PATH}
-              label={t('devices.TITLE')}
-              summary={t('devices.SUMMARY', { count: props.devices.length })}
-            />
-          )}
+          ))}
         </ul>
       </Card>
       <ExportSection />
@@ -519,7 +484,7 @@ export function DevicesPage(props: {
     <SettingsPage
       ctx={props.ctx}
       title={t('devices.TITLE')}
-      back={profileSection(DEVICES_SECTION_ID)}
+      section={DEVICES_SECTION_ID}
       formPage
     >
       {props.notice && (

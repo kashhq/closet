@@ -463,6 +463,8 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   await shot(page, name('style'), '/auth/profile/style');
   await shot(page, name('sizes'), '/auth/profile/sizes');
   await shot(page, name('tokens'), '/auth/tokens');
+  await shot(page, name('sharing'), '/auth/profile/sharing');
+  await shot(page, name('week'), '/auth/profile/week');
   await shot(page, name('link-import'), '/wardrobe/new/from-link');
   await shot(page, name('plan'), `/calendar/plan?for=day:${ANCHOR}`);
   await shot(page, name('recap'), `/wardrobe/recap?year=${ANCHOR.slice(0, 4)}`);

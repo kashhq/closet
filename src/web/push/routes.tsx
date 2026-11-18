@@ -19,12 +19,12 @@ import {
 } from './queries';
 import type { PushSender, VapidConfig } from './sender';
 import {
-  PUSH_SETTINGS_PATH,
   PushSettingsPage,
   ReminderSettingsForm,
   ReminderStatus,
   TestResult,
 } from './settings';
+import { PUSH_SETTINGS_PATH } from './urls';
 
 /**
  * The browser's PushSubscription.toJSON(), as public/js/push.js posts it.

@@ -1,12 +1,12 @@
 import { Card } from '../card';
 import { todayIn } from '../../calendar-date';
 import { t } from '../i18n';
-import { PageShell } from '../layout/page-shell';
+import { SettingsPage } from '../layout/settings-page';
 import { CopyableText } from '../share/share-button';
 import type { ViewContext } from '../view-context';
 import { PostForm } from '../form';
 import { Field, UsernameTwin } from './form';
-import { AGENT_ACCESS_SECTION_ID, profileSection } from './urls';
+import { AGENT_ACCESS_SECTION_ID } from './urls';
 import {
   MAX_ACTIVE_TOKENS,
   TOKEN_NAME_MAX,
@@ -139,14 +139,12 @@ export function TokensPage(props: TokensPageProps) {
   const { ctx, tokens, created, timeZone } = props;
   const day = (instant: Date) => todayIn(timeZone, instant);
   return (
-    <PageShell
+    <SettingsPage
       ctx={ctx}
-      name="tokens"
-      bar={{
-        title: t('agentAccess.TITLE'),
-        back: profileSection(AGENT_ACCESS_SECTION_ID),
-        formPage: true,
-      }}
+      title={t('agentAccess.TITLE')}
+      section={AGENT_ACCESS_SECTION_ID}
+      formPage
+      body={{}}
     >
       <p class="text-sm text-base-content/70 mb-6">{t('agentAccess.INTRO')}</p>
 
@@ -247,6 +245,6 @@ export function TokensPage(props: TokensPageProps) {
           </ul>
         )}
       </Card>
-    </PageShell>
+    </SettingsPage>
   );
 }
