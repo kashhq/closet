@@ -1683,6 +1683,7 @@
     "NO_OCCASION": "Any time",
     "ALREADY_ON_TRIP": "Already on the trip for this day",
     "PACKING": "Packing list",
+    "PACKING_AND_NOTES": "Packing and notes",
     "PACKING_EMPTY": "Add outfits and their garments show up here, with how many of each to pack.",
     "PACKED_SUMMARY": "{packed} of {garments} packed · {pieces} pieces",
     "NEED_ATTENTION": "{count} need attention",
