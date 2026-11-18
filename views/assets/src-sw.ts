@@ -150,7 +150,10 @@ declare const self: ServiceWorkerGlobalScope;
 // https://developer.chrome.com/docs/workbox/modules/workbox-core#clients_claim
 // Top level on purpose: once the user accepts an update (SKIP_WAITING below)
 // the new worker must take the open pages so `controlling` fires and
-// pwa.js can reload.
+// pwa.js can reload. It claims only pages already running: one whose
+// navigation started while the first worker installed commits after this
+// claim and is skipped (still a reserved client), so pwa.js asks for its
+// own (CLAIM_CLIENTS below, #1140).
 clientsClaim();
 
 // https://developer.chrome.com/docs/workbox/modules/workbox-navigation-preload
@@ -1875,13 +1878,86 @@ function formatBytes(bytes: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
 }
 
+/** How long a page has to answer BUILD_QUERY before it counts as of no known build. */
+const BUILD_QUERY_MS = 3_000;
+
+/**
+ * The build an uncontrolled page was rendered with, asked of it now
+ * (BUILD_QUERY, answered by pwa.js on the port), or undefined when it does
+ * not answer in time (a page without pwa.js, or one too busy).
+ */
+function askBuild(client: Client): Promise<unknown> {
+  const channel = new MessageChannel();
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      channel.port1.close();
+      resolve(undefined);
+    }, BUILD_QUERY_MS);
+    channel.port1.onmessage = (event: MessageEvent<{ build?: unknown }>) => {
+      clearTimeout(deadline);
+      channel.port1.close();
+      resolve(event.data.build);
+    };
+    client.postMessage({ type: 'BUILD_QUERY' }, [channel.port2]);
+  });
+}
+
+/** The window clients this worker does not control, by id. */
+async function uncontrolledWindows(): Promise<Client[]> {
+  const [windows, controlled] = await Promise.all([
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+    self.clients.matchAll({ type: 'window' }),
+  ]);
+  const controlledIds = new Set(controlled.map((client) => client.id));
+  return windows.filter((client) => !controlledIds.has(client.id));
+}
+
+/**
+ * Claims the uncontrolled pages only when every one of them says, asked
+ * now, that it is of this worker's build. `clients.claim()` takes every
+ * uncontrolled page in scope, so one of another build (a hard reload after a
+ * deploy, holding the next build's assets) or of no known build holds back
+ * the claim of all: the update flow takes it, never this worker. Nothing is
+ * kept between requests, so a worker stopped between two pages' requests
+ * still claims both on the second (#1140). Reserved clients (navigations not
+ * committed) are not in `matchAll`; each asks once it runs. A page that
+ * became a client while the others answered was not asked: the claim waits
+ * for its own request.
+ */
+async function claimOwnBuildPages(): Promise<void> {
+  const uncontrolled = await uncontrolledWindows();
+  if (uncontrolled.length === 0) return;
+  const builds = await Promise.all(uncontrolled.map(askBuild));
+  const foreign = builds.filter((build) => build !== STATIC_BUILD);
+  if (foreign.length > 0) {
+    console.info(
+      `[sw] CLAIM_CLIENTS: nothing claimed, ${foreign.length} of ${uncontrolled.length} ` +
+        `uncontrolled page(s) not of build ${STATIC_BUILD} ` +
+        `(${foreign.map((build) => (build === undefined ? 'no answer' : String(build))).join(', ')})`,
+    );
+    return;
+  }
+  const asked = new Set(uncontrolled.map((client) => client.id));
+  if ((await uncontrolledWindows()).some((client) => !asked.has(client.id))) {
+    console.info(
+      '[sw] CLAIM_CLIENTS: a page opened meanwhile, nothing claimed',
+    );
+    return;
+  }
+  await self.clients.claim();
+  console.info(
+    `[sw] CLAIM_CLIENTS: claimed ${uncontrolled.length} uncontrolled page(s) of build ${STATIC_BUILD}`,
+  );
+}
+
 // Update flow: pwa.js shows a toast when a new worker is waiting and sends
 // SKIP_WAITING when the user taps Reload. No skipWaiting() on install: a
 // worker that seizes control mid-session leaves pages holding stale asset
 // URLs, which is the black-screen bug the old hard-navigate hack papered over.
 // The page's own questions come from public/js/freshness.js, each with a
-// MessagePort for the answer; WARM_PAGES and SESSION_ENDING from
-// public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. Only this
+// MessagePort for the answer; WARM_PAGES, SESSION_ENDING and CLAIM_CLIENTS
+// from public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. The
+// worker asks pages too: BUILD_QUERY (claimOwnBuildPages). Only this
 // site's own pages can post here (a page reaches a worker only through its
 // own origin's registration).
 self.addEventListener('message', (event) => {
@@ -1890,6 +1966,10 @@ self.addEventListener('message', (event) => {
   if (type === 'SKIP_WAITING') {
     console.log('[sw] SKIP_WAITING received');
     void self.skipWaiting();
+  } else if (type === 'CLAIM_CLIENTS') {
+    // A page this active worker does not control (pwa.js): left out of the
+    // activation's claim, it would stay out of the worker until a reload.
+    event.waitUntil(claimOwnBuildPages());
   } else if (type === 'REVALIDATE_PAGE' && port) {
     event.waitUntil(
       revalidateForPage(

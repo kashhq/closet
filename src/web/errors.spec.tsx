@@ -154,7 +154,7 @@ describe('createErrorHandler', () => {
     const res = await app.inject({ method: 'GET', url: '/missing' });
     expect(res.statusCode).toBe(404);
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
-    expect(res.body).toMatch(/^<!DOCTYPE html><html lang="en">/);
+    expect(res.body).toMatch(/^<!DOCTYPE html><html lang="en"[ >]/);
     expect(res.body).toMatch(/<h1\b[^>]*>Not found<\/h1>/);
     expect(res.body).toContain('>Not Found</p>');
     // No session here: no dock (#662).

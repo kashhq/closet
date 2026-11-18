@@ -1,6 +1,7 @@
+import { type Page, type Route } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 import { CACHED_AT_TIMING_NAME, PAGES_CACHE } from '../src/web/page-cache';
-import { signIn } from './support/e2e-session';
+import { APP_ORIGIN, signIn } from './support/e2e-session';
 import {
   cachedPaths,
   cachePage,
@@ -8,6 +9,12 @@ import {
   withoutWarming,
 } from './support/service-worker';
 import { WEBKIT_CANNOT_NAVIGATE_OFFLINE } from './support/webkit-limits';
+
+/** Long past a claim's few milliseconds, well inside the test's timeout. */
+const CLAIM_BOUND_MS = 10_000;
+
+/** A build id no worker has: a page rendered by another deploy. */
+const OTHER_BUILD = 'another-build';
 
 /**
  * What only a browser can show about the installed app: online, the worker
@@ -41,6 +48,7 @@ test.describe('installed app delivery', () => {
   test('navigations use the preload online and the cache or offline page offline', async ({
     page,
     context,
+    browser,
     browserName,
   }) => {
     test.skip(browserName === 'webkit', WEBKIT_CANNOT_NAVIGATE_OFFLINE);
@@ -140,5 +148,118 @@ test.describe('installed app delivery', () => {
       page.getByRole('heading', { level: 1, name: 'Offline' }),
     ).toBeVisible();
     await context.setOffline(false);
+
+    // A page whose navigation started while the first worker installed is a
+    // reserved client when the activation claims (clientsClaim), so it
+    // commits uncontrolled: no controllerchange, no warm, every boosted tap
+    // past the worker until a reload (#1140; on a loaded box the trips
+    // scenario's second device hung in waitForServiceWorker this way). It
+    // asks to be claimed (CLAIM_CLIENTS); the worker asks every uncontrolled
+    // page for its build right then and claims only when all are its own: a
+    // hard reload after a deploy holds the next build's assets. Tabs held
+    // from before the registration until the first tab's worker has claimed
+    // construct the race; one is rendered as another build, and the worker
+    // is stopped between two requests, which must not strand the pages.
+    await test.step("a page left out of the first worker's claim is claimed, of its own build only", async () => {
+      const device = await browser.newContext({
+        baseURL: APP_ORIGIN,
+        serviceWorkers: 'allow',
+      });
+      try {
+        const hold = async (
+          held: Page,
+          answer: (route: Route) => Promise<void>,
+        ) => {
+          let asked = () => {};
+          const requested = new Promise<void>((resolve) => (asked = resolve));
+          let release = () => {};
+          const released = new Promise<void>((resolve) => (release = resolve));
+          await held.route('**/auth/login', async (route) => {
+            asked();
+            await released;
+            await answer(route);
+          });
+          // Wrapped: an async function's returned promise would be awaited
+          // here, before the navigation it waits for has started.
+          return { requested, release };
+        };
+        const tab = async (answer: (route: Route) => Promise<void>) => {
+          const held = await device.newPage();
+          const { requested, release } = await hold(held, answer);
+          // Started before any registration: never the worker's navigation.
+          const load = held.goto('/auth/login');
+          await requested;
+          return {
+            page: held,
+            open: async () => {
+              release();
+              await load;
+            },
+          };
+        };
+        const late = await tab((route) => route.fallback());
+        const later = await tab((route) => route.fallback());
+        const other = await tab(async (route) => {
+          const response = await route.fetch();
+          const body = (await response.text()).replace(
+            /data-asset-version="[^"]*"/,
+            `data-asset-version="${OTHER_BUILD}"`,
+          );
+          expect(body).toContain(`data-asset-version="${OTHER_BUILD}"`);
+          await route.fulfill({ response, body });
+        });
+
+        const first = await device.newPage();
+        await first.goto('/auth/login');
+        await first.evaluate(() => navigator.serviceWorker.ready);
+        // Running when the activation claimed: taken at once.
+        await first.waitForFunction(() => !!navigator.serviceWorker.controller);
+
+        const controller = (held: Page) =>
+          held.evaluate(() => navigator.serviceWorker.controller);
+        const refusal = () =>
+          device.waitForEvent('console', {
+            predicate: (message) =>
+              message.text().startsWith('[sw] CLAIM_CLIENTS: nothing claimed'),
+            timeout: CLAIM_BOUND_MS,
+          });
+        // Another build's page asks, and is refused: the next build's update
+        // flow, never this worker, takes it. While it is open an own-build
+        // page's request claims nothing either (claim() would take both).
+        let refused = refusal();
+        await other.open();
+        await refused;
+        expect(await controller(other.page)).toBeNull();
+        refused = refusal();
+        await late.open();
+        await refused;
+        expect(await controller(late.page)).toBeNull();
+
+        // Gone, and the worker stopped: the next request is a fresh worker's,
+        // which asks both own-build pages and takes them.
+        await other.page.close();
+        const cdp = await device.newCDPSession(first);
+        await cdp.send('ServiceWorker.enable');
+        await cdp.send('ServiceWorker.stopAllWorkers');
+        await later.open();
+        let bound: NodeJS.Timeout | undefined;
+        const outcome = await Promise.race([
+          Promise.all(
+            [late.page, later.page].map((held) =>
+              held.waitForFunction(() => !!navigator.serviceWorker.controller),
+            ),
+          ).then(() => 'both controlled'),
+          new Promise<string>((stuck) => {
+            bound = setTimeout(
+              () => stuck('not both controlled'),
+              CLAIM_BOUND_MS,
+            );
+          }),
+        ]).finally(() => clearTimeout(bound));
+        expect(outcome).toBe('both controlled');
+      } finally {
+        await device.close();
+      }
+    });
   });
 });

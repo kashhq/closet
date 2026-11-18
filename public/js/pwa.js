@@ -79,18 +79,29 @@ function registerServiceWorker() {
   };
   document.addEventListener('connectivity:change', guardReload);
 
-  wb.addEventListener('waiting', () => {
+  // The worker this window saw waiting: only it taking the page is the update.
+  let waitingWorker = null;
+  wb.addEventListener('waiting', (event) => {
     update = 'waiting';
+    waitingWorker = event.sw ?? null;
     console.info('[pwa] update waiting');
     showUpdateToast();
   });
-  // A new controller is the update only once this window has seen it
-  // waiting; before that it is the first worker taking the page (the app's
-  // first visit, clientsClaim). Not Workbox's `isUpdate`: that says whether
-  // a worker controlled the page when pwa.js registered, so a page opened
-  // before the first worker never reloaded onto a later update.
+  // A new controller is the update only when it is the worker this window
+  // saw waiting; any other is the active worker taking the page (the app's
+  // first visit, clientsClaim, or its claim on request: claimIfUncontrolled).
+  // Workbox fires `controlling` on every controllerchange. Not Workbox's
+  // `isUpdate`: that says whether a worker controlled the page when pwa.js
+  // registered, so a page opened before the first worker never reloaded onto
+  // a later update.
   wb.addEventListener('controlling', () => {
     if (update === 'none') return;
+    if (
+      update === 'waiting' &&
+      navigator.serviceWorker.controller !== waitingWorker
+    ) {
+      return;
+    }
     if (reloadRequested) {
       window.location.reload();
       return;
@@ -113,6 +124,43 @@ function registerServiceWorker() {
     .then(() => console.info('[pwa] service worker registered'))
     .catch((error) =>
       console.warn('[pwa] service worker registration failed', error),
+    );
+  claimIfUncontrolled();
+}
+
+// The first worker's activation claims only the pages already running
+// (clientsClaim, src-sw.ts). A navigation that started while it installed
+// (the page after a quick sign-in on a slow phone) commits after that claim,
+// uncontrolled, and nothing would claim it later: no controllerchange, so no
+// warm, and every boosted tap of the session past the worker, offline
+// included, until a full reload (#1140). Once a worker is active, a page it
+// does not control asks to be claimed. The worker then asks every
+// uncontrolled page for its build (BUILD_QUERY, answered here with
+// <html data-asset-version>, what X-Asset-Version says) and claims only when
+// all are its own (claimOwnBuildPages): a hard reload after a deploy holds
+// the next build's assets, and the update flow, never the old worker, takes
+// that page. Answered whenever asked, controlled or not: another page's
+// request asks this one too.
+function claimIfUncontrolled() {
+  const build = document.documentElement.dataset.assetVersion;
+  if (!build) return;
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type !== 'BUILD_QUERY') return;
+    event.ports[0]?.postMessage({ build });
+  });
+  // The worker's query reaches a page before DOMContentLoaded only once
+  // its messages are started.
+  navigator.serviceWorker.startMessages();
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      if (navigator.serviceWorker.controller) return;
+      console.info(
+        `[pwa] page of build ${build} not controlled: asking the worker to claim it`,
+      );
+      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
+    })
+    .catch((error) =>
+      console.warn('[pwa] could not ask the worker to claim the page', error),
     );
 }
 
