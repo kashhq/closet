@@ -396,7 +396,8 @@ test.describe('Trips', () => {
     await expect(page.getByRole('link', { name: 'Wardrobe' })).toBeVisible();
     // The labels give way only where they would overflow their links
     // (#1027): a 340 px phone hides them at 200% and shows them at 100%,
-    // and at the query's 18rem (288 px) the widest one still fits.
+    // and just above the query's 17rem of content (a 288 px dock) the
+    // widest one still fits.
     const dockLabels = () =>
       page.evaluate(() =>
         Array.from(document.querySelectorAll('.dock > a'))
@@ -417,7 +418,7 @@ test.describe('Trips', () => {
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '';
     });
-    for (const width of [340, 288]) {
+    for (const width of [340, 290]) {
       await page.setViewportSize({ width, height: 844 });
       expect(await dockLabels(), `${width} px`).toEqual(
         Array(5).fill({ shown: true, fits: true }),
