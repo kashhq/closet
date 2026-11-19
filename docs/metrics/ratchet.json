@@ -30,12 +30,12 @@
     "source": "layers"
   },
   "coverage.backend.branches": {
-    "bound": 92.56,
+    "bound": 93.22,
     "direction": "higher",
     "source": "cov"
   },
   "coverage.backend.lines": {
-    "bound": 97.51,
+    "bound": 97.89,
     "direction": "higher",
     "source": "cov"
   },
@@ -85,7 +85,7 @@
     "source": "statements"
   },
   "statements.GET:/auth/profile": {
-    "bound": 6,
+    "bound": 4,
     "direction": "lower",
     "source": "statements"
   },
@@ -95,7 +95,7 @@
     "source": "statements"
   },
   "statements.GET:/calendar/plan": {
-    "bound": 3,
+    "bound": 2,
     "direction": "lower",
     "source": "statements"
   },
@@ -305,7 +305,7 @@
     "source": "statements"
   },
   "statements.POST:/calendar/plan-week": {
-    "bound": 6,
+    "bound": 5,
     "direction": "lower",
     "source": "statements"
   },
@@ -505,17 +505,17 @@
     "source": "statements"
   },
   "tests.db.vitest": {
-    "bound": 4559,
+    "bound": 8101,
     "direction": "higher",
     "source": "tier-db"
   },
   "tests.e2e.playwright": {
-    "bound": 11,
+    "bound": 12,
     "direction": "higher",
     "source": "tier-e2e"
   },
   "tests.unit.vitest": {
-    "bound": 1544,
+    "bound": 2824,
     "direction": "higher",
     "source": "tier-unit"
   }
