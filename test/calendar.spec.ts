@@ -328,10 +328,16 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
 
   // #660: Saved loads a page at a time; scrolled to its end at 390 px, the
   // sentinel brings the rest (Layered and these 31: one page and two).
-  for (let n = 0; n < PAGE_SIZE + 1; n += 1) {
-    const top = await createGarment(page, `Page tee ${n}`, 'tops');
-    await createOutfit(page, `Page outfit ${n}`, top);
-  }
+  // Each outfit has a garment of its own (the same garments make one outfit)
+  // and the pairs run together: 62 sequential posts took ~21 s of the
+  // test's 30 s, and a run on a busy host timed out inside the sentinel's
+  // assertions, which read as a Saved bug.
+  await Promise.all(
+    Array.from({ length: PAGE_SIZE + 1 }, async (_, n) => {
+      const top = await createGarment(page, `Page tee ${n}`, 'tops');
+      await createOutfit(page, `Page outfit ${n}`, top);
+    }),
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/outfits');
   const savedTiles = page.locator('#saved-outfits a[data-outfit-id]');
