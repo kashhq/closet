@@ -162,6 +162,43 @@ describe('the OpenAPI spec', () => {
       ).toThrow(/"Pair" names two schemas/);
     });
 
+    it('keeps default and example values verbatim, never hoisting them', () => {
+      const data = { title: 'Look', type: 'object' };
+      const spec = {
+        paths: {
+          '/a': {
+            x: {
+              type: 'object',
+              default: data,
+              examples: [data],
+              enum: [data],
+              properties: { default: { title: 'Named', type: 'string' } },
+              $defs: { example: { title: 'Defined', type: 'string' } },
+            },
+          },
+        },
+      };
+      nameSchemas(spec);
+      const x = spec.paths['/a'].x as unknown as {
+        default: unknown;
+        examples: unknown[];
+        enum: unknown[];
+        properties: { default: unknown };
+        $defs: { example: unknown };
+      };
+      expect(x.default).toEqual(data);
+      expect(x.examples).toEqual([data]);
+      expect(x.enum).toEqual([data]);
+      expect(x.$defs.example).toEqual({ $ref: '#/components/schemas/Defined' });
+      expect(x.properties.default).toEqual({
+        $ref: '#/components/schemas/Named',
+      });
+      const { components } = spec as unknown as {
+        components: { schemas: object };
+      };
+      expect(Object.keys(components.schemas)).toEqual(['Named', 'Defined']);
+    });
+
     it('leaves no anyOf of single-value literals, strings or numbers', () => {
       const unions = nodes(generated).filter(
         (node) =>
