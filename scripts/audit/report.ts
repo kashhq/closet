@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
   type A11yReport,
-  a11yIncreases,
+  compareA11y,
   renderA11y,
-  renderA11yIncreases,
+  renderA11yComparison,
 } from './a11y-report';
 import { type Count, noiseBetween, relativeChange, type Timing } from './stats';
 
@@ -343,7 +343,7 @@ export function renderComparison(
   // Before and after both measured it: a baseline from before #722 has none.
   const a11y =
     before.a11y && after.a11y
-      ? renderA11yIncreases(a11yIncreases(before.a11y, after.a11y))
+      ? renderA11yComparison(compareA11y(before.a11y, after.a11y))
       : [];
   if (changed.length === 0) {
     lines.push('Nothing changed beyond the noise.', '', ...a11y);

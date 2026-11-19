@@ -37,7 +37,9 @@ module.exports = {
       },
     },
     upload: {
-      target: 'temporary-public-storage',
+      // Local files, uploaded by nightly.yml: no public URL, no external request.
+      target: 'filesystem',
+      outputDir: 'scripts/results/lighthouse',
     },
   },
 };

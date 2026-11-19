@@ -4,10 +4,13 @@ import { type Browser, chromium, type Page } from '@playwright/test';
 import {
   type A11yReport,
   FIELD_FONT,
+  countKinds,
   FIELD_FONT_MIN_PX,
+  type Offender,
   type PageA11y,
   TARGET_MIN_PX,
   TARGET_SIZE,
+  TARGET_TOLERANCE_PX,
 } from './a11y-report';
 import type { Actor, AuditRequest, Fixture } from './fixture';
 
@@ -36,13 +39,6 @@ export interface A11yVisit {
   request: AuditRequest;
 }
 
-/** One violating node, for the detail file a person reads to fix it. */
-interface Offender {
-  measure: string;
-  selector: string;
-  detail: string;
-}
-
 /** What the pass learns across pages: the rules that fired, axe's version. */
 interface Found {
   rules: A11yReport['rules'];
@@ -60,8 +56,13 @@ interface Measured {
  * imports.
  */
 function measureInPage(limits: { fontMin: number; targetMin: number }): {
-  fields: { selector: string; px: number }[];
-  targets: { selector: string; width: number; height: number }[];
+  fields: { selector: string; signature: string; px: number }[];
+  targets: {
+    selector: string;
+    signature: string;
+    width: number;
+    height: number;
+  }[];
 } {
   const describe = (el: Element): string => {
     const id = el.id ? `#${el.id}` : '';
@@ -71,6 +72,18 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
       (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
     return `${el.tagName.toLowerCase()}${id}${name ? `[name=${name}]` : ''}${label ? ` "${label}"` : ''}`;
   };
+  // The element's kind, free of its text and its place: tag, type, role,
+  // field name and class list. A grid of seeded cells is one kind.
+  const kind = (el: Element): string =>
+    [
+      el.tagName.toLowerCase(),
+      el.getAttribute('type'),
+      el.getAttribute('role'),
+      el.getAttribute('name'),
+      [...el.classList].sort().join('.'),
+    ]
+      .filter(Boolean)
+      .join(' ');
   const NOT_TEXT = new Set([
     'hidden',
     'checkbox',
@@ -98,6 +111,7 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     )
     .map((el) => ({
       selector: describe(el),
+      signature: kind(el),
       px: parseFloat(getComputedStyle(el).fontSize),
     }))
     .filter((field) => field.px < limits.fontMin);
@@ -139,9 +153,7 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     const boxes = [el, ...labels].flatMap((part) => shown(part) ?? []);
     if (boxes.length === 0) return [];
     const big = boxes.some(
-      (box) =>
-        Math.round(box.width) >= limits.targetMin &&
-        Math.round(box.height) >= limits.targetMin,
+      (box) => box.width >= limits.targetMin && box.height >= limits.targetMin,
     );
     if (big) return [];
     // The biggest of them: a hidden input's 1 px says nothing of its chip.
@@ -151,8 +163,9 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     return [
       {
         selector: describe(el),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
+        signature: kind(el),
+        width: Math.round(box.width * 10) / 10,
+        height: Math.round(box.height * 10) / 10,
       },
     ];
   });
@@ -164,13 +177,11 @@ function cookieValue(actor: Actor): string {
 }
 
 async function measurePage(page: Page, found: Found): Promise<Measured> {
-  const counts: Record<string, number> = {};
   const offenders: Offender[] = [];
   const axe = await new AxeBuilder({ page }).analyze();
   found.axeVersion = axe.testEngine.version;
   const { rules } = found;
   for (const violation of axe.violations) {
-    counts[violation.id] = violation.nodes.length;
     rules[violation.id] = {
       impact: violation.impact ?? 'minor',
       help: violation.help,
@@ -179,29 +190,30 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
       offenders.push({
         measure: violation.id,
         selector: node.target.join(' '),
+        signature: node.target.join(' '),
         detail: node.failureSummary ?? '',
       });
     }
   }
   const { fields, targets } = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
-    targetMin: TARGET_MIN_PX,
+    targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
   });
-  if (fields.length > 0) counts[FIELD_FONT] = fields.length;
-  if (targets.length > 0) counts[TARGET_SIZE] = targets.length;
   offenders.push(
     ...fields.map((field) => ({
       measure: FIELD_FONT,
       selector: field.selector,
+      signature: field.signature,
       detail: `${field.px} px`,
     })),
     ...targets.map((target) => ({
       measure: TARGET_SIZE,
       selector: target.selector,
+      signature: target.signature,
       detail: `${target.width} × ${target.height} px`,
     })),
   );
-  return { counts, offenders };
+  return { counts: countKinds(offenders), offenders };
 }
 
 async function visit(
@@ -283,7 +295,7 @@ export async function auditAccessibility(
         pages.push({ id, issue, name, target, counts });
         detail[step.id] = offenders;
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        console.log(`${label}: ${total} accessibility finding(s)`);
+        console.log(`${label}: ${total} accessibility violation kind(s)`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`${label} (accessibility): ${message}`);

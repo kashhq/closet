@@ -68,6 +68,12 @@ jobs:
           path: scripts/results/
       # audit:pages built dist/; lighthouse starts it with start:prod.
       - run: npm run lighthouse
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: lighthouse
+          path: scripts/results/lighthouse/
+          if-no-files-found: ignore
 
   # The 940 MB BiRefNet model on real photos: cutout-model.spec (the queue, the
   # child process, onnxruntime-node from node_modules), then one cutout in the

@@ -10,7 +10,7 @@ import {
   type A11yVisit,
   auditAccessibility,
 } from './audit/a11y';
-import { a11yIncreases } from './audit/a11y-report';
+import { a11yPageNotes, compareA11y } from './audit/a11y-report';
 import { Budgets } from './audit/budget';
 import {
   AUDIT_PERSONAS,
@@ -387,7 +387,7 @@ async function main(): Promise<void> {
     steps: walked.results,
     sql: walked.sql,
     unwalked,
-    a11y: a11y.report,
+    a11y: values.only ? { ...a11y.report, partial: true } : a11y.report,
   };
   const written = await writeOutputs(out, report, walked, {
     explain: values.explain,
@@ -420,7 +420,12 @@ function refuseA11yIncreases(
 ): void {
   // A baseline from before #722 has no pass to compare with.
   if (!baseline.a11y || !report.a11y) return;
-  const increases = a11yIncreases(baseline.a11y, report.a11y);
+  const { increases, newPages, missingPages } = compareA11y(
+    baseline.a11y,
+    report.a11y,
+  );
+  const notes = a11yPageNotes({ increases, newPages, missingPages });
+  if (notes.length > 0) console.log(`\nAccessibility:\n${notes.join('\n')}`);
   if (increases.length === 0) return;
   throw new Error(
     `${increases.length} accessibility count(s) above the baseline:\n` +

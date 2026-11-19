@@ -176,20 +176,22 @@ its times are a different machine's; only its counts and bytes compare.
 Before the walk, every page step a browser can open (a GET answering 200,
 nothing to prepare, not htmx) loads in Chromium at 390 × 844
 (`scripts/audit/a11y.ts`, #722) as its step's user, and the report's `a11y`
-holds per page, per measure, the violating nodes: each axe-core rule (all
+holds per page, per measure, the violating element kinds (nodes with one
+selector pattern, `:nth-child` indexes, uuids and dates stripped, count once,
+so a calendar grid does not follow the seed's dates): each axe-core rule (all
 of axe's default rules), `field font < 16 px` (a text field iOS zooms the
 page into on focus, shown or not) and `target < 44 px` (a visible tap
-target smaller on either side; a control counts its label's box, and a
+target under 43.5 px on either side, the half pixel absorbing font rounding
+between macOS and Linux; a control counts its label's box, and a
 link inside running text is exempt). The browser's writes are answered 204
 in the browser, so the walk still starts on the seed and no budget is spent.
 
 **`--compare` fails on any count above the baseline** (a page the baseline
-lacks counts from zero), naming the measure and the page; it is the
+lacks is reported as new, a baseline page this run lacks as missing, neither
+fails: refresh with `npm run audit:pages -- --out docs/perf/baseline`), naming the measure and the page; it is the
 compare's one gate. Every offending node, with axe's failure summary or the
 size, is in `scripts/results/<name>.a11y-nodes.json`. A PR that fixes some
-lowers the baseline in the same change. Counts are exact for a seed day on
-one machine; a target near 44 px can round the other way on another OS's
-font rendering.
+lowers the baseline in the same change. Counts are kinds, so the same commit gives the same numbers on any day and OS.
 
 ## Rate limits
 

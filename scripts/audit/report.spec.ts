@@ -198,4 +198,20 @@ describe('rendering', () => {
       'Nothing changed beyond the noise.',
     );
   });
+
+  it('leaves accessibility out when the baseline has no a11y section', () => {
+    const before = report([step({ name: 'Grid' })]);
+    const after = {
+      ...before,
+      a11y: {
+        viewport: { width: 390, height: 844 },
+        axeVersion: '4',
+        rules: {},
+        pages: [],
+      },
+    };
+    expect(
+      renderComparison(before, after, compareReports(before, after)),
+    ).not.toContain('## Accessibility');
+  });
 });
