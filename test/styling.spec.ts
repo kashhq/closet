@@ -764,6 +764,28 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await items.nth(2).click();
     await settled();
     expect(await selected()).toBe(1);
+
+    // A window resized within lg re-syncs the steps from the strip's box,
+    // with no scroll to end (#1117). The page's row overflows at every lg
+    // width (its column is capped), so two tiles are sized to fit the strip
+    // at 1440 and not at 1024: narrower, Next comes on; wide again, the row
+    // stops overflowing and both steps are disabled.
+    await strip.evaluate((el) => {
+      const tiles = [...el.querySelectorAll<HTMLElement>('[data-snap-item]')];
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const width = (el.clientWidth - 24 - gap) / 2;
+      tiles.forEach((tile, index) => {
+        if (index < 2) tile.style.width = `${width}px`;
+        else tile.style.display = 'none';
+      });
+      el.scrollTo({ left: 0, behavior: 'instant' });
+    });
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(next).toHaveAttribute('aria-disabled', 'false');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
   });
 
   expect(errors, errors.join('\n')).toEqual([]);
