@@ -513,6 +513,16 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   // What the shots leave on is put back whether they finish or not, or the
   // 1440 run's Profile shot carries the 390 run's invite and a failure leaves
   // the public link on for the later shots.
+  const putBack = async () => {
+    await signInAs(page, 'demo');
+    await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
+    for (const id of await sharingIds()) {
+      if (sharedBefore.has(id)) continue;
+      await page.request.post(`/wardrobe-share/${id}/remove`, { headers: hx });
+    }
+  };
+  // The cleanup makes network calls: if one throws while a shot is already
+  // failing, it must not replace that first error (#1168).
   try {
     await page.request.post(`${outfitPath}/share`, { headers: hx });
     await page.goto(outfitPath);
@@ -556,14 +566,13 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
     await shot(page, name('invite'), invitePath);
     await shot(page, name('offline-signed-out'), '/offline.html');
     await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
-  } finally {
-    await signInAs(page, 'demo');
-    await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
-    for (const id of await sharingIds()) {
-      if (sharedBefore.has(id)) continue;
-      await page.request.post(`/wardrobe-share/${id}/remove`, { headers: hx });
-    }
+  } catch (failure) {
+    await putBack().catch((cleanupFailure: unknown) => {
+      console.error('Cleanup after a failed shot also failed:', cleanupFailure);
+    });
+    throw failure;
   }
+  await putBack();
   await signInAs(page, 'sparse');
   await shot(page, name('tag'), '/wardrobe/tag');
 }
