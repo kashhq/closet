@@ -19,6 +19,7 @@ import {
   withoutWarming,
 } from './support/service-worker';
 import { householdToday } from './support/household-today';
+import { WEBKIT_CANNOT_WATCH_WORKER } from './support/webkit-limits';
 import {
   expectNoZoomingFields,
   expectTouchTargets,
@@ -490,9 +491,11 @@ test.describe('Trips', () => {
         process.env.PWA_ENABLED !== 'true',
         'needs a server started with PWA_ENABLED=true',
       );
+      // networkSwitch routes the worker's own fetches (the warm is one).
+      step.skip(browserName === 'webkit', WEBKIT_CANNOT_WATCH_WORKER);
       step.skip(
-        browserName !== 'chromium',
-        'the worker is watched in Chromium',
+        browserName === 'firefox',
+        'service workers are untested in Firefox here',
       );
       const context = await browser.newContext({
         baseURL: APP_ORIGIN,

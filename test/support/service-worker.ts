@@ -17,13 +17,11 @@ interface Switch {
 const switches = new WeakMap<BrowserContext, Switch>();
 
 /**
- * Takes the device off the network and puts it back. Chromium's setOffline
- * cuts the page's requests and the navigation preload but not a request the
- * worker makes itself (NetworkFirst for an htmx request, REVALIDATE_PAGE,
- * CacheFirst for an image), which the route fails meanwhile. The route stays
- * until the context closes (closeSwitchedContext).
+ * The context's one route and its state. A second networkSwitch call reuses
+ * both: a state of its own would leave the first route never marked closing
+ * (#1141).
  */
-export async function networkSwitch(context: BrowserContext) {
+async function routeSwitch(context: BrowserContext): Promise<Switch> {
   const state: Switch = { offline: false, closing: false };
   switches.set(context, state);
   await context.route('**/*', async (route) => {
@@ -37,6 +35,18 @@ export async function networkSwitch(context: BrowserContext) {
       if (!state.closing) throw error;
     }
   });
+  return state;
+}
+
+/**
+ * Takes the device off the network and puts it back. Chromium's setOffline
+ * cuts the page's requests and the navigation preload but not a request the
+ * worker makes itself (NetworkFirst for an htmx request, REVALIDATE_PAGE,
+ * CacheFirst for an image), which the route fails meanwhile. The route stays
+ * until the context closes (closeSwitchedContext).
+ */
+export async function networkSwitch(context: BrowserContext) {
+  const state = switches.get(context) ?? (await routeSwitch(context));
   return async (network: 'offline' | 'online') => {
     state.offline = network === 'offline';
     await context.setOffline(state.offline);

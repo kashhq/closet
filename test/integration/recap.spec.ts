@@ -392,47 +392,57 @@ describe('year in review', () => {
 
   // #1015: the year lookup counts by hand what the recap calls enough; they
   // must agree on what a wear is (distinct garment-days of owned garments).
+  // That agreement is why readDefaultRecap's own `enough` check on the year
+  // it found never fails: the page opens on the latest year passing both.
+  // A user of its own, so the 2021 and 2022 wears touch no other case.
   it('picks a fallback year only when its recap is enough', async () => {
+    const cookie = await t.register('fallback@example.com');
+    const userId = await userIdOf(t, 'fallback@example.com');
+    const tee = await newGarment(
+      { name: 'Fallback tee', category: 'tops' },
+      cookie,
+    );
+    const shirt = await newGarment(
+      { name: 'Fallback shirt', category: 'tops' },
+      cookie,
+    );
+    const scarf = await createWishlistItem(t, {
+      name: 'Fallback scarf',
+      cookie,
+    });
+    const days = (year: number, month: number, count: number) =>
+      Array.from(
+        { length: count },
+        (_, i) => `${year}-${String(month).padStart(2, '0')}-0${i + 1}`,
+      );
+
     // 2022: nine wears of owned garments plus a wishlist garment's: not enough.
-    await wear(g.tee, [
-      '2022-01-01',
-      '2022-01-02',
-      '2022-01-03',
-      '2022-01-04',
-      '2022-01-05',
-    ]);
-    await wear(g.undated, [
-      '2022-02-01',
-      '2022-02-02',
-      '2022-02-03',
-      '2022-02-04',
-    ]);
-    await wear(g.wish, ['2022-03-01']);
+    await wear(tee, days(2022, 1, 5), userId);
+    await wear(shirt, days(2022, 2, 4), userId);
+    await wear(scarf, days(2022, 3, 1), userId);
     expect(
-      (await readRecap(t.db, ownerId, recapPeriod(2022, '2026-09-27'))).enough,
+      (await readRecap(t.db, userId, recapPeriod(2022, '2026-09-27'))).enough,
     ).toBe(false);
-    expect(await latestRecapYearBefore(t.db, ownerId, 2023)).toBeNull();
+    expect(await latestRecapYearBefore(t.db, userId, 2023)).toBeNull();
 
     // 2021: exactly ten garment-days over two garments: enough.
-    await wear(g.tee, [
-      '2021-01-01',
-      '2021-01-02',
-      '2021-01-03',
-      '2021-01-04',
-      '2021-01-05',
-      '2021-01-06',
-    ]);
-    await wear(g.undated, [
-      '2021-02-01',
-      '2021-02-02',
-      '2021-02-03',
-      '2021-02-04',
-    ]);
-    const year = await latestRecapYearBefore(t.db, ownerId, 2023);
+    await wear(tee, days(2021, 1, 6), userId);
+    await wear(shirt, days(2021, 2, 4), userId);
+    const year = await latestRecapYearBefore(t.db, userId, 2023);
     expect(year).toBe(2021);
     expect(
-      (await readRecap(t.db, ownerId, recapPeriod(year!, '2026-09-27'))).enough,
+      (await readRecap(t.db, userId, recapPeriod(year!, '2026-09-27'))).enough,
     ).toBe(true);
+
+    // On January 1 the bare address skips 2022's near miss for 2021's recap.
+    vi.setSystemTime(new Date('2027-01-01T17:00:00Z'));
+    try {
+      const { html } = await page('', cookie);
+      expect(html).toContain('data-year="2021"');
+      expect(html).not.toContain('id="recap-empty"');
+    } finally {
+      vi.setSystemTime(new Date(NOW));
+    }
   });
 
   it('reads ?year= as navigation state: anything else is the current year', async () => {
