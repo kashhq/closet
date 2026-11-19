@@ -45,7 +45,7 @@ export function dayRefusal(
 }
 
 /**
- * The page's outbox (views/assets/outbox.ts, bundled into public/js/outbox.js;
+ * The page's outbox (views/assets/outbox.ts, bundled into public/js/gen/outbox.js;
  * plan section 3) and the views that mark the queueable controls share
  * these rules, so a key the server renders is the key the outbox collapses
  * by.

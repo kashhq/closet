@@ -785,7 +785,7 @@ describe('queued writes', () => {
         'data-text-outbox-not-saved="{label}, {action}: not saved, {reason}."',
       );
       expect(signedIn).toMatch(
-        /<script type="module" src="\/js\/outbox\.js\?v=[^"]+"><\/script>/,
+        /<script type="module" src="\/js\/gen\/outbox\.js\?v=[^"]+"><\/script>/,
       );
       expect(signedIn).toContain('id="outbox-notice"');
 
@@ -794,7 +794,7 @@ describe('queued writes', () => {
       for (const absent of [
         'data-account=',
         'data-text-outbox-',
-        '/js/outbox.js',
+        '/js/gen/outbox.js',
         'id="outbox-banner"',
       ]) {
         expect(signedOut).not.toContain(absent);

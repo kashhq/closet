@@ -2,7 +2,7 @@
  * The outbox (#178; docs/plans/2026-11-12-offline-queued-writes.md sections
  * 3, 5 and 6; src/web/shell/outbox.md): wears, washes and packing ticks
  * tapped offline are kept in IndexedDB and replayed when the server answers
- * again. Bundled by `npm run generate:pages` into public/js/outbox.js,
+ * again. Bundled by `npm run generate:pages` into public/js/gen/outbox.js,
  * which the layout loads on signed-in pages; the rules it shares with the
  * server (keys, paths, the answer table, the queue over its store) are
  * src/offline-writes.ts.

@@ -990,7 +990,7 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
 }
 
 /* A queued write's "Waiting to sync" (src/web/outbox.tsx): shown while
-   public/js/outbox.js marks its region pending, online or not. */
+   public/js/gen/outbox.js marks its region pending, online or not. */
 [data-outbox-chip] {
   display: none;
 }

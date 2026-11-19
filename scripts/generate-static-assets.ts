@@ -2,10 +2,11 @@ import path from 'path';
 import { PUBLIC_DIR } from '../src/static-assets';
 import {
   buildPageModules,
-  watchPageModules,
+  PAGE_OUT,
   pageModuleEntries,
   precompress,
   syncClientModules,
+  watchPageModules,
 } from './static-assets';
 import { NOTICES_FILE, writeNotices } from './third-party-notices';
 
@@ -22,7 +23,7 @@ if (step === 'modules') {
 } else if (step === 'pages') {
   const { written, removed } = buildPageModules();
   console.log(
-    `public/js: ${Object.keys(pageModuleEntries()).length} page modules, ${written.length} written${written.length ? ` (${written.join(', ')})` : ''}, ${removed.length} removed`,
+    `${path.relative(process.cwd(), PAGE_OUT)}: ${Object.keys(pageModuleEntries()).length} page modules, ${written.length} written${written.length ? ` (${written.join(', ')})` : ''}, ${removed.length} removed`,
   );
 } else if (step === 'pages:watch') {
   void watchPageModules();

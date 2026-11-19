@@ -7,7 +7,7 @@ import { THEME_BASE_100 } from '../theme-colors';
 import type { ViewContext } from '../view-context';
 import { PhotoViewer } from '../files/photo-viewer';
 import { AppStatus } from './app-status';
-import { importMap } from './import-map';
+import { importMap, pageModuleUrl } from './import-map';
 import { ConfirmSheet } from './confirm-sheet';
 import { pageIdentity } from '../page-contract';
 
@@ -80,7 +80,7 @@ function ErrorScript({ ctx, v }: { ctx: ViewContext; v: string }) {
  */
 function OutboxScript({ ctx, v }: { ctx: ViewContext; v: string }) {
   if (!ctx.user) return null;
-  return <script type="module" src={`/js/outbox.js${v}`}></script>;
+  return <script type="module" src={`${pageModuleUrl('outbox')}${v}`}></script>;
 }
 
 export function Layout({
@@ -165,7 +165,10 @@ export function Layout({
         />
         {/* Heartbeat-driven online/offline state and the banner in
             AppStatus; runs everywhere, service worker or not. */}
-        <script type="module" src={`/js/connectivity.js${v}`}></script>
+        <script
+          type="module"
+          src={`${pageModuleUrl('connectivity')}${v}`}
+        ></script>
         {/* The confirmation sheet (ConfirmSheet): hx-confirm and a PostForm's
             confirm. Before submit-once, which skips a declined submit. */}
         <script type="module" src={`/js/confirm-sheet.js${v}`}></script>
@@ -182,9 +185,12 @@ export function Layout({
         <script type="module" src={`/js/request-failures.js${v}`}></script>
         {/* The app bar's back arrow goes back like a native app's. After
             submit-once, whose cancelled submits it must see as cancelled. */}
-        <script type="module" src={`/js/back.js${v}`}></script>
+        <script type="module" src={`${pageModuleUrl('back')}${v}`}></script>
         {/* Escape closes an open app bar menu (a <details> has no key). */}
-        <script type="module" src={`/js/menu-escape.js${v}`}></script>
+        <script
+          type="module"
+          src={`${pageModuleUrl('menu-escape')}${v}`}
+        ></script>
         {/* The shared photo viewer (src/web/files/photo-viewer.tsx): one
             document listener opens any [data-photo-open]. */}
         <script type="module" src={`/js/photo-viewer.js${v}`}></script>
@@ -193,7 +199,7 @@ export function Layout({
           // Service worker registration, update toast, Web Push, the install
           // dialog, iOS pull to refresh. In the head so hx-boost body swaps
           // never re-run it.
-          <script type="module" src={`/js/pwa.js${v}`}></script>
+          <script type="module" src={`${pageModuleUrl('pwa')}${v}`}></script>
         )}
         {ctx.metricsEnabled && ctx.user && (
           // The device's page-load, htmx and interaction timings, beaconed

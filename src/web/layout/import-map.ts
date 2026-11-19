@@ -1,4 +1,14 @@
 /**
+ * The URL of a page module built from views/assets/page/<name>.ts (or
+ * views/assets/outbox.ts) into public/js/gen/ (buildPageModules,
+ * scripts/static-assets.ts). A plain-JS module keeps its /js/<name>.js
+ * (scripts/ci/plain_js.conf); converting one moves its URL here.
+ */
+export function pageModuleUrl(name: string): string {
+  return `/js/gen/${name}.js`;
+}
+
+/**
  * Bare specifiers for every ES module the pages import, so the versioned URL
  * lives here once (the layout renders it as the page's importmap).
  * Page-specific modules (the snap strip's snap-strip, which Styling's
@@ -24,18 +34,18 @@ const IMPORTS = {
   'photo-input': '/js/photo-input.js',
   'snap-strip': '/js/snap-strip.js',
   styling: '/js/styling.js',
-  locate: '/js/locate.js',
-  push: '/js/push.js',
-  freshness: '/js/freshness.js',
-  'age-label': '/js/age-label.js',
-  'single-flight': '/js/single-flight.js',
+  locate: pageModuleUrl('locate'),
+  push: pageModuleUrl('push'),
+  freshness: pageModuleUrl('freshness'),
+  'age-label': pageModuleUrl('age-label'),
+  'single-flight': pageModuleUrl('single-flight'),
   'select-count': '/js/select-count.js',
   'recap-export': '/js/recap-export.js',
   'share-confirm': '/js/share-confirm.js',
-  'share-saved': '/js/share-saved.js',
+  'share-saved': pageModuleUrl('share-saved'),
   'click-gate': '/js/click-gate.js',
-  'search-shortcut': '/js/search-shortcut.js',
-} as const;
+  'search-shortcut': pageModuleUrl('search-shortcut'),
+};
 
 /** The names the bundles leave to the importmap. */
 export const IMPORT_MAP_NAMES = Object.keys(IMPORTS);

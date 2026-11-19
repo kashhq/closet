@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -14,11 +15,7 @@ import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
-import {
-  buildPageModules,
-  precompress,
-  watchPageModules,
-} from './static-assets';
+import { buildPageModules, precompress } from './static-assets';
 
 describe('precompress', () => {
   let root: string;
@@ -94,13 +91,12 @@ describe('buildPageModules', () => {
   const build = () =>
     buildPageModules({
       sources: at('sources'),
-      outdir: at('js'),
-      manifest: at('cache', 'page-modules.json'),
+      outdir: at('js', 'gen'),
+      legacyDir: at('js'),
     });
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'closet-pages-'));
-    execFileSync('git', ['init', '-q'], { cwd: root });
     mkdirSync(at('sources'), { recursive: true });
     writeFileSync(at('sources', 'outbox.ts'), 'export const y = 1;\n');
   });
@@ -109,94 +105,39 @@ describe('buildPageModules', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('removes the output of a renamed module and keeps plain-JS files it never built', () => {
+  it('leaves only the new output after a module is renamed', () => {
     source('old-name');
-    mkdirSync(at('js'), { recursive: true });
-    writeFileSync(at('js', 'plain.js'), 'export {};\n');
-    expect(build().removed).toEqual([]);
-    expect(existsSync(at('js', 'old-name.js'))).toBe(true);
-
+    build();
+    // A variant the precompress step wrote beside it.
+    writeFileSync(at('js', 'gen', 'old-name.js.br'), 'x');
     rmSync(at('sources', 'page', 'old-name.ts'));
     source('new-name');
-    const { removed } = build();
 
-    expect(removed).toEqual(['old-name.js']);
-    expect(existsSync(at('js', 'old-name.js'))).toBe(false);
-    expect(existsSync(at('js', 'new-name.js'))).toBe(true);
-    expect(existsSync(at('js', 'plain.js'))).toBe(true);
+    build();
+
+    expect(readdirSync(at('js', 'gen')).sort()).toEqual([
+      'new-name.js',
+      'outbox.js',
+    ]);
   });
 
-  it('keeps a tracked file, though an earlier run built that name', () => {
-    source('mod');
-    build();
-    execFileSync('git', ['add', '-f', 'js/mod.js'], { cwd: root });
-    rmSync(at('sources', 'page', 'mod.ts'));
-
-    expect(build().removed).toEqual([]);
-    expect(existsSync(at('js', 'mod.js'))).toBe(true);
-  });
-
-  it('keeps a file whose content changed since the build', () => {
-    source('mod');
-    build();
-    writeFileSync(at('js', 'mod.js'), 'export const edited = 1;\n');
-    rmSync(at('sources', 'page', 'mod.ts'));
-
-    expect(build().removed).toEqual([]);
-    expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('edited');
-  });
-
-  it('removes nothing outside a repository and keeps the file listed', () => {
-    source('mod');
-    build();
-    rmSync(at('.git'), { recursive: true });
-    rmSync(at('sources', 'page', 'mod.ts'));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    expect(build().removed).toEqual([]);
-    expect(existsSync(at('js', 'mod.js'))).toBe(true);
-    expect(warn).toHaveBeenCalledOnce();
-    expect(readFileSync(at('cache', 'page-modules.json'), 'utf8')).toContain(
-      'mod.js',
-    );
-
+  it('removes an untracked copy from before public/js/gen/ and keeps a tracked one', () => {
+    source('converted');
+    source('plain');
     execFileSync('git', ['init', '-q'], { cwd: root });
-    expect(build().removed).toEqual(['mod.js']);
-    warn.mockRestore();
-  });
-
-  it('reports the outputs an old name-only list left, deleting none', () => {
-    source('keep');
     mkdirSync(at('js'), { recursive: true });
-    writeFileSync(at('js', 'gone.js'), 'export {};\n');
-    mkdirSync(at('cache'), { recursive: true });
-    writeFileSync(at('cache', 'page-modules.json'), '["gone.js"]');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    writeFileSync(at('js', 'converted.js'), 'export {};\n');
+    writeFileSync(at('js', 'converted.js.br'), 'x');
+    writeFileSync(at('js', 'plain.js'), 'export {};\n');
+    execFileSync('git', ['add', 'js/plain.js'], { cwd: root });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    expect(build().removed).toEqual([]);
-    expect(existsSync(at('js', 'gone.js'))).toBe(true);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('gone.js'));
-    warn.mockRestore();
-  });
-
-  it('records a watcher rebuild, so a later rename still removes its output', async () => {
-    source('mod');
     build();
-    const watcher = await watchPageModules({
-      sources: at('sources'),
-      outdir: at('js'),
-      manifest: at('cache', 'page-modules.json'),
-    });
-    try {
-      writeFileSync(at('sources', 'page', 'mod.ts'), 'export const x = 2;\n');
-      await watcher.rebuild();
-    } finally {
-      await watcher.dispose();
-    }
-    expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('2');
 
-    rmSync(at('sources', 'page', 'mod.ts'));
-    expect(build().removed).toEqual(['mod.js']);
-    expect(existsSync(at('js', 'mod.js'))).toBe(false);
+    expect(existsSync(at('js', 'converted.js'))).toBe(false);
+    expect(existsSync(at('js', 'converted.js.br'))).toBe(false);
+    expect(existsSync(at('js', 'plain.js'))).toBe(true);
+    expect(log).toHaveBeenCalledOnce();
+    log.mockRestore();
   });
 });

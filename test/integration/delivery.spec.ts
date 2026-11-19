@@ -51,7 +51,10 @@ describe('delivery (PWA_ENABLED=true)', () => {
     });
 
     it('serves public/ files immutable for a year', async () => {
-      const res = await t.inject({ method: 'GET', url: '/js/connectivity.js' });
+      const res = await t.inject({
+        method: 'GET',
+        url: '/js/gen/connectivity.js',
+      });
       expect(res.statusCode).toBe(200);
       expect(res.headers['cache-control']).toBe(
         'public, max-age=31536000, immutable',
@@ -101,7 +104,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
     const JAVASCRIPT = 'application/javascript; charset=utf-8';
 
     it.each([
-      ['/js/connectivity.js', 'js/connectivity.js'],
+      ['/js/gen/connectivity.js', 'js/gen/connectivity.js'],
       ['/modules/htmx.min.js', 'modules/htmx.min.js'],
       // An importmap module: a wrong type and the browser refuses it.
       ['/modules/workbox-window.prod.mjs', 'modules/workbox-window.prod.mjs'],
@@ -130,27 +133,32 @@ describe('delivery (PWA_ENABLED=true)', () => {
     it('serves gzip to a client without brotli', async () => {
       const res = await t.inject({
         method: 'GET',
-        url: '/js/connectivity.js',
+        url: '/js/gen/connectivity.js',
         headers: { 'accept-encoding': 'gzip' },
       });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-encoding']).toBe('gzip');
       expect(res.headers['content-type']).toBe(JAVASCRIPT);
       expect(res.headers['vary']).toMatch(/accept-encoding/i);
-      expect(res.rawPayload.equals(file('js/connectivity.js.gz'))).toBe(true);
+      expect(res.rawPayload.equals(file('js/gen/connectivity.js.gz'))).toBe(
+        true,
+      );
       expect(
-        gunzipSync(res.rawPayload).equals(file('js/connectivity.js')),
+        gunzipSync(res.rawPayload).equals(file('js/gen/connectivity.js')),
       ).toBe(true);
     });
 
     it('serves the file itself to a request without Accept-Encoding', async () => {
-      const res = await t.inject({ method: 'GET', url: '/js/connectivity.js' });
+      const res = await t.inject({
+        method: 'GET',
+        url: '/js/gen/connectivity.js',
+      });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-encoding']).toBeUndefined();
       expect(res.headers['content-type']).toBe(JAVASCRIPT);
       // A shared cache must not hand this copy to a client that accepts br.
       expect(res.headers['vary']).toMatch(/accept-encoding/i);
-      expect(res.rawPayload.equals(file('js/connectivity.js'))).toBe(true);
+      expect(res.rawPayload.equals(file('js/gen/connectivity.js'))).toBe(true);
     });
 
     it('still compresses pages on the fly', async () => {
@@ -373,7 +381,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
     it('loads page-only libraries on their pages, not in the shell', () => {
       // pwa.js imports the install dialog and pull to refresh only where
       // they apply; the element is never in the markup.
-      expect(html).toContain('/js/pwa.js?v=');
+      expect(html).toContain('/js/gen/pwa.js?v=');
       expect(html).not.toContain('src="/modules/pwa-install');
       expect(html).not.toContain('<pwa-install');
       // Styling's module is only mapped here; its page imports it.
@@ -490,8 +498,8 @@ describe('delivery (PWA_ENABLED=true)', () => {
         string,
         string
       >;
-      expect(imports.freshness).toMatch(/^\/js\/freshness\.js\?v=/);
-      expect(imports['age-label']).toMatch(/^\/js\/age-label\.js\?v=/);
+      expect(imports.freshness).toMatch(/^\/js\/gen\/freshness\.js\?v=/);
+      expect(imports['age-label']).toMatch(/^\/js\/gen\/age-label\.js\?v=/);
     });
   });
 
@@ -537,7 +545,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       );
       const script = await t.inject({
         method: 'GET',
-        url: '/js/pwa.js?v=1',
+        url: '/js/gen/pwa.js?v=1',
       });
       expect(script.headers['cache-control']).toBe(
         'public, max-age=31536000, immutable',
