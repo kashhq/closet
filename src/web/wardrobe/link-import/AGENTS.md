@@ -1,6 +1,6 @@
 # Link import
 
-_Reference, not auto-loaded:_ [`reference.md`](reference.md) holds .
+_Reference, not auto-loaded:_ [`reference.md`](reference.md) holds the flow (the form, the photo choices), the pending photo, memory use, saving at once without the form, how the order mail reads through it, and the one rate limit.
 
 Part of the Wardrobe (`src/web/wardrobe/AGENTS.md`).
 

@@ -593,7 +593,7 @@ describe('after a database restore', () => {
       join(PROJECT_ROOT, 'src/db/reference.md'),
       'utf8',
     );
-    const recipe = /<!-- by-hand-recipe -->\n```sql\n([\s\S]*?)```/.exec(
+    const recipe = /<!-- by-hand-recipe -->\s*```sql\n([\s\S]*?)```/.exec(
       doc,
     )?.[1];
     if (!recipe) throw new Error('No by-hand recipe in src/db/reference.md');

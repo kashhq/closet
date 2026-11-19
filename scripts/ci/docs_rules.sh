@@ -60,7 +60,7 @@ esac
 # with a Logs / Logging lead. Long reference belongs in a `reference.md` beside the doc.
 # grep exits 1 for no match and 2 for an unreadable input: only 1 is a pass.
 closet_prose_patterns=(
-  '^\|.*\b(GET|POST|PUT|PATCH|DELETE)\b[^|]*/'
+  '^[[:space:]]*\|.*\b(GET|POST|PUT|PATCH|DELETE)\b[^|]*/'
   '(^|[^A-Za-z0-9_`-])[0-9]+(\+[0-9]+)? (SQL )?(statements?|queries|round trips?)\b'
   '^#+ (Statements per run|Round trips)\b'
   '^ *- \*\*(Logs?|Logging|Op lines)\*\*'

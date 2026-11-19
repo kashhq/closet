@@ -1,8 +1,8 @@
 # Tests
 
-_Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Tests; A signed-in page in the PWA specs wa...; Playwright's server runs with METRIC...; Playwright's server runs with error...; page.clock.install; Playwright cannot subscribe to push.; npm run test:cov is the gate's db jo...; Both Vitest tiers also run with the...; Playwright's server runs with the or...; test/support/legacy-migrations.ts lo...; Vitest is pinned to `~4.0`.; Nothing in Vitest boots the image or....
+_Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Tests; A signed-in page in the PWA specs wa...; Playwright's server runs with METRIC...; Playwright's server runs with error...; page.clock.install; Playwright cannot subscribe to push.; npm run test:cov is the gate's db jo...; Both Vitest tiers also run with the...; Playwright's server runs with the or...; test/support/legacy-migrations.ts lo...; Vitest is pinned to `~4.0`.; N....
 
-The tiers and their commands are in the root `AGENTS.md` (Commands, Test tiers).
+The tiers and their commands are in the root `AGENTS.md` (Commands).
 
 ## The PWA specs
 
