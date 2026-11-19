@@ -96,22 +96,55 @@ export async function generateApiSpec(): Promise<unknown> {
 
 const SCHEMA_REF = '#/components/schemas/';
 
-/** Keywords whose values are data, not schemas: an example carrying a `title` is not a component (#1169). */
-const DATA_KEYWORDS = new Set([
-  'default',
-  'example',
-  'examples',
-  'const',
-  'enum',
+/**
+ * JSON Schema's applicators, the only keywords whose values are subschemas:
+ * 2020-12's, plus draft-07's tuple form that TypeBox's `Type.Tuple` emits
+ * (`items: [...]` with `additionalItems`). The walk descends through these
+ * alone, so everything else (`default`, `examples`, `const`, `enum`, an
+ * unknown keyword) is data by construction: a titled object inside it is
+ * never hoisted (#1197).
+ */
+const SUBSCHEMA_KEYWORDS = new Set([
+  'additionalProperties',
+  'additionalItems',
+  'not',
+  'if',
+  'then',
+  'else',
+  'contains',
+  'propertyNames',
+  'unevaluatedItems',
+  'unevaluatedProperties',
 ]);
-
-/** Keywords whose value maps user-chosen names to schemas: the names are never keywords (a property may be called `default`). */
-const NAME_MAP_KEYWORDS = new Set([
+const SUBSCHEMA_LIST_KEYWORDS = new Set([
+  'prefixItems',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+/** A schema (2020-12, and a draft-07 list) or a draft-07 tuple's list of schemas. */
+const SUBSCHEMA_OR_LIST_KEYWORDS = new Set(['items']);
+/** Their values map user-chosen names to schemas (a property may be called `default`). */
+const SUBSCHEMA_MAP_KEYWORDS = new Set([
   'properties',
   'patternProperties',
   '$defs',
   'definitions',
   'dependentSchemas',
+]);
+
+/** The component kinds the emitter writes; a new kind may hold schemas this walk would miss, so the emit fails until it learns it. */
+const KNOWN_COMPONENTS = new Set(['schemas', 'securitySchemes']);
+
+const HTTP_METHODS = new Set([
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
 ]);
 
 /**
@@ -122,31 +155,26 @@ const NAME_MAP_KEYWORDS = new Set([
  * is a `oneOf` discriminated by it, with the mapping. Emitter-only: the routes still
  * serialize through the inline schemas, so no response changes.
  *
+ * The walk goes by structure, never by key name (#1197): the OpenAPI
+ * document's schema positions, then inside a schema only its subschema
+ * keywords. A response called `default` or a component called `example` is
+ * a name like any other.
+ *
  * Two shapes under one title would make one name mean two types, so the
  * emit fails and the title gets renamed at its source.
  */
 export function nameSchemas(spec: unknown): void {
   if (!isRecord(spec) || !isRecord(spec.paths)) return;
-  const components: Record<string, unknown> = isRecord(spec.components)
-    ? spec.components
-    : {};
+  refuseUnwalkedPositions(spec);
+  const components = isRecord(spec.components) ? spec.components : {};
   const registered: Record<string, unknown> = {};
   const shapeOf = new Map<string, string>();
 
-  const visit = (node: unknown, hoist = true): unknown => {
-    if (Array.isArray(node)) return node.map((item) => visit(item));
+  const visitSchema = (node: unknown, hoist = true): unknown => {
     if (!isRecord(node)) return node;
     const visited: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(node)) {
-      if (DATA_KEYWORDS.has(key)) visited[key] = value;
-      else if (NAME_MAP_KEYWORDS.has(key) && isRecord(value))
-        visited[key] = Object.fromEntries(
-          Object.entries(value).map(([name, property]) => [
-            name,
-            visit(property),
-          ]),
-        );
-      else visited[key] = visit(value);
+    for (const [keyword, value] of Object.entries(node)) {
+      visited[keyword] = visitSubschemas(keyword, value, visitSchema);
     }
     const schema = discriminated(
       collapseEnums(visited),
@@ -171,12 +199,114 @@ export function nameSchemas(spec: unknown): void {
   for (const [name, shared] of Object.entries(
     isRecord(components.schemas) ? components.schemas : {},
   )) {
-    const processed = visit(shared, false);
+    const processed = visitSchema(shared, false);
     registered[name] = processed;
     shapeOf.set(name, canonical(processed));
   }
-  spec.paths = visit(spec.paths);
+  // The OpenAPI objects are updated in place: only their `schema` changes.
+  for (const holder of schemaHolders(spec.paths)) {
+    holder.schema = visitSchema(holder.schema);
+  }
   spec.components = { ...components, schemas: registered };
+}
+
+/**
+ * Fails closed: a schema position the walk does not visit would keep its
+ * titled schemas inline, so the emit stops naming it until the walk learns
+ * it. The emitter writes none of these today.
+ */
+function unwalked(position: string): Error {
+  return new Error(
+    `The API spec has ${position}, which nameSchemas does not walk; teach it where the schemas there are.`,
+  );
+}
+
+/** The document-level positions: `webhooks`, and component kinds other than KNOWN_COMPONENTS. */
+function refuseUnwalkedPositions(spec: Record<string, unknown>): void {
+  if ('webhooks' in spec) throw unwalked('webhooks');
+  const kinds = Object.keys(isRecord(spec.components) ? spec.components : {});
+  const unknown = kinds.filter((kind) => !KNOWN_COMPONENTS.has(kind));
+  if (unknown.length > 0) {
+    throw unwalked(`components (${unknown.join(', ')})`);
+  }
+}
+
+/** A keyword's value with its subschemas visited; any other keyword's value is data and stays as it is. */
+function visitSubschemas(
+  keyword: string,
+  value: unknown,
+  visitSchema: (schema: unknown) => unknown,
+): unknown {
+  const list =
+    SUBSCHEMA_LIST_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword);
+  if (list && Array.isArray(value)) {
+    return value.map((subschema) => visitSchema(subschema));
+  }
+  if (
+    SUBSCHEMA_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword)
+  ) {
+    return visitSchema(value);
+  }
+  if (SUBSCHEMA_MAP_KEYWORDS.has(keyword) && isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, subschema]) => [
+        name,
+        visitSchema(subschema),
+      ]),
+    );
+  }
+  return value;
+}
+
+/**
+ * Every object under `paths` whose `schema` is a schema, in document order
+ * (the components' order follows it): path and operation parameters, request
+ * and response media types, response headers and their media types.
+ */
+function schemaHolders(paths: unknown): Record<string, unknown>[] {
+  const holders: Record<string, unknown>[] = [];
+  const content = (mediaTypes: unknown): void => {
+    for (const media of recordsIn(mediaTypes)) {
+      if (recordsIn(media.encoding).some((part) => 'headers' in part)) {
+        throw unwalked('encoding headers');
+      }
+      holders.push(media);
+    }
+  };
+  // A parameter or a header: a `schema`, or a `content` map.
+  const parameter = (holder: Record<string, unknown>): void => {
+    holders.push(holder);
+    content(holder.content);
+  };
+  const operation = (fields: Record<string, unknown>): void => {
+    for (const [field, value] of Object.entries(fields)) {
+      if (field === 'callbacks') throw unwalked('operation callbacks');
+      if (field === 'parameters') recordsIn(value).forEach(parameter);
+      else if (field === 'requestBody' && isRecord(value)) {
+        content(value.content);
+      } else if (field === 'responses') {
+        for (const response of recordsIn(value)) {
+          content(response.content);
+          recordsIn(response.headers).forEach(parameter);
+        }
+      }
+    }
+  };
+  for (const pathItem of recordsIn(paths)) {
+    for (const [field, value] of Object.entries(pathItem)) {
+      if (field === 'parameters') recordsIn(value).forEach(parameter);
+      else if (HTTP_METHODS.has(field) && isRecord(value)) operation(value);
+    }
+  }
+  return holders.filter((holder) => 'schema' in holder);
+}
+
+/** The objects among a map's values or a list's items. */
+function recordsIn(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  return isRecord(value) ? Object.values(value).filter(isRecord) : [];
 }
 
 /** A schema as text with its keys sorted: two copies differing only in key order are one shape. */
