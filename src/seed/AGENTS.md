@@ -16,3 +16,4 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds CI screenshot
 ## Gotchas
 
 - **The persona bibles are data, and the image carries them.** `src/seed/personas/*.md` are read at seed time (tsc does not copy Markdown), so the `Dockerfile` copies them into the runtime image; a renamed column, a short row or a value the garment form would drop fails the seed (and `persona.spec.ts`) with the bible and row named. Edit a table, not the code, to change what a persona owns or wears.
+- **Moved rules** (detail in `reference.md`): each CI screenshot test owns its data (the file is serial, `beforeAll` resets the personas, the tests changing Theo come last), and a page is reached by its exact name.

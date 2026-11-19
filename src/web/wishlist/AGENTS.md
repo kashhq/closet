@@ -16,3 +16,4 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Muse's sugges
 ## Gotchas
 
 - **A wishlist form's `replaces` has its own marker, `wishlist=1`.** Closet forms and forms cached before #18 post neither and must leave the stored replacement alone (the product, care and props markers' rule). The replacement is stored only through `replacementOf`, which is where the same-owner rule lives: a second writer of `replaces_garment_id` must go through it.
+- **Moved rules** (detail in `reference.md`): every suggestion decision goes through `decide` (the pure `decideSuggestion`), the page's through `suggestion-actions.ts`. `GET /api/v1/wishlist` is one unpaged resource: the needs sort by what every option unlocks, which only the whole list knows.

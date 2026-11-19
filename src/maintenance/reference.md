@@ -87,3 +87,5 @@ npm run maintenance:repoint-cutout -- <uuid>.webp <key|unkeyed>
 
 - **Each timer run is a job** (`runAsJob('cron')` in `scheduleJob`, the one loop under `scheduleMinutely`/`scheduleNightly`): every line it logs, its `<name> failed` line included, and its failure's Bugsink event carry a fresh `job_id` `cron-<12 hex>`; the scheduler's own lines between runs carry none.
 - **The CLIs never migrate.** `runCli` (`src/maintenance/cli.ts`) checks `requireCurrentSchema` first and exits 1 with "The database is N migration(s) behind this build. Start the server..." when the image is newer than the database, or "The database's newest migration (...) is not in this build" when it is older (`SchemaAheadError`, #651; docs/operations.md#migrations-and-rollback). A recovery tool run beside a live server must not change the schema under it (until 2026-09-26 they booted the whole app, migrations included). `test/integration/migration-runner.spec.ts` covers the check.
+
+- **Order of the passes**: the scan runs before the pending pass; `planReconciliation` drops the sets that pass deleted.

@@ -10,3 +10,9 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
 
 - **Tabs**: `calendarTabs` (Week, Month, Trips), the app bar's `tabs` on each, static like the Outfits tabs (`/calendar` is a stale-while-revalidate tab root).
 - **Selfies**: each row (`OccasionRow`) shows its entry's selfie, or up to today a way to take one (marks it worn); a day also shows looks whose outfit was deleted (`DayLooks`, `detachedLooksSql`). Deleting an entry goes through `removeEntry` (`entry-actions.ts`), which unlinks its selfie after commit; an entry takes the one-off outfit it created (origin `idea` or `planner`) once nothing holds it (Undo's rule, `removeUnheldOutfits`, #659, #748: 2 statements more, only then). "Created" is `outfit_calendar.outfit_created` (written true by the pick that made the outfit: `createOutfit`'s plan, `wearIdea` via `wearOutfitOn`, a Change; null for a reuse, a plan of a saved outfit and every entry before 0060; internal, not in the feed or API) (the planner's picks write it too, and every change of the entry's outfit rewrites it; entries planned before 0060 are null, so an old planner entry's outfit is kept until a re-plan); a reused or pre-existing outfit, and a `person` or `agent` one, never go. See Outfit selfies.
+
+## Detail condensed out of AGENTS.md (#723)
+
+- `insertEntry`'s callers: `scheduleOutfit` (POST /calendar and schedule_outfit through `planOutfit`, ownership check first), the outfit form's save transaction, the gallery's pick (and "Plan my week", `planned_by` 'auto'), the seed.
+- An owner-lock timeout is logged `-> 503: ... (<writer> for owner <id> waited 5000 ms for a lock)` from `ownerTransaction`, `(a write waited 5000 ms for a lock)` from a folded lock (`describeError` maps its 55P03).
+- Occasion labels: `occasionLabel` (`src/web/date-labels.ts`, catalog `occasion.<value>`). `calendar-view.ts` builds the page model from plain dates (pure, unit-tested in New York time).
