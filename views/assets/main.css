@@ -369,12 +369,27 @@
     flex-basis: 100%;
   }
 }
+/* From lg the tabs grow from their natural width, pushing the actions to
+   the end, and the title gives way first: one line, cut with an ellipsis,
+   its full text in the h1's `title` (#1110). A long title (a shared
+   wardrobe's owner) squeezed the row to nothing when the tabs took only the
+   room the title left. The order is the shrink weights: the title's dwarfs
+   the tabs', so it takes the whole shortfall until it is down to its
+   min-width, and only then does the tab row shrink and scroll inside the
+   bar (its overflow above), so the actions stay on screen (large text at
+   1024 px). Flex has no shrink priority; a weight this large is one. */
 @media (min-width: 1024px) {
   .app-bar:has(> .app-bar-tabs) > .app-bar-title {
-    flex: 0 1 auto;
+    flex: 0 100000 auto;
+    min-width: 5rem;
+  }
+  .app-bar:has(> .app-bar-tabs) h1 {
+    min-width: 0;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
   .app-bar-tabs {
-    flex: 1 1 0%;
+    flex: 1 1 auto;
   }
 }
 .dock {

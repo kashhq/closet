@@ -472,6 +472,10 @@ describe('trips', () => {
       const res = await get(`/trips/${id}`);
       expect(res.statusCode).toBe(200);
       const html = unescapeHtml(res.body);
+      // The aside holds the extras and the notes too (#1147).
+      expect(html).toMatch(
+        /<aside id="trip-aside"[^>]*aria-label="Packing and notes"/,
+      );
       const roles = [...html.matchAll(/<fieldset data-role="([a-z-]+)"/g)].map(
         (m) => m[1],
       );

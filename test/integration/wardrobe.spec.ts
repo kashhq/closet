@@ -265,6 +265,36 @@ describe('wardrobe', () => {
       ).toContain(include);
     });
 
+    it('asks search, a chip’s × and the capsule menu from the filter form, so an unapplied tick rides along (#1144)', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/wardrobe?keyword=shirt&category=tops&color=blue',
+      });
+      const html = unescapeHtml(res.body);
+      const fromFilters = `hx-get="/wardrobe" hx-include="#filter-form, #search-form [name='keyword']"`;
+      expect(filterDialog(html)).toMatch(/<form\b[^>]*id="filter-form"/);
+      // Search's Enter submits the filter form (its fields, the keyword
+      // through its include), never its own request, whose hidden filters
+      // are the no-script GET's and would go twice.
+      const search = /<form\b[^>]*id="search-form"[^>]*>/.exec(html)![0];
+      expect(search).toContain(
+        `onsubmit="const filters = document.getElementById('filter-form'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }"`,
+      );
+      expect(search).toContain('hx-boost="false"');
+      expect(search).not.toContain('hx-get');
+      // Each chip leaves its own filter out of the form's; without the
+      // form its href, every other filter in it, is followed natively.
+      expect(html).toContain(
+        `onclick="if (!document.getElementById('filter-form')) event.stopImmediatePropagation();"`,
+      );
+      expect(html).toContain(
+        `href="/wardrobe?keyword=shirt&color=blue" ${fromFilters} hx-params="not category"`,
+      );
+      expect(html).toContain(
+        `href="/wardrobe?keyword=shirt&category=tops" ${fromFilters} hx-params="not color"`,
+      );
+    });
+
     it('answers a fragment with the body, and the facets’ content and the bar out of band', async () => {
       const res = await t.inject({
         method: 'GET',

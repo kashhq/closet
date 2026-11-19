@@ -397,6 +397,39 @@ async function checkSelectMode(page: Page) {
   await page.evaluate(() => {
     document.documentElement.style.fontSize = '';
   });
+
+  // The capsule menu scopes the closet to Office, then All garments drops
+  // the scope: no `capsule=` in the pushed URL, every garment back.
+  await page.goto('/wardrobe');
+  const tiles = page.locator('[data-tile]');
+  const closet = await tiles.count();
+  expect(closet).toBeGreaterThan(2);
+  const scope = page.locator('#capsule-scope');
+  const choose = async (name: string) => {
+    await scope.locator('summary').click();
+    const answered = page.waitForResponse(
+      (res) => new URL(res.url()).pathname === '/wardrobe' && res.ok(),
+    );
+    await scope.getByRole('link', { name }).click();
+    await answered;
+  };
+  await choose('Office');
+  await expect(page).toHaveURL(/[?&]capsule=\d+/);
+  await expect(tiles).toHaveCount(2);
+  await choose('All garments');
+  await expect(page).not.toHaveURL(/[?&]capsule=/);
+  await expect(tiles).toHaveCount(closet);
+
+  // A chip's × on a page without the filter form follows its own href (every
+  // other filter in it) as a full navigation, never htmx's bare request.
+  await page.goto('/wardrobe?category=tops&color=blue');
+  await page.evaluate(() => document.getElementById('filter-form')?.remove());
+  await page.locator('#scope-row a[hx-params="not color"]').click();
+  await expect(page).toHaveURL(/\/wardrobe\?category=tops$/);
+  await expect(page.locator('#filter-form')).toHaveCount(1);
+  await expect(
+    page.locator('#scope-row a[hx-params="not category"]'),
+  ).toHaveCount(1);
 }
 
 /**
@@ -479,6 +512,22 @@ async function checkFilterSheet(page: Page) {
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
 
+  // Closed without Apply, the sheet drops what it was not asked to apply:
+  // a search after it sends the filter form's fields (#1144), and they are
+  // the applied ones again (layout/sheet.tsx, DISCARD_UNAPPLIED).
+  await opener.click();
+  await sheet.getByRole('radio', { name: 'Red', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await page.getByRole('search').locator('label').click();
+  await page.getByRole('textbox', { name: 'Search' }).fill('shirt');
+  await page.getByRole('textbox', { name: 'Search' }).press('Enter');
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=blue\b/);
+  await expect(page).not.toHaveURL(/[?&]color=red\b/);
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Blue shirt');
+
   // A keyword typed and not yet searched rides along with the sheet's
   // Apply: the page has one keyword field, the scope row's (#1067).
   await page.getByRole('search').locator('label').click();
@@ -499,7 +548,8 @@ async function checkFilterSheet(page: Page) {
  * column left of the grid, shown without opening anything (no opener), a
  * change applied with focus kept on Apply (htmx refocuses it by id in the
  * facets the answer brings), Back landing on facets that show its URL's
- * filters, and `/` focusing the search.
+ * filters, `/` focusing the search, and a facet ticked but not applied
+ * kept by a search (#1144).
  */
 async function checkDockedFilters(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -554,5 +604,19 @@ async function checkDockedFilters(page: Page) {
     .getByRole('textbox', { name: 'Search' });
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('');
+
+  // A facet ticked and not applied survives a search: Enter sends the
+  // filter form's fields, so the answer's facets come back with it checked
+  // and the grid filtered by it (#1144).
+  await colors.getByRole('radio', { name: 'Blue', exact: true }).click();
+  await search.fill('shirt');
+  await search.press('Enter');
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=blue\b/);
+  await expect(
+    colors.getByRole('radio', { name: 'Blue', exact: true }),
+  ).toBeChecked();
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Blue shirt');
   await page.setViewportSize({ width: 390, height: 844 });
 }

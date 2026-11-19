@@ -224,7 +224,11 @@ describe('wardrobe share lifecycle', () => {
       headers: { cookie: grantee.cookie },
     });
     expect(shared.statusCode).toBe(200);
-    expect(shared.body).toMatch(/<h1[^>]*>[^<]*’s wardrobe<\/h1>/);
+    // Its full name in the h1's tooltip: from lg the bar cuts it to one
+    // line beside the tabs (#1110).
+    expect(shared.body).toMatch(
+      /<h1[^>]*title="([^"]*’s wardrobe)"[^>]*>\1<\/h1>/,
+    );
     expect(shared.body).toContain(`/wardrobe/${garmentId}?ownerId=${owner.id}`);
 
     // Pages the installed app cached before still swap the grid with the
