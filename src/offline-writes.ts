@@ -706,6 +706,8 @@ export type ReplayRecord = StoredRecord & {
   serverErrors?: number;
   /** When it became stuck, or last answered 5xx while stuck: its retry clock. */
   stuckAt?: number;
+  /** When sign-out's discard named it (discardAtSignOut): no drain sends it (`sendable`). */
+  heldForDiscardAt?: number;
 };
 
 export const isStuck = (record: ReplayRecord) => record.stuckAt !== undefined;
@@ -935,23 +937,86 @@ export async function discardStuck<R extends ReplayRecord>(
 }
 
 /**
- * Sign-out's discard of what the drain left (outbox.ts, drainBeforeLeaving):
- * the named records dropped to their tombstones (`drop`, dropQueuedWrites)
- * inside the drain's turn, like the notice's Discard. A replay still in
- * flight past SIGN_OUT_DRAIN_MS settles first, within its own deadline
- * (REPLAY_TIMEOUT_MS): landed, its record is gone and nothing is reverted;
- * failed, it is tombstoned. Without the turn the server could save a write
- * the page already shows reverted. How many were dropped.
+ * How long sign-out's hold keeps a record from every drain (`sendable`):
+ * the discard needs the turn only past the one replay in flight
+ * (REPLAY_TIMEOUT_MS). A hold its tab never released (closed while it
+ * waited) lapses, and the record is sent again, as before the hold.
+ */
+export const DISCARD_HOLD_MS = 60_000;
+
+/**
+ * Whether a drain may send a stored record (the drain's `skip`, read before
+ * each one): still queued (not replaced, not a tombstone) and not held by a
+ * sign-out's discard. A hold stamped in the future (a clock moved back) is
+ * taken as lapsed, so no record is stranded.
+ */
+export function sendable(
+  stored: ReplayRecord | undefined,
+  now: number,
+): boolean {
+  if (stored === undefined || stored.state === 'discarded') return false;
+  const held = stored.heldForDiscardAt;
+  if (held === undefined) return true;
+  const age = now - held;
+  return age < 0 || age >= DISCARD_HOLD_MS;
+}
+
+/** The hold's copy of a stored record, or undefined when there is nothing to hold (a tombstone). */
+export function heldForDiscard<R extends ReplayRecord>(
+  stored: R,
+  now: number,
+): R | undefined {
+  return stored.state === 'discarded'
+    ? undefined
+    : { ...stored, heldForDiscardAt: now };
+}
+
+/** The released copy of a record the discard did not tombstone, or undefined when nothing changes. */
+export function releasedFromDiscard<R extends ReplayRecord>(
+  stored: R,
+): R | undefined {
+  if (stored.state === 'discarded' || stored.heldForDiscardAt === undefined) {
+    return undefined;
+  }
+  return { ...stored, heldForDiscardAt: undefined };
+}
+
+/** The store sign-out's discard acts through (the page's IndexedDB; a stub in the spec). */
+export interface SignOutDiscardStore {
+  /** The named records stamped by `heldForDiscard`, in one transaction. */
+  hold(ids: readonly string[], now: number): Promise<void>;
+  /** The named unsent records to their tombstones (dropQueuedWrites). */
+  drop(goes: (record: { id: string }) => boolean): Promise<{ dropped: number }>;
+  /** The named records still held, released (`releasedFromDiscard`). */
+  release(ids: readonly string[]): Promise<void>;
+}
+
+/**
+ * Sign-out's discard of what the drain left (outbox.ts, drainBeforeLeaving).
+ * First the records are held in the store (#1157), so every tab's drain,
+ * reading the store before each send (`sendable`), sends none of them from
+ * its next record on: the discard waits for the one replay in flight,
+ * within its own deadline (REPLAY_TIMEOUT_MS), not for each leftover in
+ * turn, whichever tab holds the lock. Then, in the drain's turn like the
+ * notice's Discard, they are dropped to their tombstones: one that landed
+ * is gone and nothing is reverted; one that failed is tombstoned. Without
+ * the turn the server could save a write the page already shows reverted.
+ * The release runs however it ends, so a turn that is refused (a lock
+ * request rejecting) leaves nothing held. How many were dropped.
  */
 export async function discardAtSignOut(
   exclusively: Exclusively,
   ids: readonly string[],
-  drop: (
-    goes: (record: { id: string }) => boolean,
-  ) => Promise<{ dropped: number }>,
+  store: SignOutDiscardStore,
+  now: () => number,
 ): Promise<number> {
   const named = new Set(ids);
-  return exclusively(
-    async () => (await drop((record) => named.has(record.id))).dropped,
-  );
+  await store.hold(ids, now());
+  try {
+    return await exclusively(
+      async () => (await store.drop((record) => named.has(record.id))).dropped,
+    );
+  } finally {
+    await store.release(ids);
+  }
 }

@@ -94,6 +94,11 @@ import {
   outbox,
   type OutboxChange,
 } from './outbox-store';
+import {
+  activateThenSweep,
+  pruneOrphanRows,
+  SWEEP_DEADLINE_MS,
+} from './expiration-rows';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
@@ -258,6 +263,32 @@ async function deleteCacheAndMetadata(name: string): Promise<boolean> {
     );
   }
   return deleted;
+}
+
+/**
+ * Once per activate, after it (activateThenSweep): the expiration rows
+ * whose entry is gone (#1155, expiration-rows.ts), above all a stale image
+ * imageStore deleted after its row was written. A failure only logs; the
+ * next activate sweeps again.
+ */
+async function pruneExpirationRows(): Promise<void> {
+  for (const name of Object.keys(MAX_ENTRIES)) {
+    try {
+      const pruned = await pruneOrphanRows(
+        self.indexedDB,
+        self.caches,
+        name,
+        Date.now,
+      );
+      if (pruned > 0) {
+        console.info(
+          `[sw] ${name}: ${pruned} expiration row(s) without an entry deleted`,
+        );
+      }
+    } catch (error) {
+      console.warn(`[sw] ${name}: could not sweep its expiration rows`, error);
+    }
+  }
 }
 
 // One precache per static build (#656, src/static-build.ts, src/web/shell/updates.md), named
@@ -1030,6 +1061,9 @@ const imageStore: WorkboxPlugin = {
     isStale(startedIn(state), new URL(request.url).pathname) ? null : response,
   cacheDidUpdate: async ({ cacheName, request, state }) => {
     if (startedIn(state) === generation) return;
+    // The ExpirationPlugin after this one still writes the URL's row, which
+    // Workbox cannot delete alone: the next activate sweeps it
+    // (pruneExpirationRows, #1155).
     const cache = await self.caches.open(cacheName);
     await cache.delete(request);
     console.info(
@@ -1107,7 +1141,8 @@ const RETIRED_CACHES = [
 ];
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
+  void activateThenSweep(
+    (promise) => event.waitUntil(promise),
     (async () => {
       // Every copy stamped before this moment is an older build's: never
       // opened stale-first (StaleTabRoot), and due for the activation
@@ -1131,6 +1166,12 @@ self.addEventListener('activate', (event) => {
         `[sw] build ${STATIC_BUILD} active: keeping precache(s) ${kept.join(', ')}, ${dropped.length} dropped`,
       );
     })(),
+    pruneExpirationRows,
+    SWEEP_DEADLINE_MS,
+    () =>
+      console.info(
+        `[sw] expiration sweep given up after ${SWEEP_DEADLINE_MS / 1000} s`,
+      ),
   );
 });
 
