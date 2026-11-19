@@ -99,7 +99,7 @@ const SCHEMA_REF = '#/components/schemas/';
 /**
  * JSON Schema's applicators, the only keywords whose values are subschemas:
  * 2020-12's, plus draft-07's tuple form that TypeBox's `Type.Tuple` emits
- * (`items: [...]` with `additionalItems`). The walk descends through these
+ * (`items: [...]` with `additionalItems`) and `dependencies`. The walk descends through these
  * alone, so everything else (`default`, `examples`, `const`, `enum`, an
  * unknown keyword) is data by construction: a titled object inside it is
  * never hoisted (#1197).
@@ -115,6 +115,7 @@ const SUBSCHEMA_KEYWORDS = new Set([
   'propertyNames',
   'unevaluatedItems',
   'unevaluatedProperties',
+  'contentSchema',
 ]);
 const SUBSCHEMA_LIST_KEYWORDS = new Set([
   'prefixItems',
@@ -132,6 +133,8 @@ const SUBSCHEMA_MAP_KEYWORDS = new Set([
   'definitions',
   'dependentSchemas',
 ]);
+/** Draft-07's `dependencies`: a map whose values are a schema or, left alone, an array of property names. */
+const SUBSCHEMA_MAP_OR_NAMES_KEYWORDS = new Set(['dependencies']);
 
 /** The component kinds the emitter writes; a new kind may hold schemas this walk would miss, so the emit fails until it learns it. */
 const KNOWN_COMPONENTS = new Set(['schemas', 'securitySchemes']);
@@ -254,6 +257,14 @@ function visitSubschemas(
       Object.entries(value).map(([name, subschema]) => [
         name,
         visitSchema(subschema),
+      ]),
+    );
+  }
+  if (SUBSCHEMA_MAP_OR_NAMES_KEYWORDS.has(keyword) && isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, dependency]) => [
+        name,
+        Array.isArray(dependency) ? dependency : visitSchema(dependency),
       ]),
     );
   }
