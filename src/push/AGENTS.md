@@ -11,6 +11,8 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Client; Revok
 - **Signing out drops the subscription** in the service worker (with the page cache); the row goes on the next send's 410 or with the account (the foreign key cascades, and `push_reminder`'s claims with the row).
 - **The abort cancels, never abandons** (#920): the signal reaches the re-plan (rolled back before its commit) and the forecast reads; the run awaits all but the send, then gives back; a short give-back is `lost`, a failure (`docs/decisions.md`).
 - **Manual check** (CI has no push service): on an installed phone, Profile, enable notifications, turn the morning reminder on at the next quarter hour; it arrives at that minute and opens Today; mark something worn and set the evening one: nothing arrives.
+- **A device's rows are its user's**: `POST /push/unsubscribe` deletes only the caller's row (204 either way); the test send past `PUSH_TEST_LIMIT` sends nothing (#705).
+- **Never logged**: an endpoint (the settings route logs the user and the device id).
 
 ## Gotchas
 

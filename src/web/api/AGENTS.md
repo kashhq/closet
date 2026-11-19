@@ -20,6 +20,7 @@ A feature is done when its domain function has a page caller, an API caller, and
 - **`OPERATIONS`** lists every `/api/v1` operationId; `requireContract` refuses a route whose id is not there, so a twin names only a real operation.
 - **`PAGE_WRITES`** classifies every page route that is not a GET (`METHOD /template`, every feature on; a POST that only renders too) as exactly one of `{ api: '<operationId>' }` (or a list, `Twin`, for a write of two shapes: `POST /calendar` plans, or with `replace` changes an entry; its matrix routes may reach either), `{ webOnly: '<reason>' }` (the plan's section 6 list; each reason a named constant, said once) or `{ pending: '#192'..'#195' }`. **`MCP_WRITES`** does the same for every tool with `writes: true` (`agentOnly` for Muse's round), listed but not required to have a twin.
 - The spec fails on a route or tool nobody classified, a line whose route or tool is gone, and a twin no API route declares. An area PR that adds a twin turns its `pending` lines into `api` in the same change.
+- **Never logged**: the token, the password or the device name (a sign-in names the user, the token's row id and the address; the `Http` line on `api` and `mcp` carries `user_id` and `token_id`, the row id).
 
 ## Gotchas
 

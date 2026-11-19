@@ -41,7 +41,7 @@ src/
   server.ts       serve(): createApp, the nightly and minute timers, the cutout queue, listen
   main.ts         production entry: loadConfig, createLogger, the model runner, serve()
   config.ts       loadConfig(), the only reader of process.env     logger.ts  createLogger()
-  random.ts       seededRandom(...key): the one PRNG; never Math.random
+  random.ts       seededRandom(...key): the one PRNG; never Math.random or the clock
   calendar-date.ts IsoDate, todayIn(tz, now): pure, shared by every layer
   web/            plugin.ts, errors.tsx, render.ts, autosave.tsx, layout/, security/, one dir per feature
   db/ maintenance/ metrics/ cutout/ wardrobe/ push/ weather/ seed/   each: see the area index

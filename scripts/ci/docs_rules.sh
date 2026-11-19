@@ -57,7 +57,9 @@ esac
 # what a spec pins and the code says; they went stale every PR, so each is refused here. The
 # patterns are narrow on purpose: a table row naming an HTTP method and a path, a digit before
 # "statements" / "queries" / "round trips" (or a statement-count heading), and a bullet that opens
-# with a Logs / Logging lead. Long reference belongs in a `reference.md` beside the doc.
+# with a Logs / Logging lead. What must never be logged is a rule, not a format: it goes on a
+# `**Never logged**` bullet, which no pattern here matches. Long reference belongs in a
+# `reference.md` beside the doc.
 # grep exits 1 for no match and 2 for an unreadable input: only 1 is a pass.
 closet_prose_patterns=(
   '^[[:space:]]*\|.*\b(GET|POST|PUT|PATCH|DELETE)\b[^|]*/'
