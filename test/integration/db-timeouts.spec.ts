@@ -16,7 +16,7 @@ import { createGarment } from './garments';
 import { createTestApp, type TestApp } from './harness';
 
 /**
- * Database timeouts (#134, src/db/AGENTS.md, Timeouts): one stuck
+ * Database timeouts (#134, src/db/reference.md, Timeouts): one stuck
  * transaction must not wedge an owner's writes. The server's pool opens its
  * connections with statement_timeout and idle_in_transaction_session_timeout;
  * every form of the owner lock bounds its lock waits (lock_timeout), so a

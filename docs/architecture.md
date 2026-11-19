@@ -103,3 +103,63 @@ Every request goes through the root hooks in `app.ts` (the same-origin check at 
 Every response gets the security headers (root onSend) and, off the static paths, one log line (root onResponse). Off the static paths a second root onSend relays a redirect's `Clear-Site-Data` to the document it lands on (`createCacheClearRelay`, `src/web/auth/AGENTS.md`).
 
 htmx in the browser swaps fragments returned by further routes. A route that serves both a page and a fragment decides with `isFragmentRequest` from `src/htmx/fragment-request.ts` (shared with the service worker's cache keys) and sets `Vary`: in the web layer, `wantsFragment(request, reply)` does both.
+
+## Area index with its triggers, and routes (moved from the root AGENTS.md, #723)
+
+Moved here verbatim from the root `AGENTS.md` by #723 (the root now keeps a one-line form of each rule); the root wins where they differ.
+
+#### Area index
+
+Each area's detail lives in an `AGENTS.md` beside its code, with `CLAUDE.md` a symlink to it so Claude Code loads it when a file in its directory is read; when planning work in an area, read its doc first. A "see Wardrobe" elsewhere means that area's doc.
+
+| Area                         | Doc                                      | Read it when the work touches                                                                                    |
+| ---------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Request security             | `src/web/security/AGENTS.md`             | CSRF, rate limits, proxies, outbound fetches, redirects, logout, session revocation                              |
+| Auth                         | `src/web/auth/AGENTS.md`                 | the session, passwords, emails, the step-up rule                                                                 |
+| Images                       | `src/web/files/AGENTS.md`                | storing, serving, deleting or referencing photos, pending photos                                                 |
+| Background removal           | `src/cutout/AGENTS.md`                   | cutouts, their state machine, the queue, the model child                                                         |
+| Wardrobe                     | `src/web/wardrobe/AGENTS.md`             | garments: the grid, the form, properties, bulk edit, tagging, search                                             |
+| Link import                  | `src/web/wardrobe/link-import/AGENTS.md` | adding a garment from a product link or Android's share sheet                                                    |
+| The garment model            | `src/wardrobe/AGENTS.md`                 | the pure rules in `src/wardrobe/`, adding an occasion or a property value                                        |
+| Wishlist                     | `src/web/wishlist/AGENTS.md`             | the wishlist (Muse's inbox, its decision screen), a garment's status, "Bought it", the retired plans' addresses  |
+| Style profile                | `src/web/style/AGENTS.md`                | the style profile (what the agent reads of your taste)                                                           |
+| Capsules                     | `src/web/capsules/AGENTS.md`             | capsules and the capsule filter                                                                                  |
+| Wears and washes             | `src/web/wears/AGENTS.md`                | wears, washes, away, laundry, availability                                                                       |
+| Insights                     | `src/web/insights/AGENTS.md`             | the insights page                                                                                                |
+| Sharing                      | `src/web/sharing/AGENTS.md`              | the access resolver; which surfaces are share-aware vs owner-only                                                |
+| Sizes                        | `src/web/sizes/AGENTS.md`                | sizes, body measurements, the brand hint                                                                         |
+| Seed personas                | `src/seed/AGENTS.md`                     | the seed, the persona bibles, demo data                                                                          |
+| Calendar                     | `src/web/calendar/AGENTS.md`             | the calendar, its entries and occasions                                                                          |
+| Trips                        | `src/web/trips/AGENTS.md`                | trips and packing lists                                                                                          |
+| Outfit selfies               | `src/web/selfies/AGENTS.md`              | selfies of worn entries                                                                                          |
+| Weather                      | `src/weather/AGENTS.md`                  | the forecast, climate normals, `/weather/*`                                                                      |
+| Outfits                      | `src/web/outfits/AGENTS.md`              | outfits, deleting one, what holds one                                                                            |
+| Styling                      | `src/web/styling/AGENTS.md`              | the outfit composer                                                                                              |
+| Snap strip                   | `src/web/strip/AGENTS.md`                | the scroll-snap carousel (`SnapStrip`, `snap-strip.js`) Styling and the plan review share                        |
+| Outfit gallery               | `src/web/gallery/AGENTS.md`              | the Ideas tab and anything that suggests outfits (`ideasFor`)                                                    |
+| Inspiration                  | `src/web/inspiration/AGENTS.md`          | saved looks (the Inspiration tab), their private photos, "recreate this look", the share target, their MCP tools |
+| Today                        | `src/web/today/AGENTS.md`                | the home screen                                                                                                  |
+| Weekly auto-plan             | `src/web/week-plan/AGENTS.md`            | "Plan my week", the daily re-plan, `planned_by`                                                                  |
+| Web Push                     | `src/push/AGENTS.md`                     | subscriptions, notifications, reminders                                                                          |
+| MCP server                   | `src/web/mcp/AGENTS.md`                  | `/mcp`, its tools, personal access tokens                                                                        |
+| Changes feed                 | `src/web/sync/AGENTS.md`                 | `/api/v1/changes`, its cursor, what a synced resource carries                                                    |
+| JSON API                     | `src/web/api/AGENTS.md`                  | `/api/v1`, the device sign-in, problem+json, the OpenAPI spec, adding an API route                               |
+| Health                       | `src/web/health/AGENTS.md`               | `/health/live`, `/health/ready`, `/healthz`, a readiness check, the image `HEALTHCHECK`                          |
+| PWA and the service worker   | `src/web/shell/AGENTS.md`                | the service worker, caching, offline, queued writes (the outbox), install, updates, static delivery              |
+| Styles and fonts             | `views/assets/AGENTS.md`                 | the theme, colours, fonts                                                                                        |
+| Layout                       | `src/web/layout/AGENTS.md`               | the app bar, the dock, sections, stacking, a page's `<main>`                                                     |
+| Database                     | `src/db/AGENTS.md`                       | schema internals, drizzle-kit traps, the MikroORM-era adoption                                                   |
+| Maintenance                  | `src/maintenance/AGENTS.md`              | the timers, storage reconciliation, the CLIs                                                                     |
+| Metrics                      | `src/metrics/AGENTS.md`                  | `/metrics`, Server-Timing, the device timings, a new timer or label                                              |
+| Tests                        | `test/AGENTS.md`                         | the integration harness, Playwright's server, Vitest traps                                                       |
+| Deployment (not auto-loaded) | `docs/operations.md`                     | production, its env, recovery, CI publishing                                                                     |
+
+`src/web/weather/AGENTS.md` and `src/web/push/AGENTS.md` only point to Weather's and Web Push's docs. `make docs-check` (`ci-quick`) holds this index to the docs on disk (`scripts/ci/docs_rules.sh`); the size caps and symlink rule are devkit's.
+
+#### Routes
+
+In full, with every route's owner: `docs/architecture.md#routes`. `GET /` is Today. A route is public only with `config: { public: true }` (login, registration, `/health/*` and `/healthz`, `/share`, most `/file/**` images; never an outfit selfie's); `/mcp` and `/api/v1` take a token, never the cookie (their `surface`, `src/web/surface.ts`); everything else needs a session and is the user's own. `/weather/*` exists only with `WEATHER_ENABLED`, `/push/*` only with `PWA_ENABLED`.
+
+#### Request flow
+
+In full: `docs/architecture.md#request-flow`. Root hooks in `app.ts` (same-origin at onRequest; `req.auth` and `ViewContext` at preValidation, skipped on static paths), then a route, a static file or the not-found handler. Every response gets the security headers and, off static paths, one access line (onResponse).
