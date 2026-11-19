@@ -479,6 +479,22 @@ async function checkFilterSheet(page: Page) {
   await expect(sheet).toBeHidden();
   await expect(opener).toBeFocused();
 
+  // Closed without Apply, the sheet drops what it was not asked to apply:
+  // a search after it sends the filter form's fields (#1144), and they are
+  // the applied ones again (layout/sheet.tsx, DISCARD_UNAPPLIED).
+  await opener.click();
+  await sheet.getByRole('radio', { name: 'Red', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await page.getByRole('search').locator('label').click();
+  await page.getByRole('textbox', { name: 'Search' }).fill('shirt');
+  await page.getByRole('textbox', { name: 'Search' }).press('Enter');
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=blue\b/);
+  await expect(page).not.toHaveURL(/[?&]color=red\b/);
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Blue shirt');
+
   // A keyword typed and not yet searched rides along with the sheet's
   // Apply: the page has one keyword field, the scope row's (#1067).
   await page.getByRole('search').locator('label').click();
