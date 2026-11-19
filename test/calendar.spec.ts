@@ -125,20 +125,79 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   });
   expect(plan.ok()).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
+  // What the chip looked like in the task that inserted it, before htmx's
+  // settle: a MutationObserver's callback runs in that task, ahead of the
+  // settle delay's timer. The chip used to arrive in its slot's classes and
+  // take its own only after the delay, so a measure between the two found
+  // the date column at the wrong width.
+  await page.addInitScript(() => {
+    const arrivals: Record<
+      string,
+      { date: number; chip: number; width: number }
+    > = {};
+    const settled: Record<string, boolean> = {};
+    Object.assign(window, { chipArrivals: arrivals, chipSettled: settled });
+    const centre = (box: DOMRect) => box.x + box.width / 2;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof HTMLElement) || !node.dataset.weatherDay)
+            continue;
+          const date = node.closest('[data-month-day]')?.querySelector('span');
+          if (!date) continue;
+          const chip = node.getBoundingClientRect();
+          arrivals[node.dataset.weatherDay] = {
+            date: centre(date.getBoundingClientRect()),
+            chip: centre(chip),
+            width: chip.width,
+          };
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+    document.addEventListener('htmx:afterSettle', (event) => {
+      const day = (event.target as HTMLElement).dataset?.weatherDay;
+      if (day) settled[day] = true;
+    });
+  });
   const chipPlace = async (day: string) => {
     await page.goto(`/calendar/month?month=${day.slice(0, 7)}`);
     const cell = page.locator(`[data-month-day="${day}"]`);
     const chip = cell.locator(`[data-weather-day="${day}"]`);
     await expect(chip).toBeVisible();
+    await page.waitForFunction(
+      (d) =>
+        (window as unknown as { chipSettled: Record<string, boolean> })
+          .chipSettled[d],
+      day,
+    );
     const date = (await cell.locator('span').first().boundingBox())!;
     const box = (await chip.boundingBox())!;
-    // Centred under the date: the chip's width follows its temperature.
+    const arrived = await page.evaluate(
+      (d) =>
+        (
+          window as unknown as {
+            chipArrivals: Record<
+              string,
+              { date: number; chip: number; width: number }
+            >;
+          }
+        ).chipArrivals[d],
+      day,
+    );
+    const dateCentre = date.x + date.width / 2;
+    const chipCentre = box.x + box.width / 2;
+    // Centred under the date: the chip's width follows its temperature. And
+    // drawn so from its first frame: the settle moves neither.
     return {
       below: box.y >= date.y + date.height - 1,
-      centred: Math.abs(box.x + box.width / 2 - (date.x + date.width / 2)) <= 1,
+      centred: Math.abs(chipCentre - dateCentre) <= 1,
+      settleMoved:
+        Math.abs(arrived.width - box.width) > 0.5 ||
+        Math.abs(arrived.chip - chipCentre) > 0.5 ||
+        Math.abs(arrived.date - dateCentre) > 0.5,
     };
   };
-  const underDate = { below: true, centred: true };
+  const underDate = { below: true, centred: true, settleMoved: false };
   expect(await chipPlace(planned)).toEqual(underDate);
   expect(await chipPlace(empty)).toEqual(underDate);
 

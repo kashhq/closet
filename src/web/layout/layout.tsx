@@ -32,7 +32,15 @@ import { pageIdentity } from '../page-contract';
 //  - A request gives up after the outbox's replay timeout, the one bound on
 //    how long the app waits for the server (0, htmx's default, spun a hung
 //    hx-post forever); public/js/request-failures.js says so.
+//  - No attribute settling: htmx inserts an element that replaces one of the
+//    same id wearing the old element's class and style, and gives it its
+//    own only after the settle delay (20 ms), a frame drawn with the wrong
+//    look. A month cell's weather chip arrived with its empty slot's classes
+//    at base size, widening the date column, then shrank (the calendar
+//    scenario measured between the two). The settle exists for CSS
+//    transitions between the two classes, which nothing here uses.
 const HTMX_CONFIG = {
+  attributesToSettle: [],
   disableInheritance: true,
   historyCacheSize: 3,
   timeout: REPLAY_TIMEOUT_MS,

@@ -326,9 +326,10 @@ describe('delivery (PWA_ENABLED=true)', () => {
         html.match(/<meta\s+name="htmx-config"[^>]*>/g) ?? [];
       expect(metas).toHaveLength(1);
       const content = /content="([^"]+)"/.exec(metas[0])![1];
-      // No view transitions (they drop taps while they run) and a short
-      // history cache (layout.tsx says why).
+      // No view transitions (they drop taps while they run), no attribute
+      // settling and a short history cache (layout.tsx says why).
       expect(JSON.parse(unescapeHtml(content))).toEqual({
+        attributesToSettle: [],
         disableInheritance: true,
         historyCacheSize: 3,
         // The outbox's replay timeout bounds every htmx request (#642).
