@@ -1631,3 +1631,9 @@ Consequence: `test/trips.spec.ts` at 1024 holds both: a 60-character title cut, 
 Why: `refreshOlderBuildPages` kept its per-key backoff decisions (who is asked, what a failure or any other answer does to a record, whether the walk is recorded) inline in the worker, where no spec could reach them; and `queuedIn` was a predicate `stored is OutboxRecord` that is false for a real `discarded` record, so TypeScript narrowed a tombstone to `undefined` in the false branch.
 Decision: `planRefresh`, `backoffAfter` and `walkRecord` (`src/web/page-cache.ts`) own those decisions, unit-tested in `page-cache.spec.ts`; the worker only reads and writes the cache around them. `isQueued(stored): stored is QueuedRecord` (`outbox.ts`) names what it checks, so its false branch keeps the tombstone's type.
 Consequence: a new backoff rule goes in those functions with a case, not in the worker. `service-worker.spec.ts` skips on `browserName !== 'chromium'` (`CDP_IS_CHROMIUM_ONLY`): no other browser has a CDP session, which `test/AGENTS.md`'s "never on `!== 'chromium'`" is for Safari-only limits.
+
+## 2026-11-18 — The spec names its schemas after the emit, not in the routes (#714)
+
+Why: TypeBox inlines every titled schema at each use and writes anyOf-of-literal enums, so a generated client got one nested type per copy and a try-each-branch feed decoder.
+Decision: `nameSchemas` (`scripts/api-spec.ts`) hoists each title into `components.schemas`, collapses single-value string enums, and discriminates the feed's item on `resource`; Fastify still serializes through the inline schemas, so no response changes. Copies compare by sorted-key shape; two shapes under one title fail the emit.
+Consequence: a new resource schema needs a unique `title`; a feed branch is titled `<Resource>Change` so the discriminator can map to it.

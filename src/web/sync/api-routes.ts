@@ -44,11 +44,17 @@ const about = {
 
 const Change = Type.Union(
   entries.map((entry) =>
-    Type.Object({
-      resource: Type.Literal(entry.name),
-      ...about,
-      data: entry.schema,
-    }),
+    Type.Object(
+      {
+        resource: Type.Literal(entry.name),
+        ...about,
+        data: entry.schema,
+      },
+      // A component of its own, so the spec's discriminator can map to it.
+      {
+        title: `${entry.name.charAt(0).toUpperCase()}${entry.name.slice(1)}Change`,
+      },
+    ),
   ),
   { description: 'A row as it is now: create it, or replace yours whole' },
 );
