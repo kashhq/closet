@@ -1,4 +1,5 @@
 import { Validator } from '@seriousme/openapi-schema-validator';
+import { Type } from '@sinclair/typebox';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -232,10 +233,62 @@ describe('the OpenAPI spec', () => {
       expect(Object.keys(componentsOf(spec))).toEqual(['Named', 'Defined']);
     });
 
-    it('refuses a component kind it does not walk, rather than skip its schemas', () => {
+    it("walks a Type.Tuple's draft-07 items list and its additionalItems", () => {
+      const tuple = Type.Tuple([
+        Type.String({ title: 'Label' }),
+        Type.Number(),
+      ]);
+      expect(Array.isArray(tuple.items)).toBe(true);
+      const spec = answering({
+        '200': {
+          ...tuple,
+          additionalItems: { title: 'Extra', type: 'boolean' },
+        },
+      });
+      nameSchemas(spec);
+      expect(schemaOf(spec, '200')).toMatchObject({
+        items: [{ $ref: '#/components/schemas/Label' }, { type: 'number' }],
+        additionalItems: { $ref: '#/components/schemas/Extra' },
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['Label', 'Extra']);
+    });
+
+    it('refuses a schema position it does not walk, rather than skip its schemas', () => {
+      const media = (encoding: object) => ({
+        content: { 'multipart/form-data': { schema: {}, encoding } },
+      });
+      const unwalked = [
+        { paths: {}, components: { responses: {} } },
+        { paths: {}, webhooks: {} },
+        { paths: { '/a': { post: { callbacks: {}, responses: {} } } } },
+        {
+          paths: {
+            '/a': {
+              post: {
+                requestBody: media({ photo: { headers: {} } }),
+                responses: {},
+              },
+            },
+          },
+        },
+      ];
+      for (const spec of unwalked) {
+        expect(() => nameSchemas(spec), JSON.stringify(spec)).toThrow(
+          /does not walk/,
+        );
+      }
       expect(() =>
-        nameSchemas({ paths: {}, components: { responses: {} } }),
-      ).toThrow(/does not walk/);
+        nameSchemas({
+          paths: {
+            '/a': {
+              post: {
+                requestBody: media({ photo: { contentType: 'image/*' } }),
+                responses: {},
+              },
+            },
+          },
+        }),
+      ).not.toThrow();
     });
 
     it('leaves no anyOf of single-value literals, strings or numbers', () => {

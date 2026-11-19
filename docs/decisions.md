@@ -1679,5 +1679,5 @@ Consequence: a PR that changes an area's behavior edits its doc only for a chang
 
 ## 2026-11-19 — The spec emitter walks schemas by structure (#1197)
 Why: `nameSchemas` walked every object in the OpenAPI document as a schema and skipped keyword lists (`DATA_KEYWORDS`, `NAME_MAP_KEYWORDS`); three review rounds (#1167, #1196, #1197) each found a name that was also a keyword (a `default` response, a component called `example`).
-Decision: it visits only the document's schema positions (parameters, media types, headers, `components.schemas`) and, inside a schema, only JSON Schema's applicator keywords; every other value is data by construction. A component kind it does not walk (`components.responses`, ...) fails the emit.
+Decision: it visits only the document's schema positions (parameters, media types, headers, `components.schemas`) and, inside a schema, only JSON Schema's applicator keywords (with draft-07's tuple `items: [...]` and `additionalItems`, which `Type.Tuple` emits); every other value is data by construction. A position it does not walk (another component kind, `webhooks`, `callbacks`, encoding headers) fails the emit.
 Consequence: a new applicator keyword or schema position is added to its list in `scripts/api-spec.ts`; there is no list of data keywords to keep.

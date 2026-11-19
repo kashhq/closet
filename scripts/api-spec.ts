@@ -97,14 +97,16 @@ export async function generateApiSpec(): Promise<unknown> {
 const SCHEMA_REF = '#/components/schemas/';
 
 /**
- * JSON Schema 2020-12's applicators, the only keywords whose values are
- * subschemas. The walk descends through these alone, so everything else
- * (`default`, `examples`, `const`, `enum`, an unknown keyword) is data by
- * construction: a titled object inside it is never hoisted (#1197).
+ * JSON Schema's applicators, the only keywords whose values are subschemas:
+ * 2020-12's, plus draft-07's tuple form that TypeBox's `Type.Tuple` emits
+ * (`items: [...]` with `additionalItems`). The walk descends through these
+ * alone, so everything else (`default`, `examples`, `const`, `enum`, an
+ * unknown keyword) is data by construction: a titled object inside it is
+ * never hoisted (#1197).
  */
 const SUBSCHEMA_KEYWORDS = new Set([
   'additionalProperties',
-  'items',
+  'additionalItems',
   'not',
   'if',
   'then',
@@ -120,6 +122,8 @@ const SUBSCHEMA_LIST_KEYWORDS = new Set([
   'oneOf',
   'allOf',
 ]);
+/** A schema (2020-12, and a draft-07 list) or a draft-07 tuple's list of schemas. */
+const SUBSCHEMA_OR_LIST_KEYWORDS = new Set(['items']);
 /** Their values map user-chosen names to schemas (a property may be called `default`). */
 const SUBSCHEMA_MAP_KEYWORDS = new Set([
   'properties',
@@ -161,7 +165,8 @@ const HTTP_METHODS = new Set([
  */
 export function nameSchemas(spec: unknown): void {
   if (!isRecord(spec) || !isRecord(spec.paths)) return;
-  const components = walkableComponents(spec);
+  refuseUnwalkedPositions(spec);
+  const components = isRecord(spec.components) ? spec.components : {};
   const registered: Record<string, unknown> = {};
   const shapeOf = new Map<string, string>();
 
@@ -205,20 +210,25 @@ export function nameSchemas(spec: unknown): void {
   spec.components = { ...components, schemas: registered };
 }
 
-/** The spec's components, refusing a kind whose schemas the walk would miss. */
-function walkableComponents(
-  spec: Record<string, unknown>,
-): Record<string, unknown> {
-  const components = isRecord(spec.components) ? spec.components : {};
-  const unwalked = Object.keys(components).filter(
-    (kind) => !KNOWN_COMPONENTS.has(kind),
+/**
+ * Fails closed: a schema position the walk does not visit would keep its
+ * titled schemas inline, so the emit stops naming it until the walk learns
+ * it. The emitter writes none of these today.
+ */
+function unwalked(position: string): Error {
+  return new Error(
+    `The API spec has ${position}, which nameSchemas does not walk; teach it where the schemas there are.`,
   );
-  if (unwalked.length > 0) {
-    throw new Error(
-      `The API spec has components (${unwalked.join(', ')}) that nameSchemas does not walk; teach it where their schemas are.`,
-    );
+}
+
+/** The document-level positions: `webhooks`, and component kinds other than KNOWN_COMPONENTS. */
+function refuseUnwalkedPositions(spec: Record<string, unknown>): void {
+  if ('webhooks' in spec) throw unwalked('webhooks');
+  const kinds = Object.keys(isRecord(spec.components) ? spec.components : {});
+  const unknown = kinds.filter((kind) => !KNOWN_COMPONENTS.has(kind));
+  if (unknown.length > 0) {
+    throw unwalked(`components (${unknown.join(', ')})`);
   }
-  return components;
 }
 
 /** A keyword's value with its subschemas visited; any other keyword's value is data and stays as it is. */
@@ -227,9 +237,17 @@ function visitSubschemas(
   value: unknown,
   visitSchema: (schema: unknown) => unknown,
 ): unknown {
-  if (SUBSCHEMA_KEYWORDS.has(keyword)) return visitSchema(value);
-  if (SUBSCHEMA_LIST_KEYWORDS.has(keyword) && Array.isArray(value)) {
+  const list =
+    SUBSCHEMA_LIST_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword);
+  if (list && Array.isArray(value)) {
     return value.map((subschema) => visitSchema(subschema));
+  }
+  if (
+    SUBSCHEMA_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword)
+  ) {
+    return visitSchema(value);
   }
   if (SUBSCHEMA_MAP_KEYWORDS.has(keyword) && isRecord(value)) {
     return Object.fromEntries(
@@ -249,8 +267,13 @@ function visitSubschemas(
  */
 function schemaHolders(paths: unknown): Record<string, unknown>[] {
   const holders: Record<string, unknown>[] = [];
-  const content = (media: unknown): void => {
-    holders.push(...recordsIn(media));
+  const content = (mediaTypes: unknown): void => {
+    for (const media of recordsIn(mediaTypes)) {
+      if (recordsIn(media.encoding).some((part) => 'headers' in part)) {
+        throw unwalked('encoding headers');
+      }
+      holders.push(media);
+    }
   };
   // A parameter or a header: a `schema`, or a `content` map.
   const parameter = (holder: Record<string, unknown>): void => {
@@ -259,6 +282,7 @@ function schemaHolders(paths: unknown): Record<string, unknown>[] {
   };
   const operation = (fields: Record<string, unknown>): void => {
     for (const [field, value] of Object.entries(fields)) {
+      if (field === 'callbacks') throw unwalked('operation callbacks');
       if (field === 'parameters') recordsIn(value).forEach(parameter);
       else if (field === 'requestBody' && isRecord(value)) {
         content(value.content);
