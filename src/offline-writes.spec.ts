@@ -39,7 +39,8 @@ import {
   retryStuck,
   type StuckActionStore,
   isStuck,
-  unstuck,
+  settledRecord,
+  UNSTUCK,
   retryDelayMs,
   routesThroughOutbox,
   showsQueuedWrite,
@@ -383,9 +384,12 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
         sent.push(record.id);
         return Promise.resolve(answers(record.id));
       },
+      // As the page's settle: the change onto the copy stored now.
       settle(record, step) {
+        const current = stored.get(record.id);
+        if (!current) return Promise.resolve(false);
         if (step.step === 'saved') stored.delete(record.id);
-        else stored.set(record.id, step.record);
+        else stored.set(record.id, settledRecord(current, step.change));
         return Promise.resolve(true);
       },
     };
@@ -579,12 +583,10 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
   });
 
   it('Try again: unstuck clears the count so the record is judged afresh', () => {
-    const cleared = unstuck({
-      ...row('bad'),
-      attempts: 7,
-      serverErrors: 4,
-      stuckAt: 5,
-    });
+    const cleared = settledRecord(
+      { ...row('bad'), attempts: 7, serverErrors: 4, stuckAt: 5 },
+      UNSTUCK,
+    );
     expect(isStuck(cleared)).toBe(false);
     expect(cleared).toMatchObject({ attempts: 0 });
     expect(cleared.serverErrors).toBeUndefined();
@@ -615,15 +617,17 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
     const actions = (w: ReturnType<typeof world>) => {
       const store: StuckActionStore<Row> = {
         find: (id) => Promise.resolve(w.stored.get(id)),
-        settle(record, next) {
-          if (!w.stored.has(record.id)) return Promise.resolve(false);
-          if (next) w.stored.set(record.id, next);
+        settle(record, change) {
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          if (change) w.stored.set(record.id, settledRecord(current, change));
           else w.stored.delete(record.id);
           return Promise.resolve(true);
         },
         discard(record) {
-          if (!w.stored.has(record.id)) return Promise.resolve(false);
-          w.stored.set(record.id, discardedRecord(record, w.clock.now));
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          w.stored.set(record.id, discardedRecord(current, w.clock.now));
           return Promise.resolve(true);
         },
       };
@@ -861,6 +865,44 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       ).toBe(true);
       expect(sendable(heldForDiscard(pending, 1_000), 999)).toBe(true);
       expect(heldForDiscard(discardedRecord(pending, 0), 1)).toBeUndefined();
+    });
+
+    it('a hold placed while the replay is in flight survives its 5xx answer, and no drain sends the record again (#1161)', async () => {
+      const w = world([row('bad')], () => SERVER, { now: 1_000 });
+      readsTheStore(w);
+      const gate = held(w);
+      const drain = w.drain();
+      await gate.started;
+      await signOutIn(w).hold(['bad'], w.clock.now);
+      gate.release(SERVER);
+      await drain;
+      expect(w.stored.get('bad')).toMatchObject({
+        heldForDiscardAt: 1_000,
+        attempts: 1,
+        serverErrors: 1,
+      });
+      await w.drain();
+      expect(w.sent).toEqual(['bad']);
+    });
+
+    it('Try again keeps a hold stored between its read and its write, so the drain after it sends nothing (#1161)', async () => {
+      const w = world([stuckRow()], () => OK, { now: 1_000 });
+      readsTheStore(w);
+      const store = actions(w);
+      const find = store.find.bind(store);
+      store.find = async (id) => {
+        const copy = await find(id);
+        await signOutIn(w).hold([id], w.clock.now);
+        return copy;
+      };
+      expect(await retryStuck(store, createTurns(), 'bad')).toMatchObject({
+        id: 'bad',
+      });
+      const left = w.stored.get('bad');
+      expect(left).toMatchObject({ heldForDiscardAt: 1_000, attempts: 0 });
+      expect(left && isStuck(left)).toBe(false);
+      await w.drain();
+      expect(w.sent).toEqual([]);
     });
   });
 
