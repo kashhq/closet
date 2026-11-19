@@ -278,7 +278,7 @@ describe('wardrobe', () => {
       // are the no-script GET's and would go twice.
       const search = /<form\b[^>]*id="search-form"[^>]*>/.exec(html)![0];
       expect(search).toContain(
-        `onsubmit="if (window.htmx) { event.preventDefault(); document.getElementById('filter-form').requestSubmit(); }"`,
+        `onsubmit="const filters = document.getElementById('filter-form'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }"`,
       );
       expect(search).toContain('hx-boost="false"');
       expect(search).not.toContain('hx-get');

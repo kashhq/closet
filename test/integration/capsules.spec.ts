@@ -505,9 +505,10 @@ describe('capsules', () => {
         )![0];
       expect(scope).toMatch(/<summary[^>]*>\s*<span class="truncate">Travel</);
       // Each asks from the filter form with its capsule set over the form's,
-      // so a facet ticked and not yet applied rides along (#1144).
+      // so a facet ticked and not yet applied rides along (#1144); the
+      // closet drops the form's capsule rather than sending it empty.
       expect(scope).toMatch(
-        /href="\/wardrobe" hx-get="\/wardrobe" hx-include="#filter-form[^"]*" hx-vals="\{"capsule":""\}"/,
+        /href="\/wardrobe" hx-get="\/wardrobe" hx-include="#filter-form[^"]*" hx-params="not capsule"/,
       );
       expect(scope).toMatch(
         new RegExp(
@@ -532,6 +533,14 @@ describe('capsules', () => {
 
     it('refuses a capsule that is not an id (400) or not the wardrobe’s (404)', async () => {
       expect((await get('/wardrobe?capsule=abc')).statusCode).toBe(400);
+      // Empty is no scope (URL state), the closet unscoped.
+      const empty = await get('/wardrobe?keyword=&capsule=', {
+        'hx-request': 'true',
+      });
+      expect(empty.statusCode).toBe(200);
+      const closet = tileNames(unescapeHtml((await get('/wardrobe')).body));
+      expect(closet.length).toBeGreaterThan(2);
+      expect(tileNames(unescapeHtml(empty.body))).toEqual(closet);
       expect((await get('/wardrobe?capsule=999999')).statusCode).toBe(404);
       expect((await get('/wardrobe?pick=999999')).statusCode).toBe(404);
     });

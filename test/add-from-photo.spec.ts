@@ -397,6 +397,28 @@ async function checkSelectMode(page: Page) {
   await page.evaluate(() => {
     document.documentElement.style.fontSize = '';
   });
+
+  // The capsule menu scopes the closet to Office, then All garments drops
+  // the scope: no `capsule=` in the pushed URL, every garment back.
+  await page.goto('/wardrobe');
+  const tiles = page.locator('[data-tile]');
+  const closet = await tiles.count();
+  expect(closet).toBeGreaterThan(2);
+  const scope = page.locator('#capsule-scope');
+  const choose = async (name: string) => {
+    await scope.locator('summary').click();
+    const answered = page.waitForResponse(
+      (res) => new URL(res.url()).pathname === '/wardrobe' && res.ok(),
+    );
+    await scope.getByRole('link', { name }).click();
+    await answered;
+  };
+  await choose('Office');
+  await expect(page).toHaveURL(/[?&]capsule=\d+/);
+  await expect(tiles).toHaveCount(2);
+  await choose('All garments');
+  await expect(page).not.toHaveURL(/[?&]capsule=/);
+  await expect(tiles).toHaveCount(closet);
 }
 
 /**

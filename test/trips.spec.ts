@@ -249,6 +249,40 @@ async function expectSectionTabs(page: Page): Promise<void> {
       titleLines: 1,
       titleCut: true,
     });
+
+    // At 200% text the title is cut to its floor first, then the tab row
+    // scrolls inside the bar: the actions after it (the Wardrobe's ⋯ and
+    // ＋; the Calendar's bar has none) stay whole on screen, never pushed
+    // past the edge.
+    if (label !== 'Wardrobe sections') continue;
+    const large = await page.evaluate((name) => {
+      document.documentElement.style.fontSize = '200%';
+      const row = document.querySelector(`.app-bar nav[aria-label="${name}"]`);
+      const h1 = document.querySelector('.app-bar h1');
+      if (!row || !h1) return null;
+      const box = row.getBoundingClientRect();
+      const after: Element[] = [];
+      for (let el = row.nextElementSibling; el; el = el.nextElementSibling) {
+        if (el.getBoundingClientRect().width > 0) after.push(el);
+      }
+      const result = {
+        scrolls: row.scrollWidth > row.clientWidth,
+        trailing: after.length > 0,
+        onScreen: after.every((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.left >= box.right - 0.5 && rect.right <= innerWidth + 0.5;
+        }),
+        titleShown: h1.getBoundingClientRect().width > 0,
+      };
+      document.documentElement.style.fontSize = '';
+      return result;
+    }, label);
+    expect(large, paths[0]).toEqual({
+      scrolls: true,
+      trailing: true,
+      onScreen: true,
+      titleShown: true,
+    });
   }
   await page.setViewportSize(viewport);
   await page.goto(start);

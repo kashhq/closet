@@ -884,11 +884,11 @@ const FILTER_FORM_ID = 'filter-form';
 
 // The search form's Enter, with htmx loaded: the filter form's request
 // (its fields, this keyword through its hx-include), never this form's
-// own (#1144). The filter form is always on the page beside the search
-// (both are browsing's); its Apply, the default button, may sit in the
-// phone's closed sheet, which `requestSubmit()` does not need. Without
-// htmx the form's native GET goes as it is.
-const SEARCH_THROUGH_FILTERS = `if (window.htmx) { event.preventDefault(); document.getElementById('${FILTER_FORM_ID}').requestSubmit(); }`;
+// own (#1144). Its Apply, the default button, may sit in the phone's
+// closed sheet, which `requestSubmit()` does not need. Without htmx, or
+// on a page without the filter form (browsing renders both today; the
+// search must not depend on it), the form's native GET goes as it is.
+const SEARCH_THROUGH_FILTERS = `const filters = document.getElementById('${FILTER_FORM_ID}'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }`;
 
 /**
  * A scope-row request built from the filter form as it stands (its ticks,
@@ -991,12 +991,18 @@ function CapsuleScope(props: {
   const current = props.capsules.find(
     (capsule) => String(capsule.id) === search.capsule,
   );
+  // The closet ("All") drops the scope rather than sending it empty: the
+  // pushed URL then carries no `capsule=` (the form's hidden capsule goes
+  // too, through hx-params).
   const scoped = (capsule: string) => {
     const href = wardrobeUrl(viewOwner, {
       ...searchParams(search),
       capsule,
     });
-    return { href, ...fromFilters({ set: { capsule } }) };
+    const change = capsule
+      ? { set: { capsule } }
+      : { drop: 'capsule' as const };
+    return { href, ...fromFilters(change) };
   };
   return (
     <details class="dropdown shrink-0" id="capsule-scope">

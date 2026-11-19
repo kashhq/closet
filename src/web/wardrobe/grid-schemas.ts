@@ -72,7 +72,8 @@ const GridFilters = {
   needsWash: Type.Optional(Type.String({ maxLength: 10 })),
   attention: Type.Optional(Type.String({ maxLength: 10 })),
   // A capsule of the addressed wardrobe (src/web/capsules): a 400 when not
-  // an id, a 404 when not one of the wardrobe's capsules (the route).
+  // an id, a 404 when not one of the wardrobe's capsules (the route). Empty
+  // is no scope (URL state: a hand-cleared `?capsule=` is the closet).
   capsule: Type.Optional(Type.Union([Type.Literal(''), RowId])),
 };
 
