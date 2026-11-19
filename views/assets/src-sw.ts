@@ -83,11 +83,11 @@ import {
   SHARE_STASH_CACHE,
 } from '../../src/web/inspiration/share-target';
 import {
-  OUTBOX_SYNCED,
   queuedWritesGoneAtClaim,
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
+import { PAGE_MESSAGES, WORKER_MESSAGES } from '../../src/worker-messages';
 import {
   dropQueuedWrites,
   openOutboxChannel,
@@ -1940,7 +1940,7 @@ function askBuild(client: Client): Promise<unknown> {
       channel.port1.close();
       resolve(event.data.build);
     };
-    client.postMessage({ type: 'BUILD_QUERY' }, [channel.port2]);
+    client.postMessage({ type: WORKER_MESSAGES.buildQuery }, [channel.port2]);
   });
 }
 
@@ -2005,14 +2005,14 @@ async function claimOwnBuildPages(): Promise<void> {
 self.addEventListener('message', (event) => {
   const type: unknown = event.data?.type;
   const [port] = event.ports;
-  if (type === 'SKIP_WAITING') {
+  if (type === PAGE_MESSAGES.skipWaiting) {
     console.log('[sw] SKIP_WAITING received');
     void self.skipWaiting();
-  } else if (type === 'CLAIM_CLIENTS') {
+  } else if (type === PAGE_MESSAGES.claimClients) {
     // A page this active worker does not control (pwa.js): left out of the
     // activation's claim, it would stay out of the worker until a reload.
     event.waitUntil(claimOwnBuildPages());
-  } else if (type === 'REVALIDATE_PAGE' && port) {
+  } else if (type === PAGE_MESSAGES.revalidatePage && port) {
     event.waitUntil(
       revalidateForPage(
         event,
@@ -2021,16 +2021,16 @@ self.addEventListener('message', (event) => {
         port,
       ),
     );
-  } else if (type === 'WARM_PAGES') {
+  } else if (type === PAGE_MESSAGES.warmPages) {
     event.waitUntil(warmPages(event));
-  } else if (type === 'SESSION_ENDING') {
+  } else if (type === PAGE_MESSAGES.sessionEnding) {
     // A sign-in, a registration, a sign-out or an account deletion is
     // leaving one of our pages (#542, data-ends-session): whatever session
     // this device had ends with it, so its caches go before the landing
     // page is asked for. A post that then fails costs a refetch. Held by
     // waitUntil, so the drop outlives the page that asked.
     event.waitUntil(dropSession(event, 'a sign-in or sign-out was posted'));
-  } else if (type === OUTBOX_SYNCED) {
+  } else if (type === PAGE_MESSAGES.outboxSynced) {
     const writes = syncedWritePaths(event.data.paths);
     if (writes.length > 0) {
       event.waitUntil(

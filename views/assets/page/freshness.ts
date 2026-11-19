@@ -30,6 +30,10 @@ import { ageLabel } from 'age-label';
 import { latestOnly } from 'single-flight';
 import { showToast } from 'toast';
 import { OUTBOX_SYNCED_EVENT } from '../../../src/offline-writes';
+import {
+  PAGE_MESSAGES,
+  type RevalidatePageMessage,
+} from '../../../src/worker-messages';
 import { PAGE_TAG_TIMING_NAME } from '../../../src/page-tag';
 import {
   CACHED_AT_HEADER,
@@ -255,19 +259,12 @@ function onRevalidated(
   }
 }
 
-/** The worker's REVALIDATE_PAGE (views/assets/src-sw.ts). */
-interface RevalidatePage {
-  type: 'REVALIDATE_PAGE';
-  url: string;
-  fragment: boolean;
-}
-
 /**
  * Posts to the controlling worker; its answers come back on a port.
  * `navigator.serviceWorker` is undefined without a secure context.
  */
 function ask(
-  message: RevalidatePage,
+  message: RevalidatePageMessage,
   onAnswer: (answer: Revalidation) => void,
 ) {
   // Optional: the DOM lib types it as always there, and it is not.
@@ -309,7 +306,11 @@ function checkDocument() {
     quietUntil: Date.now() + REVALIDATION_GRACE_MS,
   });
   ask(
-    { type: 'REVALIDATE_PAGE', url: display.url, fragment: false },
+    {
+      type: PAGE_MESSAGES.revalidatePage,
+      url: display.url,
+      fragment: false,
+    },
     (answer) => onRevalidated(id, answer),
   );
 }
@@ -449,7 +450,7 @@ export function watchFreshness() {
     const id = display.id;
     ask(
       {
-        type: 'REVALIDATE_PAGE',
+        type: PAGE_MESSAGES.revalidatePage,
         url: display.url,
         fragment: display.fragment !== null,
       },

@@ -445,16 +445,6 @@ export function packedCount(
 export const REPLAY_TIMEOUT_MS = 15_000;
 
 /**
- * The page's message to the service worker after a drain saved queued
- * writes (plan section 5): `{ type, paths }`, the saved records' paths. The
- * worker refetches the cached pages that show them (`showsQueuedWrite`), so
- * a page reopened offline later shows the synced state, not the one cached
- * before the tap (views/assets/src-sw.ts, refetchSyncedPages). The pages
- * on screen take the server's copy themselves (OUTBOX_SYNCED_EVENT).
- */
-export const OUTBOX_SYNCED = 'OUTBOX_SYNCED';
-
-/**
  * The document event every tab whose page shows a saved write gets once a
  * drain (its own or another tab's) saved it: `detail.paths`. freshness.js
  * (which spells this string itself: it cannot import a TS module) fetches

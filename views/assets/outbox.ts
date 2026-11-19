@@ -60,11 +60,14 @@ import {
   wornState,
 } from '../../src/page-day';
 import {
+  type OutboxSyncedMessage,
+  PAGE_MESSAGES,
+} from '../../src/worker-messages';
+import {
   enqueue,
   isChecklist,
   packedCount,
   OUTBOX_MAX_PENDING,
-  OUTBOX_SYNCED,
   OUTBOX_SYNCED_EVENT,
   intentEnding,
   type IntentEnd,
@@ -1210,9 +1213,9 @@ const drain = singleFlight(async (reason: string) => {
  */
 function announceSynced(paths: string[]): void {
   navigator.serviceWorker?.controller?.postMessage({
-    type: OUTBOX_SYNCED,
+    type: PAGE_MESSAGES.outboxSynced,
     paths,
-  });
+  } satisfies OutboxSyncedMessage);
   channel?.postMessage({ drain: false, synced: paths } satisfies OutboxChange);
   showSynced(paths);
 }

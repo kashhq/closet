@@ -33,6 +33,11 @@ import {
   type StatusText,
   statusTextAttribute,
 } from '../../../src/web/page-contract';
+import {
+  type BareMessage,
+  PAGE_MESSAGES,
+  WORKER_MESSAGES,
+} from '../../../src/worker-messages';
 
 const text = (name: StatusText) =>
   document
@@ -165,7 +170,7 @@ function claimIfUncontrolled() {
   navigator.serviceWorker.addEventListener(
     'message',
     (event: MessageEvent<{ type?: unknown } | null>) => {
-      if (event.data?.type !== 'BUILD_QUERY') return;
+      if (event.data?.type !== WORKER_MESSAGES.buildQuery) return;
       event.ports[0]?.postMessage({ build });
     },
   );
@@ -178,7 +183,9 @@ function claimIfUncontrolled() {
       console.info(
         `[pwa] page of build ${build} not controlled: asking the worker to claim it`,
       );
-      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
+      registration.active?.postMessage({
+        type: PAGE_MESSAGES.claimClients,
+      } satisfies BareMessage);
     })
     .catch((error: unknown) =>
       console.warn('[pwa] could not ask the worker to claim the page', error),
@@ -303,7 +310,9 @@ function warmForOffline() {
   const ask = () => {
     if (document.visibilityState !== 'visible' || !heartbeatOnline()) return;
     if (navigator.connection?.saveData) return;
-    navigator.serviceWorker.controller?.postMessage({ type: 'WARM_PAGES' });
+    navigator.serviceWorker.controller?.postMessage({
+      type: PAGE_MESSAGES.warmPages,
+    } satisfies BareMessage);
   };
   if (document.readyState === 'complete') ask();
   else window.addEventListener('load', ask, { once: true });
@@ -317,7 +326,7 @@ function warmForOffline() {
 const WORKER_TELL_MS = 1_000;
 
 /** Posts to the registration's active worker, giving up after WORKER_TELL_MS. */
-async function tellActiveWorker(message: { type: string }) {
+async function tellActiveWorker(message: BareMessage) {
   let gaveUp: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<undefined>((resolve) => {
     gaveUp = setTimeout(resolve, WORKER_TELL_MS);
@@ -353,7 +362,7 @@ function announceSessionBoundaries() {
       return;
     }
     if (event.defaultPrevented) return;
-    const message = { type: 'SESSION_ENDING' };
+    const message: BareMessage = { type: PAGE_MESSAGES.sessionEnding };
     const { controller } = navigator.serviceWorker;
     if (controller) {
       controller.postMessage(message);

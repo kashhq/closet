@@ -2,6 +2,7 @@ import path from 'path';
 import { PUBLIC_DIR } from '../src/static-assets';
 import {
   buildPageModules,
+  watchPageModules,
   pageModuleEntries,
   precompress,
   syncClientModules,
@@ -19,10 +20,12 @@ if (step === 'modules') {
     `public/modules: ${copied.length} copied${copied.length ? ` (${copied.join(', ')})` : ''}, ${removed.length} removed`,
   );
 } else if (step === 'pages') {
-  const written = buildPageModules();
+  const { written, removed } = buildPageModules();
   console.log(
-    `public/js: ${Object.keys(pageModuleEntries()).length} page modules, ${written.length} written${written.length ? ` (${written.join(', ')})` : ''}`,
+    `public/js: ${Object.keys(pageModuleEntries()).length} page modules, ${written.length} written${written.length ? ` (${written.join(', ')})` : ''}, ${removed.length} removed`,
   );
+} else if (step === 'pages:watch') {
+  void watchPageModules();
 } else if (step === 'notices') {
   const { bytes, written } = writeNotices();
   console.log(
@@ -38,7 +41,7 @@ if (step === 'modules') {
   );
 } else {
   console.error(
-    'Usage: generate-static-assets.ts modules|pages|notices|precompress',
+    'Usage: generate-static-assets.ts modules|pages|pages:watch|notices|precompress',
   );
   process.exit(1);
 }
