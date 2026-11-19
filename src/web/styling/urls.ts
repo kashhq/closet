@@ -49,7 +49,13 @@ export function stylingUrl(
   path: string = STYLING_PATH,
   extra: string[] = [],
 ): string {
-  const query = [
+  const query = [...stateQuery(state), ...extra];
+  return query.length > 0 ? `${path}?${query.join('&')}` : path;
+}
+
+/** The state's parameters, in the order every Styling address spells them. */
+function stateQuery(state: StylingState): string[] {
+  return [
     state.destination && destinationQuery(state.destination),
     state.capsuleId !== undefined && `capsule=${state.capsuleId}`,
     state.picks && 'picks=1',
@@ -58,9 +64,7 @@ export function stylingUrl(
     state.ownerId !== undefined && `ownerId=${state.ownerId}`,
     state.returnTo !== undefined &&
       `returnTo=${encodeURIComponent(state.returnTo)}`,
-    ...extra,
-  ].filter(Boolean);
-  return query.length > 0 ? `${path}?${query.join('&')}` : path;
+  ].filter((part): part is string => Boolean(part));
 }
 
 /** "Style this" on a garment: Styling with the garment chosen and locked in its row. */

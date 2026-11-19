@@ -1609,3 +1609,9 @@ Consequence: an orphan row lives until the next deploy's activate, not forever. 
 Why: settle put back a whole record built from the drain's copy, read before the send; a sign-out hold stored meanwhile (`heldForDiscardAt`) was erased by a 5xx's write-back, and the next drain sent the write the user chose to discard. Try again had the same gap between its read and its write.
 Decision: a settle carries a `ReplayChange` (state, reason, attempts, serverErrors, stuckAt, discardedAt) applied by `settledRecord` to the record read inside the readwrite transaction; `replayQueue`'s steps, Try again (`UNSTUCK`) and Discard (`discarding`) build only changes. Rejected: the hold in its own object store, which needs a database version bump that tabs of older builds block (#871).
 Consequence: a new record field survives every settle unless it is added to `ReplayChange`. The other writes already read in their transaction (`rewrite`, `dropQueuedWrites`) or put a new record (`putCollapsed`).
+
+## 2026-11-18 — Styling's Save is an action answering the path it lands on (#719)
+
+Why: Styling was the one feature whose model and Save lived in its routes file (1185 lines); Save ended in `pickTo`, which takes the reply, so its rules could not be called without Fastify.
+Decision: `styling/styling-actions.ts` holds every read and Save, each taking the Actor and throwing its refusals; `saveStyled` answers the landing path, and the route redirects (303). The gallery's `pickTo` became `pickToPath` plus the redirect, with `savedOutfitPath` the one spelling of "the week, else the outfit, flagged when already saved". `model.ts` holds the pure builders. No Styling API route: Save's twins already call the actions Save ends in.
+Consequence: a new Save branch goes in `saveStyled`, and its op line in the action it ends in; `routes.tsx` stays parse, call, render.
