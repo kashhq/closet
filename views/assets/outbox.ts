@@ -69,7 +69,7 @@ import {
   intentEnding,
   type IntentEnd,
   regionEnd,
-  discardedRecord,
+  discarding,
   showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
@@ -95,7 +95,9 @@ import {
   heldForDiscard,
   releasedFromDiscard,
   retryStuck,
+  type ReplayChange,
   sendable,
+  settledRecord,
   type SignOutDiscardStore,
   type StuckActionStore,
 } from '../../src/offline-writes';
@@ -296,7 +298,7 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
 }
 
 /** A stored record still waiting to be sent or settled: not replaced, not discarded. */
-const queuedIn = (stored: OutboxRecord | undefined) =>
+const queuedIn = (stored: OutboxRecord | undefined): stored is OutboxRecord =>
   stored !== undefined && stored.state !== 'discarded';
 
 /** The record as stored now: replaced (gone), a tombstone, held by a sign-out, or as it was. */
@@ -338,23 +340,26 @@ async function rewrite(
 }
 
 /**
- * A replay's answer applied to its record (`next` in its place, or deleted)
+ * A replay's answer applied to its record (`change` onto it, or deleted)
  * only if it is still queued, in one transaction: a newer intent for its
  * key that replaced it while it was in flight must not get the old one
- * back beside it. Whether it was still queued. Discard passes its
- * tombstone as `next` (discardedRecord).
+ * back beside it. The change lands on the copy this transaction read, so a
+ * field another writer stored since the caller's read (a sign-out's hold,
+ * #1161) stays (settledRecord). Whether it was still queued. Discard passes
+ * its tombstone's fields (discarding).
  */
 async function settle(
   record: OutboxRecord,
-  next?: OutboxRecord,
+  change?: ReplayChange,
 ): Promise<boolean> {
   let queued = false;
   await write((objects) => {
     const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = queuedIn(request.result as OutboxRecord | undefined);
-      if (!queued) return;
-      if (next) objects.put(next);
+      const stored = request.result as OutboxRecord | undefined;
+      if (!queuedIn(stored)) return;
+      queued = true;
+      if (change) objects.put(settledRecord(stored, change));
       else objects.delete(record.id);
     };
   });
@@ -1089,15 +1094,15 @@ async function replayAll(
         );
         return current;
       }
-      const current = await settle(record, step.record);
+      const current = await settle(record, step.change);
       const meanwhile = current ? '' : ', superseded meanwhile';
       if (step.step === 'failed') {
         console.warn(
-          `[outbox] ${key} not saved: ${step.record.reason}${meanwhile}`,
+          `[outbox] ${key} not saved: ${step.change.reason}${meanwhile}`,
         );
       } else {
         console.info(
-          `[outbox] ${key} ${step.why}, retry ${step.record.attempts}${meanwhile}`,
+          `[outbox] ${key} ${step.why}, retry ${step.change.attempts}${meanwhile}`,
         );
       }
       return current;
@@ -1475,7 +1480,7 @@ const actionStore: StuckActionStore<OutboxRecord> = {
       : undefined;
   },
   settle,
-  discard: (record) => settle(record, discardedRecord(record, Date.now())),
+  discard: (record) => settle(record, discarding(Date.now())),
 };
 
 // A stuck write's notice: Try again clears its count and drains; Discard

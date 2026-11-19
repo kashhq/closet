@@ -516,11 +516,7 @@ export function discardedRecord<R extends ReplayRecord>(
   record: R,
   now: number,
 ): R {
-  return {
-    ...unstuck(record),
-    state: 'discarded',
-    discardedAt: now,
-  };
+  return settledRecord(record, discarding(now));
 }
 
 /** A tombstone past DISCARD_TOMBSTONE_MS; one stamped in the future (a clock moved back) waits. */
@@ -706,31 +702,62 @@ export type ReplayRecord = StoredRecord & {
   serverErrors?: number;
   /** When it became stuck, or last answered 5xx while stuck: its retry clock. */
   stuckAt?: number;
+  /** Why it failed for good (`state: 'failed'`): the notice's reason. */
+  reason?: ReplayFailure;
   /** When sign-out's discard named it (discardAtSignOut): no drain sends it (`sendable`). */
   heldForDiscardAt?: number;
 };
 
-export const isStuck = (record: ReplayRecord) => record.stuckAt !== undefined;
+/**
+ * The only fields a replay's answer, the notice's Try again or a Discard
+ * writes of a stored record, applied by `settledRecord` to the copy read in
+ * the write's own transaction, never to the copy its caller read earlier.
+ * Every other field is another writer's: a sign-out's hold above all
+ * (#1161), which a settle putting back the drain's pre-hold copy would erase,
+ * so the record the user chose to discard would be sent again. A new field
+ * is preserved by every settle unless it is added here.
+ */
+export type ReplayChange = Partial<
+  Pick<
+    ReplayRecord,
+    'state' | 'reason' | 'attempts' | 'serverErrors' | 'stuckAt' | 'discardedAt'
+  >
+>;
 
-/** A stuck record with its counters cleared: the notice's "Try again". */
-export function unstuck<R extends ReplayRecord>(record: R): R {
-  return {
-    ...record,
-    attempts: 0,
-    serverErrors: undefined,
-    stuckAt: undefined,
-  };
+/** `stored`, the record as its write's transaction read it, with `change` and nothing else applied. */
+export function settledRecord<R extends ReplayRecord>(
+  stored: R,
+  change: ReplayChange,
+): R {
+  return { ...stored, ...change };
 }
 
-/** What replayQueue tells its driver to do with a record. */
-type ReplayStep<R> =
+/** A stuck record's counters cleared: the notice's Try again. */
+export const UNSTUCK = {
+  attempts: 0,
+  serverErrors: undefined,
+  stuckAt: undefined,
+} as const satisfies ReplayChange;
+
+export const isStuck = (record: ReplayRecord) => record.stuckAt !== undefined;
+
+/** What a Discard writes of a record (`settledRecord`): its tombstone's fields. */
+export function discarding(now: number): ReplayChange {
+  return { ...UNSTUCK, state: 'discarded', discardedAt: now };
+}
+
+/**
+ * What replayQueue tells its driver to do with a record. A `change` is
+ * written onto the stored copy (`settledRecord`), never the drain's copy.
+ */
+type ReplayStep =
   | { step: 'saved'; changed: boolean }
-  /** Refused for good: `record` is the failed one. */
-  | { step: 'failed'; record: R }
-  /** Stays queued: `record` has its attempt counted (and its 5xx state as it now stands). */
+  /** Refused for good. */
+  | { step: 'failed'; change: { state: 'failed'; reason: ReplayFailure } }
+  /** Stays queued: its attempt counted (and its 5xx state as it now stands). */
   | {
       step: 'kept';
-      record: R;
+      change: { attempts: number; serverErrors?: number; stuckAt?: number };
       why: 'server-error' | 'stuck' | typeof UNREACHABLE;
     };
 
@@ -739,7 +766,7 @@ export interface ReplayDriver<R> {
   skip(record: R): Promise<boolean>;
   send(record: R): Promise<ReplayVerdict>;
   /** Whether the record was still queued, so the step applied. */
-  settle(record: R, step: ReplayStep<R>): Promise<boolean>;
+  settle(record: R, step: ReplayStep): Promise<boolean>;
   now(): number;
 }
 
@@ -794,32 +821,31 @@ export async function replayQueue<R extends ReplayRecord>(
     } else if (answer.verdict === 'failed') {
       await driver.settle(record, {
         step: 'failed',
-        record: { ...record, state: 'failed', reason: answer.reason },
+        change: { state: 'failed', reason: answer.reason },
       });
     } else if (!('cause' in answer)) {
       return { end: 'no-session' };
     } else if (answer.cause === UNREACHABLE) {
-      const kept = { ...record, attempts: record.attempts + 1 };
+      const attempts = record.attempts + 1;
       await driver.settle(record, {
         step: 'kept',
-        record: kept,
+        change: { attempts },
         why: UNREACHABLE,
       });
-      wait(retryDelayMs(kept.attempts));
+      wait(retryDelayMs(attempts));
       return backoff();
     } else {
       const serverErrors = (record.serverErrors ?? 0) + 1;
       const stuck =
         isStuck(record) || serverErrors >= STUCK_AFTER_SERVER_ERRORS;
       const kept = {
-        ...record,
         attempts: record.attempts + 1,
         serverErrors,
         ...(stuck ? { stuckAt: driver.now() } : {}),
       };
       await driver.settle(record, {
         step: 'kept',
-        record: kept,
+        change: kept,
         why: stuck ? 'stuck' : 'server-error',
       });
       held.add(record.key);
@@ -895,8 +921,8 @@ export const actionBusyAttributes = (busy: boolean): Record<string, string> =>
 /** The store the notice's buttons act through (the page's IndexedDB; a stub in the spec). */
 export interface StuckActionStore<R extends ReplayRecord> {
   find(id: string): Promise<R | undefined>;
-  /** replayQueue's `settle`: `next` in the record's place, or deleted; whether it was still queued. */
-  settle(record: R, next?: R): Promise<boolean>;
+  /** replayQueue's `settle`: the stored copy with `change` (`settledRecord`), or deleted; whether it was still queued. */
+  settle(record: R, change?: ReplayChange): Promise<boolean>;
   /** The record's tombstone (`discardedRecord`) in its place if it is still queued; whether it was. */
   discard(record: R): Promise<boolean>;
 }
@@ -920,7 +946,7 @@ export async function retryStuck<R extends ReplayRecord>(
   return exclusively(async () => {
     const record = await store.find(id);
     if (!record || !isStuck(record)) return undefined;
-    return (await store.settle(record, unstuck(record))) ? record : undefined;
+    return (await store.settle(record, UNSTUCK)) ? record : undefined;
   });
 }
 
