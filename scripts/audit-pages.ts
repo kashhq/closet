@@ -22,6 +22,7 @@ import {
   type AuditReport,
   compareReports,
   parseReport,
+  refuseOnlyWithOut,
   renderComparison,
   renderReport,
   REPORT_VERSION,
@@ -66,10 +67,11 @@ const PROJECT_ROOT = resolve(__dirname, '..');
 /** Gitignored: the default output, and every run's app log. */
 const RESULTS = join(PROJECT_ROOT, 'scripts', 'results');
 
+const DEFAULT_OUT = 'scripts/results/audit';
 const OPTIONS = {
   runs: { type: 'string', default: '20' },
   warmup: { type: 'string', default: '3' },
-  out: { type: 'string', default: 'scripts/results/audit' },
+  out: { type: 'string' },
   persona: { type: 'string', default: 'demo' },
   only: { type: 'string' },
   compare: { type: 'string' },
@@ -295,12 +297,18 @@ async function writeOutputs(
   return written;
 }
 
+/** No default in OPTIONS: only an explicit --out can overwrite a baseline. */
+function outPrefix(only: string | undefined, out: string | undefined): string {
+  refuseOnlyWithOut(only, out);
+  return resolve(PROJECT_ROOT, out ?? DEFAULT_OUT);
+}
+
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: OPTIONS, strict: true });
   const runs = count(values.runs, 'runs', 1);
   const warmup = count(values.warmup, 'warmup', 0);
   const persona = auditPersona(values.persona);
-  const out = resolve(PROJECT_ROOT, values.out);
+  const out = outPrefix(values.only, values.out);
   const baseline = values.compare
     ? await readBaseline(values.compare, persona)
     : undefined;
@@ -402,7 +410,7 @@ async function main(): Promise<void> {
     `Wrote ${written.map((path) => relative(process.cwd(), path)).join(', ')}`,
   );
   refuseFailures([...a11y.failures, ...walked.failures], appLog);
-  if (baseline) refuseA11yIncreases(baseline, report, a11yNodes);
+  if (baseline) refuseNewA11yKinds(baseline, report, a11yNodes);
 }
 
 function refuseFailures(failures: readonly string[], appLog: string): void {
@@ -412,27 +420,30 @@ function refuseFailures(failures: readonly string[], appLog: string): void {
   );
 }
 
-/** The one gate in the compare: counts and times only print (docs/perf/README.md). */
-function refuseA11yIncreases(
+/** The one gate in the compare, on kinds; count rises print as WORSE (docs/perf/README.md). */
+function refuseNewA11yKinds(
   baseline: AuditReport,
   report: AuditReport,
   nodesFile: string,
 ): void {
   // A baseline from before #722 has no pass to compare with.
   if (!baseline.a11y || !report.a11y) return;
-  const { increases, newPages, missingPages } = compareA11y(
-    baseline.a11y,
-    report.a11y,
-  );
-  const notes = a11yPageNotes({ increases, newPages, missingPages });
+  const comparison = compareA11y(baseline.a11y, report.a11y);
+  const { newKinds, increases } = comparison;
+  const notes = a11yPageNotes(comparison);
   if (notes.length > 0) console.log(`\nAccessibility:\n${notes.join('\n')}`);
-  if (increases.length === 0) return;
+  for (const increase of increases) {
+    console.log(
+      `WORSE accessibility nodes: ${increase.measure} on #${increase.id} (${increase.target}): ${increase.before} → ${increase.after}`,
+    );
+  }
+  if (newKinds.length === 0) return;
   throw new Error(
-    `${increases.length} accessibility count(s) above the baseline:\n` +
-      increases
+    `${newKinds.length} accessibility violation kind(s) the baseline lacks:\n` +
+      newKinds
         .map(
-          (increase) =>
-            `  ${increase.measure} on #${increase.id} (${increase.target}): ${increase.before} → ${increase.after}`,
+          (item) =>
+            `  ${item.measure} on #${item.id} (${item.target}): ${item.kind}`,
         )
         .join('\n') +
       `\nEach node: ${relative(process.cwd(), nodesFile)}`,

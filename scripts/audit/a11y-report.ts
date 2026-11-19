@@ -25,11 +25,17 @@ export interface PageA11y {
   name: string;
   target: string;
   /**
-   * Violating element kinds per measure (signatureOf), not nodes: an axe rule
-   * id, FIELD_FONT or TARGET_SIZE; zeros left out. Thirty identical calendar
-   * cells are one kind, so the number does not follow the seed's dates.
+   * Violating nodes per measure (an axe rule id, FIELD_FONT or TARGET_SIZE;
+   * zeros left out). Follows the seed's dates and the platform's rounding, so
+   * a rise only warns.
    */
   counts: Record<string, number>;
+  /**
+   * Distinct violating element kinds per measure (signatureOf), sorted. Thirty
+   * identical calendar cells are one kind, so the list does not follow the
+   * seed: a kind the baseline lacks is what fails the compare.
+   */
+  kinds: Record<string, string[]>;
 }
 
 export interface A11yReport {
@@ -67,19 +73,24 @@ export function signatureOf(selector: string): string {
     .replace(/\d{4}-\d{2}-\d{2}/g, 'DATE');
 }
 
-/** Distinct (measure, signature) pairs per measure: PageA11y.counts. */
-export function countKinds(
+/** A page's PageA11y `counts` (nodes) and `kinds` (distinct signatures) per measure. */
+export function tally(
   offenders: readonly Pick<Offender, 'measure' | 'signature'>[],
-): Record<string, number> {
+): Pick<PageA11y, 'counts' | 'kinds'> {
+  const counts: Record<string, number> = {};
   const kinds = new Map<string, Set<string>>();
   for (const { measure, signature } of offenders) {
+    counts[measure] = (counts[measure] ?? 0) + 1;
     const set = kinds.get(measure) ?? new Set<string>();
     set.add(signatureOf(signature));
     kinds.set(measure, set);
   }
-  return Object.fromEntries(
-    [...kinds].map(([measure, set]) => [measure, set.size]),
-  );
+  return {
+    counts,
+    kinds: Object.fromEntries(
+      [...kinds].map(([measure, set]) => [measure, [...set].sort()]),
+    ),
+  };
 }
 
 const IMPACT_ORDER = ['critical', 'serious', 'moderate', 'minor'] as const;
@@ -92,7 +103,17 @@ export interface A11yIncrease {
   after: number;
 }
 
+export interface A11yNewKind {
+  id: string;
+  target: string;
+  measure: string;
+  kind: string;
+}
+
 export interface A11yComparison {
+  /** A (page, measure, kind) the baseline lacks: the one thing that fails the compare. */
+  newKinds: A11yNewKind[];
+  /** Node counts that rose on a page both runs have: printed as WORSE, never failing. */
   increases: A11yIncrease[];
   /** Pages this run has and the baseline lacks: reported, never failing. */
   newPages: { id: string; target: string; total: number }[];
@@ -103,16 +124,43 @@ export interface A11yComparison {
 const totalOf = (counts: Record<string, number>): number =>
   Object.values(counts).reduce((sum, count) => sum + count, 0);
 
+function newKindsOf(page: PageA11y, was: PageA11y): A11yNewKind[] {
+  const { id, target } = page;
+  return Object.entries(page.kinds).flatMap(([measure, kinds]) => {
+    const known = new Set(was.kinds[measure] ?? []);
+    return kinds
+      .filter((kind) => !known.has(kind))
+      .map((kind) => ({ id, target, measure, kind }));
+  });
+}
+
+function increasesOf(page: PageA11y, was: PageA11y): A11yIncrease[] {
+  const { id, target } = page;
+  return Object.entries(page.counts)
+    .filter(([measure, count]) => count > (was.counts[measure] ?? 0))
+    .map(([measure, after]) => ({
+      id,
+      target,
+      measure,
+      before: was.counts[measure] ?? 0,
+      after,
+    }));
+}
+
 /**
- * Every measure that went up on a page both runs have. A page only this run
- * has is new, and one only the baseline has is missing (unless `--only`
- * filtered this run): neither fails, the author refreshes the baseline.
+ * Kinds fail, counts warn: a kind is the same on any day and OS, so a new one
+ * is a real regression; a node count follows the seed's dates and font
+ * rounding, so a rise is only worth a look (the nightly gates no deploy). A
+ * page only this run has is new, and one only the baseline has is missing
+ * (unless `--only` filtered this run): neither fails, the author refreshes
+ * the baseline.
  */
 export function compareA11y(
   before: A11yReport,
   after: A11yReport,
 ): A11yComparison {
-  const old = new Map(before.pages.map((page) => [page.id, page.counts]));
+  const old = new Map(before.pages.map((page) => [page.id, page]));
+  const newKinds: A11yNewKind[] = [];
   const increases: A11yIncrease[] = [];
   const newPages: A11yComparison['newPages'] = [];
   for (const page of after.pages) {
@@ -125,23 +173,14 @@ export function compareA11y(
       });
       continue;
     }
-    for (const [measure, count] of Object.entries(page.counts)) {
-      if (count > (was[measure] ?? 0)) {
-        increases.push({
-          id: page.id,
-          target: page.target,
-          measure,
-          before: was[measure] ?? 0,
-          after: count,
-        });
-      }
-    }
+    newKinds.push(...newKindsOf(page, was));
+    increases.push(...increasesOf(page, was));
   }
   const seen = new Set(after.pages.map((page) => page.id));
   const missingPages = after.partial
     ? []
     : before.pages.filter((page) => !seen.has(page.id)).map((page) => page.id);
-  return { increases, newPages, missingPages };
+  return { newKinds, increases, newPages, missingPages };
 }
 
 function impactOf(report: A11yReport, measure: string): string {
@@ -169,7 +208,7 @@ export function renderA11y(report: A11yReport): string[] {
     '## Accessibility',
     '',
     `${report.pages.length} pages at ${report.viewport.width} × ${report.viewport.height} in Chromium, axe-core ${report.axeVersion}; ` +
-      `counts are violating element kinds (one per distinct selector pattern, not per node). \`${FIELD_FONT}\` is a text field iOS zooms into, \`${TARGET_SIZE}\` a tap target smaller on either side.`,
+      `counts are violating nodes. \`${FIELD_FONT}\` is a text field iOS zooms into, \`${TARGET_SIZE}\` a tap target smaller on either side.`,
     '',
   ];
   if (totals.size === 0) {
@@ -191,28 +230,38 @@ export function renderA11y(report: A11yReport): string[] {
 export const REFRESH_BASELINE =
   'npm run audit:pages -- --out docs/perf/baseline';
 
-/** The compare as markdown: the failing increases, then the pages to add to or drop from the baseline. */
+/** The compare as markdown: new kinds (failing), count rises (warnings), then the pages to add to or drop from the baseline. */
 export function renderA11yComparison(comparison: A11yComparison): string[] {
-  const { increases } = comparison;
-  const lines =
-    increases.length === 0
-      ? [
-          '## Accessibility',
-          '',
-          'No page has more violations than the baseline.',
-          '',
-        ]
-      : [
-          '## Accessibility: increases (the compare fails)',
-          '',
-          '| Page | Target | Rule | Before | After |',
-          '| --- | --- | --- | --: | --: |',
-          ...increases.map(
-            (increase) =>
-              `| #${increase.id} | \`${increase.target.replaceAll('|', '\\|')}\` | \`${increase.measure}\` | ${increase.before} | ${increase.after} |`,
-          ),
-          '',
-        ];
+  const { newKinds, increases } = comparison;
+  const lines = ['## Accessibility', ''];
+  if (newKinds.length === 0) {
+    lines.push('No violation kind the baseline lacks.', '');
+  } else {
+    lines.push(
+      'New violation kinds (the compare fails):',
+      '',
+      '| Page | Target | Rule | Kind |',
+      '| --- | --- | --- | --- |',
+      ...newKinds.map(
+        (item) =>
+          `| #${item.id} | \`${item.target.replaceAll('|', '\\|')}\` | \`${item.measure}\` | \`${item.kind.replaceAll('|', '\\|')}\` |`,
+      ),
+      '',
+    );
+  }
+  if (increases.length > 0) {
+    lines.push(
+      'Node counts above the baseline (WORSE, a warning: counts follow the seed and the platform):',
+      '',
+      '| Page | Target | Rule | Before | After |',
+      '| --- | --- | --- | --: | --: |',
+      ...increases.map(
+        (increase) =>
+          `| #${increase.id} | \`${increase.target.replaceAll('|', '\\|')}\` | \`${increase.measure}\` | ${increase.before} | ${increase.after} |`,
+      ),
+      '',
+    );
+  }
   lines.push(...a11yPageNotes(comparison));
   return lines;
 }

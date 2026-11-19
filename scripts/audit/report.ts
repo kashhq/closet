@@ -377,3 +377,13 @@ export function renderComparison(
   lines.push('', ...a11y);
   return lines.join('\n');
 }
+
+/** `--out` writes the whole baseline: a filtered run would truncate it. */
+export function refuseOnlyWithOut(
+  only: string | undefined,
+  out: string | undefined,
+): void {
+  if (only && out !== undefined) {
+    throw new Error('--out writes the whole baseline; drop --only');
+  }
+}

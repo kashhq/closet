@@ -37,7 +37,7 @@ A **page or fragment read** at scale is over the line when its p50 is above
 phone parses on every visit). Statements and bytes are exact; a time is
 over only past the noise below. A page over the line is a finding for the
 owner to schedule, not a failing gate: `make perf-compare` prints what
-moved, and fails only on more accessibility violations (Accessibility, below). Writes, MCP tools and jobs are read for their
+moved, and fails only on a new accessibility violation kind (Accessibility, below). Writes, MCP tools and jobs are read for their
 statements and times too, but the hashing steps (sign-in, register, change
 password: 220 to 440 ms by design) and the photo pipeline are not pages.
 
@@ -176,9 +176,10 @@ its times are a different machine's; only its counts and bytes compare.
 Before the walk, every page step a browser can open (a GET answering 200,
 nothing to prepare, not htmx) loads in Chromium at 390 × 844
 (`scripts/audit/a11y.ts`, #722) as its step's user, and the report's `a11y`
-holds per page, per measure, the violating element kinds (nodes with one
-selector pattern, `:nth-child` indexes, uuids and dates stripped, count once,
-so a calendar grid does not follow the seed's dates): each axe-core rule (all
+holds per page, per measure, the violating node count and the sorted list of
+violating element kinds (nodes with one selector pattern, `:nth-child`
+indexes, uuids and dates stripped, are one kind, so a calendar grid does not
+follow the seed's dates): each axe-core rule (all
 of axe's default rules), `field font < 16 px` (a text field iOS zooms the
 page into on focus, shown or not) and `target < 44 px` (a visible tap
 target under 43.5 px on either side, the half pixel absorbing font rounding
@@ -186,12 +187,15 @@ between macOS and Linux; a control counts its label's box, and a
 link inside running text is exempt). The browser's writes are answered 204
 in the browser, so the walk still starts on the seed and no budget is spent.
 
-**`--compare` fails on any count above the baseline** (a page the baseline
-lacks is reported as new, a baseline page this run lacks as missing, neither
-fails: refresh with `npm run audit:pages -- --out docs/perf/baseline`), naming the measure and the page; it is the
-compare's one gate. Every offending node, with axe's failure summary or the
-size, is in `scripts/results/<name>.a11y-nodes.json`. A PR that fixes some
-lowers the baseline in the same change. Counts are kinds, so the same commit gives the same numbers on any day and OS.
+**`--compare` fails on a new kind**: a (page, rule, kind) triple the baseline
+lacks, which is deterministic across days and OSes. A node count above the
+baseline's prints as `WORSE accessibility nodes` and never fails: counts follow
+the seed's dates and font rounding, and the nightly gates no deploy. A page the
+baseline lacks is reported as new, a baseline page this run lacks as missing,
+neither fails: refresh with `npm run audit:pages -- --out docs/perf/baseline`
+(refused with `--only`, which would truncate it). Every offending node, with
+axe's failure summary or the size, is in `scripts/results/<name>.a11y-nodes.json`.
+A PR that fixes some refreshes the baseline in the same change.
 
 ## Rate limits
 

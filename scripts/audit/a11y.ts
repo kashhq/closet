@@ -4,9 +4,9 @@ import { type Browser, chromium, type Page } from '@playwright/test';
 import {
   type A11yReport,
   FIELD_FONT,
-  countKinds,
   FIELD_FONT_MIN_PX,
   type Offender,
+  tally,
   type PageA11y,
   TARGET_MIN_PX,
   TARGET_SIZE,
@@ -19,8 +19,8 @@ import type { Actor, AuditRequest, Fixture } from './fixture';
  * open (a plain GET answering 200) loaded in Chromium at phone width, then
  * axe-core's violations per rule, the form fields an iPhone zooms into
  * (under 16 px) and the tap targets under 44 px, counted per page. The
- * counts go into the report (`a11y`) and `--compare` fails on any increase:
- * the baseline holds what exists, a PR may only lower it.
+ * counts and violating kinds go into the report (`a11y`); `--compare` fails on a
+ * kind the baseline lacks and warns on a node-count rise.
  *
  * Read-only: the browser's writes (a beacon, a vitals post) are answered 204
  * in the browser, so the walk after it starts on the seed as it was and no
@@ -45,8 +45,7 @@ interface Found {
   axeVersion: string;
 }
 
-interface Measured {
-  counts: Record<string, number>;
+interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
   offenders: Offender[];
 }
 
@@ -213,7 +212,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
       detail: `${target.width} × ${target.height} px`,
     })),
   );
-  return { counts: countKinds(offenders), offenders };
+  return { ...tally(offenders), offenders };
 }
 
 async function visit(
@@ -284,7 +283,7 @@ export async function auditAccessibility(
     for (const step of visits) {
       const label = `#${step.issue} ${step.name} (${step.target})`;
       try {
-        const { counts, offenders } = await visit(
+        const { counts, kinds, offenders } = await visit(
           browser,
           origin,
           fixture,
@@ -292,10 +291,10 @@ export async function auditAccessibility(
           found,
         );
         const { id, issue, name, target } = step;
-        pages.push({ id, issue, name, target, counts });
+        pages.push({ id, issue, name, target, counts, kinds });
         detail[step.id] = offenders;
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        console.log(`${label}: ${total} accessibility violation kind(s)`);
+        console.log(`${label}: ${total} accessibility violation(s)`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`${label} (accessibility): ${message}`);
