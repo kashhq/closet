@@ -128,16 +128,25 @@ function pageBuildOptions(sources: string, outdir: string): BuildOptions {
 
 // Where the page modules were built before public/js/gen/ (#1177).
 const PAGE_LEGACY_DIR = path.join(PUBLIC_DIR, 'js');
+// Outside public/, so a moved file is neither served nor copied into the image.
+const LEGACY_PARK_DIR = path.join(
+  NODE_MODULES,
+  '.cache',
+  'closet',
+  'legacy-js',
+);
 
 /**
- * Deletes the untracked `<name>.js` copies the builds before public/js/gen/
- * left in public/js/ for each page module name: no longer ignored and never
- * referenced, but a checkout's leftovers would still be copied into the
- * image (the Dockerfile's `COPY public`). A tracked file (a plain-JS module)
- * is never touched. Without git to ask (the image build has no .git), nothing
- * is removed.
+ * Moves the untracked `<name>.js` copies the builds before public/js/gen/
+ * left in public/js/ for each page module name (with their .br/.gz) to
+ * `parkDir`: no longer ignored and never referenced, but a checkout's
+ * leftovers would still be copied into the image (the Dockerfile's
+ * `COPY public`). They are moved, never deleted: an untracked file of that
+ * name may be a developer's uncommitted edit (#1181), and an older parked
+ * copy is overwritten. A tracked file (a plain-JS module) is never touched.
+ * Without git to ask (the image build has no .git), nothing is moved.
  */
-function removeLegacyCopies(names: string[], dir: string): void {
+function parkLegacyCopies(names: string[], dir: string, parkDir: string): void {
   const candidates = names
     .map((name) => `${name}.js`)
     .filter((file) => fs.existsSync(path.join(dir, file)));
@@ -155,11 +164,15 @@ function removeLegacyCopies(names: string[], dir: string): void {
   }
   for (const file of candidates) {
     if (tracked.has(file)) continue;
-    for (const leftover of [file, `${file}.br`, `${file}.gz`]) {
-      fs.rmSync(path.join(dir, leftover), { force: true });
+    fs.mkdirSync(parkDir, { recursive: true });
+    for (const variant of [file, `${file}.br`, `${file}.gz`]) {
+      const from = path.join(dir, variant);
+      if (fs.existsSync(from)) {
+        fs.renameSync(from, path.join(parkDir, variant));
+      }
     }
     console.log(
-      `page modules: removed ${path.relative(process.cwd(), path.join(dir, file))}, an untracked copy from before public/js/gen/`,
+      `page modules: moved ${path.relative(process.cwd(), path.join(dir, file))}, an untracked copy from before public/js/gen/, to ${path.relative(process.cwd(), path.join(parkDir, file))}`,
     );
   }
 }
@@ -173,14 +186,20 @@ function removeLegacyCopies(names: string[], dir: string): void {
  * removed.
  */
 export function buildPageModules(
-  where: { sources?: string; outdir?: string; legacyDir?: string } = {},
+  where: {
+    sources?: string;
+    outdir?: string;
+    legacyDir?: string;
+    parkDir?: string;
+  } = {},
 ): { written: string[]; removed: string[] } {
   const {
     sources = PAGE_SOURCES,
     outdir = PAGE_OUT,
     legacyDir = PAGE_LEGACY_DIR,
+    parkDir = LEGACY_PARK_DIR,
   } = where;
-  removeLegacyCopies(Object.keys(pageModuleEntries(sources)), legacyDir);
+  parkLegacyCopies(Object.keys(pageModuleEntries(sources)), legacyDir, parkDir);
   const result = buildSync({
     ...pageBuildOptions(sources, outdir),
     logLevel: 'warning',
