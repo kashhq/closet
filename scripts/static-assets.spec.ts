@@ -9,10 +9,11 @@ import {
   utimesSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
 import { buildPageModules, precompress } from './static-assets';
 
@@ -88,7 +89,11 @@ describe('buildPageModules', () => {
     writeFileSync(at('sources', 'page', `${name}.ts`), 'export const x = 1;\n');
   };
   const build = () =>
-    buildPageModules({ sources: at('sources'), outdir: at('gen') });
+    buildPageModules({
+      sources: at('sources'),
+      outdir: at('js', 'gen'),
+      legacyDir: at('js'),
+    });
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'closet-pages-'));
@@ -104,12 +109,35 @@ describe('buildPageModules', () => {
     source('old-name');
     build();
     // A variant the precompress step wrote beside it.
-    writeFileSync(at('gen', 'old-name.js.br'), 'x');
+    writeFileSync(at('js', 'gen', 'old-name.js.br'), 'x');
     rmSync(at('sources', 'page', 'old-name.ts'));
     source('new-name');
 
     build();
 
-    expect(readdirSync(at('gen')).sort()).toEqual(['new-name.js', 'outbox.js']);
+    expect(readdirSync(at('js', 'gen')).sort()).toEqual([
+      'new-name.js',
+      'outbox.js',
+    ]);
+  });
+
+  it('removes an untracked copy from before public/js/gen/ and keeps a tracked one', () => {
+    source('converted');
+    source('plain');
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    mkdirSync(at('js'), { recursive: true });
+    writeFileSync(at('js', 'converted.js'), 'export {};\n');
+    writeFileSync(at('js', 'converted.js.br'), 'x');
+    writeFileSync(at('js', 'plain.js'), 'export {};\n');
+    execFileSync('git', ['add', 'js/plain.js'], { cwd: root });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    build();
+
+    expect(existsSync(at('js', 'converted.js'))).toBe(false);
+    expect(existsSync(at('js', 'converted.js.br'))).toBe(false);
+    expect(existsSync(at('js', 'plain.js'))).toBe(true);
+    expect(log).toHaveBeenCalledOnce();
+    log.mockRestore();
   });
 });
