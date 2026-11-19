@@ -189,7 +189,7 @@ export interface PageRoute {
   /**
    * An add or edit page, which its save is done with: its app bar says so
    * (`AppBar formPage`, `data-form-page`), and the back arrow of the page
-   * the save lands on skips it (public/js/back.js). `expectFormPageFlag`.
+   * the save lands on skips it (views/assets/page/back.ts). `expectFormPageFlag`.
    */
   formPage: boolean;
 }
@@ -391,7 +391,7 @@ export function expectFormPageFlag(
 /**
  * An add or edit page's writes are disabled offline (#411, `FormPage`): its
  * native post to `action` and any `hx-delete` carry `data-needs-network`,
- * which public/js/connectivity.js disables while the heartbeat fails. A
+ * which views/assets/page/connectivity.ts disables while the heartbeat fails. A
  * cached copy posting without a connection lands on the worker's offline
  * page and loses what was typed.
  */
@@ -517,7 +517,7 @@ export function expectNativePostForms(res: LightMyRequestResponse): void {
 /**
  * The posts that change whose session this device has. The service worker
  * never sees them (#542), so each form says so itself (`PostForm`
- * `endsSession`, `data-ends-session`): public/js/pwa.js tells the worker as
+ * `endsSession`, `data-ends-session`): views/assets/page/pwa.ts tells the worker as
  * it posts, and the worker drops the session caches before the landing
  * page. One missing the mark leaves the previous account's pages cached.
  */
@@ -545,7 +545,7 @@ const QUEUED_FORM = new RegExp(
 /**
  * The `PostForm`s (marked by their `data-submit-once`) a page renders that
  * would post while offline: neither `data-needs-network`, which
- * public/js/connectivity.js disables offline with every control that
+ * views/assets/page/connectivity.ts disables offline with every control that
  * submits the form, nor an `allowOffline` reason (`data-allow-offline`),
  * nor a write the outbox queues (`data-offline-queue`, #178).
  * Disabled is the default (#411; owner, 2026-10-22): a cached form posting

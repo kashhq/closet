@@ -5,22 +5,20 @@
  * answers newer evidence with a result taken before it existed, which is how
  * an `offline` event during the page-load heartbeat was lost for 30 s (#436).
  *
- * Used by connectivity.js's probe; unit-tested in
+ * Used by connectivity.ts's probe and the outbox; unit-tested in
  * src/web/layout/single-flight.spec.ts.
- *
- * @template {unknown[]} A
- * @template T
- * @param {(...args: A) => Promise<T>} task
- * @returns {(...args: A) => Promise<T>}
  */
-export function singleFlight(task) {
-  let current = null;
-  let next = null;
-  const start = (args) => {
-    current = task(...args).finally(() => {
+export function singleFlight<A extends unknown[], T>(
+  task: (...args: A) => Promise<T>,
+): (...args: A) => Promise<T> {
+  let current: Promise<T> | null = null;
+  let next: Promise<T> | null = null;
+  const start = (args: A) => {
+    const run = task(...args).finally(() => {
       current = null;
     });
-    return current;
+    current = run;
+    return run;
   };
   return (...args) => {
     if (!current) return start(args);
@@ -42,18 +40,15 @@ export function singleFlight(task) {
  * rejection (its abort included), is dropped, so the network's order never
  * decides what is applied. Resolves whether this call's answer was applied.
  *
- * Used by freshness.js's server copy after a sync (#900); unit-tested in
+ * Used by freshness.ts's server copy after a sync (#900); unit-tested in
  * src/web/layout/single-flight.spec.ts.
- *
- * @template {unknown[]} A
- * @template T
- * @param {(signal: AbortSignal, ...args: A) => Promise<T>} fetchAnswer
- * @param {(answer: T, ...args: A) => void} apply
- * @returns {(...args: A) => Promise<boolean>}
  */
-export function latestOnly(fetchAnswer, apply) {
+export function latestOnly<A extends unknown[], T>(
+  fetchAnswer: (signal: AbortSignal, ...args: A) => Promise<T>,
+  apply: (answer: T, ...args: A) => void,
+): (...args: A) => Promise<boolean> {
   let sequence = 0;
-  let inFlight = null;
+  let inFlight: AbortController | null = null;
   return async (...args) => {
     sequence += 1;
     const mine = sequence;

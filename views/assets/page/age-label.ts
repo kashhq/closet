@@ -1,6 +1,6 @@
 /**
  * How old a page on screen is, in words: "3 minutes ago", "yesterday".
- * Pure, for public/js/freshness.js (and its unit spec,
+ * Pure, for freshness.ts (and its unit spec,
  * src/web/layout/age-label.spec.ts).
  */
 
@@ -14,23 +14,18 @@ export const STALE_AFTER_MS = MINUTE;
 /**
  * The largest whole unit of an age, or null under a minute (and for a
  * negative age, from a clock set back).
- *
- * @param {number} ageMs
- * @returns {{ value: number, unit: 'day' | 'hour' | 'minute' } | null}
  */
-export function ageParts(ageMs) {
+export function ageParts(
+  ageMs: number,
+): { value: number; unit: 'day' | 'hour' | 'minute' } | null {
   if (!(ageMs >= STALE_AFTER_MS)) return null;
   if (ageMs >= DAY) return { value: Math.floor(ageMs / DAY), unit: 'day' };
   if (ageMs >= HOUR) return { value: Math.floor(ageMs / HOUR), unit: 'hour' };
   return { value: Math.floor(ageMs / MINUTE), unit: 'minute' };
 }
 
-/**
- * @param {number} ageMs
- * @param {string} locale the document's language
- * @returns {string | null} null while the age is under a minute
- */
-export function ageLabel(ageMs, locale) {
+/** Null while the age is under a minute; `locale` is the document's language. */
+export function ageLabel(ageMs: number, locale: string): string | null {
   const parts = ageParts(ageMs);
   if (!parts) return null;
   return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(

@@ -67,8 +67,20 @@ data/**
 /models/
 public/bundle.css
 public/sw.js
-# Bundled from views/assets/outbox.ts (npm run generate:outbox)
+# Bundled from views/assets/outbox.ts and views/assets/page/*.ts (npm run generate:pages;
+# scripts/ci/plain-js-check.sh fails a page module whose output is not listed here)
 public/js/outbox.js
+public/js/age-label.js
+public/js/back.js
+public/js/connectivity.js
+public/js/freshness.js
+public/js/locate.js
+public/js/menu-escape.js
+public/js/push.js
+public/js/pwa.js
+public/js/search-shortcut.js
+public/js/share-saved.js
+public/js/single-flight.js
 public/build.json
 public/vendor/
 public/modules/

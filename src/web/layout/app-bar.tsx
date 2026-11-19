@@ -6,6 +6,7 @@ import { t } from '../i18n';
 import type { ViewContext } from '../view-context';
 import { LinkTabs, type LinkTabsProps } from './link-tabs';
 import { BackLink } from './parts';
+import { formPage, FRESHNESS_ID } from '../page-contract';
 
 export interface AppBarProps {
   ctx: ViewContext;
@@ -20,7 +21,7 @@ export interface AppBarProps {
    * The back arrow, absent on a section's root page: its fallback target.
    * The arrow goes back in history when the page before is in the app, and
    * here only on a cold entry (a shared link, a notification, a fresh
-   * launch; public/js/back.js).
+   * launch; views/assets/page/back.ts).
    */
   back?: string;
   /**
@@ -68,7 +69,7 @@ export function AppBar(props: AppBarProps) {
   return (
     <header
       class="app-bar flex items-center gap-1 px-2 bg-base-100 border-b border-base-300"
-      data-form-page={props.formPage ? '' : undefined}
+      {...formPage(props.formPage === true)}
     >
       {props.back && <BackLink href={props.back} historyBack />}
       <div class="app-bar-title flex flex-col justify-center flex-1 min-w-0 px-1">
@@ -94,9 +95,12 @@ export function AppBar(props: AppBarProps) {
           </div>
         </div>
         {/* "Updated 3 minutes ago" while the page on screen is a cached copy
-            a minute old or more (public/js/freshness.js); under the title,
+            a minute old or more (views/assets/page/freshness.ts); under the title,
             so it never covers or moves the content. */}
-        <span id="freshness" class="hidden truncate text-xs text-muted"></span>
+        <span
+          id={FRESHNESS_ID}
+          class="hidden truncate text-xs text-muted"
+        ></span>
       </div>
       {/* After the title in the DOM, as it sits from lg; below lg main.css
           moves it to the header's second row (order). */}

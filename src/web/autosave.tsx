@@ -1,6 +1,7 @@
 import type { Child } from 'hono/jsx';
 import type { QueueableKind } from '../offline-writes';
 import { t } from './i18n';
+import { needsNetwork } from './page-contract';
 
 /**
  * Save-on-change ("autosave") controls: every form or control that posts on
@@ -88,7 +89,7 @@ export function AutosaveForm(props: {
         region ?? 'find [data-autosave-status]',
       )}
       hx-trigger="change, submit"
-      data-needs-network={props.offlineQueue === undefined ? '' : undefined}
+      {...needsNetwork(props.offlineQueue === undefined)}
       data-offline-queue={props.offlineQueue}
     >
       {props.children}

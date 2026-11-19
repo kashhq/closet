@@ -1,16 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { buildSync } from 'esbuild';
 import {
   isFreshVariant,
   PRECOMPRESSED_EXTENSIONS,
   PUBLIC_DIR,
   variantSource,
 } from '../src/static-assets';
+import { IMPORT_MAP_NAMES } from '../src/web/layout/import-map';
 
 // Build steps for what src/static-assets.ts serves from public/. Run by
 // scripts/generate-static-assets.ts (`npm run generate:modules`,
-// `npm run generate:precompress`) and, so the integration tier serves
+// `npm run generate:pages`, `npm run generate:precompress`) and, so the integration tier serves
 // public/ as the build leaves it, by the integration project's globalSetup
 // (test/support/static-assets-setup.ts).
 
@@ -72,6 +74,63 @@ export function syncClientModules(): { copied: string[]; removed: string[] } {
     .filter((file) => !wanted.has(variantSource(file) ?? file));
   for (const file of removed) fs.rmSync(path.join(MODULES_DIR, file));
   return { copied, removed };
+}
+
+const PAGE_SOURCES = path.join(PUBLIC_DIR, '..', 'views', 'assets');
+const PAGE_OUT = path.join(PUBLIC_DIR, 'js');
+
+/**
+ * The page's TypeScript modules (src/web/shell/AGENTS.md, Client modules):
+ * views/assets/outbox.ts and every views/assets/page/<name>.ts, each to
+ * public/js/<name>.js (ignored by git), the URL the layout and the
+ * importmap name. Each is one ES module: what it imports by a relative path
+ * (the shared rules in src/) is bundled in, what it imports by an importmap
+ * name stays a bare import the browser resolves, so a module several import
+ * (toast, single-flight) is one instance per document.
+ */
+export function pageModuleEntries(): Record<string, string> {
+  const page = path.join(PAGE_SOURCES, 'page');
+  const entries: Record<string, string> = {
+    outbox: path.join(PAGE_SOURCES, 'outbox.ts'),
+  };
+  for (const file of fs.readdirSync(page).sort()) {
+    if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
+    entries[path.basename(file, '.ts')] = path.join(page, file);
+  }
+  return entries;
+}
+
+/**
+ * Bundles pageModuleEntries into public/js/ (minified, as the worker is). A
+ * module whose bytes are already current is left alone, so its mtime (and
+ * its precompressed variants' freshness) survives a repeat run, as
+ * syncClientModules does; returns the names written.
+ */
+export function buildPageModules(): string[] {
+  const result = buildSync({
+    entryPoints: pageModuleEntries(),
+    outdir: PAGE_OUT,
+    bundle: true,
+    minify: true,
+    format: 'esm',
+    external: IMPORT_MAP_NAMES,
+    logLevel: 'warning',
+    write: false,
+  });
+  const written: string[] = [];
+  for (const output of result.outputFiles) {
+    const bytes = Buffer.from(output.contents);
+    if (
+      fs.existsSync(output.path) &&
+      fs.readFileSync(output.path).equals(bytes)
+    ) {
+      continue;
+    }
+    fs.mkdirSync(path.dirname(output.path), { recursive: true });
+    fs.writeFileSync(output.path, bytes);
+    written.push(path.basename(output.path));
+  }
+  return written;
 }
 
 // Text formats worth compressing; images, fonts (woff2 is brotli already)

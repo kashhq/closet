@@ -37,6 +37,7 @@ import {
 import { ideaName, type IdeasWeather, shuffledSeed } from './ideas';
 import type { PoolGarment } from './queries';
 import { type GalleryState, ideasUrl } from './urls';
+import { needsNetwork } from '../page-contract';
 
 /**
  * The Outfits page's Ideas tab (#9): generated outfits as full-width cards
@@ -391,7 +392,7 @@ function IdeaCard(props: {
                   hx-post="/outfits/ideas/avoid"
                   hx-target="closest [data-idea]"
                   hx-swap="delete"
-                  data-needs-network=""
+                  {...needsNetwork()}
                 >
                   <input type="hidden" name="garmentId" value={String(a.id)} />
                   <input type="hidden" name="garmentId" value={String(b.id)} />

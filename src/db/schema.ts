@@ -259,7 +259,7 @@ export const userDevice = pgTable(
       .defaultNow()
       .notNull(),
     // When the browser last confirmed the subscription: every signed-in app
-    // start sends it again (public/js/push.js).
+    // start sends it again (views/assets/page/push.ts).
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .notNull(),

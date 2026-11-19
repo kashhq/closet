@@ -57,7 +57,7 @@ export const ChangePasswordBody = Type.Object({
   currentPassword: Password,
   newPassword: Password,
   confirmPassword: Password,
-  // This device's push subscription (<push-endpoint>, public/js/push.js):
+  // This device's push subscription (<push-endpoint>, views/assets/page/push.ts):
   // the one the new password leaves in place. Empty when the browser has
   // none; absent from pages cached before it. Only ever compared with this
   // user's own rows, so anything else in it keeps nothing.

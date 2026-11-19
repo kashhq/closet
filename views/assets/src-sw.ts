@@ -103,7 +103,7 @@ import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
 /**
- * Caching model (public/js/pwa.js and public/js/freshness.js are the page
+ * Caching model (views/assets/page/pwa.ts and views/assets/page/freshness.ts are the page
  * side):
  *  - App shell files under public/ are precached by content hash
  *    (scripts/generate-sw.ts), one precache per static build, so a repeat
@@ -946,7 +946,7 @@ async function revalidate(
  * stored before this worker activated (#2): online the server's page
  * answers, and the older build's copy only when the server cannot.
  *
- * Nothing here starts a revalidation: public/js/freshness.js reads the
+ * Nothing here starts a revalidation: views/assets/page/freshness.ts reads the
  * served-from-cache stamp itself, through Navigation Timing (Server-Timing,
  * CACHED_AT_TIMING_NAME in page-cache.ts), and asks for REVALIDATE_PAGE
  * itself, the same request a reconnect makes (#240). A worker that instead
@@ -991,7 +991,7 @@ const isPageRequest = ({ request, url }: { request: Request; url: URL }) =>
 // permission stays). Here only for a session the worker's own fetch found
 // ended (endFetchedSession); a sign-out, an account deletion or a session
 // ended elsewhere lands on the signed-out login page, which drops the
-// subscription itself (<push-signed-out>, public/js/push.js).
+// subscription itself (<push-signed-out>, views/assets/page/push.ts).
 async function dropPushSubscription(): Promise<void> {
   try {
     const subscription = await self.registration.pushManager.getSubscription();
@@ -1183,7 +1183,7 @@ warmStrategyCache({ urls: [FALLBACK_HTML_URL], strategy: offlinePage });
 // Runs when a matched route's handler fails: for a page (navigation or a
 // boosted link, which swaps the whole body) serve the offline page; a
 // fragment request fails instead, which htmx reports as htmx:sendError and
-// public/js/connectivity.js turns into the offline banner.
+// views/assets/page/connectivity.ts turns into the offline banner.
 setCatchHandler(async ({ request }) => {
   const wantsPage =
     request.mode === 'navigate' || request.headers.get('HX-Boosted') === 'true';
@@ -1996,9 +1996,9 @@ async function claimOwnBuildPages(): Promise<void> {
 // SKIP_WAITING when the user taps Reload. No skipWaiting() on install: a
 // worker that seizes control mid-session leaves pages holding stale asset
 // URLs, which is the black-screen bug the old hard-navigate hack papered over.
-// The page's own questions come from public/js/freshness.js, each with a
+// The page's own questions come from views/assets/page/freshness.ts, each with a
 // MessagePort for the answer; WARM_PAGES, SESSION_ENDING and CLAIM_CLIENTS
-// from public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. The
+// from views/assets/page/pwa.ts and OUTBOX_SYNCED from outbox.js want none. The
 // worker asks pages too: BUILD_QUERY (claimOwnBuildPages). Only this
 // site's own pages can post here (a page reaches a worker only through its
 // own origin's registration).

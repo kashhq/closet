@@ -65,6 +65,7 @@ import {
   type WardrobeHeaderProps,
   WardrobeMenu,
 } from './wardrobe-header';
+import { needsNetwork, searchShortcut } from '../page-contract';
 
 /**
  * The grid's filters as the page echoes them into its links and forms. The
@@ -919,7 +920,7 @@ function fromFilters(change: {
   };
 }
 
-// `/` focuses the search (public/js/search-shortcut.js; owner decision 5 of
+// `/` focuses the search (views/assets/page/search-shortcut.ts; owner decision 5 of
 // the desktop plan): the module loads with the search form.
 const SEARCH_SHORTCUT_IMPORT = "import 'search-shortcut';";
 
@@ -1183,7 +1184,7 @@ function SearchForm(props: {
           aria-label={t('SEARCH')}
           enterkeyhint="search"
           class="min-w-0 grow"
-          data-search-shortcut
+          {...searchShortcut()}
         />
       </label>
     </form>
@@ -1613,7 +1614,7 @@ function BulkActions({ model }: { model: WardrobeModel }) {
       <p class="text-sm text-muted mb-3" data-offline-note="">
         {t('BULK_NEEDS_NETWORK')}
       </p>
-      <div class="flex flex-col gap-4" data-needs-network="">
+      <div class="flex flex-col gap-4" {...needsNetwork()}>
         {capsules.length > 0 && (
           <div class="flex items-end gap-2">
             <label class="flex-1 min-w-0">
@@ -1816,7 +1817,7 @@ function BulkDialog() {
           type="submit"
           form={BULK_FORM_ID}
           class="btn btn-primary btn-sm"
-          data-needs-network=""
+          {...needsNetwork()}
         >
           {t('APPLY')}
         </button>

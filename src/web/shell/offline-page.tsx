@@ -5,6 +5,7 @@ import { PageShell } from '../layout/page-shell';
 import { SECTION_HOME } from '../layout/sections';
 import { OPENS_STALE, PAGES_CACHE } from '../page-cache';
 import type { ViewContext } from '../view-context';
+import { offlineFallback, savedPages, savedPagesNone } from '../page-contract';
 
 /**
  * The service worker's navigation fallback (FALLBACK_HTML_URL in
@@ -27,7 +28,7 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
     >
       <div
         class="px-16 gap-2 flex flex-col items-center"
-        data-offline-fallback=""
+        {...offlineFallback()}
       >
         <OfflineIcon class="size-6 text-error animate-pulse" />
         <h2 class="font-semibold">{t('OFFLINE_NOT_SAVED')}</h2>
@@ -36,7 +37,7 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
             <p>{t('OFFLINE_DESC')}</p>
             <ul
               class="flex flex-wrap gap-2 justify-center"
-              data-saved-pages={PAGES_CACHE}
+              {...savedPages(PAGES_CACHE)}
             >
               {OPENS_STALE.map((section) => (
                 <li hidden>
@@ -46,7 +47,7 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
                 </li>
               ))}
             </ul>
-            <p hidden data-saved-pages-none="">
+            <p hidden {...savedPagesNone()}>
               {t('OFFLINE_NONE_SAVED')}
             </p>
           </>

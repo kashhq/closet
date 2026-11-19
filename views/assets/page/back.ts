@@ -21,7 +21,7 @@
  * page (before every navigation, and on every history restore), so the
  * trail on screen is kept here and written back after each.
  *
- * A native post (every PostForm, src/web/auth/form.tsx) loads a new
+ * A native post (every PostForm, src/web/form.tsx) loads a new
  * document, whose entry starts without state: the submit hands the trail
  * over in sessionStorage, and the next document takes it only when its
  * referrer is the page that posted (a push notification's navigation never
@@ -53,6 +53,15 @@
  * Evaluated once per document (a module; boosted navigations swap only the
  * body): the listeners sit on the document and the window.
  */
+import { FORM_PAGE, HISTORY_BACK } from '../../../src/web/page-contract';
+
+/** One history entry of the app: its path, how it was reached, when rendered. */
+interface TrailEntry {
+  path: string;
+  /** Reached by a form page's save or exit, so back goes past that form. */
+  afterForm: boolean;
+  at: number;
+}
 
 const STATE_KEY = 'closetTrail';
 const HANDOFF_KEY = 'closet-back-handoff';
@@ -61,10 +70,14 @@ const SAVED_AT_KEY = 'closet-back-saved-at';
 const TRAIL_LIMIT = 50;
 
 const here = () => location.pathname + location.search;
-const last = (entries) => entries[entries.length - 1];
-const pathnameOf = (path) => path.split('?')[0];
+const last = (entries: TrailEntry[]) => entries[entries.length - 1];
+const pathnameOf = (path: string) => path.split('?')[0];
 /** A new entry for the page on screen, rendered now. */
-const entryHere = (afterForm) => ({ path: here(), afterForm, at: Date.now() });
+const entryHere = (afterForm: boolean): TrailEntry => ({
+  path: here(),
+  afterForm,
+  at: Date.now(),
+});
 const coldTrail = () => [entryHere(false)];
 /**
  * What the logs name a page by: its first path segment. Paths can carry
@@ -72,45 +85,57 @@ const coldTrail = () => [entryHere(false)];
  * whatever the user typed, and the console is readable by anything on the
  * page.
  */
-const routeKind = (path) => `/${path.split(/[/?#]/)[1] ?? ''}`;
+const routeKind = (path: string) => `/${path.split(/[/?#]/)[1] ?? ''}`;
 
 /** The page on screen is a form its save leaves (AppBar `formPage`). */
 const onFormPage = () =>
-  document.querySelector('header.app-bar[data-form-page]') !== null;
+  document.querySelector(`header.app-bar[${FORM_PAGE}]`) !== null;
+
+/** history.state as this module and htmx leave it. */
+const stateOf = (value: unknown) =>
+  (value ?? undefined) as { [STATE_KEY]?: unknown } | undefined;
 
 /**
  * A trail read back from history.state or the handoff, if it is one: a
  * list of entries ending at `path`.
  */
-function trailEndingAt(value, path) {
+function trailEndingAt(value: unknown, path: string): TrailEntry[] | null {
   const valid =
     Array.isArray(value) &&
     value.length > 0 &&
     value.every(
-      (entry) =>
+      (entry: Partial<TrailEntry> | null | undefined) =>
         typeof entry?.path === 'string' &&
         typeof entry.afterForm === 'boolean' &&
         typeof entry.at === 'number',
     );
-  return valid && last(value).path === path ? value : null;
+  return valid && last(value as TrailEntry[]).path === path
+    ? (value as TrailEntry[])
+    : null;
 }
 
 /** The trail of the entry on screen. */
-let trail = [];
+let trail: TrailEntry[] = [];
 
-function remember(entries) {
+function remember(entries: TrailEntry[]) {
   trail = entries.slice(-TRAIL_LIMIT);
-  history.replaceState({ ...history.state, [STATE_KEY]: trail }, '');
+  history.replaceState(
+    { ...(history.state as object | null), [STATE_KEY]: trail },
+    '',
+  );
 }
 
 /**
  * The trail a native post from the referring page handed over. Read once:
  * whatever this document's entry is, the handoff is spent.
  */
-function takeHandoff() {
-  let handoff;
+function takeHandoff(): { trail: TrailEntry[]; afterForm: boolean } | null {
+  let handoff: { trail?: unknown; afterForm?: unknown } | null;
   try {
-    handoff = JSON.parse(sessionStorage.getItem(HANDOFF_KEY) ?? 'null');
+    handoff = JSON.parse(sessionStorage.getItem(HANDOFF_KEY) ?? 'null') as {
+      trail?: unknown;
+      afterForm?: unknown;
+    } | null;
     sessionStorage.removeItem(HANDOFF_KEY);
   } catch (error) {
     console.warn('[back] could not read the handed-over trail', error);
@@ -131,7 +156,7 @@ function takeHandoff() {
 // or a cold entry.
 {
   const handoff = takeHandoff();
-  const stored = trailEndingAt(history.state?.[STATE_KEY], here());
+  const stored = trailEndingAt(stateOf(history.state)?.[STATE_KEY], here());
   if (stored) {
     // A reload (pull to refresh, the save's own) renders the page anew; a
     // back/forward load may come from the HTTP cache (below).
@@ -155,7 +180,7 @@ function takeHandoff() {
  * `?unworn=30`). 0 when that runs past the trail's start: nothing in the
  * app to go back to.
  */
-function stepsBack(entries) {
+function stepsBack(entries: TrailEntry[]) {
   const current = entries.length - 1;
   const page = pathnameOf(entries[current].path);
   let from = current;
@@ -175,7 +200,7 @@ function stepsBack(entries) {
  * entry (its href): the entry it pushes is the form's exit, done like a
  * save, so its own back arrow does not return into the abandoned form.
  */
-let formExit = null;
+let formExit: string | null = null;
 
 // Capture phase: ahead of htmx's own click listener on the (boosted) link,
 // which would otherwise also navigate forward to the href.
@@ -192,7 +217,7 @@ document.addEventListener(
     ) {
       return;
     }
-    const link = event.target.closest('a[data-history-back]');
+    const link = event.target.closest<HTMLAnchorElement>(`a[${HISTORY_BACK}]`);
     if (!link) return;
     const steps = stepsBack(trail);
     if (steps === 0) {
@@ -235,7 +260,7 @@ document.addEventListener('htmx:replacedInHistory', () => {
 // shipped, which starts cold. htmx:historyRestore writes it back once htmx
 // is done with the entry.
 window.addEventListener('popstate', (event) => {
-  const stored = trailEndingAt(event.state?.[STATE_KEY], here());
+  const stored = trailEndingAt(stateOf(event.state)?.[STATE_KEY], here());
   if (stored) remember(stored);
   else if (last(trail).path === here()) {
     remember([...trail, entryHere(false)]);
@@ -265,11 +290,15 @@ if (navigationType() === 'back_forward') {
 }
 
 function navigationType() {
-  return performance.getEntriesByType('navigation')[0]?.type;
+  return (
+    performance.getEntriesByType('navigation')[0] as
+      | PerformanceNavigationTiming
+      | undefined
+  )?.type;
 }
 
 /** Reloads the entry on screen if it was rendered before the tab's last save. */
-function reloadIfStale(how) {
+function reloadIfStale(how: string) {
   if (last(trail).at >= lastSavedAt()) return;
   console.info(
     `[back] ${routeKind(here())} restored (${how}) from before a save: reloading`,

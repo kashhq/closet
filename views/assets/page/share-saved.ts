@@ -13,8 +13,13 @@
 
 const MARK = 'closet.share-saving';
 
-/** @param {{ cache: string, key: string }} stash */
-export function markSaving(stash) {
+/** Where the shared photo is stashed (share-target.ts's stash). */
+interface Stash {
+  cache: string;
+  key: string;
+}
+
+export function markSaving(stash: Stash) {
   sessionStorage.setItem(MARK, JSON.stringify(stash));
 }
 
@@ -28,7 +33,7 @@ export async function forgetSavedShare() {
   if (!marked) return;
   sessionStorage.removeItem(MARK);
   try {
-    const { cache, key } = JSON.parse(marked);
+    const { cache, key } = JSON.parse(marked) as Stash;
     await (await caches.open(cache)).delete(key);
     console.info('[share] the saved share was deleted from the device');
   } catch (err) {

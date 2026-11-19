@@ -1,8 +1,11 @@
 {
-  // Type-checks the page's outbox (outbox.ts) against the DOM lib; bundled by
-  // esbuild in `npm run generate:outbox`, this config never emits. The bare
-  // names it imports from public/js/ resolve through `paths`, as the pages'
-  // importmap resolves them in the browser (esbuild keeps them external).
+  // Type-checks the page's modules (outbox.ts and page/*.ts) against the DOM
+  // lib, strict; bundled by esbuild in `npm run generate:pages`
+  // (buildPageModules, scripts/static-assets.ts), this config never emits.
+  // The bare names they import resolve through `paths`, as the pages'
+  // importmap (src/web/layout/import-map.ts) resolves them in the browser
+  // (esbuild keeps them external): a TypeScript module's own source, a
+  // plain-JS one's file in public/js/ (typed from its JSDoc).
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
@@ -14,10 +17,16 @@
     "allowJs": true,
     "types": [],
     "paths": {
+      "age-label": ["./page/age-label.ts"],
+      "freshness": ["./page/freshness.ts"],
+      "locate": ["./page/locate.ts"],
+      "push": ["./page/push.ts"],
+      "search-shortcut": ["./page/search-shortcut.ts"],
+      "share-saved": ["./page/share-saved.ts"],
+      "single-flight": ["./page/single-flight.ts"],
       "toast": ["../../public/js/toast.js"],
-      "confirm-sheet": ["../../public/js/confirm-sheet.js"],
-      "single-flight": ["../../public/js/single-flight.js"]
+      "confirm-sheet": ["../../public/js/confirm-sheet.js"]
     }
   },
-  "include": ["outbox.ts"]
+  "include": ["outbox.ts", "page/*.ts", "page-globals.d.ts", "page-vendor.d.ts"]
 }

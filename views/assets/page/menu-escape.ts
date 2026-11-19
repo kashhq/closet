@@ -14,5 +14,5 @@ document.addEventListener('keydown', (event) => {
   const open = document.querySelector('.app-bar details[open]');
   if (!open) return;
   open.removeAttribute('open');
-  open.querySelector(':scope > summary')?.focus();
+  open.querySelector<HTMLElement>(':scope > summary')?.focus();
 });

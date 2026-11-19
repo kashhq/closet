@@ -2,7 +2,7 @@
  * The outbox (#178; docs/plans/2026-11-12-offline-queued-writes.md sections
  * 3, 5 and 6; src/web/shell/outbox.md): wears, washes and packing ticks
  * tapped offline are kept in IndexedDB and replayed when the server answers
- * again. Bundled by `npm run generate:outbox` into public/js/outbox.js,
+ * again. Bundled by `npm run generate:pages` into public/js/outbox.js,
  * which the layout loads on signed-in pages; the rules it shares with the
  * server (keys, paths, the answer table, the queue over its store) are
  * src/offline-writes.ts.
@@ -102,6 +102,12 @@ import {
   type StuckActionStore,
 } from '../../src/offline-writes';
 import {
+  CONNECTIVITY,
+  FETCHED_AT,
+  FRESHNESS_CHANGE_EVENT,
+  FRESHNESS_ID,
+} from '../../src/web/page-contract';
+import {
   type DroppableRecord,
   dropQueuedWrites,
   openOutboxChannel,
@@ -143,12 +149,6 @@ interface Draft {
   fields: Fields;
 }
 
-declare global {
-  interface Window {
-    htmx?: { process(element: Element): void };
-  }
-}
-
 /** What one drain did: its saves, and when to retry, if it must. */
 interface DrainResult {
   saved: number;
@@ -172,8 +172,6 @@ const SAVED_TOAST_MS = 3_000;
 const REFUSAL_TOAST_MS = 6_000;
 
 const REGION = '[data-outbox-key]';
-// public/js/freshness.js's, on the document whenever its stamp is set.
-const FRESHNESS_CHANGE = 'freshness:change';
 const QUEUE_FORM = 'form[data-offline-queue]';
 const ALTERNATE = ':scope > template[data-outbox-state]';
 const FULL_MARK = 'outboxFull';
@@ -213,9 +211,9 @@ function counted(
 const fullText = () =>
   text('textOutboxFull').replace('{count}', String(OUTBOX_MAX_PENDING));
 
-/** connectivity.js's state, on <html>; absent until its first change (online). */
+/** connectivity.ts's state, on <html>; absent until its first change (online). */
 function offline(): boolean {
-  const state = document.documentElement.dataset.connectivity;
+  const state = document.documentElement.getAttribute(CONNECTIVITY);
   return state === 'offline' || state === 'reconnecting';
 }
 
@@ -1364,7 +1362,8 @@ function pageDayOf(element: Element, timeZone: string): string {
   return (
     answeredOn(element) ??
     pageDay(
-      document.getElementById('freshness')?.dataset.fetchedAt,
+      document.getElementById(FRESHNESS_ID)?.getAttribute(FETCHED_AT) ??
+        undefined,
       arrivals.current,
       timeZone,
     )
@@ -1593,9 +1592,9 @@ document.addEventListener('htmx:historyRestore', (event) => {
   void refresh();
 });
 
-// The page's stamp moved (freshness.js: another display, a revalidation
+// The page's stamp moved (freshness.ts: another display, a revalidation
 // that found the copy current, a re-stamped copy): so may its day.
-document.addEventListener(FRESHNESS_CHANGE, () => {
+document.addEventListener(FRESHNESS_CHANGE_EVENT, () => {
   showPageDay();
   void refresh();
 });

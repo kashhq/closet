@@ -25,7 +25,7 @@ import {
 } from './urls';
 import type { UnreadReason } from './writes';
 
-// public/js/share-saved.js: a share confirmation's Save lands here, so the
+// views/assets/page/share-saved.ts: a share confirmation's Save lands here, so the
 // shared photo it posted leaves the device now that it is saved. An inline
 // module, so it runs again on a page a boosted navigation brings. A fixed
 // string with nothing interpolated.

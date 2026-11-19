@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-// connectivity.js's heartbeat (public/js/ is served as it is, not built):
-// its verdict is this pure helper, tested here.
-import {
-  isLiveAnswer,
-  LIVE_HEADER,
-  LIVE_VALUE,
-} from '../../../public/js/live-answer.js';
+// connectivity.ts's heartbeat: its verdict is this pure helper, tested here.
+import { isLiveAnswer, LIVE_HEADER, LIVE_VALUE } from './live-answer';
 
 describe('isLiveAnswer', () => {
   it.each([

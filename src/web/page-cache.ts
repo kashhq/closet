@@ -5,7 +5,7 @@
  * The tab roots open stale-while-revalidate: the worker answers a document
  * load from its cache at once and fetches the page again behind it. The
  * page on screen learns how old it is and whether the server's copy differs
- * from the worker (public/js/freshness.js), and says so.
+ * from the worker (views/assets/page/freshness.ts), and says so.
  */
 
 import { isApiPath } from './api-path';
@@ -25,7 +25,7 @@ import { type Section, SECTION_HOME } from './layout/sections';
  * copies are stamped and owned (pageStore); pages-v1 held neither and is
  * retired on activate. A full page is stored under its absolute URL
  * (pageCacheKey), which the offline fallback page reads to link only what
- * this device saved (`data-pages-cache`, public/js/connectivity.js).
+ * this device saved (`data-pages-cache`, views/assets/page/connectivity.ts).
  */
 export const PAGES_CACHE = 'pages-v2';
 
@@ -47,7 +47,7 @@ export const CACHED_AT_HEADER = 'X-SW-Cached-At';
  * route template), and reading it this way needs nothing the worker must
  * remember until the page asks: asking its own memory for what it served,
  * keyed by the navigation's resultingClientId, did not survive a worker
- * WebKit had stopped meanwhile (public/js/freshness.js duplicates this
+ * WebKit had stopped meanwhile (views/assets/page/freshness.ts duplicates this
  * name; it cannot import a TS module). Once the page sees this, it asks for
  * REVALIDATE_PAGE itself (src-sw.ts), a fresh, self-contained request that
  * needs nothing remembered either.

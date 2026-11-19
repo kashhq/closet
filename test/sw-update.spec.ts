@@ -7,7 +7,7 @@ import { cachedPaths, networkSwitch } from './support/service-worker';
 
 /**
  * The installed app's update flow (src/web/shell/AGENTS.md, Updates): a new
- * build's worker waits, public/js/pwa.js offers it in a toast, Reload posts
+ * build's worker waits, views/assets/page/pwa.ts offers it in a toast, Reload posts
  * SKIP_WAITING (only online), and the page reloads once the new worker
  * controls it. Never a forced reload, in this window or another. Then the
  * activation refresh (#656): the pages build A stored still open offline

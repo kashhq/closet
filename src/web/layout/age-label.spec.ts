@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-// The freshness indicator's wording runs in the browser (public/js/ is
-// served as it is, not built); its pure part is tested here.
+// The freshness indicator's wording runs in the browser; its pure part is
+// tested here.
 import {
   ageLabel,
   ageParts,
   STALE_AFTER_MS,
-} from '../../../public/js/age-label.js';
+} from '../../../views/assets/page/age-label';
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;

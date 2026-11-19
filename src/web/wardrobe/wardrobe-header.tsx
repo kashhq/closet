@@ -26,6 +26,7 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from './urls';
+import { needsNetwork } from '../page-contract';
 
 /**
  * The Wardrobe's header and tabs (docs/plans/2026-09-26-redesign.md,
@@ -353,7 +354,7 @@ function PhotoItem(props: { source: 'camera' | 'library' }) {
   const camera = props.source === 'camera';
   const Icon = camera ? CameraIcon : PhotoLibraryIcon;
   return (
-    <li data-needs-network="">
+    <li {...needsNetwork()}>
       <label class="relative py-3 gap-3" data-photo-source={props.source}>
         <Icon class="size-5" />
         {t(camera ? 'garment.PHOTO_CAMERA' : 'garment.PHOTO_LIBRARY')}

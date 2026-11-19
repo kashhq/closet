@@ -36,7 +36,7 @@ process.env.SENTRY_DSN ??= E2E_SENTRY_DSN;
 
 /**
  * A Safari tab (not the installed app) opens the install dialog over the
- * first page of every session (public/js/pwa.js, offerInstall), and it
+ * first page of every session (views/assets/page/pwa.ts, offerInstall), and it
  * takes every tap until dismissed. The Safari projects start as a user who
  * has dismissed it: @khmyznikov/pwa-install's own flag, which it reads from
  * sessionStorage or localStorage.

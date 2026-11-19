@@ -7,7 +7,9 @@ import { THEME_BASE_100 } from '../theme-colors';
 import type { ViewContext } from '../view-context';
 import { PhotoViewer } from '../files/photo-viewer';
 import { AppStatus } from './app-status';
+import { importMap } from './import-map';
 import { ConfirmSheet } from './confirm-sheet';
+import { pageIdentity } from '../page-contract';
 
 /**
  * The document shell of every page. `PageShell` renders it with the app
@@ -35,43 +37,6 @@ const HTMX_CONFIG = {
   historyCacheSize: 3,
   timeout: REPLAY_TIMEOUT_MS,
 };
-
-// Bare specifiers for every ES module the pages import, so the versioned URL
-// lives here once. Page-specific modules (the snap strip's snap-strip, which
-// Styling's styling imports, the garment page's mask-editor and photo-input,
-// select mode's select-count, the recap's recap-export, the share
-// confirmation's share-confirm and click-gate, a look's share-saved, the
-// Wardrobe's search-shortcut) are only fetched by the page that imports
-// them.
-function importMap(version: string) {
-  const v = `?v=${version}`;
-  return {
-    imports: {
-      'workbox-window': `/modules/workbox-window.prod.mjs${v}`,
-      // pwa.js imports these two only where they do something.
-      'pwa-install': `/modules/pwa-install.bundle.js${v}`,
-      pulltorefreshjs: `/modules/pulltorefresh/index.esm.js${v}`,
-      toast: `/js/toast.js${v}`,
-      'confirm-sheet': `/js/confirm-sheet.js${v}`,
-      'mask-editor': `/js/mask-editor.js${v}`,
-      'photo-input': `/js/photo-input.js${v}`,
-      'snap-strip': `/js/snap-strip.js${v}`,
-      styling: `/js/styling.js${v}`,
-      locate: `/js/locate.js${v}`,
-      push: `/js/push.js${v}`,
-      freshness: `/js/freshness.js${v}`,
-      'age-label': `/js/age-label.js${v}`,
-      'live-answer': `/js/live-answer.js${v}`,
-      'single-flight': `/js/single-flight.js${v}`,
-      'select-count': `/js/select-count.js${v}`,
-      'recap-export': `/js/recap-export.js${v}`,
-      'share-confirm': `/js/share-confirm.js${v}`,
-      'share-saved': `/js/share-saved.js${v}`,
-      'click-gate': `/js/click-gate.js${v}`,
-      'search-shortcut': `/js/search-shortcut.js${v}`,
-    },
-  };
-}
 
 /**
  * A page's own link preview: the og tags (the share page's garment, a public
@@ -111,7 +76,7 @@ function ErrorScript({ ctx, v }: { ctx: ViewContext; v: string }) {
  * The offline outbox (#178, src/web/shell/outbox.md): queues wears, washes
  * and packing ticks offline and replays them. Signed-in pages only, whose
  * #app-status names the account. Built from views/assets/outbox.ts
- * (`npm run generate:outbox`); it imports from the importmap.
+ * (`npm run generate:pages`); it imports from the importmap.
  */
 function OutboxScript({ ctx, v }: { ctx: ViewContext; v: string }) {
   if (!ctx.user) return null;
@@ -136,11 +101,7 @@ export function Layout({
     // pages; the session cookie is httpOnly, so scripts cannot tell.
     // data-asset-version: the build this page was rendered with, which the
     // worker checks before claiming it (pwa.js, claimIfUncontrolled).
-    <html
-      lang="en"
-      data-signed-in={ctx.user ? '' : undefined}
-      data-asset-version={ctx.appVersion}
-    >
+    <html lang="en" {...pageIdentity(ctx.user !== undefined, ctx.appVersion)}>
       <head>
         <meta charset="UTF-8" />
         {/* No viewport-fit=cover: iOS standalone handles the safe areas
