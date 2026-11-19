@@ -18,3 +18,5 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
 
 - `drizzle/0002_outfit_slot.sql` built `outfit_slot` from the old `outfit.slots` JSON and `outfit_garments` pivot and aborts the boot if the two disagree for any outfit (compared as garment sets, owner-checked).
 - `/outfits/row-fragment` is gone (htmx-only, nothing links it).
+
+- **Incomplete outfits in views**: The views judge the garments they read (`OutfitGarment.status`, `piecesToBuy`; `to-buy.tsx`): the collage badges a piece To buy, the Saved grid's line says "1 piece to buy", the pickers (`SavedOutfitButton`, the Saved tab's `?for=day:`) disable it with "Buy 1 piece first", and its page shows the pieces above Edit in Styling (opened with Include picks on, `picks=1`), with no Plan. Styling's rows read the same rule (`rowGarmentsSql`), so a piece to buy stays as its row; `insertSlots` names its refusals itself (`slotRefusals`). MCP `list_outfits`/`get_outfit` answer `toBuy`.
