@@ -307,7 +307,8 @@ export const PAGE_WRITES: Readonly<
   'POST /wardrobe/orders/:id/dismiss': ORDER_MAIL,
 
   // Wears, washes and away.
-  'POST /wardrobe/:id/wear': { api: 'wearGarment' },
+  // `worn=0` takes the day's wear off.
+  'POST /wardrobe/:id/wear': { api: ['wearGarment', 'unwearGarment'] },
   'POST /wardrobe/:id/washed': { api: 'washGarment' },
   'POST /wardrobe/:id/away': { api: 'setGarmentAway' },
   'POST /laundry': { api: 'washGarments' },

@@ -170,7 +170,7 @@ Merging to `main` deploys: the publisher host's `make publish` (never the Mac: a
 Deviations from `~/.claude/conventions/`, each with its `docs/decisions.md` entry:
 
 - **Job outcomes add `discarded` and `interrupted`** (the cutout queue), non-alerting; any error or timeout is `failure`. `JOB_OUTCOMES` and `metrics.spec.ts` hold the list (2026-10-13, Observability contract).
-- **Statement budgets come only from `recordQueries` blocks** (`build/statements.json`, `make ci-db`): the most statements each `<METHOD>:<route>` sent there, not every request the suite makes (2026-10-13, Observability contract 2).
+- **Statement counts are pinned by the specs alone** (an API twin's from `PAGE_WRITES`: `test/AGENTS.md`); `build/statements.json` (`make ci-db`) only reports the most each `<METHOD>:<route>` sent in `recordQueries` (2026-10-13; #721).
 - **No pull-request job in Actions and no pre-merge gate**: a PR merges on review rounds (`@codex review`, or `make review PR=<n>`), and main is proven at deploy by the publisher's check_tree (devkit 2026-11-02); `ci.yml` runs only by hand.
 - **`nightly.yml` runs on a `schedule:`**: the page audit, Lighthouse, the real cutout model and WebKit, too slow for any PR; nothing in it gates a deploy (2026-10-16, Convention deltas declared).
 - **The image smoke is `scripts/smoke-image.sh`, not devkit's `boot_image.sh`**: it boots on the host network, then runs devkit's `contract_probe.sh` (2026-10-16, Convention deltas declared).

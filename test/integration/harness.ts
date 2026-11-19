@@ -644,8 +644,8 @@ function requestsSince(marks: Map<LogCapture, number>): RequestStatements[] {
  * proving a page reads what it shows rather than a whole table: rows, not
  * only statements, since one statement can return everything. Each
  * request's own count is noted as a statement budget (STATEMENTS_OUT,
- * test/support/statement-budgets.ts): the counts these specs pin are the
- * ones the metrics ratchet holds.
+ * test/support/statement-budgets.ts), which the metrics report reads; only
+ * the specs' own assertions hold a count (#721).
  */
 export async function recordQueries(
   work: () => Promise<unknown>,

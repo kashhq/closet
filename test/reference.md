@@ -17,7 +17,7 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
                        while a callback runs, with rows, start and time; recordQueries and the page audit),
                        statement-budgets.ts (+ -setup, -global: with STATEMENTS_OUT, `make ci-db`, the
                        most statements each `<METHOD>:<route>` sent inside a recordQueries block, merged
-                       into build/statements.json, which metrics.conf's `statements` collector ratchets),
+                       into build/statements.json, which metrics.conf's `statements` collector reports),
                        multipart.ts, pwa-env.ts (PWA_ENV: the PWA's config with a throwaway VAPID pair),
                        household-today.ts (householdToday: the server's "today" for Playwright),
                        log-capture.ts (LogCapture, captureLogs: the app's log lines as records),
