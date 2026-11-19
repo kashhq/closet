@@ -8,10 +8,11 @@ import {
   utimesSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
 import { buildPageModules, precompress } from './static-assets';
 
@@ -95,6 +96,7 @@ describe('buildPageModules', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'closet-pages-'));
+    execFileSync('git', ['init', '-q'], { cwd: root });
     mkdirSync(at('sources'), { recursive: true });
     writeFileSync(at('sources', 'outbox.ts'), 'export const y = 1;\n');
   });
@@ -118,5 +120,58 @@ describe('buildPageModules', () => {
     expect(existsSync(at('js', 'old-name.js'))).toBe(false);
     expect(existsSync(at('js', 'new-name.js'))).toBe(true);
     expect(existsSync(at('js', 'plain.js'))).toBe(true);
+  });
+
+  it('keeps a tracked file, though an earlier run built that name', () => {
+    source('mod');
+    build();
+    execFileSync('git', ['add', '-f', 'js/mod.js'], { cwd: root });
+    rmSync(at('sources', 'page', 'mod.ts'));
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'mod.js'))).toBe(true);
+  });
+
+  it('keeps a file whose content changed since the build', () => {
+    source('mod');
+    build();
+    writeFileSync(at('js', 'mod.js'), 'export const edited = 1;\n');
+    rmSync(at('sources', 'page', 'mod.ts'));
+
+    expect(build().removed).toEqual([]);
+    expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('edited');
+  });
+
+  it('removes nothing outside a repository and keeps the file listed', () => {
+    source('mod');
+    build();
+    rmSync(at('.git'), { recursive: true });
+    rmSync(at('sources', 'page', 'mod.ts'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'mod.js'))).toBe(true);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(readFileSync(at('cache', 'page-modules.json'), 'utf8')).toContain(
+      'mod.js',
+    );
+
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    expect(build().removed).toEqual(['mod.js']);
+    warn.mockRestore();
+  });
+
+  it('reports the outputs an old name-only list left, deleting none', () => {
+    source('keep');
+    mkdirSync(at('js'), { recursive: true });
+    writeFileSync(at('js', 'gone.js'), 'export {};\n');
+    mkdirSync(at('cache'), { recursive: true });
+    writeFileSync(at('cache', 'page-modules.json'), '["gone.js"]');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'gone.js'))).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('gone.js'));
+    warn.mockRestore();
   });
 });
