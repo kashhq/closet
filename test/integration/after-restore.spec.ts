@@ -52,7 +52,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Recovering from a database restore (#653): the post-restore command,
  * reconciliation's missing marks and the placeholder they draw, the writes
  * that must ignore the placeholder, the cutout repoint, and the by-hand
- * recipe of src/db/AGENTS.md, all against the real sync triggers.
+ * recipe of src/db/reference.md, all against the real sync triggers.
  */
 describe('after a database restore', () => {
   let t: TestApp;
@@ -588,12 +588,15 @@ describe('after a database restore', () => {
     expect(await revisionOf(garment.id)).toBeGreaterThan(before);
   });
 
-  it('the by-hand recipe in src/db/AGENTS.md passes the sync triggers, and the same write without it does not', async () => {
-    const doc = await readFile(join(PROJECT_ROOT, 'src/db/AGENTS.md'), 'utf8');
+  it('the by-hand recipe in src/db/reference.md passes the sync triggers, and the same write without it does not', async () => {
+    const doc = await readFile(
+      join(PROJECT_ROOT, 'src/db/reference.md'),
+      'utf8',
+    );
     const recipe = /<!-- by-hand-recipe -->\n```sql\n([\s\S]*?)```/.exec(
       doc,
     )?.[1];
-    if (!recipe) throw new Error('No by-hand recipe in src/db/AGENTS.md');
+    if (!recipe) throw new Error('No by-hand recipe in src/db/reference.md');
     const id = await createGarment(t, { name: 'Shirt' });
     const before = await revisionOf(id);
 
