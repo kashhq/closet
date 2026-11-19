@@ -36,7 +36,7 @@ const budgets = new Map<string, number>();
  * collector (devkit/metrics/statements.py) refuses a key without one: it is
  * left out, so the file holds only real routes whatever the specs request.
  */
-const isRouteKey = (key: string) =>
+export const isRouteKey = (key: string) =>
   key.slice(key.indexOf(':') + 1).startsWith('/');
 
 export function noteStatements(requests: readonly RequestStatements[]): void {
