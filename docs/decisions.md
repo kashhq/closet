@@ -1653,3 +1653,15 @@ Consequence: `no-unsafe-*` is `error` everywhere but `test/integration`, where 9
 Why: building the TS page modules into public/js/ beside the tracked plain JS meant the build could not tell its stale outputs from source files; the manifest-and-hash cleanup it needed took four review rounds of edge cases (tracked files, no git, the legacy list, watcher races).
 Decision: `buildPageModules` writes only `public/js/gen/` (gitignored whole) and leaves it holding exactly its outputs, unchanged bytes kept for precompress; served as `/js/gen/<name>.js` through `pageModuleUrl` (`src/web/layout/import-map.ts`), under the existing `/js/` static prefix, precache glob and versioned root. The manifest, hashes, `trackedNames` and the legacy handling are gone.
 Consequence: converting a plain module moves its URL to `pageModuleUrl`. A checkout built before this has untracked `public/js/<name>.js` copies, which the Dockerfile's `COPY public` would ship: each build deletes a page module's name there when git says it is untracked (one `ls-files`; skipped without git, as in the image), never a tracked plain module. No .dockerignore: it cannot say "untracked", and every other leftover in public/ the build reconciles itself.
+
+## 2026-11-18 — The statements file holds routes only, so ci-metrics ignores tier order
+
+**Why:** `make ci-db` itself wrote `GET:unmatched` and `POST:unmatched` (a spec's 404 no route matched) into `build/statements.json`; the collector refuses a key without a `/route`, so `make ci-metrics` exited 2 on a clean tree (#720). The e2e tier never wrote the file.
+**Decision:** `noteStatements` (`test/support/statement-budgets.ts`) drops a request with no route template; only `recordQueries` blocks, only for real routes, feed the file.
+**Consequence:** `ci-db ci-e2e` and `ci-e2e ci-db` give the same 88 statements keys. `ci-metrics` also needs `ci-unit`'s `tier-unit.json`.
+
+## 2026-11-18 — The dup collector skips the generated OpenAPI spec; the ratchet was stale, not doubled
+
+**Why:** jscpd read `src/web/api/openapi.json` (generated, committed): 5.47 % duplication and 307 clones, all inside that file. Real code is 0.12 % and 18 clones. The test counts (unit 2824 in 172 unique files, none under dist/ or a worktree) and the size/fan figures are real growth since the 2026-11-13 baseline (src 580 to 821 files, `schema.ts` 2427 to 2923 lines).
+**Decision:** `.jscpd.json` (merged over devkit's base by `--base`) ignores `**/openapi.json`.
+**Consequence:** a new generated file under `src/` that is not TS gets an ignore there.

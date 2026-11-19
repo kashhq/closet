@@ -1,12 +1,12 @@
 {
   "metrics": {
-    "coupling.backend.fan_in_max": 123,
-    "duplication.repo.jscpd_percent": 0.04,
-    "size.backend.max_lines": 2427,
-    "size.backend.over_600": 16,
+    "coupling.backend.fan_in_max": 199,
+    "duplication.repo.jscpd_percent": 0.12,
+    "size.backend.max_lines": 2923,
+    "size.backend.over_600": 34,
     "vuln.backend.critical": 0,
     "vuln.backend.high": 0,
-    "vuln.backend.packages": 405,
+    "vuln.backend.packages": 406,
     "vuln.backend.total": 0
   },
   "schema_version": 2,
