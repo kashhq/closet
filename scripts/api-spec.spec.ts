@@ -1,7 +1,12 @@
 import { Validator } from '@seriousme/openapi-schema-validator';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { generateApiSpec, serializeSpec, SPEC_PATH } from './api-spec';
+import {
+  generateApiSpec,
+  nameSchemas,
+  serializeSpec,
+  SPEC_PATH,
+} from './api-spec';
 
 /**
  * The OpenAPI drift test (#190; plan section 5): the committed
@@ -113,5 +118,122 @@ describe('the OpenAPI spec', () => {
       'GET /api/v1/openapi.json',
       'POST /api/v1/auth/token',
     ]);
+  });
+
+  describe('as a client generator reads it (#714)', () => {
+    function nodes(root: unknown): Record<string, unknown>[] {
+      const found: Record<string, unknown>[] = [];
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) node.forEach(walk);
+        else if (typeof node === 'object' && node !== null) {
+          found.push(node as Record<string, unknown>);
+          Object.values(node).forEach(walk);
+        }
+      };
+      walk(root);
+      return found;
+    }
+
+    it('holds every titled schema once, as a component, and never inline', () => {
+      const spec = generated as Spec & {
+        components: { schemas: Record<string, { title?: string }> };
+      };
+      for (const [name, schema] of Object.entries(spec.components.schemas)) {
+        expect(schema.title, name).toBe(name);
+      }
+      const inline = nodes(spec.paths).filter(
+        (node) => typeof node.title === 'string' && !('$ref' in node),
+      );
+      expect(inline.map((node) => node.title)).toEqual([]);
+    });
+
+    it('fails the emit when one title names two shapes, but not for a reordered copy', () => {
+      const twoShapes = (second: object) => ({
+        paths: {
+          '/a': { get: { x: { title: 'Pair', type: 'object', required: [] } } },
+          '/b': { get: { x: second } },
+        },
+      });
+      expect(() =>
+        nameSchemas(twoShapes({ type: 'object', required: [], title: 'Pair' })),
+      ).not.toThrow();
+      expect(() =>
+        nameSchemas(twoShapes({ title: 'Pair', type: 'string' })),
+      ).toThrow(/"Pair" names two schemas/);
+    });
+
+    it('leaves no anyOf of single-value literals, strings or numbers', () => {
+      const unions = nodes(generated).filter(
+        (node) =>
+          Array.isArray(node.anyOf) &&
+          node.anyOf.every(
+            (branch: { enum?: unknown[] }) => branch.enum?.length === 1,
+          ),
+      );
+      expect(unions).toEqual([]);
+    });
+
+    it('collapses number literals as numbers', () => {
+      const spec = {
+        paths: {
+          '/a': {
+            x: {
+              anyOf: [
+                { type: 'integer', enum: [1] },
+                { type: 'integer', enum: [2] },
+              ],
+            },
+          },
+        },
+      };
+      nameSchemas(spec);
+      expect(spec.paths['/a'].x).toEqual({ type: 'integer', enum: [1, 2] });
+    });
+
+    it('points every $ref at a component that exists', () => {
+      const spec = generated as { components: { schemas: object } };
+      const missing = nodes(spec)
+        .map((node) => node.$ref)
+        .filter(
+          (ref): ref is string =>
+            typeof ref === 'string' &&
+            !(
+              ref.replace('#/components/schemas/', '') in
+              spec.components.schemas
+            ),
+        );
+      expect(missing).toEqual([]);
+      const mapped = nodes(spec).flatMap((node) =>
+        node.discriminator
+          ? Object.values(
+              (node.discriminator as { mapping: Record<string, string> })
+                .mapping,
+            )
+          : [],
+      );
+      expect(mapped.length).toBeGreaterThan(0);
+    });
+
+    it("discriminates the changes feed's item by resource, mapping each to its component", () => {
+      const spec = generated as {
+        components: {
+          schemas: Record<
+            string,
+            { properties: { changes: { items: Record<string, unknown> } } }
+          >;
+        };
+      };
+      const item = spec.components.schemas.ChangesPage.properties.changes.items;
+      expect(item.anyOf).toBeUndefined();
+      const branches = item.oneOf as { $ref: string }[];
+      const discriminator = item.discriminator as {
+        propertyName: string;
+        mapping: Record<string, string>;
+      };
+      expect(discriminator.propertyName).toBe('resource');
+      expect(Object.values(discriminator.mapping).sort()).toEqual(
+        branches.map((branch) => branch.$ref).sort(),
+      );
+    });
   });
 });

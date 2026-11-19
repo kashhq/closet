@@ -1632,6 +1632,12 @@ Why: `refreshOlderBuildPages` kept its per-key backoff decisions (who is asked, 
 Decision: `planRefresh`, `backoffAfter` and `walkRecord` (`src/web/page-cache.ts`) own those decisions, unit-tested in `page-cache.spec.ts`; the worker only reads and writes the cache around them. `isQueued(stored): stored is QueuedRecord` (`outbox.ts`) names what it checks, so its false branch keeps the tombstone's type.
 Consequence: a new backoff rule goes in those functions with a case, not in the worker. `service-worker.spec.ts` skips on `browserName !== 'chromium'` (`CDP_IS_CHROMIUM_ONLY`): no other browser has a CDP session, which `test/AGENTS.md`'s "never on `!== 'chromium'`" is for Safari-only limits.
 
+## 2026-11-18 — The spec names its schemas after the emit, not in the routes (#714)
+
+Why: TypeBox inlines every titled schema at each use and writes anyOf-of-literal enums, so a generated client got one nested type per copy and a try-each-branch feed decoder.
+Decision: `nameSchemas` (`scripts/api-spec.ts`) hoists each title into `components.schemas`, collapses single-value string enums, and discriminates the feed's item on `resource`; Fastify still serializes through the inline schemas, so no response changes. Copies compare by sorted-key shape; two shapes under one title fail the emit.
+Consequence: a new resource schema needs a unique `title`; a feed branch is titled `<Resource>Change` so the discriminator can map to it.
+
 ## 2026-11-18 — Client modules are TypeScript sharing the views' names; plain JS only shrinks (#713)
 Why: the installed app's offline state, freshness, back and push ran as unchecked JS: a renamed `data-*` attribute or dataset key shipped with every check green, and freshness.js duplicated four server constants because it could not import TS.
 Decision: connectivity, freshness, back, pwa, push and six small modules moved to `views/assets/page/*.ts` (strict `tsconfig.page.json`, in `npm run typecheck`), bundled by `buildPageModules` (`npm run generate:pages`, which replaced `generate:outbox`) to their old `public/js/` URLs with every importmap name kept external. The names they read are `src/web/page-contract.ts`'s constants, spread by the writing view; the heartbeat's header became `src/live-answer.ts` (one spelling, bundled into connectivity: the `live-answer` importmap entry is gone) and the page tag `src/page-tag.ts`.
