@@ -583,7 +583,7 @@ describe('Clear-Site-Data reaches the page a redirect lands on', () => {
   });
 
   it('a static path or an htmx fragment never clears, and leaves the marker for the page', async () => {
-    for (const url of ['/js/pwa.js', '/health/live', '/manifest.json']) {
+    for (const url of ['/js/gen/pwa.js', '/health/live', '/manifest.json']) {
       const res = await t.inject({
         method: 'GET',
         url,

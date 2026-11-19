@@ -325,7 +325,7 @@ describe('app shell', () => {
 
     it('goes back in history, with its href as the fallback', async () => {
       const res = await get('/auth/update-email');
-      expect(res.body).toContain('/js/back.js?v=');
+      expect(res.body).toContain('/js/gen/back.js?v=');
       expect(res.body).toMatch(
         /<a href="\/auth\/profile#account" class="btn[^"]*" aria-label="Back" data-history-back=""/,
       );

@@ -31,7 +31,7 @@ import { CACHED_AT_HEADER } from '../src/web/page-cache';
  * not listed; the integration tier's expectFullPage holds every page's
  * PostForms to the marker.
  *
- * Except the writes the outbox queues (#178, public/js/outbox.js): Wore
+ * Except the writes the outbox queues (#178, public/js/gen/outbox.js): Wore
  * today and a packing tick stay enabled offline, show their other state and
  * "Waiting to sync", and save on reconnect; a write the server refuses is a
  * notice until dismissed or signed out; another account's page never sends

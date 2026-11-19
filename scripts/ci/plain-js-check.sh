@@ -4,8 +4,9 @@
 #   - a tracked public/js/*.js with no `known` line is a new plain-JS module: write it as
 #     views/assets/page/<name>.ts instead;
 #   - a `known` line with no tracked file was converted or removed: drop the line;
-#   - a views/assets/page/<name>.ts whose public/js/<name>.js is tracked, or not ignored, would
-#     ship the build's output beside (or instead of) the source: delete it, list it in .gitignore.
+#   - a views/assets/page/<name>.ts whose public/js/<name>.js is still tracked is a converted
+#     module whose plain copy stayed: delete it (the build writes public/js/gen/<name>.js);
+#   - public/js/gen/ (the build's output) must be ignored, never tracked.
 # Stdlib only (git, sort, comm), like layer-check, so it runs before npm ci.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -33,13 +34,17 @@ done < <(comm -23 <(printf '%s\n' "$known") <(printf '%s\n' "$tracked"))
 while IFS= read -r source; do
   [ -n "$source" ] || continue
   case "$source" in *.d.ts) continue ;; esac
-  output="public/js/$(basename "$source" .ts).js"
-  if git ls-files --error-unmatch -- "$output" >/dev/null 2>&1; then
-    fail "$output is built from $source (npm run generate:pages): delete the tracked copy"
-  elif ! git check-ignore -q --no-index -- "$output"; then
-    fail "$output is built from $source (npm run generate:pages): list it in .gitignore"
+  plain="public/js/$(basename "$source" .ts).js"
+  if git ls-files --error-unmatch -- "$plain" >/dev/null 2>&1; then
+    fail "$plain is converted to $source (built to public/js/gen/): delete the tracked copy"
   fi
 done < <(git ls-files -- 'views/assets/page/*.ts')
+
+if [ -n "$(git ls-files -- public/js/gen)" ]; then
+  fail "public/js/gen/ is the build's output (npm run generate:pages): untrack it"
+elif ! git check-ignore -q --no-index -- public/js/gen/any.js; then
+  fail "public/js/gen/ is the build's output (npm run generate:pages): list it in .gitignore"
+fi
 
 if [ "$status" -eq 0 ]; then
   echo "plain-js-check: $(printf '%s\n' "$known" | grep -c .) plain-JS modules left (scripts/ci/plain_js.conf)"

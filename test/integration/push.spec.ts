@@ -525,7 +525,7 @@ describe('web push (PWA_ENABLED=true)', () => {
       expect(res.body).toMatch(/<p data-show="checking">/);
       expect(res.body).toMatch(/<p data-show="on" hidden/);
       expect(res.body).toMatch(/hx-post="\/push\/test"/);
-      expect(res.body).toContain('"push":"/js/push.js?v=');
+      expect(res.body).toContain('"push":"/js/gen/push.js?v=');
     });
 
     it('a signed-out page is not marked signed in', async () => {

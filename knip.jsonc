@@ -15,7 +15,7 @@
     "src/cutout/child.ts",
     // Loaded by the pages' <script> tags (src/web/layout/), never imported.
     "public/js/*.js",
-    // The page's TypeScript modules, each bundled into public/js/<name>.js by
+    // The page's TypeScript modules, each bundled into public/js/gen/<name>.js by
     // `npm run generate:pages` (buildPageModules, scripts/static-assets.ts).
     "views/assets/outbox.ts",
     "views/assets/page/*.ts",

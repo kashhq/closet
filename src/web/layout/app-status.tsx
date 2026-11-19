@@ -138,7 +138,7 @@ function outboxText(): Record<`data-text-outbox-${string}`, string> {
 /**
  * The outbox's banner ("3 changes waiting to sync", "Syncing 3 changes",
  * "Sign in to save 3 changes") and its notice of the writes that were not
- * saved, which stays until Dismiss. public/js/outbox.js fills both.
+ * saved, which stays until Dismiss. public/js/gen/outbox.js fills both.
  */
 function OutboxStatus() {
   return (
