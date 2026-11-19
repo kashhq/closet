@@ -24,15 +24,25 @@ import { dirname, join } from 'node:path';
  */
 
 export interface RequestStatements {
-  /** `<METHOD>:<route template>`, `unmatched` for a 404 no route matched. */
+  /** `<METHOD>:<route template>`, `unmatched` for a 404 no route matched (never noted). */
   key: string;
   statements: number;
 }
 
 const budgets = new Map<string, number>();
 
+/**
+ * A 404 no route matched has no route template to budget, and the statements
+ * collector (devkit/metrics/statements.py) refuses a key without one: it is
+ * left out, so the file holds only real routes whatever the specs request.
+ */
+const isRouteKey = (key: string) =>
+  key.slice(key.indexOf(':') + 1).startsWith('/');
+
 export function noteStatements(requests: readonly RequestStatements[]): void {
-  for (const { key, statements } of requests) {
+  for (const { key, statements } of requests.filter(({ key }) =>
+    isRouteKey(key),
+  )) {
     budgets.set(key, Math.max(budgets.get(key) ?? 0, statements));
   }
 }
