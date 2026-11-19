@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRouteKey } from '../support/statement-budgets';
+import { isRouteKey } from '../test/support/statement-budgets';
 
 describe('isRouteKey', () => {
   it('drops a request no route matched', () => {
