@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { pruneOrphanRows } from '../views/assets/expiration-rows';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  activateThenSweep,
+  pruneOrphanRows,
+} from '../views/assets/expiration-rows';
 
 const ORIGIN = 'https://closet.test';
 const IMAGES = 'images-v2';
@@ -193,5 +196,45 @@ describe('pruneOrphanRows: an expiration row without its entry (#1155)', () => {
       keyPath: 'id',
       indexes: ['cacheName', 'timestamp'],
     });
+  });
+});
+
+describe('activateThenSweep: the sweep never holds the activation (#1155)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('activation completes while the database never opens; the sweep is given up at its deadline', async () => {
+    vi.useFakeTimers();
+    // A WebKit worker's IndexedDB can leave an open unsettled for good.
+    const neverOpens = { open: () => ({}) as IDBOpenDBRequest };
+    const { storage } = fakeCaches();
+    const held: Promise<unknown>[] = [];
+    const onTimeout = vi.fn();
+    const outcome = activateThenSweep(
+      (promise) => held.push(promise),
+      Promise.resolve(),
+      async () => {
+        await pruneOrphanRows(neverOpens, storage, IMAGES, () => NOW);
+      },
+      10_000,
+      onTimeout,
+    );
+    expect(held).toHaveLength(1);
+    await expect(held[0]).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await outcome).toBe('timed-out');
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('a failed activation sweeps nothing', async () => {
+    const sweep = vi.fn(() => Promise.resolve());
+    const outcome = activateThenSweep(
+      () => undefined,
+      Promise.reject(new Error('activate')),
+      sweep,
+      10_000,
+      () => undefined,
+    );
+    expect(await outcome).toBe('skipped');
+    expect(sweep).not.toHaveBeenCalled();
   });
 });

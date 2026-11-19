@@ -114,3 +114,40 @@ export async function pruneOrphanRows(
     db.close();
   }
 }
+
+/** How long the activate's sweep may run before it is given up. */
+export const SWEEP_DEADLINE_MS = 10_000;
+
+/**
+ * The activate step: `waitUntil` holds the activation alone, and the sweep
+ * starts once it has settled, outside it, bounded by `deadlineMs` (#1155).
+ * An IndexedDB open that never settles (a WebKit worker's known failure)
+ * would otherwise hold the activation, and every client waiting on it, for
+ * good. Unheld, a worker stopped mid-sweep leaves the rest to the next
+ * activate; one past the deadline is abandoned (`onTimeout` logs it), and a
+ * failed activation sweeps nothing. What became of the sweep.
+ */
+export function activateThenSweep(
+  waitUntil: (promise: Promise<unknown>) => void,
+  activation: Promise<void>,
+  sweep: () => Promise<void>,
+  deadlineMs: number,
+  onTimeout: () => void,
+): Promise<'swept' | 'timed-out' | 'skipped'> {
+  waitUntil(activation);
+  return activation.then(
+    async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        sweep().then(() => 'swept' as const),
+        new Promise<'timed-out'>((resolve) => {
+          timer = setTimeout(() => resolve('timed-out'), deadlineMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (outcome === 'timed-out') onTimeout();
+      return outcome;
+    },
+    () => 'skipped' as const,
+  );
+}

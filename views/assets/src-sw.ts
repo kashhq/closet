@@ -94,7 +94,11 @@ import {
   outbox,
   type OutboxChange,
 } from './outbox-store';
-import { pruneOrphanRows } from './expiration-rows';
+import {
+  activateThenSweep,
+  pruneOrphanRows,
+  SWEEP_DEADLINE_MS,
+} from './expiration-rows';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
@@ -262,10 +266,10 @@ async function deleteCacheAndMetadata(name: string): Promise<boolean> {
 }
 
 /**
- * Once per activate: the expiration rows whose entry is gone (#1155,
- * expiration-rows.ts), above all a stale image imageStore deleted after
- * its row was written. A failure only logs: it must not hold the
- * activation, and the next activate sweeps again.
+ * Once per activate, after it (activateThenSweep): the expiration rows
+ * whose entry is gone (#1155, expiration-rows.ts), above all a stale image
+ * imageStore deleted after its row was written. A failure only logs; the
+ * next activate sweeps again.
  */
 async function pruneExpirationRows(): Promise<void> {
   for (const name of Object.keys(MAX_ENTRIES)) {
@@ -1137,7 +1141,8 @@ const RETIRED_CACHES = [
 ];
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
+  void activateThenSweep(
+    (promise) => event.waitUntil(promise),
     (async () => {
       // Every copy stamped before this moment is an older build's: never
       // opened stale-first (StaleTabRoot), and due for the activation
@@ -1151,7 +1156,6 @@ self.addEventListener('activate', (event) => {
       );
       const count = deleted.filter(Boolean).length;
       if (count > 0) console.info(`[sw] dropped ${count} retired cache(s)`);
-      await pruneExpirationRows();
       // Before this build records its own activation, so the build it
       // replaces is the latest other one to have activated.
       const { kept, dropped } = await dropOtherPrecaches(self.caches, PRECACHE);
@@ -1162,6 +1166,12 @@ self.addEventListener('activate', (event) => {
         `[sw] build ${STATIC_BUILD} active: keeping precache(s) ${kept.join(', ')}, ${dropped.length} dropped`,
       );
     })(),
+    pruneExpirationRows,
+    SWEEP_DEADLINE_MS,
+    () =>
+      console.info(
+        `[sw] expiration sweep given up after ${SWEEP_DEADLINE_MS / 1000} s`,
+      ),
   );
 });
 
