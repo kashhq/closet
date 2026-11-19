@@ -128,25 +128,18 @@ function pageBuildOptions(sources: string, outdir: string): BuildOptions {
 
 // Where the page modules were built before public/js/gen/ (#1177).
 const PAGE_LEGACY_DIR = path.join(PUBLIC_DIR, 'js');
-// Outside public/, so a moved file is neither served nor copied into the image.
-const LEGACY_PARK_DIR = path.join(
-  NODE_MODULES,
-  '.cache',
-  'closet',
-  'legacy-js',
-);
 
 /**
- * Moves the untracked `<name>.js` copies the builds before public/js/gen/
- * left in public/js/ for each page module name (with their .br/.gz) to
- * `parkDir`: no longer ignored and never referenced, but a checkout's
- * leftovers would still be copied into the image (the Dockerfile's
- * `COPY public`). They are moved, never deleted: an untracked file of that
- * name may be a developer's uncommitted edit (#1181), and an older parked
- * copy is overwritten. A tracked file (a plain-JS module) is never touched.
- * Without git to ask (the image build has no .git), nothing is moved.
+ * Warns about each untracked `<name>.js` the builds before public/js/gen/ left
+ * in public/js/ for a page module's name: obsolete build output nothing loads
+ * (the URLs moved to /js/gen/), but still copied into an image by the
+ * Dockerfile's `COPY public`. It touches no file (#1181): an untracked file of
+ * that name may be a developer's edit, and moving or deleting it is a data-loss
+ * risk for a few hours' worth of stale output. A tracked file (a plain-JS
+ * module) is never named. Without git to ask (the image build has no .git),
+ * nothing is said.
  */
-function parkLegacyCopies(names: string[], dir: string, parkDir: string): void {
+function warnLegacyCopies(names: string[], dir: string): void {
   const candidates = names
     .map((name) => `${name}.js`)
     .filter((file) => fs.existsSync(path.join(dir, file)));
@@ -164,15 +157,8 @@ function parkLegacyCopies(names: string[], dir: string, parkDir: string): void {
   }
   for (const file of candidates) {
     if (tracked.has(file)) continue;
-    fs.mkdirSync(parkDir, { recursive: true });
-    for (const variant of [file, `${file}.br`, `${file}.gz`]) {
-      const from = path.join(dir, variant);
-      if (fs.existsSync(from)) {
-        fs.renameSync(from, path.join(parkDir, variant));
-      }
-    }
-    console.log(
-      `page modules: moved ${path.relative(process.cwd(), path.join(dir, file))}, an untracked copy from before public/js/gen/, to ${path.relative(process.cwd(), path.join(parkDir, file))}`,
+    console.warn(
+      `page modules: ${path.relative(process.cwd(), path.join(dir, file))} is an obsolete build output from before public/js/gen/; delete it by hand (git clean -n public/js lists them)`,
     );
   }
 }
@@ -190,16 +176,14 @@ export function buildPageModules(
     sources?: string;
     outdir?: string;
     legacyDir?: string;
-    parkDir?: string;
   } = {},
 ): { written: string[]; removed: string[] } {
   const {
     sources = PAGE_SOURCES,
     outdir = PAGE_OUT,
     legacyDir = PAGE_LEGACY_DIR,
-    parkDir = LEGACY_PARK_DIR,
   } = where;
-  parkLegacyCopies(Object.keys(pageModuleEntries(sources)), legacyDir, parkDir);
+  warnLegacyCopies(Object.keys(pageModuleEntries(sources)), legacyDir);
   const result = buildSync({
     ...pageBuildOptions(sources, outdir),
     logLevel: 'warning',

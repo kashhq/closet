@@ -93,7 +93,6 @@ describe('buildPageModules', () => {
       sources: at('sources'),
       outdir: at('js', 'gen'),
       legacyDir: at('js'),
-      parkDir: at('parked'),
     });
 
   beforeEach(() => {
@@ -122,7 +121,7 @@ describe('buildPageModules', () => {
     ]);
   });
 
-  it('moves an untracked copy from before public/js/gen/ out of public/ and keeps a tracked one', () => {
+  it('warns about an untracked copy from before public/js/gen/ and touches no file', () => {
     source('converted');
     source('plain');
     execFileSync('git', ['init', '-q'], { cwd: root });
@@ -131,19 +130,17 @@ describe('buildPageModules', () => {
     writeFileSync(at('js', 'converted.js.br'), 'x');
     writeFileSync(at('js', 'plain.js'), 'export {};\n');
     execFileSync('git', ['add', 'js/plain.js'], { cwd: root });
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     build();
 
-    expect(existsSync(at('js', 'converted.js'))).toBe(false);
-    expect(existsSync(at('js', 'converted.js.br'))).toBe(false);
-    expect(readFileSync(at('parked', 'converted.js'), 'utf8')).toBe(
+    expect(readFileSync(at('js', 'converted.js'), 'utf8')).toBe(
       'export const edited = 1;\n',
     );
-    expect(readFileSync(at('parked', 'converted.js.br'), 'utf8')).toBe('x');
+    expect(existsSync(at('js', 'converted.js.br'))).toBe(true);
     expect(existsSync(at('js', 'plain.js'))).toBe(true);
-    expect(existsSync(at('parked', 'plain.js'))).toBe(false);
-    expect(log).toHaveBeenCalledOnce();
-    log.mockRestore();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0]?.[0])).toContain('converted.js');
+    warn.mockRestore();
   });
 });
