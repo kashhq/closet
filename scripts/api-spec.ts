@@ -97,7 +97,22 @@ export async function generateApiSpec(): Promise<unknown> {
 const SCHEMA_REF = '#/components/schemas/';
 
 /** Keywords whose values are data, not schemas: an example carrying a `title` is not a component (#1169). */
-const DATA_KEYWORDS = new Set(['default', 'example', 'examples', 'const']);
+const DATA_KEYWORDS = new Set([
+  'default',
+  'example',
+  'examples',
+  'const',
+  'enum',
+]);
+
+/** Keywords whose value maps user-chosen names to schemas: the names are never keywords (a property may be called `default`). */
+const NAME_MAP_KEYWORDS = new Set([
+  'properties',
+  'patternProperties',
+  '$defs',
+  'definitions',
+  'dependentSchemas',
+]);
 
 /**
  * What a client generator needs and TypeBox's inlining withholds (#714):
@@ -124,8 +139,7 @@ export function nameSchemas(spec: unknown): void {
     const visited: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
       if (DATA_KEYWORDS.has(key)) visited[key] = value;
-      else if (key === 'properties' && isRecord(value))
-        // Property names are not keywords: one called `default` is a schema.
+      else if (NAME_MAP_KEYWORDS.has(key) && isRecord(value))
         visited[key] = Object.fromEntries(
           Object.entries(value).map(([name, property]) => [
             name,

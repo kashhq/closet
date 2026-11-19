@@ -142,22 +142,24 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
       for (const record of records) {
         for (const node of record.addedNodes) {
           if (!(node instanceof HTMLElement)) continue;
-          // The chip may arrive itself or inside an inserted wrapper.
-          const chipNode = node.matches('[data-weather-day]')
-            ? node
-            : node.querySelector<HTMLElement>('[data-weather-day]');
-          const day = chipNode?.dataset.weatherDay;
-          if (!chipNode || !day) continue;
-          const date = chipNode
-            .closest('[data-month-day]')
-            ?.querySelector('span');
-          if (!date) continue;
-          const chip = chipNode.getBoundingClientRect();
-          arrivals[day] = {
-            date: centre(date.getBoundingClientRect()),
-            chip: centre(chip),
-            width: chip.width,
-          };
+          // A chip arrives itself or inside an inserted wrapper, one or many.
+          const chips = [
+            ...(node.matches('[data-weather-day]') ? [node] : []),
+            ...node.querySelectorAll<HTMLElement>('[data-weather-day]'),
+          ];
+          for (const chipNode of chips) {
+            const day = chipNode.dataset.weatherDay;
+            const date = chipNode
+              .closest('[data-month-day]')
+              ?.querySelector('span');
+            if (!day || !date) continue;
+            const chip = chipNode.getBoundingClientRect();
+            arrivals[day] = {
+              date: centre(date.getBoundingClientRect()),
+              chip: centre(chip),
+              width: chip.width,
+            };
+          }
         }
       }
     }).observe(document, { childList: true, subtree: true });
