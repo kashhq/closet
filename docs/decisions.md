@@ -1665,3 +1665,8 @@ Consequence: converting a plain module moves its URL to `pageModuleUrl`. A check
 **Why:** jscpd read `src/web/api/openapi.json` (generated, committed): 5.47 % duplication and 307 clones, all inside that file. Real code is 0.12 % and 18 clones. The test counts (unit 2824 in 172 unique files, none under dist/ or a worktree) and the size/fan figures are real growth since the 2026-11-13 baseline (src 580 to 821 files, `schema.ts` 2427 to 2923 lines).
 **Decision:** `.jscpd.json` (merged over devkit's base by `--base`) ignores `**/openapi.json`.
 **Consequence:** a new generated file under `src/` that is not TS gets an ignore there.
+
+## 2026-11-18 — htmx settles no attributes
+Why: htmx inserts an element that replaces one of the same id wearing the old element's `class` and `style`, applying its own only after the 20 ms settle delay, for CSS transitions. A month cell's weather chip arrived in its empty slot's classes (base size, not `text-xs`), widening the lg date column, then shrank; `calendar.spec.ts` measured the date and the chip on either side of the settle and failed once.
+Decision: `HTMX_CONFIG.attributesToSettle` is `[]` (`src/web/layout/layout.tsx`): every swapped element is drawn as the server sent it from its first frame. Nothing used the settle for a transition.
+Consequence: a CSS transition between an old and a new class on swap is unavailable; one that needs it animates on its own (`@starting-style`, a keyframe). The calendar scenario records the chip at insertion (a MutationObserver, ahead of the settle timer) and requires the settle to move nothing.
