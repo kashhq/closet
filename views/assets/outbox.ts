@@ -298,7 +298,9 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
 }
 
 /** A record that is not Discard's tombstone: still waiting to be sent or settled. */
-type QueuedRecord = OutboxRecord & { state: 'pending' | 'failed' };
+type QueuedRecord = OutboxRecord & {
+  state: Exclude<OutboxRecord['state'], 'discarded'>;
+};
 
 /**
  * A stored record still waiting to be sent or settled: not replaced, not

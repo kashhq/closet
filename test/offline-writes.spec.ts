@@ -628,7 +628,12 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     page.on('request', (request) => {
       if (request.method() !== 'POST') return;
       const { pathname } = new URL(request.url());
-      (pathname === '/laundry' ? posted : washes).push(pathname);
+      // Only the laundry's own post and the washes it queues: the vitals and
+      // error-tracking beacons are POSTs too.
+      if (pathname === '/laundry') posted.push(pathname);
+      else if (/^\/wardrobe\/\d+\/washed$/.test(pathname)) {
+        washes.push(pathname);
+      }
     });
 
     await page.goto('/laundry');
