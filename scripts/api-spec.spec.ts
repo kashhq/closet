@@ -253,6 +253,29 @@ describe('the OpenAPI spec', () => {
       expect(Object.keys(componentsOf(spec))).toEqual(['Label', 'Extra']);
     });
 
+    it('walks contentSchema and draft-07 dependencies, leaving a property-name array alone', () => {
+      const spec = answering({
+        '200': {
+          type: 'string',
+          contentSchema: { title: 'Decoded', type: 'object' },
+          dependencies: {
+            card: { title: 'Billing', type: 'object' },
+            name: ['first', 'last'],
+          },
+        },
+      });
+      nameSchemas(spec);
+      expect(schemaOf(spec, '200')).toEqual({
+        type: 'string',
+        contentSchema: { $ref: '#/components/schemas/Decoded' },
+        dependencies: {
+          card: { $ref: '#/components/schemas/Billing' },
+          name: ['first', 'last'],
+        },
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['Decoded', 'Billing']);
+    });
+
     it('refuses a schema position it does not walk, rather than skip its schemas', () => {
       const media = (encoding: object) => ({
         content: { 'multipart/form-data': { schema: {}, encoding } },
