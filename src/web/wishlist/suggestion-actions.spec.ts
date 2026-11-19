@@ -238,7 +238,7 @@ describe("Muse's writes are the caller's own wardrobe", () => {
     });
     await expect(createNeed(deps, owner, need)).rejects.toMatchObject({
       statusCode: 409,
-      message: expect.stringContaining(`id ${NEED}, not_now`),
+      message: expect.stringContaining(`id ${NEED}, not_now`) as string,
     });
   });
 });

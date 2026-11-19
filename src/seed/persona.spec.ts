@@ -131,12 +131,12 @@ describe('persona bibles', () => {
     });
     expect(garment('T21').fields).toMatchObject({
       condition: 'replace_soon',
-      conditionNote: expect.stringMatching(/Pilling/),
+      conditionNote: expect.stringMatching(/Pilling/) as string,
     });
     expect(garment('B02').fields.condition).toBe('needs_repair');
     expect(garment('G04').away).toEqual({
       reason: 'lent',
-      note: expect.stringMatching(/Dana/),
+      note: expect.stringMatching(/Dana/) as string,
     });
     expect(garment('F07').away).toMatchObject({ reason: 'repair' });
     expect(demo.garments.filter((g) => g.away)).toHaveLength(2);
@@ -162,7 +162,7 @@ describe('persona bibles', () => {
       {
         day: '2025-03-22',
         kind: 'alteration',
-        note: expect.stringMatching(/Sleeves shortened/),
+        note: expect.stringMatching(/Sleeves shortened/) as string,
         cost: '25.00',
       },
     ]);
@@ -181,7 +181,7 @@ describe('persona bibles', () => {
       styles: ['elevated-basics', 'smart-casual', 'outdoor-technical'],
       budget: 'mid',
       palette: ['green', 'blue', 'black', 'white', 'grey', 'beige', 'brown'],
-      notes: expect.stringMatching(/One pattern at a time/),
+      notes: expect.stringMatching(/One pattern at a time/) as string,
     });
     // His week template (#16) is his week table: the day's Calendar
     // occasion, and the runs and the gym as workouts.
