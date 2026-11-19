@@ -5,6 +5,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { Client } from 'pg';
 import sharp from 'sharp';
+import {
+  type A11yPass,
+  type A11yVisit,
+  auditAccessibility,
+} from './audit/a11y';
+import { a11yPageNotes, compareA11y } from './audit/a11y-report';
 import { Budgets } from './audit/budget';
 import {
   AUDIT_PERSONAS,
@@ -16,6 +22,7 @@ import {
   type AuditReport,
   compareReports,
   parseReport,
+  refuseOnlyWithOut,
   renderComparison,
   renderReport,
   REPORT_VERSION,
@@ -30,14 +37,17 @@ import {
   type Outcome,
   type Phase,
   type Step,
+  stepId,
 } from './audit/walk';
 
 /**
  * `npm run audit:pages` (#157): every page, fragment, action, MCP tool and
  * job the page audits (#158-#174) name, measured as the demo persona on the
  * production build: server time p50/p95 over repeated runs after warm-up,
- * SQL statements and rows per request, response bytes. Writes a markdown
- * table and a JSON report a later run diffs against (`--compare`).
+ * SQL statements and rows per request, response bytes; first, every page in
+ * Chromium at 390 px for axe, field font and target size (audit/a11y.ts,
+ * #722). Writes a markdown table and a JSON report a later run diffs
+ * against (`--compare`, which fails on more accessibility violations).
  * docs/perf/README.md is the guide; the committed baseline lives there too.
  *
  *   --runs N            timed runs per step (default 20)
@@ -57,10 +67,11 @@ const PROJECT_ROOT = resolve(__dirname, '..');
 /** Gitignored: the default output, and every run's app log. */
 const RESULTS = join(PROJECT_ROOT, 'scripts', 'results');
 
+const DEFAULT_OUT = 'scripts/results/audit';
 const OPTIONS = {
   runs: { type: 'string', default: '20' },
   warmup: { type: 'string', default: '3' },
-  out: { type: 'string', default: 'scripts/results/audit' },
+  out: { type: 'string' },
   persona: { type: 'string', default: 'demo' },
   only: { type: 'string' },
   compare: { type: 'string' },
@@ -237,6 +248,16 @@ async function record(
   }
 }
 
+/** The page steps a browser opens: a plain GET, not an htmx fragment. */
+function browserVisits(fixture: Fixture, steps: readonly Step[]): A11yVisit[] {
+  return steps.flatMap((step) => {
+    const request = step.page?.(fixture);
+    if (!request || request.method !== 'GET' || request.htmx) return [];
+    const { issue, name, target } = step;
+    return [{ id: stepId(step), issue, name, target, request }];
+  });
+}
+
 /** Route templates and MCP tools no step reached. */
 async function notWalked(
   fixture: Fixture,
@@ -276,12 +297,18 @@ async function writeOutputs(
   return written;
 }
 
+/** No default in OPTIONS: only an explicit --out can overwrite a baseline. */
+function outPrefix(only: string | undefined, out: string | undefined): string {
+  refuseOnlyWithOut(only, out);
+  return resolve(PROJECT_ROOT, out ?? DEFAULT_OUT);
+}
+
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: OPTIONS, strict: true });
   const runs = count(values.runs, 'runs', 1);
   const warmup = count(values.warmup, 'warmup', 0);
   const persona = auditPersona(values.persona);
-  const out = resolve(PROJECT_ROOT, values.out);
+  const out = outPrefix(values.only, values.out);
   const baseline = values.compare
     ? await readBaseline(values.compare, persona)
     : undefined;
@@ -300,6 +327,8 @@ async function main(): Promise<void> {
   // Beside the other runs' output, never in docs/perf/ with a baseline.
   await mkdir(RESULTS, { recursive: true });
   const appLog = join(RESULTS, `${basename(out)}.app.log`);
+  // Every offending node of the accessibility pass, beside the log.
+  const a11yNodes = join(RESULTS, `${basename(out)}.a11y-nodes.json`);
   const fixture = await createFixture({
     persona,
     photo: await testPhoto(),
@@ -322,7 +351,18 @@ async function main(): Promise<void> {
   const [loadAtStart] = loadavg();
   let walked: Walked;
   let unwalked: string[];
+  let a11y: A11yPass;
   try {
+    // Before the walk: the pass is read-only (a11y.ts), so the steps still
+    // start on the seed as it was.
+    a11y = await auditAccessibility(
+      fixture,
+      browserVisits(
+        fixture,
+        phases.flatMap((phase) => phase.steps),
+      ),
+      a11yNodes,
+    );
     walked = await walk(
       fixture,
       phases,
@@ -355,6 +395,7 @@ async function main(): Promise<void> {
     steps: walked.results,
     sql: walked.sql,
     unwalked,
+    a11y: values.only ? { ...a11y.report, partial: true } : a11y.report,
   };
   const written = await writeOutputs(out, report, walked, {
     explain: values.explain,
@@ -368,11 +409,45 @@ async function main(): Promise<void> {
   console.log(
     `Wrote ${written.map((path) => relative(process.cwd(), path)).join(', ')}`,
   );
-  if (walked.failures.length > 0) {
-    throw new Error(
-      `${walked.failures.length} step(s) failed:\n${walked.failures.join('\n')}\nThe app's log: ${relative(process.cwd(), appLog)}`,
+  refuseFailures([...a11y.failures, ...walked.failures], appLog);
+  if (baseline) refuseNewA11yKinds(baseline, report, a11yNodes);
+}
+
+function refuseFailures(failures: readonly string[], appLog: string): void {
+  if (failures.length === 0) return;
+  throw new Error(
+    `${failures.length} step(s) failed:\n${failures.join('\n')}\nThe app's log: ${relative(process.cwd(), appLog)}`,
+  );
+}
+
+/** The one gate in the compare, on kinds; count rises print as WORSE (docs/perf/README.md). */
+function refuseNewA11yKinds(
+  baseline: AuditReport,
+  report: AuditReport,
+  nodesFile: string,
+): void {
+  // A baseline from before #722 has no pass to compare with.
+  if (!baseline.a11y || !report.a11y) return;
+  const comparison = compareA11y(baseline.a11y, report.a11y);
+  const { newKinds, increases } = comparison;
+  const notes = a11yPageNotes(comparison);
+  if (notes.length > 0) console.log(`\nAccessibility:\n${notes.join('\n')}`);
+  for (const increase of increases) {
+    console.log(
+      `WORSE accessibility nodes: ${increase.measure} on #${increase.id} (${increase.target}): ${increase.before} → ${increase.after}`,
     );
   }
+  if (newKinds.length === 0) return;
+  throw new Error(
+    `${newKinds.length} accessibility violation kind(s) the baseline lacks:\n` +
+      newKinds
+        .map(
+          (item) =>
+            `  ${item.measure} on #${item.id} (${item.target}): ${item.kind}`,
+        )
+        .join('\n') +
+      `\nEach node: ${relative(process.cwd(), nodesFile)}`,
+  );
 }
 
 main().catch((error: unknown) => {

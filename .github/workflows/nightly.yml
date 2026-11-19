@@ -1,7 +1,7 @@
 name: Nightly
 
 # Slow checks that no PR or publish pays for: the page audit (against the
-# committed baseline) and Lighthouse (trend-shaped, used to run on every
+# committed baseline; its accessibility counts fail on an increase, #722) and Lighthouse (trend-shaped, used to run on every
 # push), the real background-removal model, too big for the per-merge
 # publisher's smoke test (#181), and the browser suite in WebKit, the owner's phone's
 # engine (#179). Nothing here gates a deploy.
@@ -16,7 +16,7 @@ permissions:
 jobs:
   performance:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:18-alpine
@@ -56,6 +56,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The audit's accessibility pass opens every page in Chromium (scripts/audit/a11y.ts).
+      - run: npx playwright install --with-deps chromium
       # Counts and bytes compare exactly across machines; times are this
       # runner's, not the baseline box's (docs/perf/README.md).
       - run: npm run audit:pages -- --compare docs/perf/baseline.json
@@ -66,6 +68,12 @@ jobs:
           path: scripts/results/
       # audit:pages built dist/; lighthouse starts it with start:prod.
       - run: npm run lighthouse
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: lighthouse
+          path: scripts/results/lighthouse/
+          if-no-files-found: ignore
 
   # The 940 MB BiRefNet model on real photos: cutout-model.spec (the queue, the
   # child process, onnxruntime-node from node_modules), then one cutout in the

@@ -71,7 +71,12 @@ export function PermissionBadge(props: {
 export function InviteLinkResult(props: { url: string }) {
   return (
     <div class="flex flex-col gap-3" id="invite-link-result">
-      <CopyableText value={props.url} size="sm" label={t('COPY_TEXT')} />
+      <CopyableText
+        value={props.url}
+        size="sm"
+        name={t('INVITE_LINK')}
+        label={t('COPY_TEXT')}
+      />
     </div>
   );
 }
@@ -178,6 +183,7 @@ export function SharingPage(props: { ctx: ViewContext; model: SharingModel }) {
                   <CopyableText
                     value={inviteUrl(model.origin, share.inviteToken)}
                     size="xs"
+                    name={t('INVITE_LINK')}
                     label={t('COPY_INVITE_LINK')}
                   />
                 )}

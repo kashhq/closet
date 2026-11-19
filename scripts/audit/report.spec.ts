@@ -6,6 +6,7 @@ import {
   renderComparison,
   renderReport,
   REPORT_VERSION,
+  refuseOnlyWithOut,
   sqlKey,
   type StepResult,
 } from './report';
@@ -197,5 +198,36 @@ describe('rendering', () => {
     expect(renderComparison(same, same, compareReports(same, same))).toContain(
       'Nothing changed beyond the noise.',
     );
+  });
+
+  it('leaves accessibility out when the baseline has no a11y section', () => {
+    const before = report([step({ name: 'Grid' })]);
+    const after = {
+      ...before,
+      a11y: {
+        viewport: { width: 390, height: 844 },
+        axeVersion: '4',
+        rules: {},
+        pages: [],
+      },
+    };
+    expect(
+      renderComparison(before, after, compareReports(before, after)),
+    ).not.toContain('## Accessibility');
+  });
+});
+
+describe('refuseOnlyWithOut', () => {
+  it('refuses a filtered run that would write the baseline', () => {
+    expect(() => refuseOnlyWithOut('calendar', 'docs/perf/baseline')).toThrow(
+      '--out writes the whole baseline; drop --only',
+    );
+  });
+
+  it('allows --only alone and --out alone', () => {
+    expect(() => refuseOnlyWithOut('calendar', undefined)).not.toThrow();
+    expect(() =>
+      refuseOnlyWithOut(undefined, 'docs/perf/baseline'),
+    ).not.toThrow();
   });
 });

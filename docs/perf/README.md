@@ -9,10 +9,12 @@ production build, over one of two seeded personas (#707):
 | `demo` (default) | Theo: 83 garments, 26 outfits, 13 weeks of wears | `baseline.md`, `baseline.json` |
 | `scale` | Theo grown to the 0.1 target: 500 garments, 1,000 outfits, 1,095 days (1,043 worn entries, 4,550 wears), Dana sharing her wardrobe | `baseline-scale.md`, `baseline-scale.json` |
 
-Both baselines are that run on `main` at `08d9927` (2026-11-14, Apple M4
-10 cores, Node 22.23.3; demo: load average 2.6 rising to 8.3, scale: 10.1
-falling to 2.7, other agents' runs sharing the box: times from them are
-rough, counts and bytes exact); scale's Styling (#163) and Ideas gallery
+Demo's baseline is #722's run at `4fc5b86` (2026-11-19, Apple M4 10
+cores, Node 22.23.3, load average 5.8 falling to 2.5), the first with the
+accessibility counts. Scale's is the run on `main` at `08d9927`
+(2026-11-14, load average 10.1 falling to 2.7, other agents' runs sharing
+the box: times rough, counts and bytes exact), without them (its compare
+skips the pass until it is refreshed); its Styling (#163) and Ideas gallery
 (#168) steps were measured again by #996's `--only` runs and merged in.
 Every page PR shows its before and after
 against the one that fits it; a perf-sensitive one against both
@@ -35,7 +37,7 @@ A **page or fragment read** at scale is over the line when its p50 is above
 phone parses on every visit). Statements and bytes are exact; a time is
 over only past the noise below. A page over the line is a finding for the
 owner to schedule, not a failing gate: `make perf-compare` prints what
-moved, it does not fail. Writes, MCP tools and jobs are read for their
+moved, and fails only on a new accessibility violation kind (Accessibility, below). Writes, MCP tools and jobs are read for their
 statements and times too, but the hashing steps (sign-in, register, change
 password: 220 to 440 ms by design) and the photo pipeline are not pages.
 
@@ -168,6 +170,32 @@ the load average at the start and end of the walk; compare runs made under
 similar load, from the same machine: CI's nightly run
 (`.github/workflows/nightly.yml`) compares against this baseline too, but
 its times are a different machine's; only its counts and bytes compare.
+
+## Accessibility
+
+Before the walk, every page step a browser can open (a GET answering 200,
+nothing to prepare, not htmx) loads in Chromium at 390 × 844
+(`scripts/audit/a11y.ts`, #722) as its step's user, and the report's `a11y`
+holds per page, per measure, the violating node count and the sorted list of
+violating element kinds (nodes with one selector pattern, `:nth-child`
+indexes, uuids and dates stripped, are one kind, so a calendar grid does not
+follow the seed's dates): each axe-core rule (all
+of axe's default rules), `field font < 16 px` (a text field iOS zooms the
+page into on focus, shown or not) and `target < 44 px` (a visible tap
+target under 43.5 px on either side, the half pixel absorbing font rounding
+between macOS and Linux; a control counts its label's box, and a
+link inside running text is exempt). The browser's writes are answered 204
+in the browser, so the walk still starts on the seed and no budget is spent.
+
+**`--compare` fails on a new kind**: a (page, rule, kind) triple the baseline
+lacks, which is deterministic across days and OSes. A node count above the
+baseline's prints as `WORSE accessibility nodes` and never fails: counts follow
+the seed's dates and font rounding, and the nightly gates no deploy. A page the
+baseline lacks is reported as new, a baseline page this run lacks as missing,
+neither fails: refresh with `npm run audit:pages -- --out docs/perf/baseline`
+(refused with `--only`, which would truncate it). Every offending node, with
+axe's failure summary or the size, is in `scripts/results/<name>.a11y-nodes.json`.
+A PR that fixes some refreshes the baseline in the same change.
 
 ## Rate limits
 

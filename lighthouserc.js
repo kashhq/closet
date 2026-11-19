@@ -25,11 +25,11 @@ module.exports = {
         'unused-css-rules': 'warn',
         'render-blocking-insight': 'warn',
         'image-delivery-insight': 'warn',
-        // Pre-existing homepage issues unrelated to wardrobe feature.
         // Lighthouse 13 dropped the font-size, render-blocking-resources and
         // third-party-facades audits (the last two became render-blocking-insight,
         // already warned above, and third-parties-insight, which the preset turns off).
-        'color-contrast': 'warn',
+        // An error since #722; the page audit's axe pass checks every other page.
+        'color-contrast': 'error',
         // robots.txt disallows everything on purpose (private app, no landing page)
         'is-crawlable': 'off',
         // These audits return null (not applicable) and cannot use minScore
@@ -37,7 +37,9 @@ module.exports = {
       },
     },
     upload: {
-      target: 'temporary-public-storage',
+      // Local files, uploaded by nightly.yml: no public URL, no external request.
+      target: 'filesystem',
+      outputDir: 'scripts/results/lighthouse',
     },
   },
 };

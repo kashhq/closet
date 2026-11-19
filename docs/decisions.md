@@ -1687,3 +1687,9 @@ Consequence: a new twin's count is one line in the table; a case naming a page r
 Why: `nameSchemas` walked every object in the OpenAPI document as a schema and skipped keyword lists (`DATA_KEYWORDS`, `NAME_MAP_KEYWORDS`); three review rounds (#1167, #1196, #1197) each found a name that was also a keyword (a `default` response, a component called `example`).
 Decision: it visits only the document's schema positions (parameters, media types, headers, `components.schemas`) and, inside a schema, only JSON Schema's applicator keywords (with draft-07's tuple `items: [...]` and `additionalItems`, which `Type.Tuple` emits); every other value is data by construction. A position it does not walk (another component kind, `webhooks`, `callbacks`, encoding headers) fails the emit.
 Consequence: a new applicator keyword or schema position is added to its list in `scripts/api-spec.ts`; there is no list of data keywords to keep.
+
+## 2026-11-19 — The page audit's accessibility counts are a ratchet (#722)
+
+Why: nothing checked accessibility past the signed-out login page (Lighthouse), and the audit already visits every page as the demo persona, but through `inject`, with no browser.
+Decision: `audit:pages` first opens each plain-GET page step in Chromium at 390 px on a loopback port (`scripts/audit/a11y.ts`), the browser's writes answered 204 in the browser so the walk's seed and rate-limit budgets are untouched, and records per page the nodes of each axe rule, text fields under 16 px and tap targets under 44 px (`a11y` in the report, still version 2: a report without it compares as before). `--compare` fails on any increase; times and counts still only print. Lighthouse's `color-contrast` is an error.
+Consequence: a PR that adds a violation fails the nightly; one that fixes some refreshes the baseline. The counts are a baseline of what exists (serious `label-content-name-mismatch`, `nested-interactive`, hundreds of small targets), not a pass.

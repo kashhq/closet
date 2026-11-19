@@ -157,12 +157,14 @@ export function TokensPage(props: TokensPageProps) {
           <CopyableText
             value={created.token}
             size="sm"
+            name={t('agentAccess.TOKEN')}
             label={t('agentAccess.COPY')}
           />
           <p class="text-sm">{t('agentAccess.CONNECT')}</p>
           <CopyableText
             value={connectCommand(ctx.siteUrl, created.token)}
             size="xs"
+            name={t('agentAccess.CONNECT_COMMAND')}
             label={t('agentAccess.COPY')}
           />
         </Card>
