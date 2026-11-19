@@ -606,6 +606,56 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(page.locator('[data-outbox="pending"]')).toHaveCount(0);
   });
 
+  await test.step('a native post (the laundry’s Mark washed) is held, queued a wash per row, and replays on reconnect', async () => {
+    await signIn(page, 'outbox-laundry');
+    const ids = [
+      await createGarment(page, 'Hamper tee'),
+      await createGarment(page, 'Hamper shirt'),
+    ];
+    for (const id of ids) {
+      expect(
+        (
+          await page.request.post(`/wardrobe/${id}/wear`, {
+            form: { worn: '1' },
+            headers: SAME_ORIGIN,
+          })
+        ).ok(),
+      ).toBe(true);
+    }
+    const banner = page.locator('#outbox-banner');
+    const posted: string[] = [];
+    const washes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'POST') return;
+      const { pathname } = new URL(request.url());
+      // Only the laundry's own post and the washes it queues: the vitals and
+      // error-tracking beacons are POSTs too.
+      if (pathname === '/laundry') posted.push(pathname);
+      else if (/^\/wardrobe\/\d+\/washed$/.test(pathname)) {
+        washes.push(pathname);
+      }
+    });
+
+    await page.goto('/laundry');
+    await setWritesReachable(page, false);
+    await page.getByRole('button', { name: 'Mark washed' }).click();
+    // Held at the capture-phase submit: the form never posts, so the page
+    // stays on the hamper and each row is its own pending wash.
+    await expect(banner).toHaveText('2 changes waiting to sync');
+    await expect(page).toHaveURL(/\/laundry$/);
+    expect(posted).toEqual([]);
+
+    await setWritesReachable(page, true);
+    await expect(page.getByText('2 changes saved')).toBeVisible();
+    await expect(banner).toBeHidden();
+    expect(posted).toEqual([]);
+    expect(washes.sort()).toEqual(
+      ids.map((id) => `/wardrobe/${id}/washed`).sort(),
+    );
+    await page.reload();
+    await expect(page.getByText('Nothing needs a wash.')).toBeVisible();
+  });
+
   await test.step('the worker refetches what a sync saved, and the queue ends with the session', async (step) => {
     step.skip(
       process.env.PWA_ENABLED !== 'true',

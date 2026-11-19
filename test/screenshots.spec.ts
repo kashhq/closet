@@ -503,50 +503,67 @@ async function framedPageShots(page: Page, suffix: string): Promise<void> {
   await shot(page, name('outfit'));
   const outfitPath = new URL(page.url()).pathname;
   const hx = { ...SAME_ORIGIN, 'hx-request': 'true' };
-  await page.request.post(`${outfitPath}/share`, { headers: hx });
-  await page.goto(outfitPath);
-  const shareLink = new URL(
-    await page.locator('[data-public-share] input').inputValue(),
-  );
-  const invite = await page.request.post('/wardrobe-share/create-invite-link', {
-    form: { permission: 'VIEW' },
-    headers: hx,
-  });
-  const invitePath = /\/wardrobe-share\/invite\/[0-9a-f-]{36}/.exec(
-    await invite.text(),
-  )?.[0];
-  expect(invitePath).toBeDefined();
-  await page.goto('/trips');
-  await page.getByRole('link', { name: /Austin conference/ }).click();
-  await expect(page.locator('#trip-packed-summary')).toBeVisible();
-  await shot(page, name('trip'));
-  await page.locator('[data-add-outfit]').first().click();
-  await expect(
-    page.getByRole('heading', { name: 'Add an outfit' }),
-  ).toBeVisible();
-  await shot(page, name('trip-add-outfit'));
-  await page.goto('/capsules');
-  await page.getByRole('link', { name: /^Weekend/ }).click();
-  await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
-  await shot(page, name('capsule'));
-  await openSelfie(page);
-  await page.screenshot({
-    path: `${DIR}/${name('selfie-dialog')}.png`,
-    animations: 'disabled',
-  });
-  await shot(page, name('trips'), '/trips');
-  await shot(page, name('laundry'), '/laundry');
-  await shot(page, name('about'), '/about');
-  await shot(page, name('offline'), '/offline.html');
-  await shot(page, name('invite-signed-in'), invitePath);
-  await page.context().clearCookies();
-  await shot(page, name('login'), '/auth/login');
-  await shot(page, name('register'), '/auth/register');
-  await shot(page, name('invite'), invitePath);
-  await shot(page, name('offline-signed-out'), '/offline.html');
-  await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
-  await signInAs(page, 'demo');
-  await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
+  const sharingIds = async () => {
+    const html = await (await page.request.get('/auth/profile/sharing')).text();
+    return [...html.matchAll(/\/wardrobe-share\/(\d+)\/remove/g)].map(
+      (match) => match[1],
+    );
+  };
+  const sharedBefore = new Set(await sharingIds());
+  // What the shots leave on is put back whether they finish or not, or the
+  // 1440 run's Profile shot carries the 390 run's invite and a failure leaves
+  // the public link on for the later shots.
+  try {
+    await page.request.post(`${outfitPath}/share`, { headers: hx });
+    await page.goto(outfitPath);
+    const shareLink = new URL(
+      await page.locator('[data-public-share] input').inputValue(),
+    );
+    const invite = await page.request.post(
+      '/wardrobe-share/create-invite-link',
+      { form: { permission: 'VIEW' }, headers: hx },
+    );
+    const invitePath = /\/wardrobe-share\/invite\/[0-9a-f-]{36}/.exec(
+      await invite.text(),
+    )?.[0];
+    expect(invitePath).toBeDefined();
+    await page.goto('/trips');
+    await page.getByRole('link', { name: /Austin conference/ }).click();
+    await expect(page.locator('#trip-packed-summary')).toBeVisible();
+    await shot(page, name('trip'));
+    await page.locator('[data-add-outfit]').first().click();
+    await expect(
+      page.getByRole('heading', { name: 'Add an outfit' }),
+    ).toBeVisible();
+    await shot(page, name('trip-add-outfit'));
+    await page.goto('/capsules');
+    await page.getByRole('link', { name: /^Weekend/ }).click();
+    await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
+    await shot(page, name('capsule'));
+    await openSelfie(page);
+    await page.screenshot({
+      path: `${DIR}/${name('selfie-dialog')}.png`,
+      animations: 'disabled',
+    });
+    await shot(page, name('trips'), '/trips');
+    await shot(page, name('laundry'), '/laundry');
+    await shot(page, name('about'), '/about');
+    await shot(page, name('offline'), '/offline.html');
+    await shot(page, name('invite-signed-in'), invitePath);
+    await page.context().clearCookies();
+    await shot(page, name('login'), '/auth/login');
+    await shot(page, name('register'), '/auth/register');
+    await shot(page, name('invite'), invitePath);
+    await shot(page, name('offline-signed-out'), '/offline.html');
+    await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
+  } finally {
+    await signInAs(page, 'demo');
+    await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
+    for (const id of await sharingIds()) {
+      if (sharedBefore.has(id)) continue;
+      await page.request.post(`/wardrobe-share/${id}/remove`, { headers: hx });
+    }
+  }
   await signInAs(page, 'sparse');
   await shot(page, name('tag'), '/wardrobe/tag');
 }

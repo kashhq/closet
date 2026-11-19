@@ -1625,3 +1625,9 @@ Consequence: the search form's hidden filters stay for the no-script GET; includ
 Why: tabs at `flex: 1 0 auto` never shrank, so at 200% text at 1024 px the title's floor, the tabs and the actions overflowed the header and pushed the actions off screen; at `1 1 0%` a long title squeezed the tabs to nothing.
 Decision: the title is `flex: 0 100000 auto` with a 5rem floor and the tabs `1 1 auto` (main.css). Flex has no shrink priority; a weight that large gives the title the whole shortfall (the tabs' share is under a layout unit) until its floor, then the tab row shrinks and scrolls inside the bar.
 Consequence: `test/trips.spec.ts` at 1024 holds both: a 60-character title cut, tabs unscrolled at 100%; the row scrolling and the Wardrobe's actions on screen at 200%.
+
+## 2026-11-18 — The refresh's backoff bookkeeping is pure; a tombstone is a record, not "gone" (#905, #1164)
+
+Why: `refreshOlderBuildPages` kept its per-key backoff decisions (who is asked, what a failure or any other answer does to a record, whether the walk is recorded) inline in the worker, where no spec could reach them; and `queuedIn` was a predicate `stored is OutboxRecord` that is false for a real `discarded` record, so TypeScript narrowed a tombstone to `undefined` in the false branch.
+Decision: `planRefresh`, `backoffAfter` and `walkRecord` (`src/web/page-cache.ts`) own those decisions, unit-tested in `page-cache.spec.ts`; the worker only reads and writes the cache around them. `isQueued(stored): stored is QueuedRecord` (`outbox.ts`) names what it checks, so its false branch keeps the tombstone's type.
+Consequence: a new backoff rule goes in those functions with a case, not in the worker. `service-worker.spec.ts` skips on `browserName !== 'chromium'` (`CDP_IS_CHROMIUM_ONLY`): no other browser has a CDP session, which `test/AGENTS.md`'s "never on `!== 'chromium'`" is for Safari-only limits.

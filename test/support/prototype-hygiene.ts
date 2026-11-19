@@ -34,3 +34,14 @@ export function hidePrototypeExtensions(): void {
     }
   }
 }
+
+/**
+ * What a spec file left enumerable (`enumerablePrototypeKeys`), hidden
+ * after it is read: the file that loaded the module fails (shared-worker-setup),
+ * and the leak does not fail every later file in the worker too (#629).
+ */
+export function releasePrototypeLeaks(): string[] {
+  const leaked = enumerablePrototypeKeys();
+  hidePrototypeExtensions();
+  return leaked;
+}

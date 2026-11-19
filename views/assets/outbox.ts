@@ -297,8 +297,16 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
   }
 }
 
-/** A stored record still waiting to be sent or settled: not replaced, not discarded. */
-const queuedIn = (stored: OutboxRecord | undefined): stored is OutboxRecord =>
+/** A record that is not Discard's tombstone: still waiting to be sent or settled. */
+type QueuedRecord = OutboxRecord & {
+  state: Exclude<OutboxRecord['state'], 'discarded'>;
+};
+
+/**
+ * A stored record still waiting to be sent or settled: not replaced, not
+ * discarded. The false branch keeps the tombstone's type (it is a real record).
+ */
+const isQueued = (stored: OutboxRecord | undefined): stored is QueuedRecord =>
   stored !== undefined && stored.state !== 'discarded';
 
 /** The record as stored now: replaced (gone), a tombstone, held by a sign-out, or as it was. */
@@ -357,7 +365,7 @@ async function settle(
     const request = objects.get(record.id);
     request.onsuccess = () => {
       const stored = request.result as OutboxRecord | undefined;
-      if (!queuedIn(stored)) return;
+      if (!isQueued(stored)) return;
       queued = true;
       if (change) objects.put(settledRecord(stored, change));
       else objects.delete(record.id);
@@ -1072,7 +1080,7 @@ async function replayAll(
       const stored = await storedCopy(record);
       if (sendable(stored, Date.now())) return false;
       console.info(
-        `[outbox] ${nameOf(record)} ${queuedIn(stored) ? 'held for a sign-out discard' : 'superseded'} before its replay`,
+        `[outbox] ${nameOf(record)} ${isQueued(stored) ? 'held for a sign-out discard' : 'superseded'} before its replay`,
       );
       return true;
     },

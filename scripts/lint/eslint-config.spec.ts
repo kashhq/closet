@@ -91,6 +91,37 @@ describe('forged copy', () => {
   });
 });
 
+// A file whose program lacks src/web/i18n.ts (the service worker's project,
+// views/assets/tsconfig.json) cannot name the brand: brandOf has none, and the
+// rule must still judge what needs no brand (any, never, an unconstrained
+// type parameter) and not throw (#1108).
+describe('forged copy without the brand in the program', () => {
+  const forgedHere = async (body: string) => {
+    const [result] = await eslint.lintText(`${body}\n`, {
+      filePath: resolve(root, 'views/assets/expiration-rows.ts'),
+    });
+    expect(result.messages.filter((m) => m.fatal)).toEqual([]);
+    return result.messages.filter((m) => m.ruleId === 'closet/no-forged-copy')
+      .length;
+  };
+
+  it.each([
+    "export const a = 'English' as never;",
+    "export const a = 'English' as any;",
+    'export function as<T>(x: unknown): T {\n  return x as T;\n}',
+  ])('refuses %s', async (body) => {
+    expect(await forgedHere(body)).toBe(1);
+  });
+
+  it.each([
+    "export const a = 'English' as unknown;",
+    "export const a = ['English'] as string[];",
+    "export const a = 'English' as const;",
+  ])('lets %s through', async (body) => {
+    expect(await forgedHere(body)).toBe(0);
+  });
+});
+
 // closet/no-hidden-control (scripts/lint/hidden-control.mjs, #674) reads every
 // class a control's JSX can produce, so a computed `class={...}` is judged as
 // a literal one (#1067's clear chip slipped past the grep it replaced). The
