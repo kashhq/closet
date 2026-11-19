@@ -40,7 +40,8 @@ import { BY_PERSON, type WriteOrigin } from '../write-origin';
  * it is reused, and the redirect says so (ALREADY_SAVED_FLAG). `name`
  * names a new outfit; without it pickIdea names it for its garments.
  * pickGarments is every branch but `replace` without the redirect: the
- * API's pick (POST /outfit-picks) calls it.
+ * API's pick (POST /outfit-picks) calls it. pickToPath is pickTo without
+ * the reply: Styling's Save (styling-actions.ts) calls it.
  */
 
 /** The most garments a card holds: a template, a layer and a locked piece or two. */
@@ -70,7 +71,7 @@ function pickOrigin(
   return madeBy.agentTokenId === null ? 'person' : 'agent';
 }
 
-export function pickTo(
+export async function pickTo(
   deps: ActionDeps,
   reply: FastifyReply,
   actor: Actor,
@@ -78,13 +79,51 @@ export function pickTo(
   garmentIds: number[],
   options: { source: PickSource; name?: string },
 ): Promise<FastifyReply> {
+  const path = await pickToPath(deps, actor, destination, garmentIds, options);
+  return reply.redirect(path, 303);
+}
+
+/**
+ * pickTo without the reply: the pick made, answering the path it lands on.
+ * Styling's Save (styling-actions.ts) calls it, so it needs no Fastify.
+ */
+export function pickToPath(
+  deps: ActionDeps,
+  actor: Actor,
+  destination: OutfitDestination,
+  garmentIds: number[],
+  options: { source: PickSource; name?: string },
+): Promise<string> {
   // A gallery card or Styling's Save: the person's (pickOrigin).
   if (destination.kind === 'day' && destination.replace !== undefined) {
     const { replace: entryId, day, occasion } = destination;
     const target = { entryId, day, occasion };
-    return pickInPlace(deps, reply, actor, target, garmentIds, options);
+    return pickInPlace(deps, actor, target, garmentIds, options);
   }
-  return pickAndRedirect(deps, reply, actor, destination, garmentIds, options);
+  return pickAndLand(deps, actor, destination, garmentIds, options);
+}
+
+/**
+ * Where a saved outfit lands: the week of the day it was planned on, else
+ * the outfit, flagged when it was saved already (a double tap, a retried
+ * post: a success too, which the page it lands on says). A pick's, and
+ * Styling's Save with Include picks on.
+ */
+export function savedOutfitPath(
+  outfit: { id: number } & SavedFlags,
+  day: IsoDate | undefined,
+): string {
+  if (day) return weekPath(day, outfit);
+  const flag = alreadySavedParam(outfit);
+  return `/outfits/${outfit.id}${flag && `?${flag}`}`;
+}
+
+type SavedFlags = Parameters<typeof alreadySavedParam>[0];
+
+/** The week of `day`, flagged when the outfit planned on it was saved already. */
+function weekPath(day: IsoDate, saved: SavedFlags): string {
+  const flag = alreadySavedParam(saved);
+  return `/calendar?week=${day}${flag && `&${flag}`}`;
 }
 
 /**
@@ -113,12 +152,11 @@ export function postedDestination(body: {
 
 async function pickInPlace(
   deps: ActionDeps,
-  reply: FastifyReply,
   actor: Actor,
-  target: EntryTarget,
+  target: EntryTarget & { day: IsoDate },
   garmentIds: number[],
   options: { source: PickSource; name?: string },
-): Promise<FastifyReply> {
+): Promise<string> {
   const replaced = await replaceEntryOutfit(
     deps,
     actor,
@@ -130,11 +168,7 @@ async function pickInPlace(
     },
     BY_PERSON,
   );
-  const flag = alreadySavedParam(replaced);
-  return reply.redirect(
-    `/calendar?week=${target.day}${flag && `&${flag}`}`,
-    303,
-  );
+  return weekPath(target.day, replaced);
 }
 
 /**
@@ -220,30 +254,19 @@ export async function pickGarments(
   return { kind: 'saved', outfit, plan };
 }
 
-async function pickAndRedirect(
+async function pickAndLand(
   deps: ActionDeps,
-  reply: FastifyReply,
   actor: Actor,
   destination: PickDestination,
   garmentIds: number[],
   options: { source: PickSource; name?: string },
-): Promise<FastifyReply> {
+): Promise<string> {
   const picked = await pickGarments(deps, actor, destination, garmentIds, {
     ...options,
     madeBy: BY_PERSON,
   });
-  if (picked.kind === 'trip') {
-    return reply.redirect(tripUrl(picked.tripId, '?picked=1'), 303);
-  }
-  // A pick of an outfit that exists (a double tap, a retried post) is a
-  // success too; the page it lands on says so.
-  const flag = alreadySavedParam(picked.outfit);
-  return reply.redirect(
-    picked.plan
-      ? `/calendar?week=${picked.plan.day}${flag && `&${flag}`}`
-      : `/outfits/${picked.outfit.id}${flag && `?${flag}`}`,
-    303,
-  );
+  if (picked.kind === 'trip') return tripUrl(picked.tripId, '?picked=1');
+  return savedOutfitPath(picked.outfit, picked.plan?.day);
 }
 
 function pickMessage(

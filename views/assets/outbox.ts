@@ -69,7 +69,7 @@ import {
   intentEnding,
   type IntentEnd,
   regionEnd,
-  discardedRecord,
+  discarding,
   showsSyncedWrite,
   type OutboxStore,
   type QueueableKind,
@@ -92,7 +92,13 @@ import {
   type Exclusively,
   discardStuck,
   discardAtSignOut,
+  heldForDiscard,
+  releasedFromDiscard,
   retryStuck,
+  type ReplayChange,
+  sendable,
+  settledRecord,
+  type SignOutDiscardStore,
   type StuckActionStore,
 } from '../../src/offline-writes';
 import {
@@ -292,39 +298,68 @@ async function recordsOf(account: string): Promise<OutboxRecord[]> {
 }
 
 /** A stored record still waiting to be sent or settled: not replaced, not discarded. */
-const queuedIn = (stored: OutboxRecord | undefined) =>
+const queuedIn = (stored: OutboxRecord | undefined): stored is OutboxRecord =>
   stored !== undefined && stored.state !== 'discarded';
 
-/** Whether a record is still in the store: not replaced by a newer intent. */
-async function isQueued(record: OutboxRecord): Promise<boolean> {
-  let queued = false;
+/** The record as stored now: replaced (gone), a tombstone, held by a sign-out, or as it was. */
+async function storedCopy(
+  record: OutboxRecord,
+): Promise<OutboxRecord | undefined> {
+  let stored: OutboxRecord | undefined;
   await transact('readonly', (objects) => {
     const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = queuedIn(request.result as OutboxRecord | undefined);
+      stored = request.result as OutboxRecord | undefined;
     };
   });
-  return queued;
+  return stored;
 }
 
 /**
- * A replay's answer applied to its record (`next` in its place, or deleted)
+ * Each named record `change` gives a new copy, in one transaction; announced
+ * only when one changed. Sign-out's hold and release (SignOutDiscardStore).
+ */
+async function rewrite(
+  ids: readonly string[],
+  change: (stored: OutboxRecord) => OutboxRecord | undefined,
+): Promise<void> {
+  let changed = 0;
+  await transact('readwrite', (objects) => {
+    for (const id of ids) {
+      const request = objects.get(id);
+      request.onsuccess = () => {
+        const stored = request.result as OutboxRecord | undefined;
+        const next = stored && change(stored);
+        if (!next) return;
+        objects.put(next);
+        changed += 1;
+      };
+    }
+  });
+  if (changed > 0) announce({ drain: false });
+}
+
+/**
+ * A replay's answer applied to its record (`change` onto it, or deleted)
  * only if it is still queued, in one transaction: a newer intent for its
  * key that replaced it while it was in flight must not get the old one
- * back beside it. Whether it was still queued. Discard passes its
- * tombstone as `next` (discardedRecord).
+ * back beside it. The change lands on the copy this transaction read, so a
+ * field another writer stored since the caller's read (a sign-out's hold,
+ * #1161) stays (settledRecord). Whether it was still queued. Discard passes
+ * its tombstone's fields (discarding).
  */
 async function settle(
   record: OutboxRecord,
-  next?: OutboxRecord,
+  change?: ReplayChange,
 ): Promise<boolean> {
   let queued = false;
   await write((objects) => {
     const request = objects.get(record.id);
     request.onsuccess = () => {
-      queued = queuedIn(request.result as OutboxRecord | undefined);
-      if (!queued) return;
-      if (next) objects.put(next);
+      const stored = request.result as OutboxRecord | undefined;
+      if (!queuedIn(stored)) return;
+      queued = true;
+      if (change) objects.put(settledRecord(stored, change));
       else objects.delete(record.id);
     };
   });
@@ -1031,13 +1066,15 @@ async function replayAll(
         );
         return true;
       }
-      // Replaced by a newer intent since the drain read the store: that one
-      // replays instead, this one never.
-      if (!(await isQueued(record))) {
-        console.info(`[outbox] ${nameOf(record)} superseded before its replay`);
-        return true;
-      }
-      return false;
+      // Replaced by a newer intent since the drain read the store (that one
+      // replays instead, this one never), or held by a sign-out's discard in
+      // any tab (#1157).
+      const stored = await storedCopy(record);
+      if (sendable(stored, Date.now())) return false;
+      console.info(
+        `[outbox] ${nameOf(record)} ${queuedIn(stored) ? 'held for a sign-out discard' : 'superseded'} before its replay`,
+      );
+      return true;
     },
     send(record) {
       return send(record, replayUrl(record.path) as URL);
@@ -1057,15 +1094,15 @@ async function replayAll(
         );
         return current;
       }
-      const current = await settle(record, step.record);
+      const current = await settle(record, step.change);
       const meanwhile = current ? '' : ', superseded meanwhile';
       if (step.step === 'failed') {
         console.warn(
-          `[outbox] ${key} not saved: ${step.record.reason}${meanwhile}`,
+          `[outbox] ${key} not saved: ${step.change.reason}${meanwhile}`,
         );
       } else {
         console.info(
-          `[outbox] ${key} ${step.why}, retry ${step.record.attempts}${meanwhile}`,
+          `[outbox] ${key} ${step.why}, retry ${step.change.attempts}${meanwhile}`,
         );
       }
       return current;
@@ -1091,6 +1128,23 @@ async function replayAll(
 }
 
 const tabTurns = createTurns();
+
+/** Sign-out's discard over the store; its hold reaches every tab's drain (discardAtSignOut). */
+const signOutDiscard: SignOutDiscardStore = {
+  hold: (ids, now) => rewrite(ids, (stored) => heldForDiscard(stored, now)),
+  drop,
+  async release(ids) {
+    // Logged, not thrown: a hold left behind lapses (DISCARD_HOLD_MS).
+    try {
+      await rewrite(ids, releasedFromDiscard);
+    } catch (error) {
+      console.warn(
+        '[outbox] sign-out: could not release the held writes',
+        error,
+      );
+    }
+  },
+};
 
 /**
  * The drain's turn: across tabs `navigator.locks`, in this tab a queue of
@@ -1223,11 +1277,13 @@ async function drainBeforeLeaving(
   if (!discard) return false;
   // Tombstones, not deletions (#1042): another tab of this account still
   // showing one of these ticks reverts it instead of taking it for saved.
-  // In the drain's turn, after any replay still in flight (discardAtSignOut).
+  // Held first, so no tab's drain sends them, then dropped in the drain's
+  // turn, after only the replay in flight (discardAtSignOut, #1157).
   const dropped = await discardAtSignOut(
     exclusively,
     left.map((record) => record.id),
-    drop,
+    signOutDiscard,
+    Date.now,
   );
   console.info(`[outbox] ${dropped} unsynced change(s) discarded at sign-out`);
   return true;
@@ -1424,7 +1480,7 @@ const actionStore: StuckActionStore<OutboxRecord> = {
       : undefined;
   },
   settle,
-  discard: (record) => settle(record, discardedRecord(record, Date.now())),
+  discard: (record) => settle(record, discarding(Date.now())),
 };
 
 // A stuck write's notice: Try again clears its count and drains; Discard

@@ -30,10 +30,17 @@ import {
   createTurns,
   discardStuck,
   discardAtSignOut,
+  DISCARD_HOLD_MS,
+  type Exclusively,
+  heldForDiscard,
+  releasedFromDiscard,
+  sendable,
+  type SignOutDiscardStore,
   retryStuck,
   type StuckActionStore,
   isStuck,
-  unstuck,
+  settledRecord,
+  UNSTUCK,
   retryDelayMs,
   routesThroughOutbox,
   showsQueuedWrite,
@@ -377,9 +384,12 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
         sent.push(record.id);
         return Promise.resolve(answers(record.id));
       },
+      // As the page's settle: the change onto the copy stored now.
       settle(record, step) {
+        const current = stored.get(record.id);
+        if (!current) return Promise.resolve(false);
         if (step.step === 'saved') stored.delete(record.id);
-        else stored.set(record.id, step.record);
+        else stored.set(record.id, settledRecord(current, step.change));
         return Promise.resolve(true);
       },
     };
@@ -573,12 +583,10 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
   });
 
   it('Try again: unstuck clears the count so the record is judged afresh', () => {
-    const cleared = unstuck({
-      ...row('bad'),
-      attempts: 7,
-      serverErrors: 4,
-      stuckAt: 5,
-    });
+    const cleared = settledRecord(
+      { ...row('bad'), attempts: 7, serverErrors: 4, stuckAt: 5 },
+      UNSTUCK,
+    );
     expect(isStuck(cleared)).toBe(false);
     expect(cleared).toMatchObject({ attempts: 0 });
     expect(cleared.serverErrors).toBeUndefined();
@@ -609,15 +617,17 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
     const actions = (w: ReturnType<typeof world>) => {
       const store: StuckActionStore<Row> = {
         find: (id) => Promise.resolve(w.stored.get(id)),
-        settle(record, next) {
-          if (!w.stored.has(record.id)) return Promise.resolve(false);
-          if (next) w.stored.set(record.id, next);
+        settle(record, change) {
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          if (change) w.stored.set(record.id, settledRecord(current, change));
           else w.stored.delete(record.id);
           return Promise.resolve(true);
         },
         discard(record) {
-          if (!w.stored.has(record.id)) return Promise.resolve(false);
-          w.stored.set(record.id, discardedRecord(record, w.clock.now));
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          w.stored.set(record.id, discardedRecord(current, w.clock.now));
           return Promise.resolve(true);
         },
       };
@@ -721,28 +731,64 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       expect(await discardStuck(actions(w), turn, 'nope')).toBeUndefined();
     });
 
-    /** dropQueuedWrites over the world's rows: the named unsent ones to tombstones. */
-    const dropIn =
-      (w: ReturnType<typeof world>) =>
-      (goes: (r: { id: string }) => boolean) => {
-        let dropped = 0;
-        for (const r of w.stored.values()) {
-          if (r.state === 'discarded' || !goes(r)) continue;
-          w.stored.set(r.id, discardedRecord(r, w.clock.now));
-          dropped += 1;
+    /**
+     * Sign-out's store over the world's rows: hold and release as the page's
+     * rewrite does, the drop as dropQueuedWrites (the named unsent ones to
+     * tombstones).
+     */
+    const signOutIn = (w: ReturnType<typeof world>): SignOutDiscardStore => {
+      const rewrite = (
+        ids: readonly string[],
+        change: (r: Row) => Row | undefined,
+      ) => {
+        for (const id of ids) {
+          const stored = w.stored.get(id);
+          const next = stored && change(stored);
+          if (next) w.stored.set(id, next);
         }
-        return Promise.resolve({ dropped });
+        return Promise.resolve();
       };
+      return {
+        hold: (ids, now) => rewrite(ids, (r) => heldForDiscard(r, now)),
+        release: (ids) => rewrite(ids, releasedFromDiscard),
+        drop(goes) {
+          let dropped = 0;
+          for (const r of w.stored.values()) {
+            if (r.state === 'discarded' || !goes(r)) continue;
+            w.stored.set(r.id, discardedRecord(r, w.clock.now));
+            dropped += 1;
+          }
+          return Promise.resolve({ dropped });
+        },
+      };
+    };
+    /** A tab's drain reads the store before each send, as outbox.ts's skip does. */
+    const readsTheStore = (w: ReturnType<typeof world>) => {
+      w.driver.skip = (record) =>
+        Promise.resolve(!sendable(w.stored.get(record.id), w.clock.now));
+    };
+    /** A tab's `exclusively`: its own turns, then the lock every tab shares. */
+    const tabOf = (lock: Exclusively): Exclusively => {
+      const turns = createTurns();
+      return (task) => turns(() => lock(task));
+    };
+    const now = (w: ReturnType<typeof world>) => () => w.clock.now;
 
     it('sign-out’s discard waits for the replay in flight: one that lands is not tombstoned, the rest are', async () => {
       const w = world([row('landing'), row('left')], (id) =>
         id === 'landing' ? OK : SERVER,
       );
+      readsTheStore(w);
       const gate = held(w);
       const turn = createTurns();
       const drain = turn(() => w.drain());
       await gate.started;
-      const discard = discardAtSignOut(turn, ['landing', 'left'], dropIn(w));
+      const discard = discardAtSignOut(
+        turn,
+        ['landing', 'left'],
+        signOutIn(w),
+        now(w),
+      );
       await Promise.resolve();
       // Nothing is tombstoned while the replay is still out.
       expect([...w.stored.values()].map((r) => r.state)).toEqual([
@@ -752,21 +798,111 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       gate.release(OK);
       await drain;
       expect(await discard).toBe(1);
+      expect(w.sent).toEqual(['landing']);
       expect(w.stored.has('landing')).toBe(false);
       expect(w.stored.get('left')).toMatchObject({ state: 'discarded' });
     });
 
     it('sign-out’s discard tombstones a replay in flight that fails', async () => {
       const w = world([row('failing')], () => SERVER);
+      readsTheStore(w);
       const gate = held(w);
       const turn = createTurns();
       const drain = turn(() => w.drain());
       await gate.started;
-      const discard = discardAtSignOut(turn, ['failing'], dropIn(w));
+      const discard = discardAtSignOut(turn, ['failing'], signOutIn(w), now(w));
       gate.release(SERVER);
       await drain;
       expect(await discard).toBe(1);
       expect(w.stored.get('failing')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('a discard in one tab holds the other tab’s drain to its replay in flight; the rest are tombstoned unsent (#1157)', async () => {
+      const w = world([row('first'), row('second'), row('third')], () => OK);
+      readsTheStore(w);
+      const gate = held(w);
+      // navigator.locks: one lock across the tabs, each with its own turns.
+      const lock = createTurns();
+      const draining = tabOf(lock);
+      const signingOut = tabOf(lock);
+      const drain = draining(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(
+        signingOut,
+        ['first', 'second', 'third'],
+        signOutIn(w),
+        now(w),
+      );
+      gate.release(OK);
+      await drain;
+      expect(await discard).toBe(2);
+      expect(w.sent).toEqual(['first']);
+      expect(w.stored.has('first')).toBe(false);
+      expect(w.stored.get('second')).toMatchObject({ state: 'discarded' });
+      expect(w.stored.get('third')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('a turn refused before the drop releases the hold, so a later drain still sends them', async () => {
+      const w = world([row('a'), row('b')], () => OK);
+      readsTheStore(w);
+      const refused: Exclusively = () => Promise.reject(new Error('lock'));
+      await expect(
+        discardAtSignOut(refused, ['a', 'b'], signOutIn(w), now(w)),
+      ).rejects.toThrow('lock');
+      expect([...w.stored.values()].map((r) => r.heldForDiscardAt)).toEqual([
+        undefined,
+        undefined,
+      ]);
+      await w.drain();
+      expect(w.sent).toEqual(['a', 'b']);
+    });
+
+    it('a hold its tab never released lapses after DISCARD_HOLD_MS, and one from a clock moved back is lapsed', () => {
+      const pending = row('a');
+      expect(sendable(heldForDiscard(pending, 1_000), 1_000)).toBe(false);
+      expect(
+        sendable(heldForDiscard(pending, 1_000), 1_000 + DISCARD_HOLD_MS),
+      ).toBe(true);
+      expect(sendable(heldForDiscard(pending, 1_000), 999)).toBe(true);
+      expect(heldForDiscard(discardedRecord(pending, 0), 1)).toBeUndefined();
+    });
+
+    it('a hold placed while the replay is in flight survives its 5xx answer, and no drain sends the record again (#1161)', async () => {
+      const w = world([row('bad')], () => SERVER, { now: 1_000 });
+      readsTheStore(w);
+      const gate = held(w);
+      const drain = w.drain();
+      await gate.started;
+      await signOutIn(w).hold(['bad'], w.clock.now);
+      gate.release(SERVER);
+      await drain;
+      expect(w.stored.get('bad')).toMatchObject({
+        heldForDiscardAt: 1_000,
+        attempts: 1,
+        serverErrors: 1,
+      });
+      await w.drain();
+      expect(w.sent).toEqual(['bad']);
+    });
+
+    it('Try again keeps a hold stored between its read and its write, so the drain after it sends nothing (#1161)', async () => {
+      const w = world([stuckRow()], () => OK, { now: 1_000 });
+      readsTheStore(w);
+      const store = actions(w);
+      const find = store.find.bind(store);
+      store.find = async (id) => {
+        const copy = await find(id);
+        await signOutIn(w).hold([id], w.clock.now);
+        return copy;
+      };
+      expect(await retryStuck(store, createTurns(), 'bad')).toMatchObject({
+        id: 'bad',
+      });
+      const left = w.stored.get('bad');
+      expect(left).toMatchObject({ heldForDiscardAt: 1_000, attempts: 0 });
+      expect(left && isStuck(left)).toBe(false);
+      await w.drain();
+      expect(w.sent).toEqual([]);
     });
   });
 
