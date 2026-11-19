@@ -638,7 +638,9 @@ describe('the re-plan', () => {
     expect(kept[1]).toEqual({
       entryId: 101,
       kind: 'kept',
-      needs: expect.objectContaining({ torso: expect.any(Number) }),
+      needs: expect.objectContaining({
+        torso: expect.any(Number) as number,
+      }) as unknown,
     });
   });
 

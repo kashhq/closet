@@ -25,7 +25,7 @@ function assertJsonPlain(value: unknown, path: string): void {
         );
         return;
       }
-      const prototype = Object.getPrototypeOf(value);
+      const prototype: unknown = Object.getPrototypeOf(value);
       if (prototype === Object.prototype || prototype === null) {
         for (const [key, item] of Object.entries(value)) {
           assertJsonPlain(item, `${path}.${key}`);

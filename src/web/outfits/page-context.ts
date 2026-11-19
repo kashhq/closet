@@ -79,7 +79,9 @@ export async function savedContext(
     page: row.page,
     muse: {
       outfits: row.muse ?? [],
-      unlocks: row.unlocks ? readMuseUnlocks(row.unlocks) : new Map(),
+      unlocks: row.unlocks
+        ? readMuseUnlocks(row.unlocks)
+        : new Map<number, OutfitCount>(),
     },
     activity: new Map(
       row.activity.map(({ outfitId, ...activity }) => [outfitId, activity]),

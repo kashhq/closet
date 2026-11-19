@@ -21,10 +21,19 @@ export function clickAllowed(click, openedAt, pointerDownAt) {
 }
 
 /**
+ * The slice of `document` visibleFor reads (click-gate.spec.ts fakes it).
+ *
+ * @typedef {object} VisibilitySource
+ * @property {DocumentVisibilityState} visibilityState
+ * @property {(type: 'visibilitychange', listener: () => void) => void} addEventListener
+ * @property {(type: 'visibilitychange', listener: () => void) => void} removeEventListener
+ */
+
+/**
  * Resolves once `doc` has been visible for `delayMs` without a break: a
  * page sent to the background restarts the wait when it is back.
  *
- * @param {Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>} doc
+ * @param {VisibilitySource} doc
  * @param {number} delayMs
  * @returns {Promise<void>}
  */

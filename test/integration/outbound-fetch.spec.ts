@@ -1384,19 +1384,19 @@ describe('outbound fetch (SSRF guard)', () => {
     it.each([
       [
         'to a private address',
-        () => `https://${PRIVATE_IP}`,
+        (): string => `https://${PRIVATE_IP}`,
         undefined,
         'blocked-address',
       ],
       [
         'to a name resolving to one',
-        () => 'https://intranet.test',
+        (): string => 'https://intranet.test',
         undefined,
         'blocked-address',
       ],
       [
         'outside its hosts',
-        () => 'https://other.test',
+        (): string => 'https://other.test',
         ['shop.test'],
         'host-not-allowed',
       ],

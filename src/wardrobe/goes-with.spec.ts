@@ -176,7 +176,7 @@ describe('goesWith', () => {
     expect(layers).toMatchObject({ goes: 1, of: 2 });
     expect(layers.best).toEqual([
       {
-        garment: expect.objectContaining({ id: coat.id }),
+        garment: expect.objectContaining({ id: coat.id }) as unknown,
         outfits: null,
         atFormality: true,
       },

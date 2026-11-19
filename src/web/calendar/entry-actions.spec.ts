@@ -230,7 +230,7 @@ describe('a replace refuses with nothing changed', () => {
       replaceEntryOutfit(deps, owner, target, { outfitId: OUTFIT }, BY_PERSON),
     ).rejects.toMatchObject({
       statusCode: 409,
-      message: expect.stringContaining('Evening'),
+      message: expect.stringContaining('Evening') as string,
     });
     expect(setEntryOutfit).not.toHaveBeenCalled();
   });

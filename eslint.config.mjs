@@ -178,13 +178,6 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      // My custom rules
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      'no-unsafe-optional-chaining': 'off',
       complexity: ['warn', { max: 10 }],
       'max-depth': ['warn', { max: 3 }],
       // One assertion style: `<T>value` does not parse in .tsx files, so
@@ -336,6 +329,12 @@ export default tseslint.config(
     // sinks are carried over before the vi bans.
     files: ['test/integration/**/*.{ts,tsx}'],
     rules: {
+      // Off here only (#710): response bodies are parsed JSON asserted by
+      // value; a typed JSON helper for them is what would turn these on.
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
       'no-restricted-properties': [
         ...base[0].rules['no-restricted-properties'],
         ...['mock', 'doMock', 'unmock', 'doUnmock', 'resetModules'].map(
