@@ -289,65 +289,22 @@
             "type": "string"
           },
           "warmth": {
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  5
-                ]
-              }
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
             ]
           },
           "formality": {
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              }
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4
             ]
           }
         }
@@ -412,37 +369,13 @@
           "warmth": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "enum": [
-                      1
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      2
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      3
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      4
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      5
-                    ]
-                  }
+                "type": "number",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
                 ]
               },
               {
@@ -453,31 +386,12 @@
           "formality": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "enum": [
-                      1
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      2
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      3
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      4
-                    ]
-                  }
+                "type": "number",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
                 ]
               },
               {
@@ -708,67 +622,18 @@
             "description": "Wears before a wash; 0 never, null the role's default",
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "enum": [
-                      0
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      1
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      2
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      3
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      4
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      5
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      7
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      10
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      15
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      20
-                    ]
-                  }
+                "type": "number",
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  7,
+                  10,
+                  15,
+                  20
                 ]
               },
               {
@@ -1016,37 +881,13 @@
               "value": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "enum": [
-                          1
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          2
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          3
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          4
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          5
-                        ]
-                      }
+                    "type": "number",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4,
+                      5
                     ]
                   },
                   {
@@ -1083,31 +924,12 @@
               "value": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "enum": [
-                          1
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          2
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          3
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          4
-                        ]
-                      }
+                    "type": "number",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4
                     ]
                   },
                   {
@@ -1431,65 +1253,22 @@
             "type": "string"
           },
           "warmth": {
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  5
-                ]
-              }
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
             ]
           },
           "formality": {
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              }
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4
             ]
           },
           "materials": {
@@ -2330,37 +2109,13 @@
           "warmth": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "enum": [
-                      1
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      2
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      3
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      4
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      5
-                    ]
-                  }
+                "type": "number",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
                 ]
               },
               {
@@ -2371,31 +2126,12 @@
           "formality": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "enum": [
-                      1
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      2
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      3
-                    ]
-                  },
-                  {
-                    "type": "number",
-                    "enum": [
-                      4
-                    ]
-                  }
+                "type": "number",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4
                 ]
               },
               {
@@ -4465,49 +4201,15 @@
         "properties": {
           "weekday": {
             "description": "0 is Sunday … 6 Saturday",
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  0
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  5
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  6
-                ]
-              }
+            "type": "number",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
             ]
           },
           "day": {
@@ -4560,49 +4262,15 @@
         "properties": {
           "weekday": {
             "description": "0 is Sunday … 6 Saturday",
-            "anyOf": [
-              {
-                "type": "number",
-                "enum": [
-                  0
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  1
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  2
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  3
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  4
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  5
-                ]
-              },
-              {
-                "type": "number",
-                "enum": [
-                  6
-                ]
-              }
+            "type": "number",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
             ]
           },
           "day": {
@@ -10491,7 +10159,7 @@
             "type": "array",
             "items": {
               "description": "A row as it is now: create it, or replace yours whole",
-              "anyOf": [
+              "oneOf": [
                 {
                   "$ref": "#/components/schemas/GarmentChange"
                 },
@@ -10991,37 +10659,13 @@
           },
           {
             "schema": {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "enum": [
-                    1
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    2
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    3
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    4
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    5
-                  ]
-                }
+              "type": "number",
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5
               ]
             },
             "in": "query",
@@ -11030,31 +10674,12 @@
           },
           {
             "schema": {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "enum": [
-                    1
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    2
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    3
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    4
-                  ]
-                }
+              "type": "number",
+              "enum": [
+                1,
+                2,
+                3,
+                4
               ]
             },
             "in": "query",
@@ -17188,25 +16813,11 @@
         "parameters": [
           {
             "schema": {
-              "anyOf": [
-                {
-                  "type": "number",
-                  "enum": [
-                    30
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    90
-                  ]
-                },
-                {
-                  "type": "number",
-                  "enum": [
-                    180
-                  ]
-                }
+              "type": "number",
+              "enum": [
+                30,
+                90,
+                180
               ]
             },
             "in": "query",

@@ -99,9 +99,9 @@ const SCHEMA_REF = '#/components/schemas/';
 /**
  * What a client generator needs and TypeBox's inlining withholds (#714):
  * every titled schema becomes one component, named by its title and
- * referenced where it was copied; an `anyOf` of single-value string enums
- * is one `enum`; a union of objects that each carry a literal `resource`
- * is discriminated by it, with the mapping. Emitter-only: the routes still
+ * referenced where it was copied; an `anyOf` of single-value literals of one
+ * type is one `enum`; a union of objects that each carry a literal `resource`
+ * is a `oneOf` discriminated by it, with the mapping. Emitter-only: the routes still
  * serialize through the inline schemas, so no response changes.
  *
  * Two shapes under one title would make one name mean two types, so the
@@ -115,8 +115,8 @@ export function nameSchemas(spec: unknown): void {
   const registered: Record<string, unknown> = {};
   const shapeOf = new Map<string, string>();
 
-  const visit = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(visit);
+  const visit = (node: unknown, hoist = true): unknown => {
+    if (Array.isArray(node)) return node.map((item) => visit(item));
     if (!isRecord(node)) return node;
     const visited: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
@@ -127,7 +127,7 @@ export function nameSchemas(spec: unknown): void {
       (ref) => registered[ref.slice(SCHEMA_REF.length)],
     );
     const { title } = schema;
-    if (typeof title !== 'string' || '$ref' in schema) return schema;
+    if (!hoist || typeof title !== 'string' || '$ref' in schema) return schema;
     const shape = canonical(schema);
     const known = shapeOf.get(title);
     if (known !== undefined && known !== shape) {
@@ -140,11 +140,15 @@ export function nameSchemas(spec: unknown): void {
     return { $ref: `${SCHEMA_REF}${title}` };
   };
 
-  // The shared schemas (Problem, named by its $id and titled alike) first.
-  for (const shared of Object.values(
+  // The shared schemas (Problem, named by its $id) keep their names, titled
+  // or not; only what is inside them is processed.
+  for (const [name, shared] of Object.entries(
     isRecord(components.schemas) ? components.schemas : {},
-  ))
-    visit(shared);
+  )) {
+    const processed = visit(shared, false);
+    registered[name] = processed;
+    shapeOf.set(name, canonical(processed));
+  }
   spec.paths = visit(spec.paths);
   spec.components = { ...components, schemas: registered };
 }
@@ -160,55 +164,68 @@ function canonical(value: unknown): string {
   );
 }
 
-/** `anyOf: [{ type: 'string', enum: ['a'] }, ...]` as one `enum`. */
+const LITERAL_TYPES = ['string', 'number', 'integer', 'boolean'];
+
+/** A branch that is exactly one literal: `{ type, enum: [value] }`. */
+function singleLiteral(
+  branch: unknown,
+): { type: string; value: unknown } | undefined {
+  if (!isRecord(branch) || Object.keys(branch).length !== 2) return undefined;
+  const { type, enum: values } = branch;
+  if (typeof type !== 'string' || !LITERAL_TYPES.includes(type)) {
+    return undefined;
+  }
+  if (!Array.isArray(values) || values.length !== 1) return undefined;
+  return { type, value: values[0] };
+}
+
+/** `anyOf: [{ type: 'number', enum: [1] }, ...]` as one `enum` of that type. */
 function collapseEnums(
   schema: Record<string, unknown>,
 ): Record<string, unknown> {
   const { anyOf, ...rest } = schema;
   if (!Array.isArray(anyOf) || anyOf.length === 0) return schema;
-  const values: unknown[] = [];
-  for (const branch of anyOf) {
-    if (
-      !isRecord(branch) ||
-      Object.keys(branch).length !== 2 ||
-      branch.type !== 'string' ||
-      !Array.isArray(branch.enum) ||
-      branch.enum.length !== 1
-    ) {
-      return schema;
-    }
-    values.push(branch.enum[0]);
-  }
-  return { ...rest, type: 'string', enum: values };
+  const literals = anyOf.map(singleLiteral);
+  const [first] = literals;
+  if (!first || literals.some((l) => l?.type !== first.type)) return schema;
+  return {
+    ...rest,
+    type: first.type,
+    enum: literals.map((literal) => literal?.value),
+  };
 }
 
-/** A discriminator on `resource` for a union whose every branch carries one literal. */
+/** The one string a union branch's `resource` property allows, if it is one. */
+function resourceLiteral(target: unknown): string | undefined {
+  if (!isRecord(target) || !isRecord(target.properties)) return undefined;
+  const literal = singleLiteral(target.properties.resource);
+  return typeof literal?.value === 'string' ? literal.value : undefined;
+}
+
+/**
+ * A union whose every branch is a component carrying one literal `resource`
+ * becomes a discriminated `oneOf` (generators honour a discriminator only
+ * there; the literals make the branches mutually exclusive).
+ */
 function discriminated(
   schema: Record<string, unknown>,
   resolve: (ref: string) => unknown,
 ): Record<string, unknown> {
-  const { anyOf } = schema;
+  const { anyOf, ...rest } = schema;
   if (!Array.isArray(anyOf) || anyOf.length < 2) return schema;
   const mapping: Record<string, string> = {};
   for (const branch of anyOf) {
     if (!isRecord(branch) || typeof branch.$ref !== 'string') return schema;
-    const target = resolve(branch.$ref);
-    const resource =
-      isRecord(target) && isRecord(target.properties)
-        ? target.properties.resource
-        : undefined;
-    if (
-      !isRecord(resource) ||
-      !Array.isArray(resource.enum) ||
-      resource.enum.length !== 1 ||
-      typeof resource.enum[0] !== 'string'
-    ) {
-      return schema;
-    }
-    mapping[resource.enum[0]] = branch.$ref;
+    const value = resourceLiteral(resolve(branch.$ref));
+    if (value === undefined) return schema;
+    mapping[value] = branch.$ref;
   }
   if (Object.keys(mapping).length !== anyOf.length) return schema;
-  return { ...schema, discriminator: { propertyName: 'resource', mapping } };
+  return {
+    ...rest,
+    oneOf: anyOf,
+    discriminator: { propertyName: 'resource', mapping },
+  };
 }
 
 /**

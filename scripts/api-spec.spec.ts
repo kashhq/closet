@@ -162,16 +162,56 @@ describe('the OpenAPI spec', () => {
       ).toThrow(/"Pair" names two schemas/);
     });
 
-    it('leaves no anyOf of single-value string enums', () => {
+    it('leaves no anyOf of single-value literals, strings or numbers', () => {
       const unions = nodes(generated).filter(
         (node) =>
           Array.isArray(node.anyOf) &&
           node.anyOf.every(
-            (branch: { type?: string; enum?: unknown[] }) =>
-              branch.type === 'string' && branch.enum?.length === 1,
+            (branch: { enum?: unknown[] }) => branch.enum?.length === 1,
           ),
       );
       expect(unions).toEqual([]);
+    });
+
+    it('collapses number literals as numbers', () => {
+      const spec = {
+        paths: {
+          '/a': {
+            x: {
+              anyOf: [
+                { type: 'integer', enum: [1] },
+                { type: 'integer', enum: [2] },
+              ],
+            },
+          },
+        },
+      };
+      nameSchemas(spec);
+      expect(spec.paths['/a'].x).toEqual({ type: 'integer', enum: [1, 2] });
+    });
+
+    it('points every $ref at a component that exists', () => {
+      const spec = generated as { components: { schemas: object } };
+      const missing = nodes(spec)
+        .map((node) => node.$ref)
+        .filter(
+          (ref): ref is string =>
+            typeof ref === 'string' &&
+            !(
+              ref.replace('#/components/schemas/', '') in
+              spec.components.schemas
+            ),
+        );
+      expect(missing).toEqual([]);
+      const mapped = nodes(spec).flatMap((node) =>
+        node.discriminator
+          ? Object.values(
+              (node.discriminator as { mapping: Record<string, string> })
+                .mapping,
+            )
+          : [],
+      );
+      expect(mapped.length).toBeGreaterThan(0);
     });
 
     it("discriminates the changes feed's item by resource, mapping each to its component", () => {
@@ -184,7 +224,8 @@ describe('the OpenAPI spec', () => {
         };
       };
       const item = spec.components.schemas.ChangesPage.properties.changes.items;
-      const branches = item.anyOf as { $ref: string }[];
+      expect(item.anyOf).toBeUndefined();
+      const branches = item.oneOf as { $ref: string }[];
       const discriminator = item.discriminator as {
         propertyName: string;
         mapping: Record<string, string>;
