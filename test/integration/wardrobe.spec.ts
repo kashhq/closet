@@ -282,7 +282,11 @@ describe('wardrobe', () => {
       );
       expect(search).toContain('hx-boost="false"');
       expect(search).not.toContain('hx-get');
-      // Each chip leaves its own filter out of the form's.
+      // Each chip leaves its own filter out of the form's; without the
+      // form its href, every other filter in it, is followed natively.
+      expect(html).toContain(
+        `onclick="if (!document.getElementById('filter-form')) event.stopImmediatePropagation();"`,
+      );
       expect(html).toContain(
         `href="/wardrobe?keyword=shirt&color=blue" ${fromFilters} hx-params="not category"`,
       );

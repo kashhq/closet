@@ -419,6 +419,17 @@ async function checkSelectMode(page: Page) {
   await choose('All garments');
   await expect(page).not.toHaveURL(/[?&]capsule=/);
   await expect(tiles).toHaveCount(closet);
+
+  // A chip's × on a page without the filter form follows its own href (every
+  // other filter in it) as a full navigation, never htmx's bare request.
+  await page.goto('/wardrobe?category=tops&color=blue');
+  await page.evaluate(() => document.getElementById('filter-form')?.remove());
+  await page.locator('#scope-row a[hx-params="not color"]').click();
+  await expect(page).toHaveURL(/\/wardrobe\?category=tops$/);
+  await expect(page.locator('#filter-form')).toHaveCount(1);
+  await expect(
+    page.locator('#scope-row a[hx-params="not category"]'),
+  ).toHaveCount(1);
 }
 
 /**

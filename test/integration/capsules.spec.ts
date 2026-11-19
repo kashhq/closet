@@ -283,6 +283,19 @@ describe('capsules', () => {
       expect(html).not.toContain('id="bulk-dialog"');
       expect(html).not.toContain('id="search-form"');
       expect(html).toContain(`href="/capsules/${office}"`);
+      // Neither the picker nor select mode (a capsule and a filter on hand)
+      // renders the scope row's links, whose requests read the filter form
+      // that only browsing renders.
+      const select = unescapeHtml(
+        (await get(`/wardrobe?select=1&category=tops&capsule=${office}`)).body,
+      );
+      for (const page of [html, select]) {
+        expect(page).not.toContain('id="filter-form"');
+        expect(page).not.toContain('id="capsule-scope"');
+        expect(page).not.toContain('hx-include="#filter-form');
+        expect(page).not.toContain('id="scope-row"');
+      }
+      expect(select).toContain('id="bulk-form"');
       // One member on screen, counted; later pages' are counted as they
       // arrive by the page's module (test/capsules.spec.ts (retired 2026-10-13)).
       expect(html).toMatch(/id="selected-count"[^>]*>1</);

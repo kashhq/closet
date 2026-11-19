@@ -890,12 +890,20 @@ const FILTER_FORM_ID = 'filter-form';
 // search must not depend on it), the form's native GET goes as it is.
 const SEARCH_THROUGH_FILTERS = `const filters = document.getElementById('${FILTER_FORM_ID}'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }`;
 
+// A scope-row link on a page without the filter form (the scope row and
+// the facets render together today, browsing only) stops htmx's own
+// listener on it, which this inline handler precedes, so the link's href,
+// which carries every filter, is followed natively. Not `hx-on`: the CSP
+// has no 'unsafe-eval', which htmx needs to run it.
+const HREF_WITHOUT_FILTERS = `if (!document.getElementById('${FILTER_FORM_ID}')) event.stopImmediatePropagation();`;
+
 /**
  * A scope-row request built from the filter form as it stands (its ticks,
  * applied or not; the owner and the capsule it carries) and the keyword,
  * `change` naming what this control changes: `drop` a filter (a chip's ×),
  * `set` values over the form's (the capsule menu). The request is bare
  * `/wardrobe`: an href's query would repeat the form's fields (#1144).
+ * Without the filter form it is the link's href (`HREF_WITHOUT_FILTERS`).
  */
 function fromFilters(change: {
   drop?: keyof GridSearch;
@@ -907,6 +915,7 @@ function fromFilters(change: {
     'hx-params': change.drop ? `not ${change.drop}` : undefined,
     'hx-vals': change.set ? JSON.stringify(change.set) : undefined,
     ...SWAP_BODY,
+    onclick: HREF_WITHOUT_FILTERS,
   };
 }
 
