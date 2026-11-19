@@ -96,6 +96,9 @@ export async function generateApiSpec(): Promise<unknown> {
 
 const SCHEMA_REF = '#/components/schemas/';
 
+/** Keywords whose values are data, not schemas: an example carrying a `title` is not a component (#1169). */
+const DATA_KEYWORDS = new Set(['default', 'example', 'examples', 'const']);
+
 /**
  * What a client generator needs and TypeBox's inlining withholds (#714):
  * every titled schema becomes one component, named by its title and
@@ -120,7 +123,16 @@ export function nameSchemas(spec: unknown): void {
     if (!isRecord(node)) return node;
     const visited: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
-      visited[key] = visit(value);
+      if (DATA_KEYWORDS.has(key)) visited[key] = value;
+      else if (key === 'properties' && isRecord(value))
+        // Property names are not keywords: one called `default` is a schema.
+        visited[key] = Object.fromEntries(
+          Object.entries(value).map(([name, property]) => [
+            name,
+            visit(property),
+          ]),
+        );
+      else visited[key] = visit(value);
     }
     const schema = discriminated(
       collapseEnums(visited),

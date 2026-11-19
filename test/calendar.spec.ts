@@ -141,12 +141,19 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
     new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) {
-          if (!(node instanceof HTMLElement) || !node.dataset.weatherDay)
-            continue;
-          const date = node.closest('[data-month-day]')?.querySelector('span');
+          if (!(node instanceof HTMLElement)) continue;
+          // The chip may arrive itself or inside an inserted wrapper.
+          const chipNode = node.matches('[data-weather-day]')
+            ? node
+            : node.querySelector<HTMLElement>('[data-weather-day]');
+          const day = chipNode?.dataset.weatherDay;
+          if (!chipNode || !day) continue;
+          const date = chipNode
+            .closest('[data-month-day]')
+            ?.querySelector('span');
           if (!date) continue;
-          const chip = node.getBoundingClientRect();
-          arrivals[node.dataset.weatherDay] = {
+          const chip = chipNode.getBoundingClientRect();
+          arrivals[day] = {
             date: centre(date.getBoundingClientRect()),
             chip: centre(chip),
             width: chip.width,
@@ -184,6 +191,10 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
         ).chipArrivals[d],
       day,
     );
+    expect(
+      arrived,
+      `the chip for ${day} was never seen arriving: it came in the first HTML or outside a month cell`,
+    ).toBeDefined();
     const dateCentre = date.x + date.width / 2;
     const chipCentre = box.x + box.width / 2;
     // Centred under the date: the chip's width follows its temperature. And
