@@ -106,7 +106,7 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
       }}
       layout="panel"
       aside={<PackingAside model={model} />}
-      asideLabel={t('trips.PACKING')}
+      asideLabel={t('trips.PACKING_AND_NOTES')}
       body={{ gap: 6 }}
       overlays={
         <>
@@ -152,6 +152,8 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
  * sticky; docs/plans/2026-11-16-desktop-layout.md §4) and after them on a
  * phone, in the body's flow. The notes come with it: the phone has always
  * shown them last, and the aside follows the body, so they are the aside's.
+ * The landmark's name says both (`trips.PACKING_AND_NOTES`, #1147), and
+ * each section is labelled by its own heading.
  */
 function PackingAside({ model }: { model: TripPageModel }) {
   const { notes } = model.trip;
@@ -160,8 +162,11 @@ function PackingAside({ model }: { model: TripPageModel }) {
       <PackingSection model={model} />
       <ExtrasSection model={model} />
       {notes && (
-        <section>
-          <h2 class="text-xs font-semibold uppercase tracking-wide text-muted mb-1">
+        <section aria-labelledby="trip-notes-heading">
+          <h2
+            id="trip-notes-heading"
+            class="text-xs font-semibold uppercase tracking-wide text-muted mb-1"
+          >
             {t('NOTES')}
           </h2>
           <p class="text-sm whitespace-pre-line">{notes}</p>

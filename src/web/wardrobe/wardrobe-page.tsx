@@ -205,6 +205,11 @@ const WARDROBE_BODY: PageBodyFrame = { gutter: 'flush' };
 // Filter links, the search form and the filter sheet replace the body and
 // push the URL; their href/action keep them working without JavaScript.
 // The answer brings the facets too (PageFragment's aside), whoever asked.
+// So every request that answers the facets sends the filter form's own
+// fields (`fromFilters`, `SEARCH_THROUGH_FILTERS`): a facet ticked and not
+// yet applied is in the URL the answer pushes and checked in the facets
+// it brings, never dropped (#1144). Their `href`/`action` stay the
+// no-script path.
 const SWAP_BODY = {
   'hx-target': `#${regionId(WARDROBE, 'body')}`,
   'hx-swap': 'outerHTML',
@@ -817,8 +822,7 @@ function FilterPill(props: {
   return (
     <a
       href={href}
-      hx-get={href}
-      {...SWAP_BODY}
+      {...fromFilters({ drop: props.drop })}
       class={`badge badge-sm shrink-0 gap-1 whitespace-nowrap cursor-pointer no-underline ${props.class}`}
     >
       {props.label} &times;
@@ -876,6 +880,44 @@ function PropertyPills(props: {
 // along, typed or not yet searched: the page's one keyword field.
 const INCLUDE_KEYWORD = "#search-form [name='keyword']";
 const FILTER_SHEET_ID = 'filter-modal';
+const FILTER_FORM_ID = 'filter-form';
+
+// The search form's Enter, with htmx loaded: the filter form's request
+// (its fields, this keyword through its hx-include), never this form's
+// own (#1144). Its Apply, the default button, may sit in the phone's
+// closed sheet, which `requestSubmit()` does not need. Without htmx, or
+// on a page without the filter form (browsing renders both today; the
+// search must not depend on it), the form's native GET goes as it is.
+const SEARCH_THROUGH_FILTERS = `const filters = document.getElementById('${FILTER_FORM_ID}'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }`;
+
+// A scope-row link on a page without the filter form (the scope row and
+// the facets render together today, browsing only) stops htmx's own
+// listener on it, which this inline handler precedes, so the link's href,
+// which carries every filter, is followed natively. Not `hx-on`: the CSP
+// has no 'unsafe-eval', which htmx needs to run it.
+const HREF_WITHOUT_FILTERS = `if (!document.getElementById('${FILTER_FORM_ID}')) event.stopImmediatePropagation();`;
+
+/**
+ * A scope-row request built from the filter form as it stands (its ticks,
+ * applied or not; the owner and the capsule it carries) and the keyword,
+ * `change` naming what this control changes: `drop` a filter (a chip's ×),
+ * `set` values over the form's (the capsule menu). The request is bare
+ * `/wardrobe`: an href's query would repeat the form's fields (#1144).
+ * Without the filter form it is the link's href (`HREF_WITHOUT_FILTERS`).
+ */
+function fromFilters(change: {
+  drop?: keyof GridSearch;
+  set?: Partial<Record<keyof GridSearch, string>>;
+}) {
+  return {
+    'hx-get': '/wardrobe',
+    'hx-include': `#${FILTER_FORM_ID}, ${INCLUDE_KEYWORD}`,
+    'hx-params': change.drop ? `not ${change.drop}` : undefined,
+    'hx-vals': change.set ? JSON.stringify(change.set) : undefined,
+    ...SWAP_BODY,
+    onclick: HREF_WITHOUT_FILTERS,
+  };
+}
 
 // `/` focuses the search (public/js/search-shortcut.js; owner decision 5 of
 // the desktop plan): the module loads with the search form.
@@ -958,12 +1000,18 @@ function CapsuleScope(props: {
   const current = props.capsules.find(
     (capsule) => String(capsule.id) === search.capsule,
   );
+  // The closet ("All") drops the scope rather than sending it empty: the
+  // pushed URL then carries no `capsule=` (the form's hidden capsule goes
+  // too, through hx-params).
   const scoped = (capsule: string) => {
     const href = wardrobeUrl(viewOwner, {
       ...searchParams(search),
       capsule,
     });
-    return { href, 'hx-get': href, ...SWAP_BODY };
+    const change = capsule
+      ? { set: { capsule } }
+      : { drop: 'capsule' as const };
+    return { href, ...fromFilters(change) };
   };
   return (
     <details class="dropdown shrink-0" id="capsule-scope">
@@ -1070,10 +1118,15 @@ function FilterChips(props: {
 /**
  * Search, collapsed to its icon until tapped: the field grows over the
  * chips while it has the focus (the row's group-has rule hides them) and
- * keeps some width while it holds a keyword. Enter submits; every other
- * filter rides along as a hidden field. The page's only keyword field at
- * every width, from lg too beside the docked facets (#1067): two would
- * each hold a keyword, and the filter sheet's Apply could post only one.
+ * keeps some width while it holds a keyword. Enter submits the filter form
+ * instead (`SEARCH_THROUGH_FILTERS`), which sends this keyword with its
+ * own fields (Apply's request), so a facet ticked and not yet applied is
+ * searched with, never dropped by the facets the answer brings (#1144).
+ * Not this form's `hx-include` of the filter form: its hidden filters would
+ * go too, a filter sent twice (a 400). They stay for the no-script GET.
+ * The page's only keyword field at every width, from lg too beside the
+ * docked facets (#1067): two would each hold a keyword, and the filter
+ * sheet's Apply could post only one.
  */
 function SearchForm(props: {
   search: GridSearch;
@@ -1084,8 +1137,9 @@ function SearchForm(props: {
     <form
       method="get"
       action="/wardrobe"
-      hx-get="/wardrobe"
-      {...SWAP_BODY}
+      onsubmit={SEARCH_THROUGH_FILTERS}
+      // Not boosted: htmx would send this form's own request as well.
+      hx-boost="false"
       id="search-form"
       role="search"
       class="flex shrink-0 justify-end focus-within:flex-1"
@@ -1169,6 +1223,7 @@ function FilterSheet(props: {
         hx-get="/wardrobe"
         hx-include={INCLUDE_KEYWORD}
         {...SWAP_BODY}
+        id={FILTER_FORM_ID}
         class="group/filter"
       >
         <h3 id="filter-modal-title" class="font-bold text-lg mb-4">
