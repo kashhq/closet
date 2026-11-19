@@ -172,6 +172,11 @@ export function twinCounter() {
     const statuses = Object.keys(route.schema?.response ?? {})
       .map(Number)
       .filter((code) => code >= 200 && code < 300);
+    if (statuses.length === 0) {
+      throw new Error(
+        `${method} ${route.url} declares no numeric 2xx response`,
+      );
+    }
     routes.set(id, { method, url: route.url, status: Math.max(...statuses) });
   }
 
