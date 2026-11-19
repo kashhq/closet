@@ -499,7 +499,8 @@ async function checkFilterSheet(page: Page) {
  * column left of the grid, shown without opening anything (no opener), a
  * change applied with focus kept on Apply (htmx refocuses it by id in the
  * facets the answer brings), Back landing on facets that show its URL's
- * filters, and `/` focusing the search.
+ * filters, `/` focusing the search, and a facet ticked but not applied
+ * kept by a search (#1144).
  */
 async function checkDockedFilters(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -554,5 +555,19 @@ async function checkDockedFilters(page: Page) {
     .getByRole('textbox', { name: 'Search' });
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('');
+
+  // A facet ticked and not applied survives a search: Enter sends the
+  // filter form's fields, so the answer's facets come back with it checked
+  // and the grid filtered by it (#1144).
+  await colors.getByRole('radio', { name: 'Blue', exact: true }).click();
+  await search.fill('shirt');
+  await search.press('Enter');
+  await expect(page).toHaveURL(/[?&]keyword=shirt\b/);
+  await expect(page).toHaveURL(/[?&]color=blue\b/);
+  await expect(
+    colors.getByRole('radio', { name: 'Blue', exact: true }),
+  ).toBeChecked();
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.first()).toContainText('Blue shirt');
   await page.setViewportSize({ width: 390, height: 844 });
 }

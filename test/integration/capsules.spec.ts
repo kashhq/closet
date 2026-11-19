@@ -504,10 +504,14 @@ describe('capsules', () => {
           html,
         )![0];
       expect(scope).toMatch(/<summary[^>]*>\s*<span class="truncate">Travel</);
-      expect(scope).toContain('href="/wardrobe" hx-get="/wardrobe"');
+      // Each asks from the filter form with its capsule set over the form's,
+      // so a facet ticked and not yet applied rides along (#1144).
+      expect(scope).toMatch(
+        /href="\/wardrobe" hx-get="\/wardrobe" hx-include="#filter-form[^"]*" hx-vals="\{"capsule":""\}"/,
+      );
       expect(scope).toMatch(
         new RegExp(
-          `href="/wardrobe\\?capsule=${travel}"[^>]*aria-current="true"`,
+          `href="/wardrobe\\?capsule=${travel}" hx-get="/wardrobe"[^>]*hx-vals="\\{"capsule":"${travel}"\\}"[^>]*aria-current="true"`,
         ),
       );
       expect(scope).toContain('href="/capsules"');
