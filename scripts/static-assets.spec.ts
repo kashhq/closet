@@ -8,6 +8,7 @@ import {
   utimesSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
@@ -95,6 +96,7 @@ describe('buildPageModules', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'closet-pages-'));
+    execFileSync('git', ['init', '-q'], { cwd: root });
     mkdirSync(at('sources'), { recursive: true });
     writeFileSync(at('sources', 'outbox.ts'), 'export const y = 1;\n');
   });
@@ -118,5 +120,25 @@ describe('buildPageModules', () => {
     expect(existsSync(at('js', 'old-name.js'))).toBe(false);
     expect(existsSync(at('js', 'new-name.js'))).toBe(true);
     expect(existsSync(at('js', 'plain.js'))).toBe(true);
+  });
+
+  it('keeps a tracked file, though an earlier run built that name', () => {
+    source('mod');
+    build();
+    execFileSync('git', ['add', '-f', 'js/mod.js'], { cwd: root });
+    rmSync(at('sources', 'page', 'mod.ts'));
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'mod.js'))).toBe(true);
+  });
+
+  it('keeps a file whose content changed since the build', () => {
+    source('mod');
+    build();
+    writeFileSync(at('js', 'mod.js'), 'export const edited = 1;\n');
+    rmSync(at('sources', 'page', 'mod.ts'));
+
+    expect(build().removed).toEqual([]);
+    expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('edited');
   });
 });

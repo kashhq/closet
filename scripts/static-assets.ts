@@ -1,3 +1,5 @@
+import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -135,29 +137,54 @@ export async function watchPageModules(): Promise<void> {
   await watcher.watch();
 }
 
+const sha256 = (bytes: Uint8Array): string =>
+  createHash('sha256').update(bytes).digest('hex');
+
+/** The file names under `dir` that the repository tracks. */
+function trackedNames(dir: string): Set<string> {
+  const listed = execFileSync('git', ['ls-files', '-z', '--', '.'], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+  return new Set(listed.split('\0').filter(Boolean));
+}
+
 /**
- * Deletes the outputs the previous run (`manifest`) built that this one did
- * not, then records this run's. Returns the removed file names.
+ * Deletes the outputs the previous run (`manifest`: name to the sha-256 of
+ * what that run wrote) built that this one did not, then records this run's.
+ * A listed file survives (and leaves the list) when it is tracked now, or its
+ * bytes are not the ones recorded: a checkout of a branch where the module is
+ * still plain JS puts a tracked file of the same name there, and deleting it
+ * would leave the tree dirty. Returns the removed file names.
  */
 function removeStaleBuilds(
   outdir: string,
   manifest: string,
-  built: Set<string>,
+  built: Map<string, string>,
 ): string[] {
-  const previous: string[] = fs.existsSync(manifest)
-    ? (JSON.parse(fs.readFileSync(manifest, 'utf8')) as string[])
-    : [];
+  const parsed: unknown = fs.existsSync(manifest)
+    ? JSON.parse(fs.readFileSync(manifest, 'utf8'))
+    : {};
+  // A list from before hashes were kept (an array) vouches for nothing.
+  const previous = Object.entries(
+    Array.isArray(parsed) ? {} : (parsed as Record<string, string>),
+  ).filter(([name]) => !built.has(name));
+  const candidates = previous.filter(([name]) =>
+    fs.existsSync(path.join(outdir, name)),
+  );
+  const tracked =
+    candidates.length > 0 ? trackedNames(outdir) : new Set<string>();
   const removed: string[] = [];
-  for (const name of previous) {
+  for (const [name, hash] of candidates) {
     const file = path.join(outdir, name);
-    if (built.has(file) || !fs.existsSync(file)) continue;
+    if (tracked.has(name) || sha256(fs.readFileSync(file)) !== hash) continue;
     fs.rmSync(file);
     removed.push(name);
   }
   fs.mkdirSync(path.dirname(manifest), { recursive: true });
   fs.writeFileSync(
     manifest,
-    JSON.stringify([...built].map((file) => path.basename(file)).sort()),
+    JSON.stringify(Object.fromEntries([...built].sort())),
   );
   return removed;
 }
@@ -169,8 +196,9 @@ function removeStaleBuilds(
  * syncClientModules does. A module no longer built (a renamed or deleted
  * source) has its output removed, so no checkout keeps serving it. public/js
  * also holds the tracked plain-JS modules (scripts/ci/plain_js.conf), so what
- * counts as ours is the previous run's list, kept in `manifest` outside
- * public/ (never served or precached). Returns the names written and removed.
+ * counts as ours is the previous run's list (names and content hashes), kept
+ * in `manifest` outside public/ (never served or precached); a file that is
+ * tracked or whose content changed since is never removed. Returns the names written and removed.
  */
 export function buildPageModules(
   where: { sources?: string; outdir?: string; manifest?: string } = {},
@@ -186,10 +214,10 @@ export function buildPageModules(
     write: false,
   });
   const written: string[] = [];
-  const built = new Set<string>();
+  const built = new Map<string, string>();
   for (const output of result.outputFiles) {
-    built.add(output.path);
     const bytes = Buffer.from(output.contents);
+    built.set(path.basename(output.path), sha256(bytes));
     if (
       fs.existsSync(output.path) &&
       fs.readFileSync(output.path).equals(bytes)
