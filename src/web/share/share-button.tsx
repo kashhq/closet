@@ -20,10 +20,13 @@ function copyAndFlash(
  * A value in a read-only input plus a copy button: the wardrobe-share invite
  * links, a new personal access token and its connect command. The value
  * reaches the handler as a data attribute, never spliced into its source.
+ * `name` is the field's accessible name (what the value is), `label` the
+ * button's.
  */
 export function CopyableText(props: {
   value: string;
   size: 'xs' | 'sm';
+  name: string;
   label: string;
 }) {
   return (
@@ -32,6 +35,7 @@ export function CopyableText(props: {
         type="text"
         class={`input input-bordered input-${props.size} flex-1`}
         value={props.value}
+        aria-label={props.name}
         readonly
         onclick="this.select()"
       />
@@ -146,6 +150,7 @@ export function PublicSharePanel(props: {
       <CopyableText
         value={publicLink(props.siteUrl, share.type, share.shareableId)}
         size="sm"
+        name={t('publicShare.LINK')}
         label={t('publicShare.COPY')}
       />
     </section>

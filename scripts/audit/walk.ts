@@ -48,6 +48,11 @@ export interface Step {
    * 429. A step that hits a limited route or tool must declare it.
    */
   limits?: readonly AuditLimit[];
+  /**
+   * The request a browser opens for the accessibility pass (a11y.ts): set
+   * on a page step answering 200 with nothing to prepare.
+   */
+  page?: (fixture: Fixture) => AuditRequest;
   measure: (fixture: Fixture) => Promise<Sample>;
 }
 
@@ -98,7 +103,7 @@ function decoded(raw: Buffer, encoding: unknown): Buffer {
 }
 
 /** A step's id in the report, what a later run's diff matches it by. */
-function stepId(step: Pick<Step, 'issue' | 'name'>): string {
+export function stepId(step: Pick<Step, 'issue' | 'name'>): string {
   return `${step.issue} ${step.name}`;
 }
 
@@ -123,6 +128,11 @@ export function http<P = undefined>(step: HttpStep<P>): Step {
     ...step,
     target: step.target ?? step.route,
     route: template,
+    page:
+      step.kind === 'page' && step.expect === 200 && !step.prepare
+        ? // eslint-disable-next-line closet/no-forged-copy -- an unconstrained P with nothing prepared, never user-facing copy
+          (fixture) => step.request(fixture, undefined as P)
+        : undefined,
     async measure(fixture) {
       // eslint-disable-next-line closet/no-forged-copy -- an unconstrained P, never user-facing copy
       const prepared = (await step.prepare?.(fixture)) as P;

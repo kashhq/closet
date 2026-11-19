@@ -5,6 +5,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { Client } from 'pg';
 import sharp from 'sharp';
+import {
+  type A11yPass,
+  type A11yVisit,
+  auditAccessibility,
+} from './audit/a11y';
+import { a11yIncreases } from './audit/a11y-report';
 import { Budgets } from './audit/budget';
 import {
   AUDIT_PERSONAS,
@@ -30,14 +36,17 @@ import {
   type Outcome,
   type Phase,
   type Step,
+  stepId,
 } from './audit/walk';
 
 /**
  * `npm run audit:pages` (#157): every page, fragment, action, MCP tool and
  * job the page audits (#158-#174) name, measured as the demo persona on the
  * production build: server time p50/p95 over repeated runs after warm-up,
- * SQL statements and rows per request, response bytes. Writes a markdown
- * table and a JSON report a later run diffs against (`--compare`).
+ * SQL statements and rows per request, response bytes; first, every page in
+ * Chromium at 390 px for axe, field font and target size (audit/a11y.ts,
+ * #722). Writes a markdown table and a JSON report a later run diffs
+ * against (`--compare`, which fails on more accessibility violations).
  * docs/perf/README.md is the guide; the committed baseline lives there too.
  *
  *   --runs N            timed runs per step (default 20)
@@ -237,6 +246,16 @@ async function record(
   }
 }
 
+/** The page steps a browser opens: a plain GET, not an htmx fragment. */
+function browserVisits(fixture: Fixture, steps: readonly Step[]): A11yVisit[] {
+  return steps.flatMap((step) => {
+    const request = step.page?.(fixture);
+    if (!request || request.method !== 'GET' || request.htmx) return [];
+    const { issue, name, target } = step;
+    return [{ id: stepId(step), issue, name, target, request }];
+  });
+}
+
 /** Route templates and MCP tools no step reached. */
 async function notWalked(
   fixture: Fixture,
@@ -300,6 +319,8 @@ async function main(): Promise<void> {
   // Beside the other runs' output, never in docs/perf/ with a baseline.
   await mkdir(RESULTS, { recursive: true });
   const appLog = join(RESULTS, `${basename(out)}.app.log`);
+  // Every offending node of the accessibility pass, beside the log.
+  const a11yNodes = join(RESULTS, `${basename(out)}.a11y-nodes.json`);
   const fixture = await createFixture({
     persona,
     photo: await testPhoto(),
@@ -322,7 +343,18 @@ async function main(): Promise<void> {
   const [loadAtStart] = loadavg();
   let walked: Walked;
   let unwalked: string[];
+  let a11y: A11yPass;
   try {
+    // Before the walk: the pass is read-only (a11y.ts), so the steps still
+    // start on the seed as it was.
+    a11y = await auditAccessibility(
+      fixture,
+      browserVisits(
+        fixture,
+        phases.flatMap((phase) => phase.steps),
+      ),
+      a11yNodes,
+    );
     walked = await walk(
       fixture,
       phases,
@@ -355,6 +387,7 @@ async function main(): Promise<void> {
     steps: walked.results,
     sql: walked.sql,
     unwalked,
+    a11y: a11y.report,
   };
   const written = await writeOutputs(out, report, walked, {
     explain: values.explain,
@@ -368,11 +401,37 @@ async function main(): Promise<void> {
   console.log(
     `Wrote ${written.map((path) => relative(process.cwd(), path)).join(', ')}`,
   );
-  if (walked.failures.length > 0) {
-    throw new Error(
-      `${walked.failures.length} step(s) failed:\n${walked.failures.join('\n')}\nThe app's log: ${relative(process.cwd(), appLog)}`,
-    );
-  }
+  refuseFailures([...a11y.failures, ...walked.failures], appLog);
+  if (baseline) refuseA11yIncreases(baseline, report, a11yNodes);
+}
+
+function refuseFailures(failures: readonly string[], appLog: string): void {
+  if (failures.length === 0) return;
+  throw new Error(
+    `${failures.length} step(s) failed:\n${failures.join('\n')}\nThe app's log: ${relative(process.cwd(), appLog)}`,
+  );
+}
+
+/** The one gate in the compare: counts and times only print (docs/perf/README.md). */
+function refuseA11yIncreases(
+  baseline: AuditReport,
+  report: AuditReport,
+  nodesFile: string,
+): void {
+  // A baseline from before #722 has no pass to compare with.
+  if (!baseline.a11y || !report.a11y) return;
+  const increases = a11yIncreases(baseline.a11y, report.a11y);
+  if (increases.length === 0) return;
+  throw new Error(
+    `${increases.length} accessibility count(s) above the baseline:\n` +
+      increases
+        .map(
+          (increase) =>
+            `  ${increase.measure} on #${increase.id} (${increase.target}): ${increase.before} → ${increase.after}`,
+        )
+        .join('\n') +
+      `\nEach node: ${relative(process.cwd(), nodesFile)}`,
+  );
 }
 
 main().catch((error: unknown) => {

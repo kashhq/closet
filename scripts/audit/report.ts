@@ -1,4 +1,10 @@
 import { createHash } from 'node:crypto';
+import {
+  type A11yReport,
+  a11yIncreases,
+  renderA11y,
+  renderA11yIncreases,
+} from './a11y-report';
 import { type Count, noiseBetween, relativeChange, type Timing } from './stats';
 
 /**
@@ -74,6 +80,8 @@ export interface AuditReport {
   sql: Record<string, string>;
   /** Route templates and MCP tools no step reached (empty when the walk was filtered). */
   unwalked: string[];
+  /** The accessibility pass (a11y.ts); reports before #722 have none. */
+  a11y?: A11yReport;
 }
 
 /** A report read back (`--compare`): refused when another version wrote it. */
@@ -143,6 +151,7 @@ export function renderReport(report: AuditReport): string {
     }
     lines.push('');
   }
+  if (report.a11y) lines.push(...renderA11y(report.a11y));
   lines.push('## Not walked', '');
   lines.push(
     report.unwalked.length === 0
@@ -331,8 +340,13 @@ export function renderComparison(
       `${threshold.relative * 100}% and ${threshold.absoluteMs} ms (bold): ${faster} faster, ${slower} slower.`,
     '',
   ];
+  // Before and after both measured it: a baseline from before #722 has none.
+  const a11y =
+    before.a11y && after.a11y
+      ? renderA11yIncreases(a11yIncreases(before.a11y, after.a11y))
+      : [];
   if (changed.length === 0) {
-    lines.push('Nothing changed beyond the noise.', '');
+    lines.push('Nothing changed beyond the noise.', '', ...a11y);
     return lines.join('\n');
   }
   lines.push(
@@ -360,6 +374,6 @@ export function renderComparison(
       lines.push('');
     }
   }
-  lines.push('');
+  lines.push('', ...a11y);
   return lines.join('\n');
 }
