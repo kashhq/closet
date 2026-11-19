@@ -14,7 +14,11 @@ import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
-import { buildPageModules, precompress } from './static-assets';
+import {
+  buildPageModules,
+  precompress,
+  watchPageModules,
+} from './static-assets';
 
 describe('precompress', () => {
   let root: string;
@@ -173,5 +177,26 @@ describe('buildPageModules', () => {
     expect(existsSync(at('js', 'gone.js'))).toBe(true);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('gone.js'));
     warn.mockRestore();
+  });
+
+  it('records a watcher rebuild, so a later rename still removes its output', async () => {
+    source('mod');
+    build();
+    const watcher = await watchPageModules({
+      sources: at('sources'),
+      outdir: at('js'),
+      manifest: at('cache', 'page-modules.json'),
+    });
+    try {
+      writeFileSync(at('sources', 'page', 'mod.ts'), 'export const x = 2;\n');
+      await watcher.rebuild();
+    } finally {
+      await watcher.dispose();
+    }
+    expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('2');
+
+    rmSync(at('sources', 'page', 'mod.ts'));
+    expect(build().removed).toEqual(['mod.js']);
+    expect(existsSync(at('js', 'mod.js'))).toBe(false);
   });
 });

@@ -3,7 +3,12 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { type BuildOptions, buildSync, context } from 'esbuild';
+import {
+  type BuildContext,
+  type BuildOptions,
+  buildSync,
+  context,
+} from 'esbuild';
 import {
   isFreshVariant,
   PRECOMPRESSED_EXTENSIONS,
@@ -123,20 +128,6 @@ function pageBuildOptions(sources: string, outdir: string): BuildOptions {
   };
 }
 
-/**
- * Rebuilds the page modules on every change to their sources, for
- * `npm run start:dev` (which builds once first, so removals are handled
- * there). The entry list is read at start: a new page module needs a restart.
- * Runs until the process is stopped.
- */
-export async function watchPageModules(): Promise<void> {
-  const watcher = await context({
-    ...pageBuildOptions(PAGE_SOURCES, PAGE_OUT),
-    logLevel: 'info',
-  });
-  await watcher.watch();
-}
-
 const sha256 = (bytes: Uint8Array): string =>
   createHash('sha256').update(bytes).digest('hex');
 
@@ -158,6 +149,27 @@ function trackedNames(dir: string): Set<string> | undefined {
   }
 }
 
+/** `legacy` is a list from before hashes were kept (an array of names). */
+function readManifest(manifest: string): {
+  legacy: string[];
+  recorded: Record<string, string>;
+} {
+  const parsed: unknown = fs.existsSync(manifest)
+    ? JSON.parse(fs.readFileSync(manifest, 'utf8'))
+    : {};
+  return Array.isArray(parsed)
+    ? { legacy: parsed as string[], recorded: {} }
+    : { legacy: [], recorded: parsed as Record<string, string> };
+}
+
+function writeManifest(manifest: string, built: Map<string, string>): void {
+  fs.mkdirSync(path.dirname(manifest), { recursive: true });
+  fs.writeFileSync(
+    manifest,
+    JSON.stringify(Object.fromEntries([...built].sort())),
+  );
+}
+
 /**
  * Deletes the outputs the previous run (`manifest`: name to the sha-256 of
  * what that run wrote) built that this one did not, then records this run's.
@@ -175,13 +187,10 @@ function removeStaleBuilds(
   manifest: string,
   built: Map<string, string>,
 ): string[] {
-  const parsed: unknown = fs.existsSync(manifest)
-    ? JSON.parse(fs.readFileSync(manifest, 'utf8'))
-    : {};
-  const legacy = Array.isArray(parsed) ? (parsed as string[]) : [];
-  const previous = Object.entries(
-    Array.isArray(parsed) ? {} : (parsed as Record<string, string>),
-  ).filter(([name]) => !built.has(name));
+  const { legacy, recorded } = readManifest(manifest);
+  const previous = Object.entries(recorded).filter(
+    ([name]) => !built.has(name),
+  );
   const onDisk = (name: string) => fs.existsSync(path.join(outdir, name));
   const unlisted = legacy.filter((name) => !built.has(name) && onDisk(name));
   if (unlisted.length > 0) {
@@ -207,11 +216,7 @@ function removeStaleBuilds(
     );
     for (const [name, hash] of candidates) kept.set(name, hash);
   }
-  fs.mkdirSync(path.dirname(manifest), { recursive: true });
-  fs.writeFileSync(
-    manifest,
-    JSON.stringify(Object.fromEntries([...kept].sort())),
-  );
+  writeManifest(manifest, kept);
   return removed;
 }
 
@@ -255,6 +260,50 @@ export function buildPageModules(
     written.push(path.basename(output.path));
   }
   return { written, removed: removeStaleBuilds(outdir, manifest, built) };
+}
+
+/**
+ * Rebuilds the page modules on every change to their sources, for
+ * `npm run start:dev` (which builds once first, so removals are handled
+ * there). The entry list is read at start: a new page module needs a restart.
+ * Each rebuild records its outputs' hashes in the manifest buildPageModules
+ * keeps, so the next `generate:pages` sees the files as built, not edited,
+ * and cleans up a renamed module's. Returns the watching context; the
+ * process runs until it is stopped.
+ */
+export async function watchPageModules(
+  where: { sources?: string; outdir?: string; manifest?: string } = {},
+): Promise<BuildContext> {
+  const {
+    sources = PAGE_SOURCES,
+    outdir = PAGE_OUT,
+    manifest = PAGE_MANIFEST,
+  } = where;
+  const watcher = await context({
+    ...pageBuildOptions(sources, outdir),
+    logLevel: 'info',
+    metafile: true,
+    plugins: [
+      {
+        name: 'record-page-manifest',
+        setup(build) {
+          build.onEnd((result) => {
+            if (result.errors.length > 0 || !result.metafile) return;
+            const recorded = new Map(
+              Object.entries(readManifest(manifest).recorded),
+            );
+            for (const output of Object.keys(result.metafile.outputs)) {
+              const file = path.resolve(output);
+              recorded.set(path.basename(file), sha256(fs.readFileSync(file)));
+            }
+            writeManifest(manifest, recorded);
+          });
+        },
+      },
+    ],
+  });
+  await watcher.watch();
+  return watcher;
 }
 
 // Text formats worth compressing; images, fonts (woff2 is brotli already)
