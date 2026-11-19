@@ -55,7 +55,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          // scripts/: the repo tooling's pure rules (static-assets).
+          // scripts/: the repo tooling's pure rules (static-assets, and the
+          // statement-budget helper from test/support/, which no project globs).
           include: ['src/**/*.spec.{ts,tsx}', 'scripts/**/*.spec.ts'],
           exclude: [
             'src/web/calendar/**/*.spec.{ts,tsx}',
