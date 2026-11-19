@@ -90,7 +90,125 @@ export async function generateApiSpec(): Promise<unknown> {
   const spec: unknown = app.swagger();
   await app.close();
   markOptionalBodies(spec);
+  nameSchemas(spec);
   return spec;
+}
+
+const SCHEMA_REF = '#/components/schemas/';
+
+/**
+ * What a client generator needs and TypeBox's inlining withholds (#714):
+ * every titled schema becomes one component, named by its title and
+ * referenced where it was copied; an `anyOf` of single-value string enums
+ * is one `enum`; a union of objects that each carry a literal `resource`
+ * is discriminated by it, with the mapping. Emitter-only: the routes still
+ * serialize through the inline schemas, so no response changes.
+ *
+ * Two shapes under one title would make one name mean two types, so the
+ * emit fails and the title gets renamed at its source.
+ */
+export function nameSchemas(spec: unknown): void {
+  if (!isRecord(spec) || !isRecord(spec.paths)) return;
+  const components: Record<string, unknown> = isRecord(spec.components)
+    ? spec.components
+    : {};
+  const registered: Record<string, unknown> = {};
+  const shapeOf = new Map<string, string>();
+
+  const visit = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(visit);
+    if (!isRecord(node)) return node;
+    const visited: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      visited[key] = visit(value);
+    }
+    const schema = discriminated(
+      collapseEnums(visited),
+      (ref) => registered[ref.slice(SCHEMA_REF.length)],
+    );
+    const { title } = schema;
+    if (typeof title !== 'string' || '$ref' in schema) return schema;
+    const shape = canonical(schema);
+    const known = shapeOf.get(title);
+    if (known !== undefined && known !== shape) {
+      throw new Error(
+        `The title "${title}" names two schemas in the API spec; titles name components, so rename one.`,
+      );
+    }
+    shapeOf.set(title, shape);
+    registered[title] = schema;
+    return { $ref: `${SCHEMA_REF}${title}` };
+  };
+
+  // The shared schemas (Problem, named by its $id and titled alike) first.
+  for (const shared of Object.values(
+    isRecord(components.schemas) ? components.schemas : {},
+  ))
+    visit(shared);
+  spec.paths = visit(spec.paths);
+  spec.components = { ...components, schemas: registered };
+}
+
+/** A schema as text with its keys sorted: two copies differing only in key order are one shape. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, nested: unknown) =>
+    isRecord(nested)
+      ? Object.fromEntries(
+          Object.entries(nested).sort(([a], [b]) => a.localeCompare(b)),
+        )
+      : nested,
+  );
+}
+
+/** `anyOf: [{ type: 'string', enum: ['a'] }, ...]` as one `enum`. */
+function collapseEnums(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const { anyOf, ...rest } = schema;
+  if (!Array.isArray(anyOf) || anyOf.length === 0) return schema;
+  const values: unknown[] = [];
+  for (const branch of anyOf) {
+    if (
+      !isRecord(branch) ||
+      Object.keys(branch).length !== 2 ||
+      branch.type !== 'string' ||
+      !Array.isArray(branch.enum) ||
+      branch.enum.length !== 1
+    ) {
+      return schema;
+    }
+    values.push(branch.enum[0]);
+  }
+  return { ...rest, type: 'string', enum: values };
+}
+
+/** A discriminator on `resource` for a union whose every branch carries one literal. */
+function discriminated(
+  schema: Record<string, unknown>,
+  resolve: (ref: string) => unknown,
+): Record<string, unknown> {
+  const { anyOf } = schema;
+  if (!Array.isArray(anyOf) || anyOf.length < 2) return schema;
+  const mapping: Record<string, string> = {};
+  for (const branch of anyOf) {
+    if (!isRecord(branch) || typeof branch.$ref !== 'string') return schema;
+    const target = resolve(branch.$ref);
+    const resource =
+      isRecord(target) && isRecord(target.properties)
+        ? target.properties.resource
+        : undefined;
+    if (
+      !isRecord(resource) ||
+      !Array.isArray(resource.enum) ||
+      resource.enum.length !== 1 ||
+      typeof resource.enum[0] !== 'string'
+    ) {
+      return schema;
+    }
+    mapping[resource.enum[0]] = branch.$ref;
+  }
+  if (Object.keys(mapping).length !== anyOf.length) return schema;
+  return { ...schema, discriminator: { propertyName: 'resource', mapping } };
 }
 
 /**

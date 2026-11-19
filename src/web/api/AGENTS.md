@@ -35,6 +35,7 @@
 - **The spec** (plan section 5):
   - `npm run api:spec` (`scripts/api-spec.ts`, the only importer of the devDependency `@fastify/swagger`) registers `apiPlugin` on a bare Fastify and writes `openapi.json` (OpenAPI 3.1). `info.version` is `v1`, never the sha.
   - `Problem` is one component (`addSchema`, named by its `$id`).
+  - `nameSchemas` (`scripts/api-spec.ts`, #714) post-processes the emit for client generators, never the wire: every schema with a `title` becomes `components.schemas.<title>` and a `$ref` (a title on two different shapes fails the emit: rename one), an `anyOf` of single-value string enums becomes one `enum`, and the changes feed's item union carries `discriminator: { propertyName: 'resource', mapping }` (its branches are titled `<Resource>Change` for the mapping). A new resource schema needs a unique `title`.
   - `GET /api/v1/openapi.json` (public) serves the committed file, imported, so tsc copies it into `dist/`.
   - `scripts/api-spec.spec.ts` (unit) fails when the committed file is not what the routes generate. It validates the document (`@seriousme/openapi-schema-validator`) and asserts every operation's declarations.
 - **Logging** (logger `Api`): sign-ins with user, token row id and address; failures as user N or "an unknown email"; refused credentials with their reason and address; sign-outs. Never the token, the password or the device name. The `Http` access line on `api` and `mcp` carries `user_id` and `token_id` (the row id).

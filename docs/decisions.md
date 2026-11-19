@@ -1615,3 +1615,9 @@ Consequence: a new record field survives every settle unless it is added to `Rep
 Why: Styling was the one feature whose model and Save lived in its routes file (1185 lines); Save ended in `pickTo`, which takes the reply, so its rules could not be called without Fastify.
 Decision: `styling/styling-actions.ts` holds every read and Save, each taking the Actor and throwing its refusals; `saveStyled` answers the landing path, and the route redirects (303). The gallery's `pickTo` became `pickToPath` plus the redirect, with `savedOutfitPath` the one spelling of "the week, else the outfit, flagged when already saved". `model.ts` holds the pure builders. No Styling API route: Save's twins already call the actions Save ends in.
 Consequence: a new Save branch goes in `saveStyled`, and its op line in the action it ends in; `routes.tsx` stays parse, call, render.
+
+## 2026-11-18 — The spec names its schemas after the emit, not in the routes (#714)
+
+Why: TypeBox inlines every titled schema at each use and writes anyOf-of-literal enums, so a generated client got one nested type per copy and a try-each-branch feed decoder.
+Decision: `nameSchemas` (`scripts/api-spec.ts`) hoists each title into `components.schemas`, collapses single-value string enums, and discriminates the feed's item on `resource`; Fastify still serializes through the inline schemas, so no response changes. Copies compare by sorted-key shape; two shapes under one title fail the emit.
+Consequence: a new resource schema needs a unique `title`; a feed branch is titled `<Resource>Change` so the discriminator can map to it.

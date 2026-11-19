@@ -1,7 +1,12 @@
 import { Validator } from '@seriousme/openapi-schema-validator';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { generateApiSpec, serializeSpec, SPEC_PATH } from './api-spec';
+import {
+  generateApiSpec,
+  nameSchemas,
+  serializeSpec,
+  SPEC_PATH,
+} from './api-spec';
 
 /**
  * The OpenAPI drift test (#190; plan section 5): the committed
@@ -113,5 +118,81 @@ describe('the OpenAPI spec', () => {
       'GET /api/v1/openapi.json',
       'POST /api/v1/auth/token',
     ]);
+  });
+
+  describe('as a client generator reads it (#714)', () => {
+    function nodes(root: unknown): Record<string, unknown>[] {
+      const found: Record<string, unknown>[] = [];
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) node.forEach(walk);
+        else if (typeof node === 'object' && node !== null) {
+          found.push(node as Record<string, unknown>);
+          Object.values(node).forEach(walk);
+        }
+      };
+      walk(root);
+      return found;
+    }
+
+    it('holds every titled schema once, as a component, and never inline', () => {
+      const spec = generated as Spec & {
+        components: { schemas: Record<string, { title?: string }> };
+      };
+      for (const [name, schema] of Object.entries(spec.components.schemas)) {
+        expect(schema.title, name).toBe(name);
+      }
+      const inline = nodes(spec.paths).filter(
+        (node) => typeof node.title === 'string' && !('$ref' in node),
+      );
+      expect(inline.map((node) => node.title)).toEqual([]);
+    });
+
+    it('fails the emit when one title names two shapes, but not for a reordered copy', () => {
+      const twoShapes = (second: object) => ({
+        paths: {
+          '/a': { get: { x: { title: 'Pair', type: 'object', required: [] } } },
+          '/b': { get: { x: second } },
+        },
+      });
+      expect(() =>
+        nameSchemas(twoShapes({ type: 'object', required: [], title: 'Pair' })),
+      ).not.toThrow();
+      expect(() =>
+        nameSchemas(twoShapes({ title: 'Pair', type: 'string' })),
+      ).toThrow(/"Pair" names two schemas/);
+    });
+
+    it('leaves no anyOf of single-value string enums', () => {
+      const unions = nodes(generated).filter(
+        (node) =>
+          Array.isArray(node.anyOf) &&
+          node.anyOf.every(
+            (branch: { type?: string; enum?: unknown[] }) =>
+              branch.type === 'string' && branch.enum?.length === 1,
+          ),
+      );
+      expect(unions).toEqual([]);
+    });
+
+    it("discriminates the changes feed's item by resource, mapping each to its component", () => {
+      const spec = generated as {
+        components: {
+          schemas: Record<
+            string,
+            { properties: { changes: { items: Record<string, unknown> } } }
+          >;
+        };
+      };
+      const item = spec.components.schemas.ChangesPage.properties.changes.items;
+      const branches = item.anyOf as { $ref: string }[];
+      const discriminator = item.discriminator as {
+        propertyName: string;
+        mapping: Record<string, string>;
+      };
+      expect(discriminator.propertyName).toBe('resource');
+      expect(Object.values(discriminator.mapping).sort()).toEqual(
+        branches.map((branch) => branch.$ref).sort(),
+      );
+    });
   });
 });
