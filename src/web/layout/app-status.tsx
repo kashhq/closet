@@ -1,11 +1,12 @@
 import { t } from '../i18n';
 import type { ViewContext } from '../view-context';
 import { ClockIcon } from './parts';
+import { APP_STATUS_ID, role, statusTextAttributes } from '../page-contract';
 
 /**
  * Connectivity banner, the outbox's status and notice, and the toast host,
- * owned by public/js/connectivity.js, public/js/outbox.js, public/js/pwa.js,
- * public/js/freshness.js, public/js/request-failures.js and public/js/toast.js.
+ * owned by the page's modules (connectivity, the outbox, pwa, freshness,
+ * request-failures and toast; the names they read: src/web/page-contract.ts).
  * Lives inside <body>, so every hx-boost swap replaces it with this empty
  * copy; the scripts re-apply their state on htmx:afterSettle. The toast host
  * alone survives a swap (`hx-preserve`). The strings travel as data
@@ -19,22 +20,24 @@ export function AppStatus({ ctx }: { ctx: ViewContext }) {
   const signedIn = ctx.user !== undefined;
   return (
     <div
-      id="app-status"
-      data-text-offline={t('OFFLINE_BANNER')}
-      data-text-reconnecting={t('RECONNECTING')}
-      data-text-back-online={t('BACK_ONLINE')}
-      data-text-update-available={t('UPDATE_AVAILABLE')}
-      data-text-update-needs-network={t('UPDATE_NEEDS_NETWORK')}
-      data-text-reload={t('RELOAD')}
-      // freshness.js puts "3 minutes ago" (Intl.RelativeTimeFormat) in {ago}.
-      data-text-updated-ago={t('UPDATED_AGO', { ago: '{ago}' })}
-      data-text-newer-page={t('NEWER_PAGE_AVAILABLE')}
-      data-text-refresh={t('REFRESH')}
-      // request-failures.js: an htmx request with no answer, or one that
-      // is not this app's (a proxy's 502); the server's own carry theirs.
-      data-text-request-timed-out={t('REQUEST_TIMED_OUT')}
-      data-text-request-failed={t('REQUEST_FAILED')}
-      data-text-request-id={t('REQUEST_ID')}
+      id={APP_STATUS_ID}
+      {...statusTextAttributes({
+        offline: t('OFFLINE_BANNER'),
+        reconnecting: t('RECONNECTING'),
+        'back-online': t('BACK_ONLINE'),
+        'update-available': t('UPDATE_AVAILABLE'),
+        'update-needs-network': t('UPDATE_NEEDS_NETWORK'),
+        reload: t('RELOAD'),
+        // freshness.ts puts "3 minutes ago" (Intl.RelativeTimeFormat) in {ago}.
+        'updated-ago': t('UPDATED_AGO', { ago: '{ago}' }),
+        'newer-page': t('NEWER_PAGE_AVAILABLE'),
+        refresh: t('REFRESH'),
+        // request-failures.js: an htmx request with no answer, or one that
+        // is not this app's (a proxy's 502); the server's own carry theirs.
+        'request-timed-out': t('REQUEST_TIMED_OUT'),
+        'request-failed': t('REQUEST_FAILED'),
+        'request-id': t('REQUEST_ID'),
+      })}
       data-account={ctx.user && String(ctx.user.id)}
       data-time-zone={signedIn ? ctx.timeZone : undefined}
       {...(signedIn ? outboxText() : {})}
@@ -50,7 +53,7 @@ export function AppStatus({ ctx }: { ctx: ViewContext }) {
         >
           <div class="alert alert-warning alert-soft py-2 text-sm shadow-sm">
             <OfflineIcon class="size-5 shrink-0" />
-            <span data-role="text"></span>
+            <span {...role('text')}></span>
           </div>
         </div>
         {signedIn && <OutboxStatus />}
@@ -148,7 +151,7 @@ function OutboxStatus() {
       >
         <div class="alert alert-info alert-soft py-2 text-sm shadow-sm">
           <ClockIcon class="size-5 shrink-0" />
-          <span data-role="text"></span>
+          <span {...role('text')}></span>
         </div>
       </div>
       {/* A polite live region, not role="alert": it is on every signed-in
@@ -160,7 +163,7 @@ function OutboxStatus() {
         class="hidden pointer-events-auto"
       >
         <div class="alert alert-error alert-soft py-2 text-sm shadow-sm items-start">
-          <ul data-role="list" class="flex flex-col gap-1 flex-1 min-w-0"></ul>
+          <ul {...role('list')} class="flex flex-col gap-1 flex-1 min-w-0"></ul>
           <button
             type="button"
             class="btn btn-ghost btn-sm"

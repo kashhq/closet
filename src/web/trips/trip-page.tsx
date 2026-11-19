@@ -38,6 +38,7 @@ import {
   tripUrl,
 } from './urls';
 import { TRIP_ITEM_MAX } from './validation';
+import { needsNetwork } from '../page-contract';
 
 /**
  * GET /trips/:id (#10): a trip, phone first, a `panel` page (#1071). The
@@ -208,7 +209,7 @@ function TripWeatherSection({ model }: { model: TripPageModel }) {
             hx-get={tripUrl(trip.id, '/places')}
             hx-target="#trip-places"
             hx-swap="innerHTML"
-            data-needs-network=""
+            {...needsNetwork()}
           >
             <input
               type="search"

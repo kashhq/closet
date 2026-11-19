@@ -1,8 +1,8 @@
 /**
  * Installed-app plumbing, loaded by the layout when PWA_ENABLED: service
  * worker registration and the update flow, the freshness indicator of pages
- * served from a cache (freshness.js, with or without a worker), warming the
- * wardrobe for offline reading and Web Push on signed-in pages (push.js),
+ * served from a cache (freshness.ts, with or without a worker), warming the
+ * wardrobe for offline reading and Web Push on signed-in pages (push.ts),
  * the install dialog in a browser tab that can install the app,
  * and pull to refresh for iOS standalone (which has none of its own). Lives
  * in the head so hx-boost body swaps never re-run it; anything that touches
@@ -19,11 +19,35 @@
  * choosing the moment there is nothing to work around. test/sw-update.spec.ts
  * walks both.
  */
-import { Workbox } from 'workbox-window';
-import { showToast } from 'toast';
+import type { PWAInstallElement } from '@khmyznikov/pwa-install';
 import { watchFreshness } from 'freshness';
+import { showToast } from 'toast';
+import { Workbox } from 'workbox-window';
+import {
+  APP_STATUS_ID,
+  ASSET_VERSION,
+  CONNECTIVITY,
+  CONNECTIVITY_CHANGE_EVENT,
+  ENDS_SESSION,
+  SIGNED_IN,
+  type StatusText,
+  statusTextAttribute,
+} from '../../../src/web/page-contract';
+import {
+  type BareMessage,
+  PAGE_MESSAGES,
+  WORKER_MESSAGES,
+} from '../../../src/worker-messages';
 
-const strings = () => document.getElementById('app-status')?.dataset ?? {};
+const text = (name: StatusText) =>
+  document
+    .getElementById(APP_STATUS_ID)
+    ?.getAttribute(statusTextAttribute(name)) ?? '';
+
+/** The heartbeat's state (connectivity.ts), never navigator.onLine. */
+const heartbeatOnline = () =>
+  (document.documentElement.getAttribute(CONNECTIVITY) ?? 'online') ===
+  'online';
 
 function registerServiceWorker() {
   const wb = new Workbox('/sw.js');
@@ -33,17 +57,17 @@ function registerServiceWorker() {
   // clientsClaim took this one too, without reloading it). Reload then has
   // nothing left to activate and only reloads; messageSkipWaiting would
   // find no waiting worker and the tap would do nothing.
-  let update = 'none';
+  let update: 'none' | 'waiting' | 'active' = 'none';
   let reloadRequested = false;
-  let toast = null;
+  let toast: ReturnType<typeof showToast> | null = null;
 
   const showUpdateToast = () => {
     toast?.dismiss();
     toast = showToast({
-      text: strings().textUpdateAvailable,
+      text: text('update-available'),
       kind: 'info',
       action: {
-        label: strings().textReload,
+        label: text('reload'),
         onClick: () => {
           if (update === 'active') {
             console.info('[pwa] update already active, reloading');
@@ -63,24 +87,23 @@ function registerServiceWorker() {
   // new build, whose activation refresh fetches every page an older build
   // stored, and the reload itself is a navigation. Offline, the new build
   // would take over with nothing to fetch them with. Disabled, the toast
-  // saying why, while the heartbeat (connectivity.js's data-connectivity,
+  // saying why, while the heartbeat (connectivity.ts's data-connectivity,
   // never navigator.onLine) is not online. An update another window already
   // activated has nothing left to activate: its Reload stays a plain reload.
   const guardReload = () => {
     if (!toast?.button || update !== 'waiting') return;
-    const online =
-      (document.documentElement.dataset.connectivity ?? 'online') === 'online';
+    const online = heartbeatOnline();
     toast.button.disabled = !online;
     if (online) toast.button.removeAttribute('aria-disabled');
     else toast.button.setAttribute('aria-disabled', 'true');
     toast.label.textContent = online
-      ? strings().textUpdateAvailable
-      : strings().textUpdateNeedsNetwork;
+      ? text('update-available')
+      : text('update-needs-network');
   };
-  document.addEventListener('connectivity:change', guardReload);
+  document.addEventListener(CONNECTIVITY_CHANGE_EVENT, guardReload);
 
   // The worker this window saw waiting: only it taking the page is the update.
-  let waitingWorker = null;
+  let waitingWorker: ServiceWorker | null = null;
   wb.addEventListener('waiting', (event) => {
     update = 'waiting';
     waitingWorker = event.sw ?? null;
@@ -91,7 +114,7 @@ function registerServiceWorker() {
   // saw waiting; any other is the active worker taking the page (the app's
   // first visit, clientsClaim, or its claim on request: claimIfUncontrolled).
   // Workbox fires `controlling` on every controllerchange. Not Workbox's
-  // `isUpdate`: that says whether a worker controlled the page when pwa.js
+  // `isUpdate`: that says whether a worker controlled the page when pwa.ts
   // registered, so a page opened before the first worker never reloaded onto
   // a later update.
   wb.addEventListener('controlling', () => {
@@ -122,7 +145,7 @@ function registerServiceWorker() {
   // that blocks them) rejects here: the app works on without one.
   wb.register()
     .then(() => console.info('[pwa] service worker registered'))
-    .catch((error) =>
+    .catch((error: unknown) =>
       console.warn('[pwa] service worker registration failed', error),
     );
   claimIfUncontrolled();
@@ -142,12 +165,15 @@ function registerServiceWorker() {
 // that page. Answered whenever asked, controlled or not: another page's
 // request asks this one too.
 function claimIfUncontrolled() {
-  const build = document.documentElement.dataset.assetVersion;
+  const build = document.documentElement.getAttribute(ASSET_VERSION);
   if (!build) return;
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type !== 'BUILD_QUERY') return;
-    event.ports[0]?.postMessage({ build });
-  });
+  navigator.serviceWorker.addEventListener(
+    'message',
+    (event: MessageEvent<{ type?: unknown } | null>) => {
+      if (event.data?.type !== WORKER_MESSAGES.buildQuery) return;
+      event.ports[0]?.postMessage({ build });
+    },
+  );
   // The worker's query reaches a page before DOMContentLoaded only once
   // its messages are started.
   navigator.serviceWorker.startMessages();
@@ -157,29 +183,31 @@ function claimIfUncontrolled() {
       console.info(
         `[pwa] page of build ${build} not controlled: asking the worker to claim it`,
       );
-      registration.active?.postMessage({ type: 'CLAIM_CLIENTS' });
+      registration.active?.postMessage({
+        type: PAGE_MESSAGES.claimClients,
+      } satisfies BareMessage);
     })
-    .catch((error) =>
+    .catch((error: unknown) =>
       console.warn('[pwa] could not ask the worker to claim the page', error),
     );
 }
 
 // The session cookie is httpOnly, so the layout says whether this page is
-// signed in (data-signed-in on <html>). push.js defines the profile page's
+// signed in (data-signed-in on <html>). push.ts defines the profile page's
 // <push-settings> and re-sends an existing subscription; it never asks for
 // permission by itself.
 function startPush() {
   import('push')
     .then((push) => push.syncSubscription())
-    .catch((error) => console.warn('[pwa] push sync failed', error));
+    .catch((error: unknown) => console.warn('[pwa] push sync failed', error));
 }
 
-// A signed-out login page carries <push-signed-out>, which push.js defines:
+// A signed-out login page carries <push-signed-out>, which push.ts defines:
 // the browser's subscription goes once nobody is signed in. A boosted tap
 // that lands there needs nothing from here (the signed-in page it left has
-// push.js already).
+// push.ts already).
 function endPush() {
-  import('push').catch((error) =>
+  import('push').catch((error: unknown) =>
     console.warn('[pwa] push module failed to load', error),
   );
 }
@@ -197,19 +225,22 @@ function endPush() {
 // Mounted once per document on <html>, outside the body htmx swaps: in the
 // body every navigation re-mounted it, and every mount fetched the manifest.
 function offerInstall() {
-  const mount = async (promptEvent) => {
+  const mount = async (promptEvent?: Event) => {
     await import('pwa-install');
-    const dialog = document.createElement('pwa-install');
+    const dialog = document.createElement('pwa-install') as PWAInstallElement;
     dialog.id = 'pwa-install';
     dialog.setAttribute('manifest-url', '/manifest.json');
     dialog.setAttribute('disable-screenshots', 'true');
-    if (promptEvent) dialog.externalPromptEvent = promptEvent;
+    if (promptEvent) {
+      dialog.externalPromptEvent =
+        promptEvent as PWAInstallElement['externalPromptEvent'];
+    }
     document.documentElement.append(dialog);
     console.info(
       `[pwa] install dialog mounted (${promptEvent ? 'browser prompt' : 'instructions'})`,
     );
   };
-  const failed = (error) =>
+  const failed = (error: unknown) =>
     console.warn('[pwa] install dialog failed to load', error);
   if ('BeforeInstallPromptEvent' in window) {
     window.addEventListener(
@@ -256,7 +287,12 @@ async function installPullToRefresh() {
   };
   bind();
   document.addEventListener('htmx:afterSettle', (event) => {
-    if (event.detail.target === document.body) bind();
+    if (
+      (event as CustomEvent<{ target: Element }>).detail.target ===
+      document.body
+    ) {
+      bind();
+    }
   });
   document.addEventListener('htmx:historyRestore', bind);
 }
@@ -272,17 +308,17 @@ async function installPullToRefresh() {
 // navigator.onLine) or when the user asked to save data.
 function warmForOffline() {
   const ask = () => {
-    const online =
-      (document.documentElement.dataset.connectivity ?? 'online') === 'online';
-    if (document.visibilityState !== 'visible' || !online) return;
+    if (document.visibilityState !== 'visible' || !heartbeatOnline()) return;
     if (navigator.connection?.saveData) return;
-    navigator.serviceWorker.controller?.postMessage({ type: 'WARM_PAGES' });
+    navigator.serviceWorker.controller?.postMessage({
+      type: PAGE_MESSAGES.warmPages,
+    } satisfies BareMessage);
   };
   if (document.readyState === 'complete') ask();
   else window.addEventListener('load', ask, { once: true });
   document.addEventListener('visibilitychange', ask);
   navigator.serviceWorker.addEventListener('controllerchange', ask);
-  document.addEventListener('connectivity:change', (event) => {
+  document.addEventListener(CONNECTIVITY_CHANGE_EVENT, (event) => {
     if (event.detail.state === 'online') ask();
   });
 }
@@ -290,9 +326,9 @@ function warmForOffline() {
 const WORKER_TELL_MS = 1_000;
 
 /** Posts to the registration's active worker, giving up after WORKER_TELL_MS. */
-async function tellActiveWorker(message) {
-  let gaveUp;
-  const timeout = new Promise((resolve) => {
+async function tellActiveWorker(message: BareMessage) {
+  let gaveUp: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<undefined>((resolve) => {
     gaveUp = setTimeout(resolve, WORKER_TELL_MS);
   });
   try {
@@ -307,7 +343,7 @@ async function tellActiveWorker(message) {
 }
 
 // A sign-in, a registration, a sign-out or an account deletion leaving this
-// page: the PostForms marked data-ends-session (src/web/auth/form.tsx). The
+// page: the PostForms marked data-ends-session (src/web/form.tsx). The
 // worker never sees the post itself (#542: it would launder a cross-site
 // one's Origin), so the page tells it as the post leaves and it drops the
 // session caches before the landing page is asked for (SESSION_ENDING,
@@ -321,12 +357,12 @@ function announceSessionBoundaries() {
     const form = event.target;
     if (
       !(form instanceof HTMLFormElement) ||
-      !('endsSession' in form.dataset)
+      !form.hasAttribute(ENDS_SESSION)
     ) {
       return;
     }
     if (event.defaultPrevented) return;
-    const message = { type: 'SESSION_ENDING' };
+    const message: BareMessage = { type: PAGE_MESSAGES.sessionEnding };
     const { controller } = navigator.serviceWorker;
     if (controller) {
       controller.postMessage(message);
@@ -337,7 +373,7 @@ function announceSessionBoundaries() {
       // event, so the form's confirm is not asked again).
       event.preventDefault();
       tellActiveWorker(message)
-        .catch((error) =>
+        .catch((error: unknown) =>
           console.warn('[pwa] could not tell the worker of a sign-out', error),
         )
         .finally(() => form.submit());
@@ -352,17 +388,19 @@ function announceSessionBoundaries() {
 // eviction (WebKit grants it to an installed web app by heuristics), so a
 // warmed wardrobe survives storage pressure. The answer is only logged.
 async function persistStorage() {
-  if (!navigator.storage?.persist || (await navigator.storage.persisted())) {
+  // Optional: the DOM lib types navigator.storage as always there.
+  const storage = navigator.storage as StorageManager | undefined;
+  if (!storage?.persist || (await storage.persisted())) {
     return;
   }
-  const granted = await navigator.storage.persist();
+  const granted = await storage.persist();
   console.info(`[pwa] persistent storage ${granted ? 'granted' : 'refused'}`);
 }
 
 const standalone =
   window.navigator.standalone === true ||
   window.matchMedia('(display-mode: standalone)').matches;
-const signedIn = document.documentElement.hasAttribute('data-signed-in');
+const signedIn = document.documentElement.hasAttribute(SIGNED_IN);
 
 // Also without a service worker (an http: origin): history snapshots are
 // cached reads too, and a synced page still takes the server's copy.
@@ -373,7 +411,7 @@ if ('serviceWorker' in navigator) {
   if (signedIn) warmForOffline();
 }
 if (standalone && signedIn) {
-  persistStorage().catch((error) =>
+  persistStorage().catch((error: unknown) =>
     console.warn('[pwa] persistent storage request failed', error),
   );
 }
@@ -383,7 +421,7 @@ if (signedIn) startPush();
 else if (document.querySelector('push-signed-out')) endPush();
 if (!standalone) offerInstall();
 if (window.navigator.standalone === true) {
-  installPullToRefresh().catch((error) =>
+  installPullToRefresh().catch((error: unknown) =>
     console.warn('[pwa] pull to refresh failed to load', error),
   );
 }

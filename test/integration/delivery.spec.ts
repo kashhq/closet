@@ -11,11 +11,7 @@ import { STORAGE_MARKER } from '../../src/web/files/storage';
 import { REPLAY_TIMEOUT_MS } from '../../src/offline-writes';
 import { createGarment, jpegPhoto, uploadPhoto } from './garments';
 import { HEALTH_LIMIT } from '../../src/web/security/rate-limit';
-import { LIVE_HEADER, LIVE_VALUE } from '../../src/web/health/routes';
-import {
-  LIVE_HEADER as CLIENT_LIVE_HEADER,
-  LIVE_VALUE as CLIENT_LIVE_VALUE,
-} from '../../public/js/live-answer.js';
+import { LIVE_HEADER, LIVE_VALUE } from '../../src/live-answer';
 import {
   createTestApp,
   PWA_ENV,
@@ -229,13 +225,9 @@ describe('delivery (PWA_ENABLED=true)', () => {
     );
 
     // A captive portal's 200 is not this server (#731): the heartbeat's
-    // verdict (public/js/live-answer.js) asks for the route's own header,
-    // in the spelling the route sends.
+    // verdict (src/live-answer.ts, which the route and the heartbeat share)
+    // asks for the route's own header.
     it("marks /health/live as the server's own, as the heartbeat checks", async () => {
-      expect([LIVE_HEADER, LIVE_VALUE]).toEqual([
-        CLIENT_LIVE_HEADER,
-        CLIENT_LIVE_VALUE,
-      ]);
       for (const method of ['HEAD', 'GET'] as const) {
         const res = await t.inject({
           method,

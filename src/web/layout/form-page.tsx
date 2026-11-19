@@ -3,6 +3,7 @@ import { PostForm } from '../form';
 import type { ViewContext } from '../view-context';
 import { type PageLayout, PageShell } from './page-shell';
 import { CancelLink } from './parts';
+import { needsNetwork } from '../page-contract';
 
 /**
  * The frame of an add or edit page that is one native post (#411): the
@@ -86,7 +87,7 @@ export function FormPage(props: {
           class="btn btn-error btn-outline btn-sm w-full mt-8"
           hx-delete={remove.url}
           hx-confirm={remove.confirm}
-          data-needs-network=""
+          {...needsNetwork()}
         >
           {remove.label}
         </button>

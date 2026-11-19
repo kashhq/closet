@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { QueueableKind } from '../offline-writes';
+import { endsSession, needsNetwork } from './page-contract';
 
 /**
  * The one native POST form for the web layer (see above): the layout boosts
@@ -12,7 +13,7 @@ import type { QueueableKind } from '../offline-writes';
  * from the back/forward cache.
  *
  * Every PostForm is disabled offline (`data-needs-network`,
- * public/js/connectivity.js), its controls outside it through `form=`
+ * views/assets/page/connectivity.ts), its controls outside it through `form=`
  * included: a cached copy posting without a connection lands on the
  * worker's offline page and loses what was typed (#411). The default since
  * the owner's call of 2026-10-22; it was each caller's opt-in and 15 forms
@@ -23,7 +24,7 @@ import type { QueueableKind } from '../offline-writes';
  *
  * `endsSession` marks the four posts that change whose session this device
  * has (sign-in, registration, sign-out, account deletion) as
- * `data-ends-session`: public/js/pwa.js tells the service worker as one
+ * `data-ends-session`: views/assets/page/pwa.ts tells the service worker as one
  * leaves (SESSION_ENDING), so it drops the session caches first, and the
  * outbox holds a sign-out or deletion to sync or discard what is queued.
  * The worker never relays the post itself (#542).
@@ -56,14 +57,12 @@ export function PostForm(props: {
       class={props.class}
       hx-boost="false"
       data-confirm={props.confirm}
-      data-needs-network={
-        props.allowOffline === undefined && props.offlineQueue === undefined
-          ? ''
-          : undefined
-      }
+      {...needsNetwork(
+        props.allowOffline === undefined && props.offlineQueue === undefined,
+      )}
       data-allow-offline={props.allowOffline}
       data-offline-queue={props.offlineQueue}
-      data-ends-session={props.endsSession ? '' : undefined}
+      {...endsSession(props.endsSession === true)}
       // One post per tap: public/js/submit-once.js (the layout loads it).
       data-submit-once=""
     >

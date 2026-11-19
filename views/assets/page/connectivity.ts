@@ -10,39 +10,78 @@
  * toast when the server answers again. Loaded by the layout on every page,
  * with or without a service worker.
  */
-import { isLiveAnswer } from 'live-answer';
 import { singleFlight } from 'single-flight';
 import { showToast } from 'toast';
+import { isLiveAnswer } from '../../../src/live-answer';
+import {
+  APP_STATUS_ID,
+  CONNECTIVITY,
+  CONNECTIVITY_CHANGE_EVENT,
+  type Connectivity,
+  type ConnectivityChange,
+  NEEDS_NETWORK,
+  OFFLINE_FALLBACK,
+  roleSelector,
+  SAVED_PAGES,
+  SAVED_PAGES_NONE,
+  type StatusText,
+  statusTextAttribute,
+} from '../../../src/web/page-contract';
 
 const HEARTBEAT_MS = 30_000;
 const RETRY_MS = 5_000;
 const PROBE_TIMEOUT_MS = 5_000;
 const BACK_ONLINE_TOAST_MS = 3_000;
 
-/** @type {'online' | 'offline' | 'reconnecting'} */
-let state = 'online';
-let timer = null;
+type ProbeReason =
+  | 'load'
+  | 'timer'
+  | 'pageshow'
+  | 'online-event'
+  | 'offline-event'
+  | 'visible'
+  | 'htmx:sendError'
+  | 'htmx:responseError'
+  | 'htmx:timeout';
 
-const strings = () => document.getElementById('app-status')?.dataset ?? {};
+let state: Connectivity = 'online';
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+const text = (name: StatusText) =>
+  document
+    .getElementById(APP_STATUS_ID)
+    ?.getAttribute(statusTextAttribute(name)) ?? '';
 
 function render() {
   const banner = document.getElementById('connectivity-banner');
   if (!banner) return;
-  const text = banner.querySelector('[data-role="text"]');
+  const line = banner.querySelector(roleSelector('text'));
   // The offline fallback page says for itself that nothing is saved here.
-  if (state === 'online' || document.querySelector('[data-offline-fallback]')) {
+  if (state === 'online' || document.querySelector(`[${OFFLINE_FALLBACK}]`)) {
     banner.classList.add('hidden');
     return;
   }
-  text.textContent =
-    state === 'offline' ? strings().textOffline : strings().textReconnecting;
+  if (line) {
+    line.textContent =
+      state === 'offline' ? text('offline') : text('reconnecting');
+  }
   banner.classList.remove('hidden');
 }
 
 // Controls this module disabled, so reconnecting re-enables exactly those
 // and never one disabled for another reason (the empty photo form's Upload).
 const GUARD_MARK = 'offlineDisabled';
+const GUARD_SELECTOR = '[data-offline-disabled]';
 const CONTROLS = 'button, input, select, textarea';
+
+type Control =
+  | HTMLButtonElement
+  | HTMLInputElement
+  | HTMLSelectElement
+  | HTMLTextAreaElement;
+
+const isControl = (element: Element): element is Control =>
+  element.matches(CONTROLS);
 
 /**
  * A zone's controls. A form's are its `elements`, which also holds the
@@ -50,12 +89,12 @@ const CONTROLS = 'button, input, select, textarea';
  * lookalike's "Add a copy", the add sheet's photo inputs): guarding the
  * form guards every way to submit it.
  */
-function zoneControls(zone) {
-  if (zone.matches(CONTROLS)) return [zone];
+function zoneControls(zone: Element): Control[] {
+  if (isControl(zone)) return [zone];
   if (zone instanceof HTMLFormElement) {
-    return Array.from(zone.elements).filter((el) => el.matches(CONTROLS));
+    return Array.from(zone.elements).filter(isControl);
   }
-  return zone.querySelectorAll(CONTROLS);
+  return Array.from(zone.querySelectorAll<Control>(CONTROLS));
 }
 
 /**
@@ -65,9 +104,11 @@ function zoneControls(zone) {
  */
 function guardedForms() {
   return Array.from(
-    document.querySelectorAll('form[data-needs-network]'),
+    document.querySelectorAll<HTMLFormElement>(`form[${NEEDS_NETWORK}]`),
   ).filter((form) =>
-    Array.from(form.elements).some((el) => GUARD_MARK in el.dataset),
+    Array.from(form.elements).some(
+      (el) => el instanceof HTMLElement && GUARD_MARK in el.dataset,
+    ),
   ).length;
 }
 
@@ -82,7 +123,7 @@ function guardWrites() {
   const offline = state !== 'online';
   if (offline) {
     let guarded = 0;
-    for (const zone of document.querySelectorAll('[data-needs-network]')) {
+    for (const zone of document.querySelectorAll(`[${NEEDS_NETWORK}]`)) {
       for (const control of zoneControls(zone)) {
         if (control.disabled) continue;
         control.disabled = true;
@@ -100,38 +141,40 @@ function guardWrites() {
     }
     return;
   }
-  for (const control of document.querySelectorAll('[data-offline-disabled]')) {
+  for (const control of document.querySelectorAll<Control>(GUARD_SELECTOR)) {
     control.disabled = false;
     control.removeAttribute('aria-disabled');
     delete control.dataset[GUARD_MARK];
   }
 }
 
-function setState(next) {
+function setState(next: Connectivity) {
   if (next === state) return;
   const previous = state;
   state = next;
   // On <html>, which boosted navigations never replace: main.css dims the
   // writes marked data-needs-network while offline; guardWrites disables them.
-  document.documentElement.dataset.connectivity = state;
+  document.documentElement.setAttribute(CONNECTIVITY, state);
   guardWrites();
   console.info(`[connectivity] ${previous} -> ${next}`);
   document.dispatchEvent(
-    new CustomEvent('connectivity:change', { detail: { state, previous } }),
+    new CustomEvent<ConnectivityChange>(CONNECTIVITY_CHANGE_EVENT, {
+      detail: { state, previous },
+    }),
   );
   render();
   if (next === 'online' && previous !== 'online') {
     showToast({
-      text: strings().textBackOnline,
+      text: text('back-online'),
       kind: 'success',
       ttlMs: BACK_ONLINE_TOAST_MS,
     });
   }
 }
 
-function schedule(delayMs) {
+function schedule(delayMs: number) {
   clearTimeout(timer);
-  timer = setTimeout(() => probe('timer'), delayMs);
+  timer = setTimeout(() => void probe('timer'), delayMs);
 }
 
 async function serverReachable() {
@@ -155,11 +198,11 @@ async function serverReachable() {
 
 /**
  * One probe at a time, and a call made while one is in flight probes once
- * more after it (single-flight.js): an `offline` event or a failed request is
+ * more after it (single-flight.ts): an `offline` event or a failed request is
  * newer than the probe already running, so it must not take that probe's
  * answer (#436: the page-load probe's 200 hid an outage for 30 s).
  */
-export const probe = singleFlight(async (reason) => {
+export const probe = singleFlight(async (reason: ProbeReason) => {
   if (state === 'offline') setState('reconnecting');
   if (reason !== 'timer') {
     console.debug(`[connectivity] probe (${reason})`);
@@ -199,28 +242,28 @@ window.addEventListener('pageshow', (event) => {
   // (#241): a request cancelled by the navigation may have left `state`
   // 'offline' with the banner shown, frozen until unfrozen. Probe now
   // instead of waiting for the next heartbeat or visibilitychange.
-  if (event.persisted) probe('pageshow');
+  if (event.persisted) void probe('pageshow');
 });
 
 // Browser events are hints that something changed; the probe decides.
-window.addEventListener('online', () => probe('online-event'));
-window.addEventListener('offline', () => probe('offline-event'));
+window.addEventListener('online', () => void probe('online-event'));
+window.addEventListener('offline', () => void probe('offline-event'));
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') probe('visible');
+  if (document.visibilityState === 'visible') void probe('visible');
   else clearTimeout(timer);
 });
 // A request that never reached the server is the strongest offline signal,
 // unless the page itself is what cancelled it.
 document.addEventListener('htmx:sendError', () => {
-  if (!isPageLeaving()) probe('htmx:sendError');
+  if (!isPageLeaving()) void probe('htmx:sendError');
 });
 document.addEventListener('htmx:responseError', () => {
-  if (!isPageLeaving()) probe('htmx:responseError');
+  if (!isPageLeaving()) void probe('htmx:responseError');
 });
 // No answer within htmx's timeout (HTMX_CONFIG): a dead link looks like this
 // too. request-failures.js toasts it; the probe says whether we are offline.
 document.addEventListener('htmx:timeout', () => {
-  if (!isPageLeaving()) probe('htmx:timeout');
+  if (!isPageLeaving()) void probe('htmx:timeout');
 });
 // hx-boost replaces the whole body, banner included.
 document.addEventListener('htmx:afterSettle', () => {
@@ -228,7 +271,7 @@ document.addEventListener('htmx:afterSettle', () => {
   guardWrites();
 });
 
-probe('load');
+void probe('load');
 
 /**
  * The offline fallback page is precached, so it cannot know which tab roots
@@ -238,20 +281,23 @@ probe('load');
  * does not exist is not created.
  */
 async function revealSavedPages() {
-  const list = document.querySelector('[data-saved-pages]');
+  const list = document.querySelector(`[${SAVED_PAGES}]`);
   if (!list || !('caches' in window)) return;
-  const cacheName = list.dataset.savedPages;
+  const cacheName = list.getAttribute(SAVED_PAGES) ?? undefined;
   let saved = 0;
   for (const item of list.querySelectorAll('li')) {
-    const url = new URL(item.querySelector('a').href, location.origin).href;
+    const link = item.querySelector('a');
+    if (!link) continue;
+    const url = new URL(link.href, location.origin).href;
     if (await caches.match(url, { cacheName })) {
       item.hidden = false;
       saved += 1;
     }
   }
-  document.querySelector('[data-saved-pages-none]').hidden = saved > 0;
+  const none = document.querySelector<HTMLElement>(`[${SAVED_PAGES_NONE}]`);
+  if (none) none.hidden = saved > 0;
   console.info(`[connectivity] offline page: ${saved} saved tab roots`);
 }
 
-document.addEventListener('htmx:afterSettle', revealSavedPages);
-revealSavedPages();
+document.addEventListener('htmx:afterSettle', () => void revealSavedPages());
+void revealSavedPages();

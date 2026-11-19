@@ -21,13 +21,19 @@ import {
 } from './queries';
 import { WEATHER_SETTINGS_ID } from './urls';
 import { fetchedLabel } from './views';
+import {
+  LOCATE_FORM_ID,
+  locateButton,
+  locateStatus,
+  needsNetwork,
+} from '../page-contract';
 
 /**
  * Profile › Weather (#14; a Profile section until #728, its own page since,
  * WEATHER_SETTINGS_PATH): the home city (a search on
  * Open-Meteo's geocoding, through the server), "Use my location" (the
  * phone's position, rounded to 2 decimals in the browser and again on the
- * server; public/js/locate.js), the unit, and the personal temperature
+ * server; views/assets/page/locate.ts), the unit, and the personal temperature
  * offset with its "too warm" and "too cold" feedback (the minimal form of
  * #9's "say why not"). Each part answers only itself
  * (src/web/weather/routes.tsx): the location forms `WeatherLocation`, the
@@ -44,7 +50,7 @@ const swapInto = (id: string) =>
   ({
     'hx-target': `#${id}`,
     'hx-swap': 'outerHTML',
-    'data-needs-network': '',
+    ...needsNetwork(),
   }) as const;
 const LOCATION_SWAP = swapInto(LOCATION_ID);
 const OFFSET_SWAP = swapInto(OFFSET_ID);
@@ -135,7 +141,7 @@ export function WeatherLocation(props: {
         hx-get="/weather/places"
         hx-target="#weather-places"
         hx-swap="innerHTML"
-        data-needs-network=""
+        {...needsNetwork()}
       >
         <input
           type="search"
@@ -196,11 +202,11 @@ function HereControls(props: {
   // context with Geolocation) and posts the rounded position through the
   // hidden form.
   return (
-    <div class="flex flex-col gap-1" data-needs-network="">
+    <div class="flex flex-col gap-1" {...needsNetwork()}>
       <button
         type="button"
         class="btn btn-outline btn-sm self-start"
-        data-locate=""
+        {...locateButton()}
         hidden
       >
         {t('weather.USE_HERE')}
@@ -208,14 +214,15 @@ function HereControls(props: {
       <p
         class="text-xs text-error"
         role="alert"
-        data-locate-status=""
-        data-denied={t('weather.HERE_DENIED')}
-        data-failed={t('weather.HERE_FAILED')}
-        data-not-saved={t('weather.HERE_NOT_SAVED')}
+        {...locateStatus({
+          denied: t('weather.HERE_DENIED'),
+          failed: t('weather.HERE_FAILED'),
+          notSaved: t('weather.HERE_NOT_SAVED'),
+        })}
         hidden
       ></p>
       <form
-        id="weather-here-form"
+        id={LOCATE_FORM_ID}
         hx-post="/weather/here"
         {...LOCATION_SWAP}
         hidden

@@ -1,5 +1,6 @@
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -12,7 +13,7 @@ import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
-import { precompress } from './static-assets';
+import { buildPageModules, precompress } from './static-assets';
 
 describe('precompress', () => {
   let root: string;
@@ -75,5 +76,47 @@ describe('precompress', () => {
     expect(precompress(root)).toMatchObject({ written: 0, removed: 2 });
     expect(existsSync(path('gone.js.br'))).toBe(false);
     expect(existsSync(path('small.js.gz'))).toBe(false);
+  });
+});
+
+describe('buildPageModules', () => {
+  let root: string;
+  const at = (...parts: string[]) => join(root, ...parts);
+  const source = (name: string) => {
+    mkdirSync(at('sources', 'page'), { recursive: true });
+    writeFileSync(at('sources', 'page', `${name}.ts`), 'export const x = 1;\n');
+  };
+  const build = () =>
+    buildPageModules({
+      sources: at('sources'),
+      outdir: at('js'),
+      manifest: at('cache', 'page-modules.json'),
+    });
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'closet-pages-'));
+    mkdirSync(at('sources'), { recursive: true });
+    writeFileSync(at('sources', 'outbox.ts'), 'export const y = 1;\n');
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('removes the output of a renamed module and keeps plain-JS files it never built', () => {
+    source('old-name');
+    mkdirSync(at('js'), { recursive: true });
+    writeFileSync(at('js', 'plain.js'), 'export {};\n');
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'old-name.js'))).toBe(true);
+
+    rmSync(at('sources', 'page', 'old-name.ts'));
+    source('new-name');
+    const { removed } = build();
+
+    expect(removed).toEqual(['old-name.js']);
+    expect(existsSync(at('js', 'old-name.js'))).toBe(false);
+    expect(existsSync(at('js', 'new-name.js'))).toBe(true);
+    expect(existsSync(at('js', 'plain.js'))).toBe(true);
   });
 });

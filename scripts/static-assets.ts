@@ -1,16 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { type BuildOptions, buildSync, context } from 'esbuild';
 import {
   isFreshVariant,
   PRECOMPRESSED_EXTENSIONS,
   PUBLIC_DIR,
   variantSource,
 } from '../src/static-assets';
+import { IMPORT_MAP_NAMES } from '../src/web/layout/import-map';
 
 // Build steps for what src/static-assets.ts serves from public/. Run by
 // scripts/generate-static-assets.ts (`npm run generate:modules`,
-// `npm run generate:precompress`) and, so the integration tier serves
+// `npm run generate:pages`, `npm run generate:precompress`) and, so the integration tier serves
 // public/ as the build leaves it, by the integration project's globalSetup
 // (test/support/static-assets-setup.ts).
 
@@ -72,6 +74,133 @@ export function syncClientModules(): { copied: string[]; removed: string[] } {
     .filter((file) => !wanted.has(variantSource(file) ?? file));
   for (const file of removed) fs.rmSync(path.join(MODULES_DIR, file));
   return { copied, removed };
+}
+
+const PAGE_SOURCES = path.join(PUBLIC_DIR, '..', 'views', 'assets');
+const PAGE_OUT = path.join(PUBLIC_DIR, 'js');
+const PAGE_MANIFEST = path.join(
+  PUBLIC_DIR,
+  '..',
+  'node_modules',
+  '.cache',
+  'closet',
+  'page-modules.json',
+);
+
+/**
+ * The page's TypeScript modules (src/web/shell/AGENTS.md, Client modules):
+ * views/assets/outbox.ts and every views/assets/page/<name>.ts, each to
+ * public/js/<name>.js (ignored by git), the URL the layout and the
+ * importmap name. Each is one ES module: what it imports by a relative path
+ * (the shared rules in src/) is bundled in, what it imports by an importmap
+ * name stays a bare import the browser resolves, so a module several import
+ * (toast, single-flight) is one instance per document.
+ */
+export function pageModuleEntries(
+  sources: string = PAGE_SOURCES,
+): Record<string, string> {
+  const page = path.join(sources, 'page');
+  const entries: Record<string, string> = {
+    outbox: path.join(sources, 'outbox.ts'),
+  };
+  for (const file of fs.readdirSync(page).sort()) {
+    if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
+    entries[path.basename(file, '.ts')] = path.join(page, file);
+  }
+  return entries;
+}
+
+function pageBuildOptions(sources: string, outdir: string): BuildOptions {
+  return {
+    entryPoints: pageModuleEntries(sources),
+    outdir,
+    bundle: true,
+    minify: true,
+    format: 'esm',
+    external: IMPORT_MAP_NAMES,
+  };
+}
+
+/**
+ * Rebuilds the page modules on every change to their sources, for
+ * `npm run start:dev` (which builds once first, so removals are handled
+ * there). The entry list is read at start: a new page module needs a restart.
+ * Runs until the process is stopped.
+ */
+export async function watchPageModules(): Promise<void> {
+  const watcher = await context({
+    ...pageBuildOptions(PAGE_SOURCES, PAGE_OUT),
+    logLevel: 'info',
+  });
+  await watcher.watch();
+}
+
+/**
+ * Deletes the outputs the previous run (`manifest`) built that this one did
+ * not, then records this run's. Returns the removed file names.
+ */
+function removeStaleBuilds(
+  outdir: string,
+  manifest: string,
+  built: Set<string>,
+): string[] {
+  const previous: string[] = fs.existsSync(manifest)
+    ? (JSON.parse(fs.readFileSync(manifest, 'utf8')) as string[])
+    : [];
+  const removed: string[] = [];
+  for (const name of previous) {
+    const file = path.join(outdir, name);
+    if (built.has(file) || !fs.existsSync(file)) continue;
+    fs.rmSync(file);
+    removed.push(name);
+  }
+  fs.mkdirSync(path.dirname(manifest), { recursive: true });
+  fs.writeFileSync(
+    manifest,
+    JSON.stringify([...built].map((file) => path.basename(file)).sort()),
+  );
+  return removed;
+}
+
+/**
+ * Bundles pageModuleEntries into public/js/ (minified, as the worker is). A
+ * module whose bytes are already current is left alone, so its mtime (and
+ * its precompressed variants' freshness) survives a repeat run, as
+ * syncClientModules does. A module no longer built (a renamed or deleted
+ * source) has its output removed, so no checkout keeps serving it. public/js
+ * also holds the tracked plain-JS modules (scripts/ci/plain_js.conf), so what
+ * counts as ours is the previous run's list, kept in `manifest` outside
+ * public/ (never served or precached). Returns the names written and removed.
+ */
+export function buildPageModules(
+  where: { sources?: string; outdir?: string; manifest?: string } = {},
+): { written: string[]; removed: string[] } {
+  const {
+    sources = PAGE_SOURCES,
+    outdir = PAGE_OUT,
+    manifest = PAGE_MANIFEST,
+  } = where;
+  const result = buildSync({
+    ...pageBuildOptions(sources, outdir),
+    logLevel: 'warning',
+    write: false,
+  });
+  const written: string[] = [];
+  const built = new Set<string>();
+  for (const output of result.outputFiles) {
+    built.add(output.path);
+    const bytes = Buffer.from(output.contents);
+    if (
+      fs.existsSync(output.path) &&
+      fs.readFileSync(output.path).equals(bytes)
+    ) {
+      continue;
+    }
+    fs.mkdirSync(path.dirname(output.path), { recursive: true });
+    fs.writeFileSync(output.path, bytes);
+    written.push(path.basename(output.path));
+  }
+  return { written, removed: removeStaleBuilds(outdir, manifest, built) };
 }
 
 // Text formats worth compressing; images, fonts (woff2 is brotli already)

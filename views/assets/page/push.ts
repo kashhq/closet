@@ -1,8 +1,8 @@
 /**
  * Web Push, page side (the worker's side is the push and notificationclick
- * handlers in views/assets/src-sw.ts). Hand-written JS because the Push API
- * is imperative: permission, PushManager, the VAPID key as bytes. Imported
- * by pwa.js on signed-in pages (the layout marks them `data-signed-in` on
+ * handlers in views/assets/src-sw.ts). Script because the Push API is
+ * imperative: permission, PushManager, the VAPID key as bytes. Imported by
+ * pwa.ts on signed-in pages (the layout marks them `data-signed-in` on
  * <html>: the session cookie is httpOnly, so the server's word is the only
  * way to know).
  *
@@ -18,9 +18,16 @@
  *    server's form into the slot.
  *  - <push-endpoint> (the change-password form) names this device, so the
  *    new password keeps its subscription; <push-signed-out> (the login page
- *    shown signed out) drops the browser's subscription. pwa.js also imports
+ *    shown signed out) drops the browser's subscription. pwa.ts also imports
  *    this module on a signed-out page that carries <push-signed-out>.
  */
+import {
+  PUSH_ACTION,
+  PUSH_REMINDERS_ID,
+  PUSH_SHOW,
+  type PushAction,
+  type PushState,
+} from '../../../src/web/page-contract';
 
 const SUBSCRIBE_URL = '/push/subscribe';
 const REMINDERS_FORM_URL = '/push/reminders/form';
@@ -35,7 +42,7 @@ function pushSupported() {
   );
 }
 
-async function postJson(url, body) {
+async function postJson(url: string, body: unknown) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -52,21 +59,20 @@ async function fetchPublicKey() {
   return base64UrlToBytes((await response.text()).trim());
 }
 
-function base64UrlToBytes(value) {
+function base64UrlToBytes(value: string) {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
   return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
 }
 
-/** @type {Promise<PushSubscription | null> | undefined} */
-let synced;
+let synced: Promise<PushSubscription | null> | undefined;
 
 /**
  * This browser's subscription once the server has it, or null when there is
  * none (or permission is not granted). Runs once per document; a failure is
  * not remembered, so the next caller tries again.
  */
-export function syncSubscription() {
+export function syncSubscription(): Promise<PushSubscription | null> {
   synced ??= (async () => {
     if (!pushSupported() || Notification.permission !== 'granted') return null;
     const registration = await navigator.serviceWorker.ready;
@@ -76,7 +82,7 @@ export function syncSubscription() {
       console.info('[push] subscription confirmed with the server');
     }
     return subscription;
-  })().catch((error) => {
+  })().catch((error: unknown) => {
     synced = undefined;
     throw error;
   });
@@ -85,8 +91,8 @@ export function syncSubscription() {
 
 class PushSettingsElement extends HTMLElement {
   /** Prepared before any tap, so enabling awaits nothing before subscribe(). */
-  #registration = null;
-  #publicKey = null;
+  #registration: ServiceWorkerRegistration | null = null;
+  #publicKey: Uint8Array<ArrayBuffer> | null = null;
 
   connectedCallback() {
     this.addEventListener('click', this);
@@ -97,19 +103,23 @@ class PushSettingsElement extends HTMLElement {
     this.removeEventListener('click', this);
   }
 
-  handleEvent(event) {
-    const button = event.target.closest('[data-action]');
+  handleEvent(event: Event) {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>(`[${PUSH_ACTION}]`);
     if (!button || button.disabled) return;
-    if (button.dataset.action === 'enable')
-      void this.#run(() => this.#enable());
-    if (button.dataset.action === 'disable')
-      void this.#run(() => this.#disable());
+    const action = button.getAttribute(PUSH_ACTION) as PushAction;
+    if (action === 'enable') void this.#run(() => this.#enable());
+    if (action === 'disable') void this.#run(() => this.#disable());
   }
 
-  #show(state) {
+  #show(state: PushState) {
     this.dataset.state = state;
-    for (const element of this.querySelectorAll('[data-show]')) {
-      element.hidden = !element.dataset.show.split(' ').includes(state);
+    for (const element of this.querySelectorAll<HTMLElement>(
+      `[${PUSH_SHOW}]`,
+    )) {
+      element.hidden = !(element.getAttribute(PUSH_SHOW) ?? '')
+        .split(' ')
+        .includes(state);
     }
   }
 
@@ -122,7 +132,7 @@ class PushSettingsElement extends HTMLElement {
     }
   }
 
-  #showState(state) {
+  #showState(state: PushState) {
     this.#show(state);
     if (state === 'on') void this.#loadReminders();
   }
@@ -130,7 +140,7 @@ class PushSettingsElement extends HTMLElement {
   // This device's reminders, from the server, into their slot (the form it
   // answers keeps the slot's id, so a later load replaces it again).
   async #loadReminders() {
-    const slot = this.querySelector('#push-reminders');
+    const slot = this.querySelector(`#${PUSH_REMINDERS_ID}`);
     try {
       const subscription = await syncSubscription();
       if (!slot || !subscription) return;
@@ -144,7 +154,7 @@ class PushSettingsElement extends HTMLElement {
     }
   }
 
-  async #currentState() {
+  async #currentState(): Promise<PushState> {
     if (!pushSupported()) {
       // iOS and iPadOS have push only in the Home Screen app;
       // navigator.standalone exists only there, false in a Safari tab.
@@ -159,11 +169,12 @@ class PushSettingsElement extends HTMLElement {
   async #prepare() {
     this.#registration ??= await navigator.serviceWorker.ready;
     this.#publicKey ??= await fetchPublicKey();
+    return { registration: this.#registration, publicKey: this.#publicKey };
   }
 
   // Buttons stay disabled while a change is in flight; the outcome decides
   // the state shown.
-  async #run(change) {
+  async #run(change: () => Promise<PushState>) {
     const buttons = this.querySelectorAll('button');
     for (const button of buttons) button.disabled = true;
     try {
@@ -176,21 +187,24 @@ class PushSettingsElement extends HTMLElement {
     }
   }
 
-  #stateAfterFailure() {
+  #stateAfterFailure(): PushState {
     // A refused or dismissed prompt is the user's answer, not an error.
     if (Notification.permission === 'denied') return 'blocked';
     if (Notification.permission === 'default') return 'off';
     return 'error';
   }
 
-  async #enable() {
+  async #enable(): Promise<PushState> {
     // subscribe() asks for permission itself. It must be the first thing
     // awaited after the tap (iOS drops the gesture across other awaits), so
     // the registration and key come from #prepare() when they can.
-    if (!this.#registration || !this.#publicKey) await this.#prepare();
-    const subscription = await this.#registration.pushManager.subscribe({
+    const { registration, publicKey } =
+      this.#registration && this.#publicKey
+        ? { registration: this.#registration, publicKey: this.#publicKey }
+        : await this.#prepare();
+    const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: this.#publicKey,
+      applicationServerKey: publicKey,
     });
     await postJson(SUBSCRIBE_URL, subscription.toJSON());
     synced = Promise.resolve(subscription);
@@ -198,7 +212,7 @@ class PushSettingsElement extends HTMLElement {
     return 'on';
   }
 
-  async #disable() {
+  async #disable(): Promise<PushState> {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
@@ -226,7 +240,7 @@ class PushEndpointElement extends HTMLElement {
       .then((subscription) => {
         if (input && subscription) input.value = subscription.endpoint;
       })
-      .catch((error) =>
+      .catch((error: unknown) =>
         console.warn('[push] could not name this device for the form', error),
       );
   }
@@ -257,7 +271,7 @@ async function dropSubscription() {
 
 class PushSignedOutElement extends HTMLElement {
   connectedCallback() {
-    dropSubscription().catch((error) =>
+    dropSubscription().catch((error: unknown) =>
       console.warn('[push] could not drop the push subscription', error),
     );
   }

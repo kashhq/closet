@@ -41,6 +41,7 @@ import {
   stylingUrl,
 } from './urls';
 import { FIELD_GRID } from '../layout/columns';
+import { needsNetwork } from '../page-contract';
 
 /**
  * GET /styling (#42; docs/plans/2026-09-26-redesign.md, "Styling"): the
@@ -320,7 +321,7 @@ export function StylingFit(props: { oob?: boolean }) {
         hx-swap="innerHTML"
         hx-indicator="#styling-fit-line"
         aria-live="polite"
-        data-needs-network=""
+        {...needsNetwork()}
       ></div>
       <p class="text-xs text-muted" data-offline-note="">
         {t('styling.FIT_OFFLINE')}
@@ -563,7 +564,7 @@ function PicksToggle({ context }: { context: RowContext }) {
         hx-target="#styling-rows"
         hx-swap="outerHTML"
         hx-push-url={stylingUrl({ ...state, picks: !on })}
-        data-needs-network=""
+        {...needsNetwork()}
         data-styling-picks={on ? 'on' : 'off'}
       >
         {on && <span aria-hidden="true">✓</span>}
@@ -669,7 +670,7 @@ function AddRow({ model }: { model: StylingModel }) {
               hx-include="#styling-form"
               hx-target="#styling-rows"
               hx-swap="outerHTML"
-              data-needs-network=""
+              {...needsNetwork()}
               onclick="this.closest('details').open = false"
             >
               {roleLabel(role)}
@@ -697,7 +698,7 @@ function StylingActions({ model }: { model: StylingModel }) {
         hx-include="#styling-form"
         hx-target="#styling-rows"
         hx-swap="outerHTML"
-        data-needs-network=""
+        {...needsNetwork()}
         data-styling-shuffle=""
       >
         ⤮ {t('gallery.SHUFFLE')}
@@ -775,7 +776,7 @@ function SaveSheet({ model }: { model: StylingModel }) {
           type="submit"
           form="styling-form"
           class="btn btn-primary"
-          data-needs-network=""
+          {...needsNetwork()}
           data-styling-save=""
         >
           {saveLabel(model)}

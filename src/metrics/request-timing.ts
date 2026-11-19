@@ -1,3 +1,4 @@
+import { PAGE_TAG_TIMING_NAME } from '../page-tag';
 import { currentRequest } from '../request-context';
 
 /**
@@ -57,16 +58,6 @@ export async function timeRender<T>(render: () => Promise<T>): Promise<T> {
     if (timing) timing.renderMs += performance.now() - started;
   }
 }
-
-/**
- * The Server-Timing entry that repeats a page's ETag (src/web/render.ts),
- * its opaque value without `W/` or quotes, for the one reader that cannot
- * see the header: a document's own script, through Navigation Timing.
- * public/js/freshness.js sends it back as If-None-Match after a sync, so an
- * unchanged page answers 304 and offers nothing (#900); it duplicates this
- * name (it cannot import a TS module).
- */
-const PAGE_TAG_TIMING_NAME = 'etag';
 
 /**
  * The header's value. `route` carries the matched route template as a

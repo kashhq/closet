@@ -11,7 +11,7 @@ Capabilities: pwa, push, scheduled-jobs
 
 - **Runtime**: Node 22 (`.nvmrc`), TypeScript, plain **Fastify 5** (no framework on top), built by `tsc` to `dist/`.
 - **Image**: runs as `node` (uid/gid 1000), never root; it writes only `DATA_PATH` and `MODELS_PATH`, host mounts that must be writable by uid 1000 (`docs/operations.md#permissions`; `/health/ready`'s `storage` check, the boot refuses an unwritable `DATA_PATH`, and one without its `.closet-storage` marker while photo rows exist: Images). A new runtime write path gets a `chown` in the Dockerfile and a row there.
-- **Views**: server-rendered typed JSX (`hono/jsx` to strings, no Hono server) in `src/web/`, htmx 2, a few modules in `public/js/`. Not a SPA; no JSON API for the UI.
+- **Views**: server-rendered typed JSX (`hono/jsx` to strings, no Hono server) in `src/web/`, htmx 2, a few client modules (TypeScript in `views/assets/page/`, built to `public/js/`; the rest still plain JS there: `src/web/shell/AGENTS.md`, Client modules). Not a SPA; no JSON API for the UI.
 - **CSS**: Tailwind v4 + daisyUI (`views/assets/main.css` to `public/bundle.css`; `views/assets/AGENTS.md`).
 - **Data**: PostgreSQL 18 only (production, pgvault-dev, and the throwaway containers check_tree and CI test on). **Drizzle ORM owns the schema, the migrations and every query** (`src/db/schema.ts`, `drizzle/`, applied at boot).
 - **Auth**: a JWT in an httpOnly `access_token` cookie, into `req.auth` per request; `/mcp` takes agent tokens, `/api/v1` device tokens (`src/web/api/AGENTS.md`). Every route that changes or hands out a credential asks for the current password (`src/web/auth/AGENTS.md`).
@@ -153,7 +153,7 @@ In full: `docs/conventions.md#config`, `#logging`. `loadConfig()` (`src/config.t
 
 In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 
-- **Server owns the HTML**: htmx attributes, then CSS, then a one-line inline handler reading `data-*`; bigger is a `public/js/` module with a reason in the PR. No `_hyperscript` (`expectFullPage` fails an `_=` attribute). **Locality of behavior**: view logic beside its markup.
+- **Server owns the HTML**: htmx attributes, then CSS, then a one-line inline handler reading `data-*`; bigger is a client module (`views/assets/page/<name>.ts`, never a new `public/js/` file: `make plain-js-check`) with a reason in the PR. No `_hyperscript` (`expectFullPage` fails an `_=` attribute). **Locality of behavior**: view logic beside its markup.
 - **Every user-facing string goes through i18n** (`t`/`tHtml`, `src/i18n/en/lang.json`).
 - **daisyUI semantic tokens, no hardcoded colors** (ESLint: palette classes, `chip-N`, colours in `style`). Muted text is `text-muted`; `text-faint` never for text; ESLint refuses `text-base-content/0`–`/69`; no `opacity-*` on text.
 - **No runtime CDN imports**: client packages from `public/modules/` (`CLIENT_MODULES`) or `public/vendor/`; zero external requests (`delivery.spec.ts`).

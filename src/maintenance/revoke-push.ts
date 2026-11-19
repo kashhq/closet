@@ -15,7 +15,7 @@ import { revokeDevices, usersWithDevices } from '../web/push/queries';
  *
  * Run it after the server restarted with the new secret: before that, a
  * session still open sends its subscription again on its next page
- * (syncSubscription, public/js/push.js). Everyone re-enables notifications
+ * (syncSubscription, views/assets/page/push.ts). Everyone re-enables notifications
  * and their reminders on the profile afterwards.
  */
 

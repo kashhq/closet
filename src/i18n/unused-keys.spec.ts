@@ -51,6 +51,7 @@ describe('the catalog', () => {
   const code = [
     ...sources(join(PROJECT_ROOT, 'src')),
     ...sources(join(PROJECT_ROOT, 'public/js')),
+    ...sources(join(PROJECT_ROOT, 'views/assets/page')),
   ].join('\n');
 
   it('has no key that no source names', () => {

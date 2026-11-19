@@ -14,7 +14,7 @@ import { daysBetween, type IsoDate, todayIn } from './calendar-date';
 /**
  * The household's date of a copy's stamp (`#freshness`'s `data-fetched-at`,
  * epoch ms: when the server produced or last confirmed what is on screen,
- * public/js/freshness.js), or undefined for a missing or unreadable one.
+ * views/assets/page/freshness.ts), or undefined for a missing or unreadable one.
  */
 export function dayOfStamp(
   stamp: string | undefined,

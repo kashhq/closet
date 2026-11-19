@@ -1,10 +1,16 @@
 import path from 'path';
 import { PUBLIC_DIR } from '../src/static-assets';
-import { precompress, syncClientModules } from './static-assets';
+import {
+  buildPageModules,
+  watchPageModules,
+  pageModuleEntries,
+  precompress,
+  syncClientModules,
+} from './static-assets';
 import { NOTICES_FILE, writeNotices } from './third-party-notices';
 
-// `npm run generate:modules`, `generate:notices` and `generate:precompress` (all in
-// `npm run build`); the steps themselves are in scripts/static-assets.ts.
+// `npm run generate:modules`, `generate:pages`, `generate:notices` and `generate:precompress`
+// (all in `npm run build`); the steps themselves are in scripts/static-assets.ts.
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
 
 const step = process.argv[2];
@@ -13,6 +19,13 @@ if (step === 'modules') {
   console.log(
     `public/modules: ${copied.length} copied${copied.length ? ` (${copied.join(', ')})` : ''}, ${removed.length} removed`,
   );
+} else if (step === 'pages') {
+  const { written, removed } = buildPageModules();
+  console.log(
+    `public/js: ${Object.keys(pageModuleEntries()).length} page modules, ${written.length} written${written.length ? ` (${written.join(', ')})` : ''}, ${removed.length} removed`,
+  );
+} else if (step === 'pages:watch') {
+  void watchPageModules();
 } else if (step === 'notices') {
   const { bytes, written } = writeNotices();
   console.log(
@@ -27,6 +40,8 @@ if (step === 'modules') {
       `, ${r.current} current, ${r.removed} removed, ${Date.now() - started} ms`,
   );
 } else {
-  console.error('Usage: generate-static-assets.ts modules|notices|precompress');
+  console.error(
+    'Usage: generate-static-assets.ts modules|pages|pages:watch|notices|precompress',
+  );
   process.exit(1);
 }

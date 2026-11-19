@@ -29,7 +29,7 @@ export const PlaceQuery = Type.Object({
   q: Type.String({ minLength: PLACE_QUERY_MIN, maxLength: PLACE_QUERY_MAX }),
 });
 
-/** A position as posted: the phone's (public/js/locate.js) or a picked place's. */
+/** A position as posted: the phone's (views/assets/page/locate.ts) or a picked place's. */
 export const LocationBody = Type.Object({
   latitude: Type.Number({ minimum: -90, maximum: 90 }),
   longitude: Type.Number({ minimum: -180, maximum: 180 }),

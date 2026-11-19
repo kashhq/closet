@@ -27,7 +27,7 @@ import {
 import { PUSH_SETTINGS_PATH } from './urls';
 
 /**
- * The browser's PushSubscription.toJSON(), as public/js/push.js posts it.
+ * The browser's PushSubscription.toJSON(), as views/assets/page/push.ts posts it.
  * Stored as sent and later handed to web-push, so it is held to its real
  * shape here: an https endpoint (every push service is one) and the RFC 8291
  * keys in base64url (browsers write them unpadded), a 65-byte P-256 point

@@ -47,7 +47,7 @@ both and the page cached under A opening offline proves its `?v=` meets an
 installed precache; which precache a `?v=` reads and which an activation
 keeps is proved by `src/static-build.spec.ts` (a stand-in CacheStorage).
 
-Two bugs it found in `public/js/pwa.js` (fixed with it): the other window's
+Two bugs it found in `views/assets/page/pwa.ts` (fixed with it): the other window's
 Reload posted `SKIP_WAITING` to no waiting worker and did nothing, forever,
 since the toast came back on every navigation; and a document opened before
 the first worker controlled it never reloaded onto an update, because the

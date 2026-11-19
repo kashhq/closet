@@ -4,7 +4,7 @@
 
 **Touch sizing (#636):** where the pointer is coarse, `main.css` raises `--size-field` (44 px controls), keeps text fields at 16 px or more (iOS zoom) and gives dense controls (btn-sm/-xs, tabs, checkbox/radio/toggle, `.link`, control badges) a transparent 44 px `::after` (`::before` on an input `.btn`/`.tab`); never size a control for touch at its call site (`min-h-11`). A control whose own overflow clips (`truncate`) loses the area: truncate an inner span. `test/support/touch-targets.ts` checks it in `test/trips.spec.ts`.
 
-`src-sw.ts` is the service worker: its doc is `src/web/shell/AGENTS.md` (PWA and the service worker). `outbox.ts` is the page's offline outbox, bundled into `public/js/outbox.js` (`npm run generate:outbox`) and type-checked by `tsconfig.page.json`: its doc is `src/web/shell/outbox.md`. `outbox-store.ts` is the outbox database's one definition, imported by both bundles.
+`src-sw.ts` is the service worker: its doc is `src/web/shell/AGENTS.md` (PWA and the service worker). `outbox.ts` is the page's offline outbox and `page/*.ts` the other client modules, each bundled into `public/js/<name>.js` (`npm run generate:pages`) and type-checked by `tsconfig.page.json` (with `page-globals.d.ts` and `page-vendor.d.ts`): how they are built and share names with the views is `src/web/shell/AGENTS.md`, Client modules; the outbox's own doc is `src/web/shell/outbox.md`. `outbox-store.ts` is the outbox database's one definition, imported by both bundles.
 
 - **daisyUI's `daisyui.*` layers rank above `components`** in the bundle, so a rule that overrides a daisyUI component (the inactive section-tab colour, #726) goes in `@layer utilities`, not components and not unlayered.
 

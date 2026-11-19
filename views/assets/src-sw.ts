@@ -83,11 +83,11 @@ import {
   SHARE_STASH_CACHE,
 } from '../../src/web/inspiration/share-target';
 import {
-  OUTBOX_SYNCED,
   queuedWritesGoneAtClaim,
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
+import { PAGE_MESSAGES, WORKER_MESSAGES } from '../../src/worker-messages';
 import {
   dropQueuedWrites,
   openOutboxChannel,
@@ -103,7 +103,7 @@ import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
 /**
- * Caching model (public/js/pwa.js and public/js/freshness.js are the page
+ * Caching model (views/assets/page/pwa.ts and views/assets/page/freshness.ts are the page
  * side):
  *  - App shell files under public/ are precached by content hash
  *    (scripts/generate-sw.ts), one precache per static build, so a repeat
@@ -946,7 +946,7 @@ async function revalidate(
  * stored before this worker activated (#2): online the server's page
  * answers, and the older build's copy only when the server cannot.
  *
- * Nothing here starts a revalidation: public/js/freshness.js reads the
+ * Nothing here starts a revalidation: views/assets/page/freshness.ts reads the
  * served-from-cache stamp itself, through Navigation Timing (Server-Timing,
  * CACHED_AT_TIMING_NAME in page-cache.ts), and asks for REVALIDATE_PAGE
  * itself, the same request a reconnect makes (#240). A worker that instead
@@ -991,7 +991,7 @@ const isPageRequest = ({ request, url }: { request: Request; url: URL }) =>
 // permission stays). Here only for a session the worker's own fetch found
 // ended (endFetchedSession); a sign-out, an account deletion or a session
 // ended elsewhere lands on the signed-out login page, which drops the
-// subscription itself (<push-signed-out>, public/js/push.js).
+// subscription itself (<push-signed-out>, views/assets/page/push.ts).
 async function dropPushSubscription(): Promise<void> {
   try {
     const subscription = await self.registration.pushManager.getSubscription();
@@ -1183,7 +1183,7 @@ warmStrategyCache({ urls: [FALLBACK_HTML_URL], strategy: offlinePage });
 // Runs when a matched route's handler fails: for a page (navigation or a
 // boosted link, which swaps the whole body) serve the offline page; a
 // fragment request fails instead, which htmx reports as htmx:sendError and
-// public/js/connectivity.js turns into the offline banner.
+// views/assets/page/connectivity.ts turns into the offline banner.
 setCatchHandler(async ({ request }) => {
   const wantsPage =
     request.mode === 'navigate' || request.headers.get('HX-Boosted') === 'true';
@@ -1940,7 +1940,7 @@ function askBuild(client: Client): Promise<unknown> {
       channel.port1.close();
       resolve(event.data.build);
     };
-    client.postMessage({ type: 'BUILD_QUERY' }, [channel.port2]);
+    client.postMessage({ type: WORKER_MESSAGES.buildQuery }, [channel.port2]);
   });
 }
 
@@ -1996,23 +1996,23 @@ async function claimOwnBuildPages(): Promise<void> {
 // SKIP_WAITING when the user taps Reload. No skipWaiting() on install: a
 // worker that seizes control mid-session leaves pages holding stale asset
 // URLs, which is the black-screen bug the old hard-navigate hack papered over.
-// The page's own questions come from public/js/freshness.js, each with a
+// The page's own questions come from views/assets/page/freshness.ts, each with a
 // MessagePort for the answer; WARM_PAGES, SESSION_ENDING and CLAIM_CLIENTS
-// from public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. The
+// from views/assets/page/pwa.ts and OUTBOX_SYNCED from outbox.js want none. The
 // worker asks pages too: BUILD_QUERY (claimOwnBuildPages). Only this
 // site's own pages can post here (a page reaches a worker only through its
 // own origin's registration).
 self.addEventListener('message', (event) => {
   const type: unknown = event.data?.type;
   const [port] = event.ports;
-  if (type === 'SKIP_WAITING') {
+  if (type === PAGE_MESSAGES.skipWaiting) {
     console.log('[sw] SKIP_WAITING received');
     void self.skipWaiting();
-  } else if (type === 'CLAIM_CLIENTS') {
+  } else if (type === PAGE_MESSAGES.claimClients) {
     // A page this active worker does not control (pwa.js): left out of the
     // activation's claim, it would stay out of the worker until a reload.
     event.waitUntil(claimOwnBuildPages());
-  } else if (type === 'REVALIDATE_PAGE' && port) {
+  } else if (type === PAGE_MESSAGES.revalidatePage && port) {
     event.waitUntil(
       revalidateForPage(
         event,
@@ -2021,16 +2021,16 @@ self.addEventListener('message', (event) => {
         port,
       ),
     );
-  } else if (type === 'WARM_PAGES') {
+  } else if (type === PAGE_MESSAGES.warmPages) {
     event.waitUntil(warmPages(event));
-  } else if (type === 'SESSION_ENDING') {
+  } else if (type === PAGE_MESSAGES.sessionEnding) {
     // A sign-in, a registration, a sign-out or an account deletion is
     // leaving one of our pages (#542, data-ends-session): whatever session
     // this device had ends with it, so its caches go before the landing
     // page is asked for. A post that then fails costs a refetch. Held by
     // waitUntil, so the drop outlives the page that asked.
     event.waitUntil(dropSession(event, 'a sign-in or sign-out was posted'));
-  } else if (type === OUTBOX_SYNCED) {
+  } else if (type === PAGE_MESSAGES.outboxSynced) {
     const writes = syncedWritePaths(event.data.paths);
     if (writes.length > 0) {
       event.waitUntil(

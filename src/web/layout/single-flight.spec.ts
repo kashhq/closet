@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-// connectivity.js's probe runs in the browser (public/js/ is served as it is,
-// not built); its scheduling is this pure helper, tested here.
-import { latestOnly, singleFlight } from '../../../public/js/single-flight.js';
+// connectivity.ts's probe runs in the browser; its scheduling is this pure
+// helper, tested here.
+import {
+  latestOnly,
+  singleFlight,
+} from '../../../views/assets/page/single-flight';
 
 /** A task whose runs settle when the test says, recording each run's argument. */
 function controlled() {

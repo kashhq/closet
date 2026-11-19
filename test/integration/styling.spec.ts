@@ -1081,7 +1081,7 @@ describe('Styling', () => {
         expect(res.body).toContain(`name="ownerId" value="${ownerId}"`);
         expect(res.body).toContain('data-styling-shared');
         expect(res.body).not.toContain('id="styling-save"');
-        // Nothing saves, so it is no form page (public/js/back.js).
+        // Nothing saves, so it is no form page (views/assets/page/back.ts).
         expect(res.body).not.toContain('data-form-page');
         // Garment links stay in the shared wardrobe.
         expect(unescapeHtml(res.body)).toContain(

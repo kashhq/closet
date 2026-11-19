@@ -8,6 +8,7 @@ import {
 import { categoryRole, type GarmentRole } from '../../wardrobe/properties';
 import { jsonForScript } from '../html';
 import { t } from '../i18n';
+import { historyBack } from '../page-contract';
 
 /**
  * Small pieces the garment, outfit and share pages have in common: the
@@ -287,7 +288,7 @@ export function PlinthImage(props: {
 /**
  * A back arrow to `href`. With `historyBack` (the app bar's) it goes back in
  * history instead whenever the page before is in the app, and follows
- * `href` only on a cold entry (public/js/back.js); without, it is a plain
+ * `href` only on a cold entry (views/assets/page/back.ts); without, it is a plain
  * link to a fixed place (a Styling or Ideas destination's way back to it).
  */
 export function BackLink(props: { href: string; historyBack?: boolean }) {
@@ -296,7 +297,7 @@ export function BackLink(props: { href: string; historyBack?: boolean }) {
       href={props.href}
       class="btn btn-ghost btn-sm btn-circle"
       aria-label={t('BACK')}
-      data-history-back={props.historyBack ? '' : undefined}
+      {...historyBack(props.historyBack === true)}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -317,7 +318,7 @@ export function BackLink(props: { href: string; historyBack?: boolean }) {
 }
 
 /**
- * A form page's Cancel: a back arrow in words (public/js/back.js). It goes
+ * A form page's Cancel: a back arrow in words (views/assets/page/back.ts). It goes
  * back to the page the form was opened from, as history holds it, and to
  * `href` (the app bar's `back`) only on a cold entry; either way the form
  * is left done, so the page reached never goes back into it.
@@ -327,7 +328,7 @@ export function CancelLink(props: { href: string; class?: string }) {
     <a
       href={props.href}
       class={`btn btn-ghost${props.class ? ` ${props.class}` : ''}`}
-      data-history-back=""
+      {...historyBack()}
     >
       {t('CANCEL')}
     </a>

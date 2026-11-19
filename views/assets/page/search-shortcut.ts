@@ -12,6 +12,8 @@
  * the body).
  */
 
+import { SEARCH_SHORTCUT } from '../../../src/web/page-contract';
+
 // Inputs that take no typing, where `/` means nothing of its own.
 const KEYLESS = new Set([
   'button',
@@ -25,8 +27,7 @@ const KEYLESS = new Set([
   'submit',
 ]);
 
-/** @param {EventTarget | null} target */
-function takesTyping(target) {
+function takesTyping(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   if (target instanceof HTMLInputElement) return !KEYLESS.has(target.type);
@@ -40,7 +41,7 @@ document.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (takesTyping(event.target)) return;
   if (document.querySelector('dialog[open]')) return;
-  const field = document.querySelector('[data-search-shortcut]');
+  const field = document.querySelector(`[${SEARCH_SHORTCUT}]`);
   if (!(field instanceof HTMLElement)) return;
   event.preventDefault();
   field.focus();

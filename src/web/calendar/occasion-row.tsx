@@ -12,6 +12,7 @@ import { occasionLabel } from '../date-labels';
 import { planSheetOpener } from './plan-sheet';
 import { removalAsksFirst } from './removal';
 import { dayUrl, planPageUrl } from './urls';
+import { needsNetwork } from '../page-contract';
 
 /**
  * One calendar entry as a row of its day's agenda: the occasion's label
@@ -186,7 +187,7 @@ function EntryMenu(props: { entry: CalendarEntry; name: string }) {
               ...(asks && { confirmed: '1' }),
             })}
             hx-confirm={asks ? t('CALENDAR_DELETE_CONFIRM') : undefined}
-            data-needs-network=""
+            {...needsNetwork()}
             data-remove-entry={entry.id}
           >
             {t('CALENDAR_REMOVE')}

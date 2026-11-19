@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check lg-check migration-check secrets-check actionlint-check install
+.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -59,7 +59,7 @@ help:
 	@echo "make install          — once per checkout or worktree: materialize devkit/, devkit-check, then point core.hooksPath at .githooks"
 	@echo "make perf-compare     — the page audit over the demo and scale personas against docs/perf/'s baselines; prints regressions"
 	@echo "make ci-quick        — ci-guards, secrets-check, ci-lint, ci-typecheck (the two git hooks split it: scripts/ci/hooks.conf)"
-	@echo "make ci-guards        — devkit-check, toolchain-check, release-check, workflows-check, actionlint-check, docs-check, layer-check, guard-check, migration-check"
+	@echo "make ci-guards        — devkit-check, toolchain-check, release-check, workflows-check, actionlint-check, docs-check, layer-check, guard-check, plain-js-check, migration-check"
 	@echo "make ci-lint          — prettier format:check, eslint lint:check (both cached), then the changed-file rules"
 	@echo "make ci-typecheck     — tsc over the server (incremental) and views/assets"
 	@echo "make ci-unit          — the Vitest unit projects; no database. Budget $(UNIT_BUDGET_SECONDS) s, floor $(UNIT_FLOOR) tests"
@@ -86,6 +86,7 @@ help:
 	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index (part of ci-quick)"
 	@echo "make layer-check      — fail on an import in src/ that reaches up scripts/ci/layers.conf's layer stack (part of ci-quick)"
 	@echo "make guard-check      — fail on a code-structure rule in scripts/ci/guards.conf (devkit/bin/guard_check.py; part of ci-quick)"
+	@echo "make plain-js-check   — fail on a new plain-JS module in public/js/, or a converted one still listed in scripts/ci/plain_js.conf (part of ci-quick)"
 	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/lg-check.ts, Tailwind's own scanner and compiler; its tests are scripts/lg-check.spec.ts in ci-unit; part of ci-quick)"
 	@echo "make migration-check  — fail on an edit to a shipped drizzle migration (devkit/bin/migration_check.py; part of ci-quick)"
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
@@ -103,7 +104,7 @@ ci-quick: ci-guards secrets-check ci-lint ci-typecheck
 # Sub-second each and stdlib only, except lg-check (Node, needs npm ci). ci-guards-staged is the pre-commit
 # hook's copy: devkit-check judges the staged gate_plan.sh (devkit #124 reads the working tree
 # by default, which let a bad staged plan through when only the disk copy was fixed).
-GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check migration-check
+GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check plain-js-check migration-check
 ci-guards: devkit-check $(GUARDS_AFTER_DEVKIT) lg-check
 ci-guards-staged: devkit-check-staged $(GUARDS_AFTER_DEVKIT) lg-check-staged
 
@@ -278,6 +279,12 @@ layer-check:
 # (guards.backend.known). Stdlib only, so it runs before npm ci.
 guard-check:
 	python3 -I devkit/bin/guard_check.py
+
+# The page's plain-JS modules (public/js/*.js) only shrink: scripts/ci/plain_js.conf lists them,
+# a new one fails, a converted one fails until its line goes (#713). Reads the index, so the
+# pre-commit hook judges what is staged. Shell only, so it runs before npm ci.
+plain-js-check:
+	scripts/ci/plain-js-check.sh
 
 # Page-level `lg:` classes in src/web are counted per file against scripts/ci/lg_count.conf, which
 # only shrinks (#1066; the desktop layout plan's principle 7). Unlike its neighbours it needs
