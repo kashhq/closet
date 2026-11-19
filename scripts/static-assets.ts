@@ -140,13 +140,22 @@ export async function watchPageModules(): Promise<void> {
 const sha256 = (bytes: Uint8Array): string =>
   createHash('sha256').update(bytes).digest('hex');
 
-/** The file names under `dir` that the repository tracks. */
-function trackedNames(dir: string): Set<string> {
-  const listed = execFileSync('git', ['ls-files', '-z', '--', '.'], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
-  return new Set(listed.split('\0').filter(Boolean));
+/**
+ * The file names under `dir` that the repository tracks, or undefined when
+ * there is no repository or no git binary to ask (a Docker context without
+ * .git, a tarball).
+ */
+function trackedNames(dir: string): Set<string> | undefined {
+  try {
+    const listed = execFileSync('git', ['ls-files', '-z', '--', '.'], {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return new Set(listed.split('\0').filter(Boolean));
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -155,7 +164,11 @@ function trackedNames(dir: string): Set<string> {
  * A listed file survives (and leaves the list) when it is tracked now, or its
  * bytes are not the ones recorded: a checkout of a branch where the module is
  * still plain JS puts a tracked file of the same name there, and deleting it
- * would leave the tree dirty. Returns the removed file names.
+ * would leave the tree dirty. Without git to ask, nothing is deleted and the
+ * candidates stay listed for a run that can. A list from before hashes were
+ * kept (an array of names) proves nothing about what is on disk, so its
+ * surviving names are only reported for the developer to delete. Returns the
+ * removed file names.
  */
 function removeStaleBuilds(
   outdir: string,
@@ -165,26 +178,39 @@ function removeStaleBuilds(
   const parsed: unknown = fs.existsSync(manifest)
     ? JSON.parse(fs.readFileSync(manifest, 'utf8'))
     : {};
-  // A list from before hashes were kept (an array) vouches for nothing.
+  const legacy = Array.isArray(parsed) ? (parsed as string[]) : [];
   const previous = Object.entries(
     Array.isArray(parsed) ? {} : (parsed as Record<string, string>),
   ).filter(([name]) => !built.has(name));
-  const candidates = previous.filter(([name]) =>
-    fs.existsSync(path.join(outdir, name)),
-  );
+  const onDisk = (name: string) => fs.existsSync(path.join(outdir, name));
+  const unlisted = legacy.filter((name) => !built.has(name) && onDisk(name));
+  if (unlisted.length > 0) {
+    console.warn(
+      `page modules: ${unlisted.join(', ')} in ${outdir} may be stale builds from before content hashes were kept; delete them if untracked`,
+    );
+  }
+  const candidates = previous.filter(([name]) => onDisk(name));
   const tracked =
     candidates.length > 0 ? trackedNames(outdir) : new Set<string>();
   const removed: string[] = [];
-  for (const [name, hash] of candidates) {
-    const file = path.join(outdir, name);
-    if (tracked.has(name) || sha256(fs.readFileSync(file)) !== hash) continue;
-    fs.rmSync(file);
-    removed.push(name);
+  const kept = new Map(built);
+  if (tracked) {
+    for (const [name, hash] of candidates) {
+      const file = path.join(outdir, name);
+      if (tracked.has(name) || sha256(fs.readFileSync(file)) !== hash) continue;
+      fs.rmSync(file);
+      removed.push(name);
+    }
+  } else {
+    console.warn(
+      `page modules: git is unavailable for ${outdir}; not removing ${candidates.map(([name]) => name).join(', ')}`,
+    );
+    for (const [name, hash] of candidates) kept.set(name, hash);
   }
   fs.mkdirSync(path.dirname(manifest), { recursive: true });
   fs.writeFileSync(
     manifest,
-    JSON.stringify(Object.fromEntries([...built].sort())),
+    JSON.stringify(Object.fromEntries([...kept].sort())),
   );
   return removed;
 }

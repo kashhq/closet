@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findStaleVariants } from '../src/static-assets';
 import { buildPageModules, precompress } from './static-assets';
 
@@ -140,5 +140,38 @@ describe('buildPageModules', () => {
 
     expect(build().removed).toEqual([]);
     expect(readFileSync(at('js', 'mod.js'), 'utf8')).toContain('edited');
+  });
+
+  it('removes nothing outside a repository and keeps the file listed', () => {
+    source('mod');
+    build();
+    rmSync(at('.git'), { recursive: true });
+    rmSync(at('sources', 'page', 'mod.ts'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'mod.js'))).toBe(true);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(readFileSync(at('cache', 'page-modules.json'), 'utf8')).toContain(
+      'mod.js',
+    );
+
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    expect(build().removed).toEqual(['mod.js']);
+    warn.mockRestore();
+  });
+
+  it('reports the outputs an old name-only list left, deleting none', () => {
+    source('keep');
+    mkdirSync(at('js'), { recursive: true });
+    writeFileSync(at('js', 'gone.js'), 'export {};\n');
+    mkdirSync(at('cache'), { recursive: true });
+    writeFileSync(at('cache', 'page-modules.json'), '["gone.js"]');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(build().removed).toEqual([]);
+    expect(existsSync(at('js', 'gone.js'))).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('gone.js'));
+    warn.mockRestore();
   });
 });
