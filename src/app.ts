@@ -3,6 +3,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyMultipart from '@fastify/multipart';
 import Fastify, {
+  type FastifyBaseLogger,
   type FastifyInstance,
   LogController,
   type RouteOptions,
@@ -321,6 +322,10 @@ export async function createApp(
       metrics,
     });
 
+  // Typed as Fastify's own logger interface, not pino's Logger: the app is
+  // then the plain FastifyInstance every register* function and plugin takes
+  // (strictFunctionTypes refuses a pino-typed instance there).
+  const fastifyLogger: FastifyBaseLogger = logger.child({ logger: 'Fastify' });
   const app = Fastify({
     // Fastify's own ajv factory, each compiled validator kept per process
     // (one boot here; one per spec file in the integration tier, #724).
@@ -328,7 +333,7 @@ export async function createApp(
       compilersFactory: { buildValidator: sharedValidators },
     },
     trustProxy,
-    loggerInstance: logger.child({ logger: 'Fastify' }),
+    loggerInstance: fastifyLogger,
     // One line per request comes from the onResponse hook below.
     logController: new LogController({ disableRequestLogging: true }),
     // Every request's id is minted here (12 hex), never taken from an

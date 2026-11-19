@@ -102,7 +102,7 @@ export function dial(
     // Attached before the socket can emit and never removed: after the
     // hand-off the request listens too, but an error the moment it detaches
     // (a reset as the response ends) must not reach the process unheard.
-    socket.on('error', (error) => {
+    socket.on('error', (error: Error) => {
       signal.removeEventListener('abort', onAbort);
       reject(error);
     });
