@@ -19,6 +19,7 @@ import {
   withoutWarming,
 } from './support/service-worker';
 import { householdToday } from './support/household-today';
+import { WEBKIT_CANNOT_WATCH_WORKER } from './support/webkit-limits';
 import {
   expectNoZoomingFields,
   expectTouchTargets,
@@ -85,7 +86,8 @@ async function expectPhoneWidth(page: Page): Promise<void> {
  * second row, under the title, and the page starts below them. At 1440
  * they sit inline after the title and hold still between sibling pages
  * (they jumped with each page's width before), and Profile is the rail's
- * foot, the bar's avatar hidden. Leaves the phone on the page it found.
+ * foot, the bar's avatar hidden; at 1024 a long title truncates, never the
+ * tabs. Leaves the phone on the page it found.
  */
 async function expectSectionTabs(page: Page): Promise<void> {
   const start = page.url();
@@ -211,6 +213,78 @@ async function expectSectionTabs(page: Page): Promise<void> {
   await expect(
     page.locator('.dock').getByRole('link', { name: 'Profile' }),
   ).toBeVisible();
+
+  // At 1024 a 60-character title (a shared wardrobe's owner) gives way to
+  // the tabs: every tab whole inside the row's box, the row unscrolled, and
+  // the title cut to one line (#1110). The Wardrobe's is the switcher's.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  for (const { label, paths } of sections) {
+    await page.goto(paths[0]);
+    const fit = await page.evaluate((name) => {
+      const h1 = document.querySelector('.app-bar h1');
+      if (h1) h1.textContent = 'W'.repeat(30) + ' ' + 'x'.repeat(29);
+      const row = document.querySelector(`.app-bar nav[aria-label="${name}"]`);
+      if (!row || !h1) return null;
+      const box = row.getBoundingClientRect();
+      const cut = Array.from(row.querySelectorAll('a')).filter((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return rect.left < box.left - 0.5 || rect.right > box.right + 0.5;
+      });
+      const bar = row.closest('header')!.getBoundingClientRect();
+      return {
+        clipped: cut.length,
+        scrolls: row.scrollWidth > row.clientWidth,
+        inBar: box.left >= bar.left && box.right <= bar.right,
+        titleLines: Math.round(
+          h1.getBoundingClientRect().height /
+            parseFloat(getComputedStyle(h1).lineHeight),
+        ),
+        titleCut:
+          h1.scrollWidth > h1.clientWidth || h1.scrollHeight > h1.clientHeight,
+      };
+    }, label);
+    expect(fit, paths[0]).toEqual({
+      clipped: 0,
+      scrolls: false,
+      inBar: true,
+      titleLines: 1,
+      titleCut: true,
+    });
+
+    // At 200% text the title is cut to its floor first, then the tab row
+    // scrolls inside the bar: the actions after it (the Wardrobe's ⋯ and
+    // ＋; the Calendar's bar has none) stay whole on screen, never pushed
+    // past the edge.
+    if (label !== 'Wardrobe sections') continue;
+    const large = await page.evaluate((name) => {
+      document.documentElement.style.fontSize = '200%';
+      const row = document.querySelector(`.app-bar nav[aria-label="${name}"]`);
+      const h1 = document.querySelector('.app-bar h1');
+      if (!row || !h1) return null;
+      const box = row.getBoundingClientRect();
+      const after: Element[] = [];
+      for (let el = row.nextElementSibling; el; el = el.nextElementSibling) {
+        if (el.getBoundingClientRect().width > 0) after.push(el);
+      }
+      const result = {
+        scrolls: row.scrollWidth > row.clientWidth,
+        trailing: after.length > 0,
+        onScreen: after.every((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.left >= box.right - 0.5 && rect.right <= innerWidth + 0.5;
+        }),
+        titleShown: h1.getBoundingClientRect().width > 0,
+      };
+      document.documentElement.style.fontSize = '';
+      return result;
+    }, label);
+    expect(large, paths[0]).toEqual({
+      scrolls: true,
+      trailing: true,
+      onScreen: true,
+      titleShown: true,
+    });
+  }
   await page.setViewportSize(viewport);
   await page.goto(start);
 }
@@ -490,9 +564,11 @@ test.describe('Trips', () => {
         process.env.PWA_ENABLED !== 'true',
         'needs a server started with PWA_ENABLED=true',
       );
+      // networkSwitch routes the worker's own fetches (the warm is one).
+      step.skip(browserName === 'webkit', WEBKIT_CANNOT_WATCH_WORKER);
       step.skip(
-        browserName !== 'chromium',
-        'the worker is watched in Chromium',
+        browserName === 'firefox',
+        'service workers are untested in Firefox here',
       );
       const context = await browser.newContext({
         baseURL: APP_ORIGIN,

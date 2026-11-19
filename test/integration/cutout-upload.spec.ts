@@ -142,8 +142,9 @@ describe('cutouts: upload, page and polling', () => {
 
   // Every route that draws a garment's form hands it its subject: the
   // clone form, and the refused edit and clone, whose 400 re-renders the
-  // form (garment-routes.tsx); a route that stopped passing it would drop
-  // the photo from that page alone.
+  // form (garment-routes.tsx), and the refused repair-log entry, which draws
+  // the edit page (repair-routes.tsx); a route that stopped passing it would
+  // drop the photo from that page alone.
   it('keeps the photo subject on the clone form and on a refused edit or clone', async () => {
     const id = await createGarment(t, { name: 'Refused shirt' });
     await uploadPhoto(t, id, await jpegPhoto());
@@ -159,10 +160,18 @@ describe('cutouts: upload, page and polling', () => {
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
       });
 
+    const refusedRepair = await t.inject({
+      method: 'POST',
+      url: `/wardrobe/${id}/repairs`,
+      payload: new URLSearchParams({ kind: 'repair', note: ' ' }).toString(),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    });
+
     for (const [res, status] of [
       [await t.inject({ method: 'GET', url: `/wardrobe/${id}/clone` }), 200],
       [await post(`/wardrobe/${id}`), 400],
       [await post(`/wardrobe/${id}/clone`), 400],
+      [refusedRepair, 400],
     ] as const) {
       expect(res.statusCode).toBe(status);
       expect(unescapeHtml(res.body)).toMatch(
@@ -219,13 +228,24 @@ describe('cutouts: upload, page and polling', () => {
       expect(capped).not.toContain('Removing background…');
       // URL state is a fallback, never a 400: a count past the clamp (a page
       // left open for hours) or one no fragment writes still answers.
-      for (const odd of ['1001', '99999999999999999999', 'soon', '-1']) {
+      // A count past the clamp is still capped (no further poll while the
+      // model is unavailable); one that is not digits starts the backoff
+      // over, every 2 s from poll 1.
+      for (const [odd, restarts] of [
+        ['1001', false],
+        ['99999999999999999999', false],
+        ['soon', true],
+        ['-1', true],
+      ] as const) {
         const res = await t.inject({
           method: 'GET',
           url: `/wardrobe/${id}/cutout?poll=${odd}`,
           headers: HX_FRAGMENT,
         });
         expectFragment(res);
+        const html = unescapeHtml(res.body);
+        if (restarts) expect(html, odd).toContain(polls(id, 0, '2s'));
+        else expect(html, odd).not.toContain('hx-trigger');
       }
     });
 

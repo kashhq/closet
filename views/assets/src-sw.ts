@@ -17,6 +17,7 @@ import {
   pageUrlOfCacheKey,
 } from '../../src/htmx/fragment-request';
 import {
+  backoffAfter,
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
@@ -25,16 +26,14 @@ import {
   endedSession,
   forbidsStorage,
   type FreshPage,
-  isBackingOff,
   navigationPostAnswer,
-  nextRefreshBackoff,
   pageAccount,
   parseRefreshBackoff,
+  planRefresh,
   parseRefreshedRecord,
   type RefreshBackoff,
   refreshDue,
   type RefreshedRecord,
-  refreshedRecord,
   refetchInTurn,
   type RefetchStep,
   type RefetchVerdict,
@@ -47,6 +46,7 @@ import {
   serverUnavailable,
   servesStaleWhileRevalidate,
   stampedServerTiming,
+  walkRecord,
   PAGES_CACHE,
 } from '../../src/web/page-cache';
 import {
@@ -1445,20 +1445,24 @@ async function refreshOlderBuildPages(
     if (copy && isFromAnOlderBuild(copy, since)) due.push(key);
   }
   const startedAt = Date.now();
-  const previous = new Map<string, RefreshBackoff>();
-  const waiting: RefreshBackoff[] = [];
-  const asked: Request[] = [];
-  for (const key of due) {
-    const record = backoffKeyOf(key.url);
-    const backoff = backoffRecords.has(record)
-      ? parseRefreshBackoff(await (await cache.match(record))?.text(), since)
-      : undefined;
-    if (isBackingOff(backoff, startedAt)) waiting.push(backoff);
-    else {
-      asked.push(key);
-      if (backoff) previous.set(key.url, backoff);
-    }
-  }
+  const { asked, waiting, previous } = planRefresh(
+    await Promise.all(
+      due.map(async (key) => {
+        const record = backoffKeyOf(key.url);
+        const recorded = backoffRecords.has(record);
+        const text = recorded
+          ? await (await cache.match(record))?.text()
+          : undefined;
+        return {
+          key,
+          url: key.url,
+          recorded,
+          backoff: parseRefreshBackoff(text, since),
+        };
+      }),
+    ),
+    startedAt,
+  );
   // Each asked key's backoff after this run: the next one for a failure,
   // none (the record deleted) for any other answer. A key the walk never
   // reached (it stopped) keeps its record as it was.
@@ -1467,17 +1471,14 @@ async function refreshOlderBuildPages(
     asked,
     async (key) => {
       const step = await refetchCachedPage(event, key, run, 'refresh');
-      if (step.verdict === 'failed') {
-        after.set(
-          key.url,
-          nextRefreshBackoff(previous.get(key.url), Date.now(), since),
-        );
-      } else if (
-        !('stop' in step) &&
-        backoffRecords.has(backoffKeyOf(key.url))
-      ) {
-        after.set(key.url, undefined);
-      }
+      const change = backoffAfter(
+        step,
+        previous.get(key.url),
+        backoffRecords.has(backoffKeyOf(key.url)),
+        Date.now(),
+        since,
+      );
+      if (change) after.set(key.url, change.backoff);
       return step;
     },
     () => generation !== run,
@@ -1486,12 +1487,12 @@ async function refreshOlderBuildPages(
   // nobody's backoff.
   const dueRecords = new Set(due.map((key) => backoffKeyOf(key.url)));
   const orphans = [...backoffRecords].filter((url) => !dueRecords.has(url));
-  const record = walk.stop
-    ? undefined
-    : refreshedRecord(Date.now(), [
-        ...waiting,
-        ...[...after.values()].filter((backoff) => backoff !== undefined),
-      ]);
+  const record = walkRecord(
+    walk.stop !== undefined,
+    Date.now(),
+    waiting,
+    after,
+  );
   await recordRefresh(run, after, orphans, record);
   const summary =
     `${walk.stored} of ${due.length} older-build page(s) in ` +

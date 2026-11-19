@@ -1616,6 +1616,22 @@ Why: Styling was the one feature whose model and Save lived in its routes file (
 Decision: `styling/styling-actions.ts` holds every read and Save, each taking the Actor and throwing its refusals; `saveStyled` answers the landing path, and the route redirects (303). The gallery's `pickTo` became `pickToPath` plus the redirect, with `savedOutfitPath` the one spelling of "the week, else the outfit, flagged when already saved". `model.ts` holds the pure builders. No Styling API route: Save's twins already call the actions Save ends in.
 Consequence: a new Save branch goes in `saveStyled`, and its op line in the action it ends in; `routes.tsx` stays parse, call, render.
 
+## 2026-11-18 — The scope row asks from the facets, so an unapplied tick survives (#1144)
+Why: from lg the facets are always on screen, and search Enter, a chip's × and the capsule menu answered facets rendered from their URL, which lacked a tick not yet applied: the tick vanished.
+Decision: a chip's × and the capsule menu send the filter form's fields (`fromFilters` in `wardrobe-page.tsx`: bare `hx-get="/wardrobe"`, `hx-include="#filter-form"` plus the keyword, `hx-params="not <name>"` for a chip and for All garments, `hx-vals` for a capsule, never an empty value: it would push `capsule=`); search's Enter submits the filter form (`SEARCH_THROUGH_FILTERS`, inline `onsubmit`, `hx-boost="false"`). The tick is in the pushed URL and comes back checked: the facets still mirror the URL after every navigation (#1067's rule); answers that skip the facets would break it for a chip or a capsule.
+Consequence: the search form's hidden filters stay for the no-script GET; including the filter form into it sent each filter twice (a 400), and `<noscript>` around them fails because htmx parses swaps with scripting off. Closing the phone's `filters` sheet without Apply resets its form (`DISCARD_UNAPPLIED`, `sheet.tsx`), so a tick left there is never applied by a later request; the docked facets never close and send their live ticks.
+
+## 2026-11-18 — From lg the bar's title shrinks before its tabs, by shrink weight (#1110)
+Why: tabs at `flex: 1 0 auto` never shrank, so at 200% text at 1024 px the title's floor, the tabs and the actions overflowed the header and pushed the actions off screen; at `1 1 0%` a long title squeezed the tabs to nothing.
+Decision: the title is `flex: 0 100000 auto` with a 5rem floor and the tabs `1 1 auto` (main.css). Flex has no shrink priority; a weight that large gives the title the whole shortfall (the tabs' share is under a layout unit) until its floor, then the tab row shrinks and scrolls inside the bar.
+Consequence: `test/trips.spec.ts` at 1024 holds both: a 60-character title cut, tabs unscrolled at 100%; the row scrolling and the Wardrobe's actions on screen at 200%.
+
+## 2026-11-18 — The refresh's backoff bookkeeping is pure; a tombstone is a record, not "gone" (#905, #1164)
+
+Why: `refreshOlderBuildPages` kept its per-key backoff decisions (who is asked, what a failure or any other answer does to a record, whether the walk is recorded) inline in the worker, where no spec could reach them; and `queuedIn` was a predicate `stored is OutboxRecord` that is false for a real `discarded` record, so TypeScript narrowed a tombstone to `undefined` in the false branch.
+Decision: `planRefresh`, `backoffAfter` and `walkRecord` (`src/web/page-cache.ts`) own those decisions, unit-tested in `page-cache.spec.ts`; the worker only reads and writes the cache around them. `isQueued(stored): stored is QueuedRecord` (`outbox.ts`) names what it checks, so its false branch keeps the tombstone's type.
+Consequence: a new backoff rule goes in those functions with a case, not in the worker. `service-worker.spec.ts` skips on `browserName !== 'chromium'` (`CDP_IS_CHROMIUM_ONLY`): no other browser has a CDP session, which `test/AGENTS.md`'s "never on `!== 'chromium'`" is for Safari-only limits.
+
 ## 2026-11-18 — The spec names its schemas after the emit, not in the routes (#714)
 
 Why: TypeBox inlines every titled schema at each use and writes anyOf-of-literal enums, so a generated client got one nested type per copy and a try-each-branch feed decoder.

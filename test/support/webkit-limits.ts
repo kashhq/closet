@@ -21,11 +21,12 @@ export const WEBKIT_CANNOT_WATCH_WORKER =
   "Playwright's WebKit neither routes a service worker's own requests nor reports its console";
 
 /**
- * `context.newCDPSession` exists in Chromium only, so a spec cannot stop a
- * service worker on demand (`ServiceWorker.stopAllWorkers`) elsewhere.
+ * `context.newCDPSession` exists in Chromium only (WebKit and Firefox have no
+ * CDP session), so a spec cannot stop a service worker on demand
+ * (`ServiceWorker.stopAllWorkers`) elsewhere.
  */
-export const WEBKIT_HAS_NO_CDP =
-  "Playwright's WebKit has no CDP session to stop a service worker with";
+export const CDP_IS_CHROMIUM_ONLY =
+  "Playwright's CDP sessions exist in Chromium only, so a service worker cannot be stopped on demand";
 
 /**
  * `mouse.wheel` throws in mobile WebKit and there is no touch swipe, so a

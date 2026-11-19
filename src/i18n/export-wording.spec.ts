@@ -26,8 +26,25 @@ describe('the garment export is never called a backup', () => {
     // "export ... for/as/a backup", or "backup ... export", minus the honest
     // "not a backup".
     const claim = /export\b[^.]*\b(?:for|as|is|a|your)\s+(?:a\s+)?back ?up/i;
+    const claimed = (text: string) =>
+      claim.test(text.replace(/not a back ?up/gi, ''));
     const offenders = strings
-      .filter(([, text]) => claim.test(text.replace(/not a back ?up/gi, '')))
+      .filter(([, text]) => claimed(text))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+  });
+
+  // The sentence that began this ("Download every garment ... for a backup")
+  // never says "export", so the wording alone cannot see it: a string under an
+  // export key is the export's, whatever it calls itself.
+  it('no string under an export key mentions a backup except to deny it', () => {
+    const offenders = strings
+      .filter(([key]) => /export/i.test(key))
+      .filter(([, text]) =>
+        /\b(?:for|as|is|your|a)\s+back ?up\b/i.test(
+          text.replace(/not a back ?up/gi, ''),
+        ),
+      )
       .map(([key]) => key);
     expect(offenders).toEqual([]);
   });

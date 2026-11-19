@@ -646,6 +646,78 @@ export function refreshedRecord(
   return { at: now, retryAt: Math.min(...waiting.map((b) => b.retryAt)) };
 }
 
+/** A key due in the activation refresh, with the backoff beside it. */
+export interface DueRefresh<Key> {
+  key: Key;
+  /** The page's cache URL: what `backoffs` and the plan's `previous` are keyed by. */
+  url: string;
+  /** The record's current value; undefined with none, or an expired or unreadable one. */
+  backoff: RefreshBackoff | undefined;
+  /** Whether a record of any kind sits in the cache for it (an expired one still does). */
+  recorded: boolean;
+}
+
+/**
+ * Splits the due keys at the start of a run: the ones asked now (with the
+ * backoff they carry, so a new failure doubles it) and those still waiting.
+ */
+export function planRefresh<Key>(
+  due: readonly DueRefresh<Key>[],
+  now: number,
+): {
+  asked: Key[];
+  waiting: RefreshBackoff[];
+  previous: Map<string, RefreshBackoff>;
+} {
+  const asked: Key[] = [];
+  const waiting: RefreshBackoff[] = [];
+  const previous = new Map<string, RefreshBackoff>();
+  for (const { key, url, backoff } of due) {
+    if (isBackingOff(backoff, now)) waiting.push(backoff);
+    else {
+      asked.push(key);
+      if (backoff) previous.set(url, backoff);
+    }
+  }
+  return { asked, waiting, previous };
+}
+
+/**
+ * What one asked key's answer does to its backoff record: `{ backoff }` to
+ * write (the next one for a failure) or, with `backoff` undefined, to delete
+ * (any other answer, when a record exists); undefined to leave it as it was
+ * (a stop: the key was never really asked, or the walk ended on it).
+ */
+export function backoffAfter(
+  step: RefetchStep,
+  previous: RefreshBackoff | undefined,
+  recorded: boolean,
+  now: number,
+  activatedAt: number,
+): { backoff: RefreshBackoff | undefined } | undefined {
+  if (step.verdict === 'failed') {
+    return { backoff: nextRefreshBackoff(previous, now, activatedAt) };
+  }
+  if (!('stop' in step) && recorded) return { backoff: undefined };
+  return undefined;
+}
+
+/**
+ * What a finished walk writes as REFRESHED_AT_KEY: nothing when it stopped
+ * (the refresh stays due), else the run's end with the earliest backoff
+ * still running, whether it was left waiting or has just been set.
+ */
+export function walkRecord(
+  stopped: boolean,
+  now: number,
+  waiting: readonly RefreshBackoff[],
+  after: ReadonlyMap<string, RefreshBackoff | undefined>,
+): RefreshedRecord | undefined {
+  if (stopped) return undefined;
+  const set = [...after.values()].filter((b) => b !== undefined);
+  return refreshedRecord(now, [...waiting, ...set]);
+}
+
 /**
  * The stored record. A bare number was written before backoffs (#782) and
  * is its `at`; missing or unreadable is never refreshed.

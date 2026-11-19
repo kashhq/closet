@@ -44,6 +44,9 @@
  *   Decided by a media query, never by measuring: when the strip is first
  *   watched, and again whenever the query changes (a tablet rotating across
  *   `lg`), which attaches or detaches the observer and the tap-to-centre.
+ *   A browsed strip's own box is observed (`resized`), so a desktop window
+ *   resized within `lg` re-syncs its steps when the row starts or stops
+ *   overflowing (#1117).
  *
  * Evaluated once per document: the listeners below sit on the document and
  * serve every page's strips.
@@ -58,6 +61,18 @@ const BROWSE_MODES = new Set(['row', 'grid']);
 
 /** Strips watched as browsed: a `row` or `grid` at `lg`. */
 const browsed = new WeakSet();
+
+/**
+ * A browsed strip's box: whether it can page either way changes with its
+ * width (a window resized within `lg`) as well as its scroll. Observed only
+ * while browsed; a strip swapped out reports a zero box and is let go.
+ */
+const resized = new ResizeObserver((entries) => {
+  for (const { target } of entries) {
+    if (!target.isConnected) resized.unobserve(target);
+    else if (browsed.has(target)) syncSteps(target);
+  }
+});
 
 // A tablet rotating across `lg` (an installed PWA keeps its document) changes
 // every watched strip's mode; strips not yet watched pick it up at their first watch.
@@ -87,8 +102,10 @@ function applyMode(strip) {
   if (wantsBrowsed(strip)) {
     browsed.add(strip);
     watched.set(strip, null);
+    resized.observe(strip);
   } else {
     browsed.delete(strip);
+    resized.unobserve(strip);
     watched.set(strip, observe(strip));
   }
 }

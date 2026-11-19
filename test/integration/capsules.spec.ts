@@ -283,6 +283,19 @@ describe('capsules', () => {
       expect(html).not.toContain('id="bulk-dialog"');
       expect(html).not.toContain('id="search-form"');
       expect(html).toContain(`href="/capsules/${office}"`);
+      // Neither the picker nor select mode (a capsule and a filter on hand)
+      // renders the scope row's links, whose requests read the filter form
+      // that only browsing renders.
+      const select = unescapeHtml(
+        (await get(`/wardrobe?select=1&category=tops&capsule=${office}`)).body,
+      );
+      for (const page of [html, select]) {
+        expect(page).not.toContain('id="filter-form"');
+        expect(page).not.toContain('id="capsule-scope"');
+        expect(page).not.toContain('hx-include="#filter-form');
+        expect(page).not.toContain('id="scope-row"');
+      }
+      expect(select).toContain('id="bulk-form"');
       // One member on screen, counted; later pages' are counted as they
       // arrive by the page's module (test/capsules.spec.ts (retired 2026-10-13)).
       expect(html).toMatch(/id="selected-count"[^>]*>1</);
@@ -504,10 +517,15 @@ describe('capsules', () => {
           html,
         )![0];
       expect(scope).toMatch(/<summary[^>]*>\s*<span class="truncate">Travel</);
-      expect(scope).toContain('href="/wardrobe" hx-get="/wardrobe"');
+      // Each asks from the filter form with its capsule set over the form's,
+      // so a facet ticked and not yet applied rides along (#1144); the
+      // closet drops the form's capsule rather than sending it empty.
+      expect(scope).toMatch(
+        /href="\/wardrobe" hx-get="\/wardrobe" hx-include="#filter-form[^"]*" hx-params="not capsule"/,
+      );
       expect(scope).toMatch(
         new RegExp(
-          `href="/wardrobe\\?capsule=${travel}"[^>]*aria-current="true"`,
+          `href="/wardrobe\\?capsule=${travel}" hx-get="/wardrobe"[^>]*hx-vals="\\{"capsule":"${travel}"\\}"[^>]*aria-current="true"`,
         ),
       );
       expect(scope).toContain('href="/capsules"');
@@ -528,6 +546,14 @@ describe('capsules', () => {
 
     it('refuses a capsule that is not an id (400) or not the wardrobe’s (404)', async () => {
       expect((await get('/wardrobe?capsule=abc')).statusCode).toBe(400);
+      // Empty is no scope (URL state), the closet unscoped.
+      const empty = await get('/wardrobe?keyword=&capsule=', {
+        'hx-request': 'true',
+      });
+      expect(empty.statusCode).toBe(200);
+      const closet = tileNames(unescapeHtml((await get('/wardrobe')).body));
+      expect(closet.length).toBeGreaterThan(2);
+      expect(tileNames(unescapeHtml(empty.body))).toEqual(closet);
       expect((await get('/wardrobe?capsule=999999')).statusCode).toBe(404);
       expect((await get('/wardrobe?pick=999999')).statusCode).toBe(404);
     });

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { type AddressInfo } from 'node:net';
 import { expect, test } from './fixtures';
 import { closeSwitchedContext, networkSwitch } from './service-worker';
-import { WEBKIT_HAS_NO_CDP } from './webkit-limits';
+import { CDP_IS_CHROMIUM_ONLY } from './webkit-limits';
 
 /**
  * The contract of closeSwitchedContext (#1104), not a scenario: no app
@@ -27,7 +27,7 @@ test('a switched context closes when its service worker stops answering', async 
   browser,
   browserName,
 }) => {
-  test.skip(browserName === 'webkit', WEBKIT_HAS_NO_CDP);
+  test.skip(browserName !== 'chromium', CDP_IS_CHROMIUM_ONLY);
   const server = createServer((request, response) => {
     const worker = request.url === '/sw.js';
     response.setHeader(
@@ -51,6 +51,12 @@ test('a switched context closes when its service worker stops answering', async 
       await navigator.serviceWorker.ready;
     });
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    // A second switch on the context moves the first's route (one state),
+    // so the later call's "online" lets the page's fetch through.
+    const again = await networkSwitch(context);
+    await network('offline');
+    await again('online');
+    expect(await page.evaluate(() => fetch('/').then((r) => r.ok))).toBe(true);
     await network('offline');
     const cdp = await context.newCDPSession(page);
     await cdp.send('ServiceWorker.enable');

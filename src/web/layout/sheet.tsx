@@ -83,6 +83,18 @@ export interface SheetProps {
 }
 
 /**
+ * A `filters` sheet closed without Apply (its Close, the backdrop, Escape)
+ * drops the ticks it was not asked to apply: `reset()` restores the
+ * server-rendered state, the applied filters. The page's other requests
+ * send the filter form's fields (the Wardrobe's search, chips and capsule
+ * menu, #1144), so a tick left in a closed phone sheet would otherwise be
+ * applied by them. Docked from lg the sheet is never opened, so never
+ * closed: there the live ticks ride along. Apply's own request has read
+ * the form before anything closes.
+ */
+const DISCARD_UNAPPLIED = "this.querySelector('form')?.reset()";
+
+/**
  * Every app sheet's `<dialog>` and box (#1062): a page brings the content,
  * never a modal class. Opened by a control carrying `sheetOpener(id)`;
  * public/js/confirm-sheet.js owns the behaviour every sheet shares
@@ -100,6 +112,7 @@ export function Sheet(props: SheetProps) {
       class={DIALOG_CLASS[props.kind]}
       data-sheet={props.kind}
       aria-labelledby={props.labelledBy}
+      onclose={props.kind === 'filters' ? DISCARD_UNAPPLIED : undefined}
     >
       <div class={boxClass(props.kind, props.gap, props.boxClass)}>
         {props.children}

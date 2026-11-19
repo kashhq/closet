@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  backoffAfter,
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
@@ -17,6 +18,7 @@ import {
   pageAccount,
   parseRefreshBackoff,
   parseRefreshedRecord,
+  planRefresh,
   type RefreshBackoff,
   refreshDue,
   refreshedRecord,
@@ -30,6 +32,7 @@ import {
   servesStaleWhileRevalidate,
   SESSION_ENDED_HEADER,
   stampedServerTiming,
+  walkRecord,
 } from './page-cache';
 import { PROFILE_PATH } from './auth/urls';
 
@@ -718,6 +721,91 @@ describe('the refresh backoff', () => {
       failures: 1,
       retryAt: now + 5 * MINUTE,
       activatedAt: buildB,
+    });
+  });
+
+  // The worker's bookkeeping around the walk (refreshOlderBuildPages, #786).
+  describe('the run around the walk', () => {
+    const now = activated + 10 * MINUTE;
+    const waitingOne = nextRefreshBackoff(undefined, now, activated);
+    const elapsed: RefreshBackoff = {
+      failures: 2,
+      retryAt: now - 1,
+      activatedAt: activated,
+    };
+
+    it('asks the keys not backing off, carrying the backoff they had', () => {
+      const plan = planRefresh(
+        [
+          { key: 'waits', url: '/a', recorded: true, backoff: waitingOne },
+          { key: 'due again', url: '/b', recorded: true, backoff: elapsed },
+          { key: 'fresh', url: '/c', recorded: false, backoff: undefined },
+          // An expired or unreadable record: asked, with no failure count.
+          { key: 'expired', url: '/d', recorded: true, backoff: undefined },
+        ],
+        now,
+      );
+      expect(plan.asked).toEqual(['due again', 'fresh', 'expired']);
+      expect(plan.waiting).toEqual([waitingOne]);
+      expect([...plan.previous]).toEqual([['/b', elapsed]]);
+    });
+
+    it('doubles a failed key’s backoff and clears any other answer’s', () => {
+      expect(
+        backoffAfter({ verdict: 'failed' }, elapsed, true, now, activated),
+      ).toEqual({
+        backoff: {
+          failures: 3,
+          retryAt: now + 20 * MINUTE,
+          activatedAt: activated,
+        },
+      });
+      expect(
+        backoffAfter({ verdict: 'failed' }, undefined, false, now, activated),
+      ).toEqual({ backoff: nextRefreshBackoff(undefined, now, activated) });
+      for (const step of [
+        { verdict: 'stored' },
+        { verdict: 'kept' },
+        { verdict: 'deleted', removed: 1 },
+      ] satisfies RefetchStep[]) {
+        expect(backoffAfter(step, elapsed, true, now, activated)).toEqual({
+          backoff: undefined,
+        });
+        // No record to delete: nothing to write.
+        expect(
+          backoffAfter(step, undefined, false, now, activated),
+        ).toBeUndefined();
+      }
+    });
+
+    it('leaves a record alone when the key ended the walk', () => {
+      for (const verdict of ['stop', 'session-ended', 'unreachable'] as const) {
+        expect(
+          backoffAfter(
+            { verdict, stop: verdict },
+            elapsed,
+            true,
+            now,
+            activated,
+          ),
+        ).toBeUndefined();
+      }
+    });
+
+    it('records the walk only when it asked every key, with the earliest backoff left', () => {
+      const failed = nextRefreshBackoff(undefined, now, activated);
+      const after = new Map<string, RefreshBackoff | undefined>([
+        ['/b', failed],
+        ['/c', undefined],
+      ]);
+      expect(walkRecord(true, now, [waitingOne], after)).toBeUndefined();
+      expect(walkRecord(false, now, [], new Map())).toEqual({ at: now });
+      // A cleared key waits for nothing; the earliest of the rest rules.
+      expect(walkRecord(false, now, [waitingOne], after)).toEqual({
+        at: now,
+        retryAt: waitingOne.retryAt,
+      });
+      expect(walkRecord(false, now, [], after)?.retryAt).toBe(failed.retryAt);
     });
   });
 });
