@@ -141,16 +141,25 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
     new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) {
-          if (!(node instanceof HTMLElement) || !node.dataset.weatherDay)
-            continue;
-          const date = node.closest('[data-month-day]')?.querySelector('span');
-          if (!date) continue;
-          const chip = node.getBoundingClientRect();
-          arrivals[node.dataset.weatherDay] = {
-            date: centre(date.getBoundingClientRect()),
-            chip: centre(chip),
-            width: chip.width,
-          };
+          if (!(node instanceof HTMLElement)) continue;
+          // A chip arrives itself or inside an inserted wrapper, one or many.
+          const chips = [
+            ...(node.matches('[data-weather-day]') ? [node] : []),
+            ...node.querySelectorAll<HTMLElement>('[data-weather-day]'),
+          ];
+          for (const chipNode of chips) {
+            const day = chipNode.dataset.weatherDay;
+            const date = chipNode
+              .closest('[data-month-day]')
+              ?.querySelector('span');
+            if (!day || !date) continue;
+            const chip = chipNode.getBoundingClientRect();
+            arrivals[day] = {
+              date: centre(date.getBoundingClientRect()),
+              chip: centre(chip),
+              width: chip.width,
+            };
+          }
         }
       }
     }).observe(document, { childList: true, subtree: true });
@@ -184,6 +193,10 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
         ).chipArrivals[d],
       day,
     );
+    expect(
+      arrived,
+      `the chip for ${day} was never seen arriving: it came in the first HTML or outside a month cell`,
+    ).toBeDefined();
     const dateCentre = date.x + date.width / 2;
     const chipCentre = box.x + box.width / 2;
     // Centred under the date: the chip's width follows its temperature. And
@@ -317,10 +330,16 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
 
   // #660: Saved loads a page at a time; scrolled to its end at 390 px, the
   // sentinel brings the rest (Layered and these 31: one page and two).
-  for (let n = 0; n < PAGE_SIZE + 1; n += 1) {
-    const top = await createGarment(page, `Page tee ${n}`, 'tops');
-    await createOutfit(page, `Page outfit ${n}`, top);
-  }
+  // Each outfit has a garment of its own (the same garments make one outfit)
+  // and the pairs run together: 62 sequential posts took ~21 s of the
+  // test's 30 s, and a run on a busy host timed out inside the sentinel's
+  // assertions, which read as a Saved bug.
+  await Promise.all(
+    Array.from({ length: PAGE_SIZE + 1 }, async (_, n) => {
+      const top = await createGarment(page, `Page tee ${n}`, 'tops');
+      await createOutfit(page, `Page outfit ${n}`, top);
+    }),
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/outfits');
   const savedTiles = page.locator('#saved-outfits a[data-outfit-id]');

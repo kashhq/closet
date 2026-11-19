@@ -1,4 +1,5 @@
 import { Validator } from '@seriousme/openapi-schema-validator';
+import { Type } from '@sinclair/typebox';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -147,19 +148,170 @@ describe('the OpenAPI spec', () => {
       expect(inline.map((node) => node.title)).toEqual([]);
     });
 
-    it('fails the emit when one title names two shapes, but not for a reordered copy', () => {
-      const twoShapes = (second: object) => ({
+    /** A spec whose one operation answers each status with its schema. */
+    function answering(responses: Record<string, unknown>) {
+      return {
         paths: {
-          '/a': { get: { x: { title: 'Pair', type: 'object', required: [] } } },
-          '/b': { get: { x: second } },
+          '/a': {
+            get: {
+              responses: Object.fromEntries(
+                Object.entries(responses).map(([status, schema]) => [
+                  status,
+                  { content: { 'application/json': { schema } } },
+                ]),
+              ),
+            },
+          },
         },
-      });
+      };
+    }
+
+    function schemaOf(spec: ReturnType<typeof answering>, status: string) {
+      const responses = spec.paths['/a'].get.responses as Record<
+        string,
+        { content: Record<string, { schema: unknown }> }
+      >;
+      return responses[status].content['application/json'].schema;
+    }
+
+    function componentsOf(spec: object): Record<string, unknown> {
+      return (spec as { components: { schemas: Record<string, unknown> } })
+        .components.schemas;
+    }
+
+    it('fails the emit when one title names two shapes, but not for a reordered copy', () => {
+      const twoShapes = (second: object) =>
+        answering({
+          '200': { title: 'Pair', type: 'object', required: [] },
+          '201': second,
+        });
       expect(() =>
         nameSchemas(twoShapes({ type: 'object', required: [], title: 'Pair' })),
       ).not.toThrow();
       expect(() =>
         nameSchemas(twoShapes({ title: 'Pair', type: 'string' })),
       ).toThrow(/"Pair" names two schemas/);
+    });
+
+    it('walks by structure, so a name that is also a keyword is still a name (#1197)', () => {
+      const spec = {
+        ...answering({ default: { title: 'Fallback', type: 'string' } }),
+        components: {
+          schemas: { example: { title: 'Sample', type: 'string' } },
+        },
+      };
+      nameSchemas(spec);
+      expect(schemaOf(spec, 'default')).toEqual({
+        $ref: '#/components/schemas/Fallback',
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['example', 'Fallback']);
+    });
+
+    it('keeps data verbatim, never hoisting it, and visits every subschema', () => {
+      const data = { title: 'Look', type: 'object' };
+      const spec = answering({
+        '200': {
+          type: 'object',
+          default: data,
+          examples: [data],
+          enum: [data],
+          'x-sample': data,
+          properties: { default: { title: 'Named', type: 'string' } },
+          $defs: { default: { title: 'Defined', type: 'string' } },
+        },
+      });
+      nameSchemas(spec);
+      expect(schemaOf(spec, '200')).toEqual({
+        type: 'object',
+        default: data,
+        examples: [data],
+        enum: [data],
+        'x-sample': data,
+        properties: { default: { $ref: '#/components/schemas/Named' } },
+        $defs: { default: { $ref: '#/components/schemas/Defined' } },
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['Named', 'Defined']);
+    });
+
+    it("walks a Type.Tuple's draft-07 items list and its additionalItems", () => {
+      const tuple = Type.Tuple([
+        Type.String({ title: 'Label' }),
+        Type.Number(),
+      ]);
+      expect(Array.isArray(tuple.items)).toBe(true);
+      const spec = answering({
+        '200': {
+          ...tuple,
+          additionalItems: { title: 'Extra', type: 'boolean' },
+        },
+      });
+      nameSchemas(spec);
+      expect(schemaOf(spec, '200')).toMatchObject({
+        items: [{ $ref: '#/components/schemas/Label' }, { type: 'number' }],
+        additionalItems: { $ref: '#/components/schemas/Extra' },
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['Label', 'Extra']);
+    });
+
+    it('walks contentSchema and draft-07 dependencies, leaving a property-name array alone', () => {
+      const spec = answering({
+        '200': {
+          type: 'string',
+          contentSchema: { title: 'Decoded', type: 'object' },
+          dependencies: {
+            card: { title: 'Billing', type: 'object' },
+            name: ['first', 'last'],
+          },
+        },
+      });
+      nameSchemas(spec);
+      expect(schemaOf(spec, '200')).toEqual({
+        type: 'string',
+        contentSchema: { $ref: '#/components/schemas/Decoded' },
+        dependencies: {
+          card: { $ref: '#/components/schemas/Billing' },
+          name: ['first', 'last'],
+        },
+      });
+      expect(Object.keys(componentsOf(spec))).toEqual(['Decoded', 'Billing']);
+    });
+
+    it('refuses a schema position it does not walk, rather than skip its schemas', () => {
+      const media = (encoding: object) => ({
+        content: { 'multipart/form-data': { schema: {}, encoding } },
+      });
+      const unwalked = [
+        { paths: {}, components: { responses: {} } },
+        { paths: {}, webhooks: {} },
+        { paths: { '/a': { post: { callbacks: {}, responses: {} } } } },
+        {
+          paths: {
+            '/a': {
+              post: {
+                requestBody: media({ photo: { headers: {} } }),
+                responses: {},
+              },
+            },
+          },
+        },
+      ];
+      for (const spec of unwalked) {
+        expect(() => nameSchemas(spec), JSON.stringify(spec)).toThrow(
+          /does not walk/,
+        );
+      }
+      expect(() =>
+        nameSchemas({
+          paths: {
+            '/a': {
+              post: {
+                requestBody: media({ photo: { contentType: 'image/*' } }),
+                responses: {},
+              },
+            },
+          },
+        }),
+      ).not.toThrow();
     });
 
     it('leaves no anyOf of single-value literals, strings or numbers', () => {
@@ -174,20 +326,16 @@ describe('the OpenAPI spec', () => {
     });
 
     it('collapses number literals as numbers', () => {
-      const spec = {
-        paths: {
-          '/a': {
-            x: {
-              anyOf: [
-                { type: 'integer', enum: [1] },
-                { type: 'integer', enum: [2] },
-              ],
-            },
-          },
+      const spec = answering({
+        '200': {
+          anyOf: [
+            { type: 'integer', enum: [1] },
+            { type: 'integer', enum: [2] },
+          ],
         },
-      };
+      });
       nameSchemas(spec);
-      expect(spec.paths['/a'].x).toEqual({ type: 'integer', enum: [1, 2] });
+      expect(schemaOf(spec, '200')).toEqual({ type: 'integer', enum: [1, 2] });
     });
 
     it('points every $ref at a component that exists', () => {
