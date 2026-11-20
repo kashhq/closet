@@ -189,6 +189,43 @@ export interface PageWatch {
   stop(): void;
 }
 
+/** The slice of a MutationRecord that isRealChange reads. */
+export interface ChangeRecord {
+  type: string;
+  attributeName: string | null;
+  oldValue: string | null;
+  /** Read for a `class` record: the node's class list now. */
+  target: Node | { getAttribute(name: string): string | null };
+}
+
+/**
+ * Whether a DOM mutation is a change to what axe judged. htmx's own
+ * bookkeeping (`htmx-request`, `htmx-settling`, `htmx-swapping`,
+ * `htmx-added`, toggled around every request and swap) is not: a `class`
+ * record whose old and new class sets differ only in `htmx-*` classes is
+ * dropped, so a poll cannot fail every attempt (#1213). A swap's childList
+ * record still counts. The watch observes with `attributeOldValue`. a11y.ts
+ * injects it by its source, so it must reference nothing outside itself.
+ */
+export function isRealChange(record: ChangeRecord): boolean {
+  if (record.type !== 'attributes' || record.attributeName !== 'class') {
+    return true;
+  }
+  const classesOf = (value: string | null) =>
+    new Set((value ?? '').split(/\s+/).filter((name) => name !== ''));
+  const before = classesOf(record.oldValue);
+  const after = classesOf(
+    'getAttribute' in record.target
+      ? record.target.getAttribute('class')
+      : null,
+  );
+  const isHtmx = (name: string) => name.startsWith('htmx-');
+  return (
+    [...before].some((name) => !after.has(name) && !isHtmx(name)) ||
+    [...after].some((name) => !before.has(name) && !isHtmx(name))
+  );
+}
+
 /** One axe run and two reruns before a page that keeps changing fails. */
 export const STILL_RUN_ATTEMPTS = 3;
 
@@ -214,9 +251,17 @@ export async function runWhileStill<T>(
   for (let attempt = 0; attempt < attempts; attempt++) {
     const watching = watch();
     try {
-      const result = await run();
+      const outcome = await run().then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error }),
+      );
       const changes = [...new Set(watching.changes())];
-      if (changes.length === 0) return { result, discarded };
+      // A throw after a change is its symptom (axe's detached node): discard
+      // and rerun. With no change it is a real failure, passed on as it was.
+      if (changes.length === 0 && 'error' in outcome) throw outcome.error;
+      if (changes.length === 0 && 'result' in outcome) {
+        return { result: outcome.result, discarded };
+      }
       discarded.push(changes);
     } finally {
       watching.stop();

@@ -8,6 +8,7 @@ import {
   type ElementDescriptor,
   FIELD_FONT,
   FIELD_FONT_MIN_PX,
+  isRealChange,
   kindOf,
   type Offender,
   runWhileStill,
@@ -148,6 +149,7 @@ async function measureInPage(limits: {
   const injected = window as unknown as {
     axe: typeof Axe;
     closetRunWhileStill: typeof runWhileStill;
+    closetIsRealChange: typeof isRealChange;
   };
   // Every change to the document while axe runs (runWhileStill), by its
   // target: a node axe judged may have been swapped out since.
@@ -158,6 +160,7 @@ async function measureInPage(limits: {
       subtree: true,
       childList: true,
       attributes: true,
+      attributeOldValue: true,
     });
     const nameOf = (node: Node) => {
       if (!(node instanceof Element)) return node.nodeName;
@@ -166,11 +169,13 @@ async function measureInPage(limits: {
     };
     return {
       changes: () =>
-        [...seen, ...observer.takeRecords()].map((record) =>
-          record.type === 'attributes'
-            ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
-            : `the children of ${nameOf(record.target)}`,
-        ),
+        [...seen, ...observer.takeRecords()]
+          .filter((record) => injected.closetIsRealChange(record))
+          .map((record) =>
+            record.type === 'attributes'
+              ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
+              : `the children of ${nameOf(record.target)}`,
+          ),
       stop: () => observer.disconnect(),
     };
   };
@@ -312,6 +317,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
   await page.evaluate(found.axeSource);
   // Self-contained by contract (its doc), so its source runs in the page.
   await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
+  await page.evaluate(`window.closetIsRealChange = ${String(isRealChange)}`);
   const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,

@@ -8,6 +8,7 @@ import {
   compareA11y,
   designClassesOf,
   type ElementDescriptor,
+  isRealChange,
   kindOf,
   renderA11y,
   renderA11yComparison,
@@ -238,6 +239,44 @@ describe('runWhileStill', () => {
     expect(runs).toBe(STILL_RUN_ATTEMPTS);
   });
 
+  it('retries a run that threw after the page changed, and returns the rerun', async () => {
+    const { log, watch } = stubPage();
+    let runs = 0;
+    const result = await runWhileStill(
+      watch,
+      () => {
+        runs += 1;
+        if (runs === 1) {
+          log.push('the children of div#today-body');
+          return Promise.reject(new Error('node is detached'));
+        }
+        return Promise.resolve('still');
+      },
+      STILL_RUN_ATTEMPTS,
+    );
+    expect(result).toEqual({
+      result: 'still',
+      discarded: [['the children of div#today-body']],
+    });
+  });
+
+  it('rethrows the same error when the run threw and nothing changed', async () => {
+    const { watch } = stubPage();
+    const failure = new Error('axe crashed');
+    let runs = 0;
+    await expect(
+      runWhileStill(
+        watch,
+        () => {
+          runs += 1;
+          return Promise.reject(failure);
+        },
+        STILL_RUN_ATTEMPTS,
+      ),
+    ).rejects.toBe(failure);
+    expect(runs).toBe(1);
+  });
+
   it('runs without its module: a11y.ts injects it into the page by source', async () => {
     // A fresh context has none of the module's scope, as the page has none.
     const injected = runInNewContext(
@@ -247,6 +286,49 @@ describe('runWhileStill', () => {
     await expect(
       injected(watch, () => Promise.resolve('still'), 1),
     ).resolves.toEqual({ result: 'still', discarded: [] });
+  });
+});
+
+describe('isRealChange', () => {
+  const classRecord = (oldValue: string, now: string) => ({
+    type: 'attributes',
+    attributeName: 'class',
+    oldValue,
+    target: { getAttribute: () => now },
+  });
+
+  it('ignores a class toggle that only touches htmx-* classes', () => {
+    expect(isRealChange(classRecord('btn', 'btn htmx-request'))).toBe(false);
+    expect(
+      isRealChange(classRecord('btn htmx-swapping', 'btn htmx-settling')),
+    ).toBe(false);
+    expect(isRealChange(classRecord('btn htmx-added', 'btn'))).toBe(false);
+  });
+
+  it('counts a real class change, even beside an htmx one', () => {
+    expect(isRealChange(classRecord('btn', 'btn btn-primary'))).toBe(true);
+    expect(isRealChange(classRecord('btn htmx-request', 'btn-primary'))).toBe(
+      true,
+    );
+  });
+
+  it('counts a childList record and any other attribute', () => {
+    const record = {
+      attributeName: null,
+      oldValue: null,
+      target: { getAttribute: () => null },
+    };
+    expect(isRealChange({ ...record, type: 'childList' })).toBe(true);
+    expect(
+      isRealChange({ ...record, type: 'attributes', attributeName: 'hidden' }),
+    ).toBe(true);
+  });
+
+  it('runs without its module: a11y.ts injects it into the page by source', () => {
+    const injected = runInNewContext(
+      `(${String(isRealChange)})`,
+    ) as typeof isRealChange;
+    expect(injected(classRecord('a', 'a htmx-request'))).toBe(false);
   });
 });
 
