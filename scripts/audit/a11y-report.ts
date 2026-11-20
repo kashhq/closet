@@ -59,6 +59,8 @@ export interface ElementDescriptor {
   role: string | null;
   /** The `type` attribute of an input or a button, else null. */
   type: string | null;
+  /** A link's `href` attribute, else null. */
+  href: string | null;
   classes: string[];
   region: RegionDescriptor;
 }
@@ -131,9 +133,16 @@ function designOf(
     .join('');
 }
 
-/** A form action's path, each segment not a code word (an id, a date, a token) as `*`, the query dropped. */
-function actionPath(action: string): string {
-  const path = action.split(/[?#]/, 1)[0];
+/**
+ * A link's or a form action's route shape: its path, each segment not a code
+ * word (an id, a date, a token) as `*`, the query and hash dropped
+ * (`/calendar/2026-11-19?week=1` is `/calendar/*`). Anything but a
+ * root-relative path (another origin, a bare `#anchor`) is `*`: an outside
+ * URL's path is a shop's, not ours.
+ */
+function routeShape(url: string): string {
+  if (!url.startsWith('/') || url.startsWith('//')) return '*';
+  const path = url.split(/[?#]/, 1)[0];
   return path
     .split('/')
     .map((segment) => (segment === '' ? '' : word(segment)))
@@ -145,7 +154,7 @@ function regionKind(
   design: ReadonlySet<string>,
 ): string {
   const name = word(region.name);
-  const action = region.action === null ? '' : ` ${actionPath(region.action)}`;
+  const action = region.action === null ? '' : ` ${routeShape(region.action)}`;
   return `${region.tag}${name === null ? '' : `#${name}`}${designOf(region.classes, design)}${action}`;
 }
 
@@ -153,8 +162,8 @@ function regionKind(
  * The element's kind, from the element itself, never from a selector string
  * (#1207: every parse of axe's selectors leaked the next escape or data
  * value). Tag, explicit role, an input's or button's type, its design-system
- * classes and its region: `button[type=submit].btn.btn-ghost in
- * section#garment-care`, a form's region its action with ids as `*`. No
+ * classes, a link's route shape and its region: `a.link /garments/* in
+ * main.page-shell`, `button[type=submit].btn in form /calendar/plan-week`. No
  * attribute value but a code word reaches it, so the
  * seed and the clock cannot, and thirty calendar cells are one kind.
  */
@@ -169,8 +178,46 @@ export function kindOf(
     role === null ? '' : `[role=${role}]`,
     type === null ? '' : `[type=${type}]`,
     designOf(element.classes, design),
+    element.href === null ? '' : ` ${routeShape(element.href)}`,
     ` in ${regionKind(element.region, design)}`,
   ].join('');
+}
+
+/** A watch on the page for one run: what changed since it began (a line each), and its end. */
+export interface PageWatch {
+  changes(): string[];
+  stop(): void;
+}
+
+/** One axe run and two reruns before a page that keeps changing fails. */
+export const STILL_RUN_ATTEMPTS = 3;
+
+/**
+ * `run`'s result from a run during which the page held still: a run that saw
+ * a change (a `load` trigger, a poll, a late module swapping the DOM) is
+ * discarded and rerun, and after `attempts` the page fails, naming what
+ * changed; a half-stale result is never returned (#1207). a11y.ts injects it
+ * into the page by its source, so it must reference nothing outside itself.
+ */
+export async function runWhileStill<T>(
+  watch: () => PageWatch,
+  run: () => Promise<T>,
+  attempts: number,
+): Promise<T> {
+  let changes: string[] = [];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const watching = watch();
+    try {
+      const result = await run();
+      changes = [...new Set(watching.changes())];
+      if (changes.length === 0) return result;
+    } finally {
+      watching.stop();
+    }
+  }
+  throw new Error(
+    `the page changed during each of ${attempts} axe runs: ${changes.slice(0, 5).join('; ')}`,
+  );
 }
 
 /** A page's PageA11y `counts` (nodes) and `kinds` (distinct kinds) per measure. */

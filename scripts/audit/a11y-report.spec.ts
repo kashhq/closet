@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import {
   type A11yReport,
@@ -10,6 +11,8 @@ import {
   kindOf,
   renderA11y,
   renderA11yComparison,
+  runWhileStill,
+  STILL_RUN_ATTEMPTS,
   tally,
   TARGET_SIZE,
 } from './a11y-report';
@@ -59,6 +62,7 @@ describe('kindOf and tally', () => {
     tag: 'a',
     role: null,
     type: null,
+    href: null,
     classes: [],
     region,
     ...over,
@@ -115,6 +119,20 @@ describe('kindOf and tally', () => {
     ).toBe('a[role=*][type=*] in main');
   });
 
+  it("keeps a link's route shape, ids, dates, query and other origins as *", () => {
+    const link = (href: string) =>
+      kindOf(element({ classes: ['btn'], href }), design);
+    expect(link('/calendar/2026-11-19?week=2#today')).toBe(
+      'a.btn /calendar/* in main',
+    );
+    expect(link('/garments/abc123')).toBe(link('/garments/0193e4567-e89b'));
+    expect(link('/garments/abc123')).toBe('a.btn /garments/* in main');
+    expect(link('/wardrobe/laundry')).not.toBe(link('/calendar/plan-week'));
+    expect(link('https://shop.example/running-shoes')).toBe('a.btn * in main');
+    expect(link('//shop.example/running-shoes')).toBe('a.btn * in main');
+    expect(link('#details')).toBe('a.btn * in main');
+  });
+
   it('keeps two offenders of one shape in different regions apart', () => {
     const inSection = (name: string) =>
       kindOf(
@@ -167,6 +185,65 @@ describe('kindOf and tally', () => {
       kinds: { [TARGET_SIZE]: ['a.btn in main', 'button in main'] },
     });
     expect(tally([])).toEqual({ counts: {}, kinds: {} });
+  });
+});
+
+describe('runWhileStill', () => {
+  /** A stub page: a change log a watch reads from where it began. */
+  function stubPage() {
+    const log: string[] = [];
+    const watch = () => {
+      const from = log.length;
+      return { changes: () => log.slice(from), stop: () => undefined };
+    };
+    return { log, watch };
+  }
+
+  it('discards a run the page changed during and returns the still rerun', async () => {
+    const { log, watch } = stubPage();
+    let runs = 0;
+    const result = await runWhileStill(
+      watch,
+      () => {
+        runs += 1;
+        // The first run sees an htmx swap land mid-run, as a poll would.
+        if (runs === 1) log.push('the children of div#today-body');
+        return Promise.resolve(`run ${runs}`);
+      },
+      STILL_RUN_ATTEMPTS,
+    );
+    expect(result).toBe('run 2');
+    expect(runs).toBe(2);
+  });
+
+  it('fails, naming what changed, when every run saw a change', async () => {
+    const { log, watch } = stubPage();
+    let runs = 0;
+    await expect(
+      runWhileStill(
+        watch,
+        () => {
+          runs += 1;
+          log.push('class of main', 'class of main');
+          return Promise.resolve(runs);
+        },
+        STILL_RUN_ATTEMPTS,
+      ),
+    ).rejects.toThrow(
+      'the page changed during each of 3 axe runs: class of main',
+    );
+    expect(runs).toBe(STILL_RUN_ATTEMPTS);
+  });
+
+  it('runs without its module: a11y.ts injects it into the page by source', async () => {
+    // A fresh context has none of the module's scope, as the page has none.
+    const injected = runInNewContext(
+      `(${String(runWhileStill)})`,
+    ) as typeof runWhileStill;
+    const { watch } = stubPage();
+    await expect(
+      injected(watch, () => Promise.resolve('still'), 1),
+    ).resolves.toBe('still');
   });
 });
 

@@ -180,8 +180,9 @@ holds per page, per measure, the violating node count and the sorted list of
 violating element kinds (`kindOf`, `scripts/audit/a11y-report.ts`: read off
 the element in the browser, never off axe's selector: its tag, explicit role,
 an input's or button's type, its design-system classes (main.css's and
-daisyUI's, never a utility) and its nearest region (a form by its action, a
-named section, a landmark); an attribute value counts only as a code word,
+daisyUI's, never a utility), a link's route shape and its nearest region (a form by its action, a
+named section, a landmark), from an axe run the page held still through
+(rerun twice, then the page fails); an attribute value counts only as a code word,
 lower-case letters and hyphens, else `*`, so a calendar grid is one kind and
 no seeded date, id or name reaches one): each axe-core rule (all
 of axe's default rules), `field font < 16 px` (a text field iOS zooms the

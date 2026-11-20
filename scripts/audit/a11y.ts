@@ -10,6 +10,8 @@ import {
   FIELD_FONT_MIN_PX,
   kindOf,
   type Offender,
+  runWhileStill,
+  STILL_RUN_ATTEMPTS,
   tally,
   type PageA11y,
   TARGET_MIN_PX,
@@ -89,13 +91,15 @@ interface InPageViolation {
  * axe's run, the text-entry fields iOS zooms into and the tap targets, each
  * violating element described for kindOf, all in one call in the page.
  * axe hands back the element it judged (`elementRef`), so nothing is looked
- * up again after it: a fragment swapped in meanwhile cannot make a target
- * miss or name another element (#1207). Runs in the browser (serialized by
+ * up again after it, and a run the page changed during is rerun
+ * (runWhileStill, injected before): a fragment swapped in meanwhile cannot
+ * make a node stale or name another element (#1207). Runs in the browser (serialized by
  * page.evaluate, axe injected before it): no closures, no imports.
  */
 async function measureInPage(limits: {
   fontMin: number;
   targetMin: number;
+  attempts: number;
 }): Promise<{
   axeVersion: string;
   violations: InPageViolation[];
@@ -127,6 +131,7 @@ async function measureInPage(limits: {
       role: el.getAttribute('role'),
       type:
         tag === 'input' || tag === 'button' ? el.getAttribute('type') : null,
+      href: tag === 'a' ? el.getAttribute('href') : null,
       classes: [...el.classList],
       region: {
         tag: region.tagName.toLowerCase(),
@@ -137,24 +142,69 @@ async function measureInPage(limits: {
       },
     };
   };
-  const engine = (window as unknown as { axe: typeof Axe }).axe;
-  const results = await engine.run(document, { elementRef: true });
-  const violations = results.violations.map((violation) => ({
-    id: violation.id,
-    impact: violation.impact ?? 'minor',
-    help: violation.help,
-    nodes: violation.nodes.flatMap((node) =>
-      node.element
-        ? [
+  const injected = window as unknown as {
+    axe: typeof Axe;
+    closetRunWhileStill: typeof runWhileStill;
+  };
+  // Every change to the document while axe runs (runWhileStill), by its
+  // target: a node axe judged may have been swapped out since.
+  const watch = () => {
+    const seen: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => seen.push(...records));
+    observer.observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    });
+    const nameOf = (node: Node) => {
+      if (!(node instanceof Element)) return node.nodeName;
+      const id = node.id ? `#${node.id}` : '';
+      return `${node.tagName.toLowerCase()}${id}`;
+    };
+    return {
+      changes: () =>
+        [...seen, ...observer.takeRecords()].map((record) =>
+          record.type === 'attributes'
+            ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
+            : `the children of ${nameOf(record.target)}`,
+        ),
+      stop: () => observer.disconnect(),
+    };
+  };
+  // Described inside the watched run, so a change before the description
+  // discards it too.
+  const runAxe = async () => {
+    const results = await injected.axe.run(document, { elementRef: true });
+    return {
+      version: results.testEngine.version,
+      violations: results.violations.map((violation) => ({
+        id: violation.id,
+        impact: violation.impact ?? 'minor',
+        help: violation.help,
+        nodes: violation.nodes.flatMap((node) => {
+          if (!node.element) return [];
+          if (!node.element.isConnected) {
+            throw new Error(
+              `axe's ${violation.id} node ${node.target.join(' ')} is detached`,
+            );
+          }
+          return [
             {
               selector: node.target.join(' '),
               element: element(node.element),
               detail: node.failureSummary ?? '',
             },
-          ]
-        : [],
-    ),
-  }));
+          ];
+        }),
+      })),
+    };
+  };
+  const results = await injected.closetRunWhileStill(
+    watch,
+    runAxe,
+    limits.attempts,
+  );
+  const { violations } = results;
   const NOT_TEXT = new Set([
     'hidden',
     'checkbox',
@@ -241,7 +291,7 @@ async function measureInPage(limits: {
     ];
   });
   return {
-    axeVersion: results.testEngine.version,
+    axeVersion: results.version,
     violations,
     fields,
     targets,
@@ -256,9 +306,12 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
   // htmx's swaps in flight settle before the run reads the page.
   await page.waitForFunction(() => !document.querySelector('.htmx-request'));
   await page.evaluate(found.axeSource);
+  // Self-contained by contract (its doc), so its source runs in the page.
+  await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
   const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
+    attempts: STILL_RUN_ATTEMPTS,
   });
   found.axeVersion = measured.axeVersion;
   const { rules, design } = found;
