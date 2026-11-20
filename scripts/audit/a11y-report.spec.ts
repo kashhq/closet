@@ -5,9 +5,11 @@ import {
   type A11yReport,
   a11yPageNotes,
   compareA11y,
+  designClassesOf,
+  type ElementDescriptor,
+  kindOf,
   renderA11y,
   renderA11yComparison,
-  signatureOf,
   tally,
   TARGET_SIZE,
 } from './a11y-report';
@@ -44,68 +46,125 @@ function report(
   };
 }
 
-describe('signatureOf and countKinds', () => {
-  it('gives one kind to selectors differing only by a date or an index', () => {
-    expect(signatureOf('a[aria-label="Thursday, Nov 20"]')).toBe(
-      signatureOf('a[aria-label="Friday, Nov 27, Run, Worn"]'),
-    );
-    expect(signatureOf('a[aria-label="Thursday, Nov 20"]')).toBe(
-      'a[aria-label="*"]',
-    );
-    expect(signatureOf('.cell:nth-child(7) > a')).toBe(
-      signatureOf('.cell:nth-child(12) > a'),
-    );
-    expect(signatureOf('.cell:nth-child(7) > a')).toBe(
-      '.cell:nth-child(*) > a',
-    );
+describe('kindOf and tally', () => {
+  const design = new Set([
+    'btn',
+    'btn-ghost',
+    'app-bar',
+    'ms-swatch',
+    'ms-swatch--blue',
+  ]);
+  const region = { tag: 'main', name: null, action: null, classes: [] };
+  const element = (over: Partial<ElementDescriptor>): ElementDescriptor => ({
+    tag: 'a',
+    role: null,
+    type: null,
+    classes: [],
+    region,
+    ...over,
   });
 
-  it('keeps attribute names and only the stable values', () => {
+  it('keeps tag, role, type, design classes and the region', () => {
     expect(
-      signatureOf(
-        'a[href="/g/123e4567-e89b-12d3-a456-426614174000/2026-11-19"]',
+      kindOf(
+        element({
+          tag: 'button',
+          role: 'tab',
+          type: 'submit',
+          classes: ['w-12', 'btn-ghost', 'btn', 'btn'],
+          region: {
+            tag: 'header',
+            name: null,
+            action: null,
+            classes: ['app-bar', 'flex'],
+          },
+        }),
+        design,
       ),
-    ).toBe('a[href="*"]');
-    expect(signatureOf('#abc-123 > button[hx-target="closest [data-x]"]')).toBe(
-      '#* > button[hx-target="*"]',
-    );
+    ).toBe('button[role=tab][type=submit].btn.btn-ghost in header.app-bar');
+  });
+
+  it('drops utilities and BEM modifiers, whose value is data', () => {
     expect(
-      signatureOf(
-        'input[type="text"][role=combobox][data-kind="grid"][data-month-day="2026-11-19"][alt=\'a b\' i]',
+      kindOf(
+        element({ classes: ['ms-swatch', 'ms-swatch--blue', 'px-2'] }),
+        design,
+      ),
+    ).toBe('a.ms-swatch in main');
+  });
+
+  it('gives one kind to elements differing only by an id, a date or a token', () => {
+    const form = (action: string, name: string) =>
+      kindOf(
+        element({ region: { tag: 'form', name, action, classes: [] } }),
+        design,
+      );
+    expect(
+      form(
+        '/garments/0193e4567-e89b-72d3-a456-426614174000/wear?day=2026-11-19',
+        'day-2026-11-19',
       ),
     ).toBe(
-      'input[type="text"][role="combobox"][data-kind="grid"][data-month-day="*"][alt="*"]',
+      form('/garments/123e4567-e89b-12d3-a456-426614174000/wear', 'Run 4'),
     );
+    expect(form('/calendar/2026-11-19/plan', 'garment-care')).toBe(
+      'a in form#garment-care /calendar/*/plan',
+    );
+    expect(
+      kindOf(element({ role: 'Thursday, Nov 20', type: 'x"y' }), design),
+    ).toBe('a[role=*][type=*] in main');
+  });
+
+  it('keeps two offenders of one shape in different regions apart', () => {
+    const inSection = (name: string) =>
+      kindOf(
+        element({
+          region: { tag: 'section', name, action: null, classes: [] },
+        }),
+        design,
+      );
+    expect(inSection('garment-care')).not.toBe(inSection('garment-wear'));
+    expect(inSection('garment-care')).toBe('a in section#garment-care');
+  });
+
+  it('reads the design classes a stylesheet defines, not its comments, strings or escapes', () => {
+    expect(
+      [
+        ...designClassesOf(
+          '@layer daisyui.l1 { /* .note */ .btn:hover, :where(.app-bar) > .lg\\:btn { margin: .5rem 0.25rem; } } @import "x.css";',
+        ),
+      ].sort(),
+    ).toEqual(['app-bar', 'btn']);
   });
 
   it('holds every kind of the committed demo baseline free of data', () => {
     const { a11y } = JSON.parse(readFileSync(BASELINE, 'utf8')) as {
       a11y: A11yReport;
     };
-    // A kind that changes when its digits do contained data: signatureOf
-    // would have replaced it, so every kind is a fixed point of it.
-    const otherDigits = (text: string) =>
-      text.replace(/\d/g, (d) => String((Number(d) + 1) % 10));
     const kinds = a11y.pages.flatMap((page) =>
       Object.values(page.kinds).flat(),
     );
     expect(kinds.length).toBeGreaterThan(0);
+    // A kind holding a digit held data (a date, an id, an index): changing
+    // its digits would change it. A heading's tag is the one digit allowed.
+    const otherDigits = (text: string) =>
+      text.replace(/\d/g, (d) => String((Number(d) + 1) % 10));
     for (const kind of kinds) {
-      expect(signatureOf(kind)).toBe(kind);
-      expect(signatureOf(otherDigits(kind))).toBe(otherDigits(kind));
-      expect(kind).not.toMatch(/\d{4}-\d{2}-\d{2}|\b\d+ days?\b/);
+      const bare = kind.replace(/\bh[1-6]\b/g, 'h');
+      expect(otherDigits(bare)).toBe(bare);
+      expect(kind).toMatch(/ in [a-z]+/);
     }
   });
 
   it('tallies nodes and sorted distinct kinds per measure', () => {
-    const cells = [30, 1, 2, 3].map((n) => ({
+    const cells = [30, 1, 2, 3].map(() => ({
       measure: TARGET_SIZE,
-      signature: `.cell:nth-child(${n}) > a`,
+      kind: kindOf(element({ classes: ['btn'] }), design),
     }));
-    const other = { measure: TARGET_SIZE, signature: 'button' };
+    const other = { measure: TARGET_SIZE, kind: 'button in main' };
     expect(tally([...cells, other])).toEqual({
       counts: { [TARGET_SIZE]: 5 },
-      kinds: { [TARGET_SIZE]: ['.cell:nth-child(*) > a', 'button'] },
+      kinds: { [TARGET_SIZE]: ['a.btn in main', 'button in main'] },
     });
     expect(tally([])).toEqual({ counts: {}, kinds: {} });
   });

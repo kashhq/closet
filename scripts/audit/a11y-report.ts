@@ -31,7 +31,7 @@ export interface PageA11y {
    */
   counts: Record<string, number>;
   /**
-   * Distinct violating element kinds per measure (signatureOf), sorted. Thirty
+   * Distinct violating element kinds per measure (kindOf), sorted. Thirty
    * identical calendar cells are one kind, so the list does not follow the
    * seed: a kind the baseline lacks is what fails the compare.
    */
@@ -48,63 +48,141 @@ export interface A11yReport {
   partial?: true;
 }
 
+/**
+ * What the pass reads off a violating element in the browser (a11y.ts,
+ * `describeInPage`), raw: kindOf decides what of it reaches a kind.
+ */
+export interface ElementDescriptor {
+  /** Lower-case tag name. */
+  tag: string;
+  /** The explicit `role` attribute. */
+  role: string | null;
+  /** The `type` attribute of an input or a button, else null. */
+  type: string | null;
+  classes: string[];
+  region: RegionDescriptor;
+}
+
+/**
+ * The element's nearest region: a form with an action, a `<section>` with an
+ * id or `aria-labelledby`, a landmark (header, nav, aside, footer, dialog,
+ * main), else the body. What separates two offenders of one shape on a page.
+ */
+export interface RegionDescriptor {
+  tag: string;
+  /** Its `id`, else its `aria-labelledby`. */
+  name: string | null;
+  /** A form's `action` attribute. */
+  action: string | null;
+  classes: string[];
+}
+
 /** One violating node as the pass found it. */
 export interface Offender {
   measure: string;
-  /** A selector or description a person can find the node by. */
+  /** A selector or description a person can find the node by (the detail file only). */
   selector: string;
-  /** What distinguishes the element's kind from other nodes (signatureOf's input). */
-  signature: string;
+  /** kindOf of the element. */
+  kind: string;
   detail: string;
 }
 
 /**
- * An attribute selector with its value: `[name="value"]`, `[name=value i]`.
- * The quoted alternatives come first because a quoted value may hold `]`.
+ * A word written in code (`garment-care`, `submit`, `wear`): lower-case
+ * letters and hyphens. A uuid (v4 and v7 always carry their version digit),
+ * a date, an index and a seeded name (capitalised, spaced) never match it.
  */
-const ATTRIBUTE =
-  /\[([\w:@.-]+)([~|^$*]?=)("[^"]*"|'[^']*'|[^\]\s]*)(\s+[iIsS])?\]/g;
+const CODE_WORD = /^[a-z]+(?:-[a-z]+)*$/;
 
-/** A `data-*` value naming a role-like constant (`data-kind="grid"`), never data. */
-const ROLE_LIKE = /^[a-z][a-z-]*$/;
-
-/**
- * Reduces an axe selector to the element's kind by construction: attribute
- * names stay, and so do the values that are stable identifiers (`type`, `role`
- * and a role-like `data-*` constant). Every other value (aria-label, href, alt,
- * title, a seeded date or id, nth-child's index) becomes `*`, so nothing the
- * seed or the clock produces can reach a kind; a regex per data shape would
- * miss the next one (#1207). Two nodes of one rule with the same signature are
- * one violation kind.
- */
-export function signatureOf(selector: string): string {
-  return selector
-    .replace(ATTRIBUTE, (_match, name: string, op: string, raw: string) => {
-      const value = raw.replace(/^(["'])(.*)\1$/, '$2');
-      const stable =
-        op === '=' &&
-        (name === 'type' ||
-          name === 'role' ||
-          (name.startsWith('data-') && ROLE_LIKE.test(value)));
-      return `[${name}${op}${stable ? `"${value}"` : '"*"'}]`;
-    })
-    .replace(
-      /:nth-(child|of-type|last-child|last-of-type)\([^)]*\)/g,
-      ':nth-$1(*)',
-    )
-    .replace(/#[\w-]+/g, '#*');
+function word(value: string | null): string | null {
+  if (value === null) return null;
+  return CODE_WORD.test(value) ? value : '*';
 }
 
-/** A page's PageA11y `counts` (nodes) and `kinds` (distinct signatures) per measure. */
+/**
+ * The class names a stylesheet defines (`.btn`, `.app-bar`), its comments,
+ * strings and layer names dropped; a name with an escape (Tailwind's `.lg\:btn`) is not one.
+ * a11y.ts feeds it main.css and daisyUI's component sheets: the design
+ * system's vocabulary, never a utility.
+ */
+export function designClassesOf(css: string): Set<string> {
+  const code = css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/"[^"]*"|'[^']*'/g, '')
+    // daisyUI's cascade layers (`@layer daisyui.l1.l2`) are not classes.
+    .replace(/@layer[^{;]*/g, '');
+  return new Set(
+    [...code.matchAll(/\.([a-z][\w-]*)(?![\w\\-])/gi)].map((m) => m[1]),
+  );
+}
+
+/**
+ * Classes kept in a kind: the design system's, less BEM modifiers
+ * (`ms-swatch--blue`), whose value is the garment's data.
+ */
+function designOf(
+  classes: readonly string[],
+  design: ReadonlySet<string>,
+): string {
+  return [...new Set(classes)]
+    .filter((name) => design.has(name) && !name.includes('--'))
+    .sort()
+    .map((name) => `.${name}`)
+    .join('');
+}
+
+/** A form action's path, each segment not a code word (an id, a date, a token) as `*`, the query dropped. */
+function actionPath(action: string): string {
+  const path = action.split(/[?#]/, 1)[0];
+  return path
+    .split('/')
+    .map((segment) => (segment === '' ? '' : word(segment)))
+    .join('/');
+}
+
+function regionKind(
+  region: RegionDescriptor,
+  design: ReadonlySet<string>,
+): string {
+  const name = word(region.name);
+  const action = region.action === null ? '' : ` ${actionPath(region.action)}`;
+  return `${region.tag}${name === null ? '' : `#${name}`}${designOf(region.classes, design)}${action}`;
+}
+
+/**
+ * The element's kind, from the element itself, never from a selector string
+ * (#1207: every parse of axe's selectors leaked the next escape or data
+ * value). Tag, explicit role, an input's or button's type, its design-system
+ * classes and its region: `button[type=submit].btn.btn-ghost in
+ * section#garment-care`, a form's region its action with ids as `*`. No
+ * attribute value but a code word reaches it, so the
+ * seed and the clock cannot, and thirty calendar cells are one kind.
+ */
+export function kindOf(
+  element: ElementDescriptor,
+  design: ReadonlySet<string>,
+): string {
+  const role = word(element.role);
+  const type = word(element.type);
+  return [
+    element.tag,
+    role === null ? '' : `[role=${role}]`,
+    type === null ? '' : `[type=${type}]`,
+    designOf(element.classes, design),
+    ` in ${regionKind(element.region, design)}`,
+  ].join('');
+}
+
+/** A page's PageA11y `counts` (nodes) and `kinds` (distinct kinds) per measure. */
 export function tally(
-  offenders: readonly Pick<Offender, 'measure' | 'signature'>[],
+  offenders: readonly Pick<Offender, 'measure' | 'kind'>[],
 ): Pick<PageA11y, 'counts' | 'kinds'> {
   const counts: Record<string, number> = {};
   const kinds = new Map<string, Set<string>>();
-  for (const { measure, signature } of offenders) {
+  for (const { measure, kind } of offenders) {
     counts[measure] = (counts[measure] ?? 0) + 1;
     const set = kinds.get(measure) ?? new Set<string>();
-    set.add(signatureOf(signature));
+    set.add(kind);
     kinds.set(measure, set);
   }
   return {

@@ -1,10 +1,14 @@
-import { writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { AxeBuilder } from '@axe-core/playwright';
 import { type Browser, chromium, type Page } from '@playwright/test';
 import {
   type A11yReport,
+  designClassesOf,
+  type ElementDescriptor,
   FIELD_FONT,
   FIELD_FONT_MIN_PX,
+  kindOf,
   type Offender,
   tally,
   type PageA11y,
@@ -43,6 +47,28 @@ export interface A11yVisit {
 interface Found {
   rules: A11yReport['rules'];
   axeVersion: string;
+  /** designClassesOf main.css and daisyUI's component sheets: the classes a kind keeps. */
+  design: ReadonlySet<string>;
+}
+
+const ROOT = join(__dirname, '..', '..');
+
+/** The design system's class names: main.css's own and every daisyUI component's. */
+async function designClasses(): Promise<Set<string>> {
+  const components = join(ROOT, 'node_modules', 'daisyui', 'components');
+  const sheets = [
+    join(ROOT, 'views', 'assets', 'main.css'),
+    ...(await readdir(components))
+      .filter((file) => file.endsWith('.css'))
+      .map((file) => join(components, file)),
+  ];
+  const names = new Set<string>();
+  for (const sheet of sheets) {
+    for (const name of designClassesOf(await readFile(sheet, 'utf8'))) {
+      names.add(name);
+    }
+  }
+  return names;
 }
 
 interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
@@ -50,15 +76,22 @@ interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
 }
 
 /**
- * The text-entry fields iOS zooms into, and the tap targets, measured in the
- * page. Runs in the browser (serialized by page.evaluate): no closures, no
+ * The text-entry fields iOS zooms into, the tap targets, and the element
+ * each of axe's targets names, measured in the page, each described for
+ * kindOf. Runs in the browser (serialized by page.evaluate): no closures, no
  * imports.
  */
-function measureInPage(limits: { fontMin: number; targetMin: number }): {
-  fields: { selector: string; signature: string; px: number }[];
+function measureInPage(limits: {
+  fontMin: number;
+  targetMin: number;
+  /** axe's selectors, which axe guarantees resolve in this document. */
+  axeTargets: string[];
+}): {
+  axe: ElementDescriptor[];
+  fields: { selector: string; element: ElementDescriptor; px: number }[];
   targets: {
     selector: string;
-    signature: string;
+    element: ElementDescriptor;
     width: number;
     height: number;
   }[];
@@ -71,18 +104,33 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
       (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
     return `${el.tagName.toLowerCase()}${id}${name ? `[name=${name}]` : ''}${label ? ` "${label}"` : ''}`;
   };
-  // The element's kind, free of its text and its place: tag, type, role,
-  // field name and class list. A grid of seeded cells is one kind.
-  const kind = (el: Element): string =>
-    [
-      el.tagName.toLowerCase(),
-      el.getAttribute('type'),
-      el.getAttribute('role'),
-      el.getAttribute('name'),
-      [...el.classList].sort().join('.'),
-    ]
-      .filter(Boolean)
-      .join(' ');
+  // The nearest region (RegionDescriptor): a named section or a form tells
+  // two offenders of one shape apart; a landmark is named by its classes.
+  const REGION =
+    'form[action], section[id], section[aria-labelledby], header, nav, aside, footer, dialog, main';
+  const element = (el: Element): ElementDescriptor => {
+    const tag = el.tagName.toLowerCase();
+    const region = el.parentElement?.closest(REGION) ?? document.body;
+    return {
+      tag,
+      role: el.getAttribute('role'),
+      type:
+        tag === 'input' || tag === 'button' ? el.getAttribute('type') : null,
+      classes: [...el.classList],
+      region: {
+        tag: region.tagName.toLowerCase(),
+        name: region.id || region.getAttribute('aria-labelledby'),
+        action:
+          region.tagName === 'FORM' ? region.getAttribute('action') : null,
+        classes: [...region.classList],
+      },
+    };
+  };
+  const axe = limits.axeTargets.map((selector) => {
+    const el = document.querySelector(selector);
+    if (!el) throw new Error(`axe's target ${selector} matches nothing`);
+    return element(el);
+  });
   const NOT_TEXT = new Set([
     'hidden',
     'checkbox',
@@ -110,7 +158,7 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     )
     .map((el) => ({
       selector: describe(el),
-      signature: kind(el),
+      element: element(el),
       px: parseFloat(getComputedStyle(el).fontSize),
     }))
     .filter((field) => field.px < limits.fontMin);
@@ -162,13 +210,13 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     return [
       {
         selector: describe(el),
-        signature: kind(el),
+        element: element(el),
         width: Math.round(box.width * 10) / 10,
         height: Math.round(box.height * 10) / 10,
       },
     ];
   });
-  return { fields, targets };
+  return { axe, fields, targets };
 }
 
 function cookieValue(actor: Actor): string {
@@ -176,42 +224,52 @@ function cookieValue(actor: Actor): string {
 }
 
 async function measurePage(page: Page, found: Found): Promise<Measured> {
-  const offenders: Offender[] = [];
   const axe = await new AxeBuilder({ page }).analyze();
   found.axeVersion = axe.testEngine.version;
-  const { rules } = found;
-  for (const violation of axe.violations) {
+  const { rules, design } = found;
+  const nodes = axe.violations.flatMap((violation) => {
     rules[violation.id] = {
       impact: violation.impact ?? 'minor',
       help: violation.help,
     };
-    for (const node of violation.nodes) {
-      offenders.push({
-        measure: violation.id,
-        selector: node.target.join(' '),
-        signature: node.target.join(' '),
-        detail: node.failureSummary ?? '',
-      });
-    }
-  }
-  const { fields, targets } = await page.evaluate(measureInPage, {
+    return violation.nodes.map((node) => {
+      // A target in a frame or a shadow root is a path of selectors no
+      // document.querySelector resolves: the app renders neither, so one is
+      // refused rather than given a kind it cannot be held to.
+      const [selector, ...nested] = node.target;
+      if (typeof selector !== 'string' || nested.length > 0) {
+        throw new Error(
+          `axe's ${violation.id} target ${JSON.stringify(node.target)} is a nested path (a frame or an encapsulated root)`,
+        );
+      }
+      return { measure: violation.id, selector, node };
+    });
+  });
+  const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
+    axeTargets: nodes.map((node) => node.selector),
   });
-  offenders.push(
-    ...fields.map((field) => ({
+  const offenders: Offender[] = [
+    ...nodes.map(({ measure, selector, node }, index) => ({
+      measure,
+      selector,
+      kind: kindOf(measured.axe[index], design),
+      detail: node.failureSummary ?? '',
+    })),
+    ...measured.fields.map((field) => ({
       measure: FIELD_FONT,
       selector: field.selector,
-      signature: field.signature,
+      kind: kindOf(field.element, design),
       detail: `${field.px} px`,
     })),
-    ...targets.map((target) => ({
+    ...measured.targets.map((target) => ({
       measure: TARGET_SIZE,
       selector: target.selector,
-      signature: target.signature,
+      kind: kindOf(target.element, design),
       detail: `${target.width} × ${target.height} px`,
     })),
-  );
+  ];
   return { ...tally(offenders), offenders };
 }
 
@@ -275,7 +333,11 @@ export async function auditAccessibility(
 ): Promise<A11yPass> {
   const origin = await fixture.app.listen({ host: '127.0.0.1', port: 0 });
   const browser = await chromium.launch();
-  const found: Found = { rules: {}, axeVersion: 'unknown' };
+  const found: Found = {
+    rules: {},
+    axeVersion: 'unknown',
+    design: await designClasses(),
+  };
   const pages: PageA11y[] = [];
   const failures: string[] = [];
   const detail: Record<string, Offender[]> = {};
