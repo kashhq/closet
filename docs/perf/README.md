@@ -177,9 +177,14 @@ Before the walk, every page step a browser can open (a GET answering 200,
 nothing to prepare, not htmx) loads in Chromium at 390 × 844
 (`scripts/audit/a11y.ts`, #722) as its step's user, and the report's `a11y`
 holds per page, per measure, the violating node count and the sorted list of
-violating element kinds (nodes with one selector pattern, `:nth-child`
-indexes, uuids and dates stripped, are one kind, so a calendar grid does not
-follow the seed's dates): each axe-core rule (all
+violating element kinds (`kindOf`, `scripts/audit/a11y-report.ts`: read off
+the element in the browser, never off axe's selector: its tag, explicit role,
+an input's or button's type, its design-system classes (main.css's and
+daisyUI's, never a utility), a link's route shape and its nearest region (a form by its action, a
+named section, a landmark), from an axe run the page held still through
+(rerun twice, then the page fails); an attribute value counts only as a code word,
+lower-case letters and hyphens, else `*`, so a calendar grid is one kind and
+no seeded date, id or name reaches one): each axe-core rule (all
 of axe's default rules), `field font < 16 px` (a text field iOS zooms the
 page into on focus, shown or not) and `target < 44 px` (a visible tap
 target under 43.5 px on either side, the half pixel absorbing font rounding

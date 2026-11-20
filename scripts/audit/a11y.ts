@@ -1,11 +1,17 @@
-import { writeFile } from 'node:fs/promises';
-import { AxeBuilder } from '@axe-core/playwright';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { type Browser, chromium, type Page } from '@playwright/test';
+import type Axe from 'axe-core';
 import {
   type A11yReport,
+  designClassesOf,
+  type ElementDescriptor,
   FIELD_FONT,
   FIELD_FONT_MIN_PX,
+  kindOf,
   type Offender,
+  runWhileStill,
+  STILL_RUN_ATTEMPTS,
   tally,
   type PageA11y,
   TARGET_MIN_PX,
@@ -43,26 +49,71 @@ export interface A11yVisit {
 interface Found {
   rules: A11yReport['rules'];
   axeVersion: string;
+  /** designClassesOf main.css and daisyUI's component sheets: the classes a kind keeps. */
+  design: ReadonlySet<string>;
+  /** axe-core's browser build, evaluated into each page before the run. */
+  axeSource: string;
+}
+
+const ROOT = join(__dirname, '..', '..');
+
+/** The design system's class names: main.css's own and every daisyUI component's. */
+async function designClasses(): Promise<Set<string>> {
+  const components = join(ROOT, 'node_modules', 'daisyui', 'components');
+  const sheets = [
+    join(ROOT, 'views', 'assets', 'main.css'),
+    ...(await readdir(components))
+      .filter((file) => file.endsWith('.css'))
+      .map((file) => join(components, file)),
+  ];
+  const names = new Set<string>();
+  for (const sheet of sheets) {
+    for (const name of designClassesOf(await readFile(sheet, 'utf8'))) {
+      names.add(name);
+    }
+  }
+  return names;
 }
 
 interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
   offenders: Offender[];
+  /** What changed during each axe run discarded before the still one (runWhileStill). */
+  reruns: string[][];
+}
+
+/** One axe rule's violation as the page reports it: no element leaves the page. */
+interface InPageViolation {
+  id: string;
+  impact: string;
+  help: string;
+  nodes: { selector: string; element: ElementDescriptor; detail: string }[];
 }
 
 /**
- * The text-entry fields iOS zooms into, and the tap targets, measured in the
- * page. Runs in the browser (serialized by page.evaluate): no closures, no
- * imports.
+ * axe's run, the text-entry fields iOS zooms into and the tap targets, each
+ * violating element described for kindOf, all in one call in the page.
+ * axe hands back the element it judged (`elementRef`), so nothing is looked
+ * up again after it, and a run the page changed during is rerun
+ * (runWhileStill, injected before): a fragment swapped in meanwhile cannot
+ * make a node stale or name another element (#1207). Runs in the browser (serialized by
+ * page.evaluate, axe injected before it): no closures, no imports.
  */
-function measureInPage(limits: { fontMin: number; targetMin: number }): {
-  fields: { selector: string; signature: string; px: number }[];
+async function measureInPage(limits: {
+  fontMin: number;
+  targetMin: number;
+  attempts: number;
+}): Promise<{
+  axeVersion: string;
+  reruns: string[][];
+  violations: InPageViolation[];
+  fields: { selector: string; element: ElementDescriptor; px: number }[];
   targets: {
     selector: string;
-    signature: string;
+    element: ElementDescriptor;
     width: number;
     height: number;
   }[];
-} {
+}> {
   const describe = (el: Element): string => {
     const id = el.id ? `#${el.id}` : '';
     const name = el.getAttribute('name');
@@ -71,18 +122,92 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
       (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
     return `${el.tagName.toLowerCase()}${id}${name ? `[name=${name}]` : ''}${label ? ` "${label}"` : ''}`;
   };
-  // The element's kind, free of its text and its place: tag, type, role,
-  // field name and class list. A grid of seeded cells is one kind.
-  const kind = (el: Element): string =>
-    [
-      el.tagName.toLowerCase(),
-      el.getAttribute('type'),
-      el.getAttribute('role'),
-      el.getAttribute('name'),
-      [...el.classList].sort().join('.'),
-    ]
-      .filter(Boolean)
-      .join(' ');
+  // The nearest region (RegionDescriptor): a named section or a form tells
+  // two offenders of one shape apart; a landmark is named by its classes.
+  const REGION =
+    'form[action], section[id], section[aria-labelledby], header, nav, aside, footer, dialog, main';
+  const element = (el: Element): ElementDescriptor => {
+    const tag = el.tagName.toLowerCase();
+    const region = el.parentElement?.closest(REGION) ?? document.body;
+    return {
+      tag,
+      role: el.getAttribute('role'),
+      type:
+        tag === 'input' || tag === 'button' ? el.getAttribute('type') : null,
+      href: tag === 'a' ? el.getAttribute('href') : null,
+      classes: [...el.classList],
+      region: {
+        tag: region.tagName.toLowerCase(),
+        name: region.id || region.getAttribute('aria-labelledby'),
+        action:
+          region.tagName === 'FORM' ? region.getAttribute('action') : null,
+        classes: [...region.classList],
+      },
+    };
+  };
+  const injected = window as unknown as {
+    axe: typeof Axe;
+    closetRunWhileStill: typeof runWhileStill;
+  };
+  // Every change to the document while axe runs (runWhileStill), by its
+  // target: a node axe judged may have been swapped out since.
+  const watch = () => {
+    const seen: MutationRecord[] = [];
+    const observer = new MutationObserver((records) => seen.push(...records));
+    observer.observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    });
+    const nameOf = (node: Node) => {
+      if (!(node instanceof Element)) return node.nodeName;
+      const id = node.id ? `#${node.id}` : '';
+      return `${node.tagName.toLowerCase()}${id}`;
+    };
+    return {
+      changes: () =>
+        [...seen, ...observer.takeRecords()].map((record) =>
+          record.type === 'attributes'
+            ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
+            : `the children of ${nameOf(record.target)}`,
+        ),
+      stop: () => observer.disconnect(),
+    };
+  };
+  // Described inside the watched run, so a change before the description
+  // discards it too.
+  const runAxe = async () => {
+    const results = await injected.axe.run(document, { elementRef: true });
+    return {
+      version: results.testEngine.version,
+      violations: results.violations.map((violation) => ({
+        id: violation.id,
+        impact: violation.impact ?? 'minor',
+        help: violation.help,
+        nodes: violation.nodes.flatMap((node) => {
+          if (!node.element) return [];
+          if (!node.element.isConnected) {
+            throw new Error(
+              `axe's ${violation.id} node ${node.target.join(' ')} is detached`,
+            );
+          }
+          return [
+            {
+              selector: node.target.join(' '),
+              element: element(node.element),
+              detail: node.failureSummary ?? '',
+            },
+          ];
+        }),
+      })),
+    };
+  };
+  const { result: results, discarded } = await injected.closetRunWhileStill(
+    watch,
+    runAxe,
+    limits.attempts,
+  );
+  const { violations } = results;
   const NOT_TEXT = new Set([
     'hidden',
     'checkbox',
@@ -110,7 +235,7 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     )
     .map((el) => ({
       selector: describe(el),
-      signature: kind(el),
+      element: element(el),
       px: parseFloat(getComputedStyle(el).fontSize),
     }))
     .filter((field) => field.px < limits.fontMin);
@@ -162,13 +287,19 @@ function measureInPage(limits: { fontMin: number; targetMin: number }): {
     return [
       {
         selector: describe(el),
-        signature: kind(el),
+        element: element(el),
         width: Math.round(box.width * 10) / 10,
         height: Math.round(box.height * 10) / 10,
       },
     ];
   });
-  return { fields, targets };
+  return {
+    axeVersion: results.version,
+    reruns: discarded,
+    violations,
+    fields,
+    targets,
+  };
 }
 
 function cookieValue(actor: Actor): string {
@@ -176,43 +307,45 @@ function cookieValue(actor: Actor): string {
 }
 
 async function measurePage(page: Page, found: Found): Promise<Measured> {
-  const offenders: Offender[] = [];
-  const axe = await new AxeBuilder({ page }).analyze();
-  found.axeVersion = axe.testEngine.version;
-  const { rules } = found;
-  for (const violation of axe.violations) {
-    rules[violation.id] = {
-      impact: violation.impact ?? 'minor',
-      help: violation.help,
-    };
-    for (const node of violation.nodes) {
-      offenders.push({
-        measure: violation.id,
-        selector: node.target.join(' '),
-        signature: node.target.join(' '),
-        detail: node.failureSummary ?? '',
-      });
-    }
-  }
-  const { fields, targets } = await page.evaluate(measureInPage, {
+  // htmx's swaps in flight settle before the run reads the page.
+  await page.waitForFunction(() => !document.querySelector('.htmx-request'));
+  await page.evaluate(found.axeSource);
+  // Self-contained by contract (its doc), so its source runs in the page.
+  await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
+  const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
+    attempts: STILL_RUN_ATTEMPTS,
   });
+  found.axeVersion = measured.axeVersion;
+  const { rules, design } = found;
+  const offenders: Offender[] = [];
+  for (const violation of measured.violations) {
+    rules[violation.id] = { impact: violation.impact, help: violation.help };
+    offenders.push(
+      ...violation.nodes.map((node) => ({
+        measure: violation.id,
+        selector: node.selector,
+        kind: kindOf(node.element, design),
+        detail: node.detail,
+      })),
+    );
+  }
   offenders.push(
-    ...fields.map((field) => ({
+    ...measured.fields.map((field) => ({
       measure: FIELD_FONT,
       selector: field.selector,
-      signature: field.signature,
+      kind: kindOf(field.element, design),
       detail: `${field.px} px`,
     })),
-    ...targets.map((target) => ({
+    ...measured.targets.map((target) => ({
       measure: TARGET_SIZE,
       selector: target.selector,
-      signature: target.signature,
+      kind: kindOf(target.element, design),
       detail: `${target.width} × ${target.height} px`,
     })),
   );
-  return { ...tally(offenders), offenders };
+  return { ...tally(offenders), offenders, reruns: measured.reruns };
 }
 
 async function visit(
@@ -275,7 +408,12 @@ export async function auditAccessibility(
 ): Promise<A11yPass> {
   const origin = await fixture.app.listen({ host: '127.0.0.1', port: 0 });
   const browser = await chromium.launch();
-  const found: Found = { rules: {}, axeVersion: 'unknown' };
+  const found: Found = {
+    rules: {},
+    axeVersion: 'unknown',
+    design: await designClasses(),
+    axeSource: await readFile(require.resolve('axe-core'), 'utf8'),
+  };
   const pages: PageA11y[] = [];
   const failures: string[] = [];
   const detail: Record<string, Offender[]> = {};
@@ -283,7 +421,7 @@ export async function auditAccessibility(
     for (const step of visits) {
       const label = `#${step.issue} ${step.name} (${step.target})`;
       try {
-        const { counts, kinds, offenders } = await visit(
+        const { counts, kinds, offenders, reruns } = await visit(
           browser,
           origin,
           fixture,
@@ -295,6 +433,11 @@ export async function auditAccessibility(
         detail[step.id] = offenders;
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
         console.log(`${label}: ${total} accessibility violation(s)`);
+        reruns.forEach((changes) =>
+          console.log(
+            `${label}: axe rerun, the page changed: ${changes.slice(0, 5).join('; ')}`,
+          ),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`${label} (accessibility): ${message}`);

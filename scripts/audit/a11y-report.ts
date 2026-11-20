@@ -31,7 +31,7 @@ export interface PageA11y {
    */
   counts: Record<string, number>;
   /**
-   * Distinct violating element kinds per measure (signatureOf), sorted. Thirty
+   * Distinct violating element kinds per measure (kindOf), sorted. Thirty
    * identical calendar cells are one kind, so the list does not follow the
    * seed: a kind the baseline lacks is what fails the compare.
    */
@@ -48,41 +48,196 @@ export interface A11yReport {
   partial?: true;
 }
 
+/**
+ * What the pass reads off a violating element in the browser (a11y.ts,
+ * `describeInPage`), raw: kindOf decides what of it reaches a kind.
+ */
+export interface ElementDescriptor {
+  /** Lower-case tag name. */
+  tag: string;
+  /** The explicit `role` attribute. */
+  role: string | null;
+  /** The `type` attribute of an input or a button, else null. */
+  type: string | null;
+  /** A link's `href` attribute, else null. */
+  href: string | null;
+  classes: string[];
+  region: RegionDescriptor;
+}
+
+/**
+ * The element's nearest region: a form with an action, a `<section>` with an
+ * id or `aria-labelledby`, a landmark (header, nav, aside, footer, dialog,
+ * main), else the body. What separates two offenders of one shape on a page.
+ */
+export interface RegionDescriptor {
+  tag: string;
+  /** Its `id`, else its `aria-labelledby`. */
+  name: string | null;
+  /** A form's `action` attribute. */
+  action: string | null;
+  classes: string[];
+}
+
 /** One violating node as the pass found it. */
 export interface Offender {
   measure: string;
-  /** A selector or description a person can find the node by. */
+  /** A selector or description a person can find the node by (the detail file only). */
   selector: string;
-  /** What distinguishes the element's kind from other nodes (signatureOf's input). */
-  signature: string;
+  /** kindOf of the element. */
+  kind: string;
   detail: string;
 }
 
 /**
- * Collapses what varies with seeded data or position into one kind: the
- * `:nth-child(3)` index, a uuid and an ISO date. Two nodes of one rule with
- * the same signature are one violation kind.
+ * A word written in code (`garment-care`, `submit`, `wear`): lower-case
+ * letters and hyphens. A uuid (v4 and v7 always carry their version digit),
+ * a date, an index and a seeded name (capitalised, spaced) never match it.
  */
-export function signatureOf(selector: string): string {
-  return selector
-    .replace(/:nth-(child|of-type|last-child|last-of-type)\(\d+\)/g, ':nth-$1')
-    .replace(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-      'ID',
-    )
-    .replace(/\d{4}-\d{2}-\d{2}/g, 'DATE');
+const CODE_WORD = /^[a-z]+(?:-[a-z]+)*$/;
+
+function word(value: string | null): string | null {
+  if (value === null) return null;
+  return CODE_WORD.test(value) ? value : '*';
 }
 
-/** A page's PageA11y `counts` (nodes) and `kinds` (distinct signatures) per measure. */
+/**
+ * The class names a stylesheet defines (`.btn`, `.app-bar`), its comments,
+ * strings and layer names dropped; a name with an escape (Tailwind's `.lg\:btn`) is not one.
+ * a11y.ts feeds it main.css and daisyUI's component sheets: the design
+ * system's vocabulary, never a utility.
+ */
+export function designClassesOf(css: string): Set<string> {
+  const code = css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/"[^"]*"|'[^']*'/g, '')
+    // daisyUI's cascade layers (`@layer daisyui.l1.l2`) are not classes.
+    .replace(/@layer[^{;]*/g, '');
+  return new Set(
+    [...code.matchAll(/\.([a-z][\w-]*)(?![\w\\-])/gi)].map((m) => m[1]),
+  );
+}
+
+/**
+ * Classes kept in a kind: the design system's, less BEM modifiers
+ * (`ms-swatch--blue`), whose value is the garment's data.
+ */
+function designOf(
+  classes: readonly string[],
+  design: ReadonlySet<string>,
+): string {
+  return [...new Set(classes)]
+    .filter((name) => design.has(name) && !name.includes('--'))
+    .sort()
+    .map((name) => `.${name}`)
+    .join('');
+}
+
+/**
+ * A link's or a form action's route shape: its path, each segment not a code
+ * word (an id, a date, a token) as `*`, the query and hash dropped
+ * (`/calendar/2026-11-19?week=1` is `/calendar/*`). Anything but a
+ * root-relative path (another origin, a bare `#anchor`) is `*`: an outside
+ * URL's path is a shop's, not ours.
+ */
+function routeShape(url: string): string {
+  if (!url.startsWith('/') || url.startsWith('//')) return '*';
+  const path = url.split(/[?#]/, 1)[0];
+  return path
+    .split('/')
+    .map((segment) => (segment === '' ? '' : word(segment)))
+    .join('/');
+}
+
+function regionKind(
+  region: RegionDescriptor,
+  design: ReadonlySet<string>,
+): string {
+  const name = word(region.name);
+  const action = region.action === null ? '' : ` ${routeShape(region.action)}`;
+  return `${region.tag}${name === null ? '' : `#${name}`}${designOf(region.classes, design)}${action}`;
+}
+
+/**
+ * The element's kind, from the element itself, never from a selector string
+ * (#1207: every parse of axe's selectors leaked the next escape or data
+ * value). Tag, explicit role, an input's or button's type, its design-system
+ * classes, a link's route shape and its region: `a.link /garments/* in
+ * main.page-shell`, `button[type=submit].btn in form /calendar/plan-week`. No
+ * attribute value but a code word reaches it, so the
+ * seed and the clock cannot, and thirty calendar cells are one kind.
+ */
+export function kindOf(
+  element: ElementDescriptor,
+  design: ReadonlySet<string>,
+): string {
+  const role = word(element.role);
+  const type = word(element.type);
+  return [
+    element.tag,
+    role === null ? '' : `[role=${role}]`,
+    type === null ? '' : `[type=${type}]`,
+    designOf(element.classes, design),
+    element.href === null ? '' : ` ${routeShape(element.href)}`,
+    ` in ${regionKind(element.region, design)}`,
+  ].join('');
+}
+
+/** A watch on the page for one run: what changed since it began (a line each), and its end. */
+export interface PageWatch {
+  changes(): string[];
+  stop(): void;
+}
+
+/** One axe run and two reruns before a page that keeps changing fails. */
+export const STILL_RUN_ATTEMPTS = 3;
+
+/** runWhileStill's answer: the still run's result and what each discarded run saw change. */
+export interface StillRun<T> {
+  result: T;
+  discarded: string[][];
+}
+
+/**
+ * `run`'s result from a run during which the page held still: a run that saw
+ * a change (a `load` trigger, a poll, a late module swapping the DOM) is
+ * discarded and rerun, and after `attempts` the page fails, naming what
+ * changed; a half-stale result is never returned (#1207). a11y.ts injects it
+ * into the page by its source, so it must reference nothing outside itself.
+ */
+export async function runWhileStill<T>(
+  watch: () => PageWatch,
+  run: () => Promise<T>,
+  attempts: number,
+): Promise<StillRun<T>> {
+  const discarded: string[][] = [];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const watching = watch();
+    try {
+      const result = await run();
+      const changes = [...new Set(watching.changes())];
+      if (changes.length === 0) return { result, discarded };
+      discarded.push(changes);
+    } finally {
+      watching.stop();
+    }
+  }
+  const last = discarded.at(-1) ?? [];
+  throw new Error(
+    `the page changed during each of ${attempts} axe runs: ${last.slice(0, 5).join('; ')}`,
+  );
+}
+
+/** A page's PageA11y `counts` (nodes) and `kinds` (distinct kinds) per measure. */
 export function tally(
-  offenders: readonly Pick<Offender, 'measure' | 'signature'>[],
+  offenders: readonly Pick<Offender, 'measure' | 'kind'>[],
 ): Pick<PageA11y, 'counts' | 'kinds'> {
   const counts: Record<string, number> = {};
   const kinds = new Map<string, Set<string>>();
-  for (const { measure, signature } of offenders) {
+  for (const { measure, kind } of offenders) {
     counts[measure] = (counts[measure] ?? 0) + 1;
     const set = kinds.get(measure) ?? new Set<string>();
-    set.add(signatureOf(signature));
+    set.add(kind);
     kinds.set(measure, set);
   }
   return {

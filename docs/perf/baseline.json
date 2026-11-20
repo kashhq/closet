@@ -15979,7 +15979,7 @@
    "width": 390,
    "height": 844
   },
-  "axeVersion": "4.14.0",
+  "axeVersion": "4.14.1",
   "rules": {
    "label-content-name-mismatch": {
     "impact": "serious",
@@ -16006,19 +16006,17 @@
     "target": "GET /",
     "counts": {
      "label-content-name-mismatch": 1,
-     "target < 44 px": 7
+     "target < 44 px": 4
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "button[hx-target=\"closest [data-today-row]\"]"
+      "button[type=button].btn.btn-ghost.btn-xs in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm",
-      "a link.link-hover.px-2.self-start.text-sm",
-      "button button btn.btn-ghost.btn-xs",
-      "button submit btn.btn-ghost.btn-xs.font-normal.hover:text-base-content.text-muted",
-      "button submit btn.btn-primary.btn-sm.btn-soft",
-      "input file photo sr-only"
+      "a.btn.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.link.link-hover /outfits/ideas in main.page-shell",
+      "button[type=button].btn.btn-ghost.btn-xs in main.page-shell",
+      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week"
      ]
     }
    },
@@ -16033,16 +16031,16 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-outline.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16057,15 +16055,15 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-outline.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16080,18 +16078,17 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a badge.badge-primary.badge-sm.capitalize.cursor-pointer.gap-1.no-underline.shrink-0.whitespace-nowrap",
-      "a badge.badge-primary.badge-sm.cursor-pointer.gap-1.no-underline.shrink-0.whitespace-nowrap",
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-outline.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.badge.badge-primary.badge-sm /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16106,19 +16103,19 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a badge.badge-info.badge-sm.cursor-pointer.gap-1.no-underline.shrink-0.whitespace-nowrap",
-      "a badge.badge-sm.badge-warning.cursor-pointer.gap-1.no-underline.shrink-0.whitespace-nowrap",
-      "a btn.btn-sm",
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-outline.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.badge.badge-info.badge-sm /wardrobe in main.page-shell",
+      "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-sm /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16133,17 +16130,17 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a badge.badge-sm.badge-warning.cursor-pointer.gap-1.no-underline.shrink-0.whitespace-nowrap",
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-outline.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16158,16 +16155,16 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".max-w-32"
+      "summary.btn.btn-primary.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start",
-      "summary btn.btn-primary.btn-sm.flex-nowrap.max-w-32.rounded-full"
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-primary.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16181,10 +16178,10 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm",
-      "button button btn.btn-primary.btn-sm",
-      "button button btn.btn-sm",
-      "input checkbox all checkbox.checkbox-sm"
+      "a.btn.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "button[type=button].btn.btn-primary.btn-sm in main.page-shell",
+      "button[type=button].btn.btn-sm in main.page-shell",
+      "input[type=checkbox].checkbox.checkbox-sm in form#bulk-form /wardrobe/bulk"
      ]
     }
    },
@@ -16198,8 +16195,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm",
-      "button submit btn.btn-primary.btn-sm"
+      "a.btn.btn-ghost.btn-sm /capsules/* in header.app-bar",
+      "button[type=submit].btn.btn-primary.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16213,8 +16210,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-primary.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
      ]
     }
    },
@@ -16228,10 +16225,10 @@
     },
     "kinds": {
      "target < 44 px": [
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button submit btn.btn-primary.btn-sm",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=submit].btn.btn-primary.btn-sm in main.page-shell",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16245,9 +16242,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16261,10 +16258,12 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-sm",
-      "a btn.btn-outline.btn-sm",
-      "a btn.btn-primary.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /capsules/*/edit in header.app-bar",
+      "a.btn.btn-outline.btn-sm /outfits/ideas in main.page-shell",
+      "a.btn.btn-outline.btn-sm /styling in main.page-shell",
+      "a.btn.btn-outline.btn-sm /wardrobe in main.page-shell",
+      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
      ]
     }
    },
@@ -16278,7 +16277,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar"
      ]
     }
    },
@@ -16292,8 +16291,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-error.btn-outline.btn-sm.mt-8.w-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules/* in header.app-bar",
+      "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16307,16 +16306,13 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a inline-block.link.link-primary.mt-2.text-sm",
-      "a link.link-primary.text-sm",
-      "button button btn.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.text-error",
-      "input checkbox capsuleIds btn.btn-sm.rounded-full",
-      "input radio away btn.btn-sm.checked:btn-warning.rounded-full",
-      "input radio away btn.btn-sm.rounded-full",
-      "input radio condition btn.btn-sm.checked:btn-warning.rounded-full",
-      "input radio condition btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.link.link-primary * in section#garment-details-title",
+      "a.link.link-primary /wardrobe/*/edit in section#garment-repairs",
+      "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
+      "input[type=checkbox].btn.btn-sm in section#garment-capsules",
+      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/away",
+      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/condition"
      ]
     }
    },
@@ -16330,9 +16326,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-outline.btn-sm.mb-4.w-full",
-      "input radio warmth btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
+      "input[type=radio].btn.btn-sm in form /wardrobe"
      ]
     }
    },
@@ -16347,17 +16343,15 @@
     },
     "kinds": {
      "nested-interactive": [
-      ".color-ms > summary"
+      "summary in form /wardrobe/*"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button button ms-pill-remove",
-      "button submit btn.btn-ghost.btn-sm.text-error",
-      "input radio kind btn.btn-sm.rounded-full",
-      "input radio type btn.btn-ghost.btn-sm.rounded-full",
-      "input radio type btn.btn-sm.rounded-full",
-      "input radio warmth btn.btn-ghost.btn-sm.rounded-full",
-      "input radio warmth btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
+      "button[type=button].ms-pill-remove in form /wardrobe/*",
+      "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/*/repairs/*/delete",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*",
+      "input[type=radio].btn.btn-sm in form /wardrobe/*",
+      "input[type=radio].btn.btn-sm in form.card /wardrobe/*/repairs"
      ]
     }
    },
@@ -16372,17 +16366,15 @@
     },
     "kinds": {
      "nested-interactive": [
-      ".color-ms > summary"
+      "summary in form /wardrobe/*/clone"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.self-start",
-      "button button ms-pill-remove",
-      "button submit btn.btn-primary.btn-sm.shrink-0",
-      "input radio type btn.btn-ghost.btn-sm.rounded-full",
-      "input radio type btn.btn-sm.rounded-full",
-      "input radio warmth btn.btn-ghost.btn-sm.rounded-full",
-      "input radio warmth btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
+      "button[type=button].ms-pill-remove in form /wardrobe/*/clone",
+      "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/*/clone",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
+      "input[type=radio].btn.btn-sm in form /wardrobe/*/clone"
      ]
     }
    },
@@ -16396,7 +16388,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/new in header.app-bar"
      ]
     }
    },
@@ -16410,11 +16402,11 @@
     },
     "kinds": {
      "target < 44 px": [
-      "button button switch btn.btn-outline.btn-sm.rounded-full",
-      "input checkbox styling-lock",
-      "summary [&::-webkit-details-marker]:hidden.cursor-pointer.flex.flex-col.list-none.pt-2.px-4.relative",
-      "summary btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.max-w-36.rounded-full"
+      "button[role=switch][type=button].btn.btn-outline.btn-sm in form#styling-form /styling",
+      "input[type=checkbox] in form#styling-form /styling",
+      "summary in aside#styling-aside.page-aside",
+      "summary.btn.btn-ghost.btn-sm in main.page-shell",
+      "summary.btn.btn-outline.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16428,10 +16420,10 @@
     },
     "kinds": {
      "target < 44 px": [
-      "button button switch btn.btn-outline.btn-sm.rounded-full",
-      "input checkbox styling-lock",
-      "summary btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.max-w-36.rounded-full"
+      "button[role=switch][type=button].btn.btn-outline.btn-sm in form#styling-form /styling",
+      "input[type=checkbox] in form#styling-form /styling",
+      "summary.btn.btn-ghost.btn-sm in main.page-shell",
+      "summary.btn.btn-outline.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16445,10 +16437,10 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "input checkbox styling-lock",
-      "summary btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.max-w-36.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
+      "input[type=checkbox] in form#styling-form /styling",
+      "summary.btn.btn-ghost.btn-sm in main.page-shell",
+      "summary.btn.btn-outline.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16462,11 +16454,11 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "input checkbox styling-lock",
-      "summary [&::-webkit-details-marker]:hidden.cursor-pointer.flex.flex-col.list-none.pt-2.px-4.relative",
-      "summary btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.max-w-36.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "input[type=checkbox] in form#styling-form /styling",
+      "summary in aside#styling-aside.page-aside",
+      "summary.btn.btn-ghost.btn-sm in main.page-shell",
+      "summary.btn.btn-outline.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16480,7 +16472,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-primary.btn-sm"
+      "a.btn.btn-primary.btn-sm /styling in header.app-bar"
      ]
     }
    },
@@ -16494,9 +16486,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-primary.btn-sm",
-      "button submit outfitId after:absolute.after:inset-0.after:rounded-box.block.focus-visible:after:outline-2.focus-visible:after:outline-primary.text-left.truncate.w-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.btn.btn-primary.btn-sm /styling in header.app-bar",
+      "button[type=submit] in form /calendar"
      ]
     }
    },
@@ -16511,17 +16503,13 @@
     },
     "kinds": {
      "image-redundant-alt": [
-      ".size-20.object-cover[alt=\"Navy cap\"]",
-      ".size-20.object-cover[alt=\"Running shoes\"]",
-      ".size-20.object-cover[alt=\"Running shorts\"]",
-      ".size-20.object-cover[alt=\"Running tee\"]"
+      "img in section#outfit-garments-title"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a leading-tight.link.link-hover.text-center.text-xs",
-      "button button btn.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.text-error",
-      "input file photo sr-only"
+      "a.btn.btn-circle.btn-ghost.btn-sm /outfits in header.app-bar",
+      "a.link.link-hover /calendar in main.page-shell",
+      "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
+      "input[type=file] in form /calendar/*/selfie"
      ]
     }
    },
@@ -16532,19 +16520,19 @@
     "target": "GET /calendar",
     "counts": {
      "label-content-name-mismatch": 7,
-     "target < 44 px": 24
+     "target < 44 px": 27
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a[href$=\"#day-DATE\"]"
+      "a * in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.btn-square",
-      "button button -ms-3.btn.btn-ghost.btn-sm.font-normal.lg:justify-start.lg:ms-0.lg:row-start-6.mt-1.text-muted",
-      "button submit btn.btn-ghost.btn-xs.font-normal.hover:text-base-content.text-muted",
-      "button submit btn.btn-primary.btn-sm.btn-soft",
-      "input file photo sr-only",
-      "summary btn.btn-ghost.btn-xs.font-normal.text-muted"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
+      "button[type=button].btn.btn-ghost.btn-sm in section#*",
+      "button[type=submit].btn.btn-ghost.btn-xs in form /calendar/*/worn",
+      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
+      "input[type=file] in form /calendar/*/selfie",
+      "summary.btn.btn-ghost.btn-xs in section#*"
      ]
     }
    },
@@ -16555,17 +16543,17 @@
     "target": "GET /calendar",
     "counts": {
      "label-content-name-mismatch": 7,
-     "target < 44 px": 15
+     "target < 44 px": 18
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a[href$=\"#day-DATE\"]"
+      "a * in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.btn-square",
-      "button button -ms-3.btn.btn-ghost.btn-sm.font-normal.lg:justify-start.lg:ms-0.lg:row-start-6.mt-1.text-muted",
-      "button submit btn.btn-primary.btn-sm.btn-soft",
-      "summary btn.btn-ghost.btn-xs.font-normal.text-muted"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
+      "button[type=button].btn.btn-ghost.btn-sm in section#*",
+      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
+      "summary.btn.btn-ghost.btn-xs in section#*"
      ]
     }
    },
@@ -16580,16 +16568,10 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a[aria-describedby=\"weather-day-DATE\"]",
-      "a[aria-label=\"Friday, Nov 27\"]",
-      "a[aria-label=\"Monday, Nov 30\"]",
-      "a[aria-label=\"Saturday, Nov 28\"]",
-      "a[aria-label=\"Sunday, Nov 29\"]",
-      "a[aria-label=\"Thursday, Nov 19, Run, Worn\"]",
-      "a[data-month-day=\"DATE\"]"
+      "a /calendar in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.btn-square"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
      ]
     }
    },
@@ -16604,10 +16586,10 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a[data-month-day=\"DATE\"]"
+      "a /calendar in main.page-shell"
      ],
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.btn-square"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
      ]
     }
    },
@@ -16621,9 +16603,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-outline.btn-sm.rounded-full",
-      "a btn.btn-primary.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
+      "a.btn.btn-outline.btn-sm /calendar/plan in nav",
+      "a.btn.btn-primary.btn-sm /calendar/plan in nav"
      ]
     }
    },
@@ -16637,7 +16619,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-primary.btn-sm"
+      "a.btn.btn-primary.btn-sm /trips/new in header.app-bar"
      ]
     }
    },
@@ -16651,13 +16633,16 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-xs",
-      "a font-medium.link.link-hover.min-w-0.text-sm",
-      "button submit btn.btn-ghost.btn-square.btn-xs",
-      "button submit btn.btn-sm.join-item",
-      "input checkbox packed checkbox.checkbox-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /trips/*/edit in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /outfits/ideas in section#trip-outfits-heading",
+      "a.btn.btn-ghost.btn-xs /trips/*/outfits/new in section#trip-outfits-heading",
+      "a.link.link-hover /outfits/* in section#trip-outfits-heading",
+      "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/items/packed",
+      "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/outfits/*/delete",
+      "button[type=submit].btn.btn-sm in form /trips/*/items",
+      "input[type=checkbox].checkbox.checkbox-sm in form /trips/*/items/packed",
+      "input[type=checkbox].checkbox.checkbox-sm in form /trips/*/packed"
      ]
     }
    },
@@ -16671,7 +16656,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar"
      ]
     }
    },
@@ -16685,8 +16670,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-error.btn-outline.btn-sm.mt-8.w-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
+      "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16700,9 +16685,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-outline.btn-sm.rounded-full",
-      "a btn.btn-primary.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
+      "a.btn.btn-outline.btn-sm /trips/*/outfits/new in nav",
+      "a.btn.btn-primary.btn-sm /trips/*/outfits/new in nav"
      ]
     }
    },
@@ -16716,9 +16701,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16732,11 +16717,11 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-block.btn-outline.btn-primary.btn-sm.mt-auto",
-      "a link.link-hover.py-1.self-start.text-base-content",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "a.btn.btn-block.btn-outline.btn-primary.btn-sm /wardrobe/*/bought in section#inbox-own",
+      "a.link.link-hover * in section#inbox-own",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16750,8 +16735,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a inline-block.link.link-primary.mt-2.text-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
+      "a.link.link-primary * in section#garment-details-title"
      ]
     }
    },
@@ -16767,33 +16752,18 @@
     },
     "kinds": {
      "heading-order": [
-      "#garment-care-label-title"
+      "h3 in form /wardrobe"
      ],
      "nested-interactive": [
-      ".color-ms > summary"
+      "summary in form /wardrobe"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-outline.btn-sm.mb-4.w-full",
-      "button button ms-pill-remove",
-      "input checkbox materials btn.btn-sm.rounded-full",
-      "input radio careBleach btn.btn-sm.rounded-full",
-      "input radio careDry btn.btn-sm.rounded-full",
-      "input radio careDryClean btn.btn-sm.rounded-full",
-      "input radio careIron btn.btn-sm.rounded-full",
-      "input radio careWash btn.btn-sm.rounded-full",
-      "input radio fit btn.btn-ghost.btn-sm.rounded-full",
-      "input radio fit btn.btn-sm.rounded-full",
-      "input radio formality btn.btn-ghost.btn-sm.rounded-full",
-      "input radio formality btn.btn-sm.rounded-full",
-      "input radio pattern btn.btn-ghost.btn-sm.rounded-full",
-      "input radio pattern btn.btn-sm.rounded-full",
-      "input radio sleeve btn.btn-ghost.btn-sm.rounded-full",
-      "input radio sleeve btn.btn-sm.rounded-full",
-      "input radio type btn.btn-ghost.btn-sm.rounded-full",
-      "input radio type btn.btn-sm.rounded-full",
-      "input radio warmth btn.btn-ghost.btn-sm.rounded-full",
-      "input radio warmth btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
+      "button[type=button].ms-pill-remove in form /wardrobe",
+      "input[type=checkbox].btn.btn-sm in form /wardrobe",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe",
+      "input[type=radio].btn.btn-sm in form /wardrobe"
      ]
     }
    },
@@ -16807,7 +16777,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar"
      ]
     }
    },
@@ -16822,18 +16792,17 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".justify-between.items-center.gap-2:nth-child > form[action=\"/outfits/ideas/allow\"][method=\"post\"][hx-boost=\"false\"] > .btn-xs.btn-ghost[type=\"submit\"]"
+      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a link.link-primary.mt-1.text-sm",
-      "button submit btn.btn-ghost.btn-xs",
-      "button submit btn.btn-primary.btn-sm.self-end",
-      "input checkbox palette btn.btn-sm.rounded-full",
-      "input checkbox styles btn.btn-sm.rounded-full",
-      "input radio budget btn.btn-ghost.btn-sm.rounded-full",
-      "input radio budget btn.btn-sm.rounded-full",
-      "input radio kind btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
+      "a.link.link-primary /auth/profile/week in form /auth/profile/style",
+      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow",
+      "button[type=submit].btn.btn-primary.btn-sm in form /auth/profile/style/rules",
+      "input[type=checkbox].btn.btn-sm in form /auth/profile/style",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /auth/profile/style",
+      "input[type=radio].btn.btn-sm in form /auth/profile/style",
+      "input[type=radio].btn.btn-sm in form /auth/profile/style/rules"
      ]
     }
    },
@@ -16847,10 +16816,10 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a link.link-primary.text-xs",
-      "button submit btn.btn-ghost.btn-sm",
-      "button submit btn.btn-primary.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.link.link-primary * in main.page-shell",
+      "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/orders/*/dismiss",
+      "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/orders/*/add"
      ]
     }
    },
@@ -16864,8 +16833,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.rounded-full"
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16879,9 +16848,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-sm",
-      "summary btn.btn-outline.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16895,9 +16864,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm",
-      "a link.link-hover",
-      "summary btn.btn-outline.btn-sm.rounded-full"
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
+      "a.link.link-hover /outfits/ideas in main.page-shell",
+      "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
    },
@@ -16911,12 +16880,13 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-xs",
-      "a btn.btn-outline.btn-sm",
-      "a btn.btn-outline.btn-sm.self-start",
-      "a btn.btn-outline.btn-xs",
-      "a btn.btn-primary.btn-xs"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
+      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
+      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
+      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
      ]
     }
    },
@@ -16930,12 +16900,13 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-xs",
-      "a btn.btn-outline.btn-sm",
-      "a btn.btn-outline.btn-sm.self-start",
-      "a btn.btn-outline.btn-xs",
-      "a btn.btn-primary.btn-xs"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
+      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
+      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
+      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
      ]
     }
    },
@@ -16949,8 +16920,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-primary.btn-sm.self-start"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "button[type=button].btn.btn-primary.btn-sm in section#recap-summary.card"
      ]
     }
    },
@@ -16964,9 +16935,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "a btn.btn-ghost.btn-sm",
-      "a btn.btn-primary.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /wardrobe/recap in nav",
+      "a.btn.btn-primary.btn-sm /calendar in main.page-shell"
      ]
     }
    },
@@ -16980,12 +16951,12 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-sm.btn-soft.rounded-full",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "button button btn.btn-ghost.btn-sm.btn-square.shrink-0",
-      "input text keyword grow.min-w-0",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "a.btn.btn-sm.btn-soft /wardrobe/tag in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
+      "input[type=text] in form#search-form /wardrobe",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16999,9 +16970,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "input radio condition btn.btn-sm.checked:btn-warning.rounded-full",
-      "input radio condition btn.btn-sm.rounded-full"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/condition"
      ]
     }
    },
@@ -17015,9 +16985,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -17031,11 +17001,11 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-outline.btn-sm",
-      "a btn.btn-primary.btn-sm",
-      "button button btn.btn-circle.btn-ghost.btn-sm",
-      "summary btn.btn-circle.btn-ghost.btn-sm.text-xl",
-      "summary btn.btn-ghost.btn-sm.flex-nowrap.gap-1.h-auto.max-w-full.min-h-8.px-1.text-start"
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
+      "a.btn.btn-primary.btn-sm /wardrobe/new in main.page-shell",
+      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "summary.btn.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -17049,9 +17019,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "input checkbox styling-lock",
-      "summary [&::-webkit-details-marker]:hidden.cursor-pointer.flex.flex-col.list-none.pt-2.px-4.relative",
-      "summary btn.btn-ghost.btn-sm"
+      "input[type=checkbox] in form#styling-form /styling",
+      "summary in aside#styling-aside.page-aside",
+      "summary.btn.btn-ghost.btn-sm in main.page-shell"
      ]
     }
    },
@@ -17065,7 +17035,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.shrink-0"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17079,7 +17049,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.shrink-0"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17093,8 +17063,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-sm.self-start",
-      "a link.link-hover.self-center.text-sm"
+      "a.btn.btn-sm /auth/sign-out-everywhere in section#sign-out.card",
+      "a.link.link-hover /about in main.page-shell"
      ]
     }
    },
@@ -17108,7 +17078,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.shrink-0"
+      "a.btn.btn-ghost.btn-sm /auth/register in header.app-bar"
      ]
     }
    },
@@ -17122,7 +17092,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-ghost.btn-sm.shrink-0"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17136,7 +17106,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17150,7 +17120,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17164,7 +17134,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17178,7 +17148,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17192,9 +17162,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button submit btn.btn-ghost.btn-xs.text-error",
-      "button submit btn.btn-primary.btn-sm.self-start"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
+      "button[type=submit].btn.btn-ghost.btn-xs in form /auth/tokens/*/revoke",
+      "button[type=submit].btn.btn-primary.btn-sm in form /auth/tokens"
      ]
     }
    },
@@ -17217,15 +17187,16 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      ".btn-active",
-      "button[value=\"cm\"]"
+      "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit",
+      "button[type=submit].btn.btn-sm in form /auth/profile/sizes/unit"
      ],
      "target < 44 px": [
-      "a btn.btn-circle.btn-ghost.btn-sm",
-      "button submit btn.btn-ghost.btn-sm",
-      "button submit btn.btn-primary.btn-sm",
-      "button submit unit btn.btn-active.btn-sm.join-item",
-      "button submit unit btn.btn-sm.join-item"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
+      "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit",
+      "button[type=submit].btn.btn-ghost.btn-sm in form.card.card-body /auth/profile/sizes/brands/*",
+      "button[type=submit].btn.btn-primary.btn-sm in form.card.card-body /auth/profile/sizes/brands",
+      "button[type=submit].btn.btn-primary.btn-sm in form.card.card-body /auth/profile/sizes/brands/*",
+      "button[type=submit].btn.btn-sm in form /auth/profile/sizes/unit"
      ]
     }
    }
