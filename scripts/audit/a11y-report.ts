@@ -59,18 +59,40 @@ export interface Offender {
 }
 
 /**
- * Collapses what varies with seeded data or position into one kind: the
- * `:nth-child(3)` index, a uuid and an ISO date. Two nodes of one rule with
- * the same signature are one violation kind.
+ * An attribute selector with its value: `[name="value"]`, `[name=value i]`.
+ * The quoted alternatives come first because a quoted value may hold `]`.
+ */
+const ATTRIBUTE =
+  /\[([\w:@.-]+)([~|^$*]?=)("[^"]*"|'[^']*'|[^\]\s]*)(\s+[iIsS])?\]/g;
+
+/** A `data-*` value naming a role-like constant (`data-kind="grid"`), never data. */
+const ROLE_LIKE = /^[a-z][a-z-]*$/;
+
+/**
+ * Reduces an axe selector to the element's kind by construction: attribute
+ * names stay, and so do the values that are stable identifiers (`type`, `role`
+ * and a role-like `data-*` constant). Every other value (aria-label, href, alt,
+ * title, a seeded date or id, nth-child's index) becomes `*`, so nothing the
+ * seed or the clock produces can reach a kind; a regex per data shape would
+ * miss the next one (#1207). Two nodes of one rule with the same signature are
+ * one violation kind.
  */
 export function signatureOf(selector: string): string {
   return selector
-    .replace(/:nth-(child|of-type|last-child|last-of-type)\(\d+\)/g, ':nth-$1')
+    .replace(ATTRIBUTE, (_match, name: string, op: string, raw: string) => {
+      const value = raw.replace(/^(["'])(.*)\1$/, '$2');
+      const stable =
+        op === '=' &&
+        (name === 'type' ||
+          name === 'role' ||
+          (name.startsWith('data-') && ROLE_LIKE.test(value)));
+      return `[${name}${op}${stable ? `"${value}"` : '"*"'}]`;
+    })
     .replace(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-      'ID',
+      /:nth-(child|of-type|last-child|last-of-type)\([^)]*\)/g,
+      ':nth-$1(*)',
     )
-    .replace(/\d{4}-\d{2}-\d{2}/g, 'DATE');
+    .replace(/#[\w-]+/g, '#*');
 }
 
 /** A page's PageA11y `counts` (nodes) and `kinds` (distinct signatures) per measure. */

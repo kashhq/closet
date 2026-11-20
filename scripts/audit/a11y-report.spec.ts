@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   type A11yReport,
@@ -9,6 +11,8 @@ import {
   tally,
   TARGET_SIZE,
 } from './a11y-report';
+
+const BASELINE = join(__dirname, '..', '..', 'docs', 'perf', 'baseline.json');
 
 type PageSpec = {
   counts?: Record<string, number>;
@@ -41,13 +45,56 @@ function report(
 }
 
 describe('signatureOf and countKinds', () => {
-  it('strips positions, ids and dates from a selector', () => {
-    expect(signatureOf('.cell:nth-child(7) > a')).toBe('.cell:nth-child > a');
+  it('gives one kind to selectors differing only by a date or an index', () => {
+    expect(signatureOf('a[aria-label="Thursday, Nov 20"]')).toBe(
+      signatureOf('a[aria-label="Friday, Nov 27, Run, Worn"]'),
+    );
+    expect(signatureOf('a[aria-label="Thursday, Nov 20"]')).toBe(
+      'a[aria-label="*"]',
+    );
+    expect(signatureOf('.cell:nth-child(7) > a')).toBe(
+      signatureOf('.cell:nth-child(12) > a'),
+    );
+    expect(signatureOf('.cell:nth-child(7) > a')).toBe(
+      '.cell:nth-child(*) > a',
+    );
+  });
+
+  it('keeps attribute names and only the stable values', () => {
     expect(
       signatureOf(
         'a[href="/g/123e4567-e89b-12d3-a456-426614174000/2026-11-19"]',
       ),
-    ).toBe('a[href="/g/ID/DATE"]');
+    ).toBe('a[href="*"]');
+    expect(signatureOf('#abc-123 > button[hx-target="closest [data-x]"]')).toBe(
+      '#* > button[hx-target="*"]',
+    );
+    expect(
+      signatureOf(
+        'input[type="text"][role=combobox][data-kind="grid"][data-month-day="2026-11-19"][alt=\'a b\' i]',
+      ),
+    ).toBe(
+      'input[type="text"][role="combobox"][data-kind="grid"][data-month-day="*"][alt="*"]',
+    );
+  });
+
+  it('holds every kind of the committed demo baseline free of data', () => {
+    const { a11y } = JSON.parse(readFileSync(BASELINE, 'utf8')) as {
+      a11y: A11yReport;
+    };
+    // A kind that changes when its digits do contained data: signatureOf
+    // would have replaced it, so every kind is a fixed point of it.
+    const otherDigits = (text: string) =>
+      text.replace(/\d/g, (d) => String((Number(d) + 1) % 10));
+    const kinds = a11y.pages.flatMap((page) =>
+      Object.values(page.kinds).flat(),
+    );
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) {
+      expect(signatureOf(kind)).toBe(kind);
+      expect(signatureOf(otherDigits(kind))).toBe(otherDigits(kind));
+      expect(kind).not.toMatch(/\d{4}-\d{2}-\d{2}|\b\d+ days?\b/);
+    }
   });
 
   it('tallies nodes and sorted distinct kinds per measure', () => {
@@ -58,7 +105,7 @@ describe('signatureOf and countKinds', () => {
     const other = { measure: TARGET_SIZE, signature: 'button' };
     expect(tally([...cells, other])).toEqual({
       counts: { [TARGET_SIZE]: 5 },
-      kinds: { [TARGET_SIZE]: ['.cell:nth-child > a', 'button'] },
+      kinds: { [TARGET_SIZE]: ['.cell:nth-child(*) > a', 'button'] },
     });
     expect(tally([])).toEqual({ counts: {}, kinds: {} });
   });
