@@ -8,7 +8,6 @@ import {
   compareA11y,
   designClassesOf,
   type ElementDescriptor,
-  isRealChange,
   kindOf,
   renderA11y,
   renderA11yComparison,
@@ -277,6 +276,24 @@ describe('runWhileStill', () => {
     expect(runs).toBe(1);
   });
 
+  it("keeps the last run's throw as the cause when every run changed and threw", async () => {
+    const { log, watch } = stubPage();
+    const failure = new Error('node is detached');
+    const error = await runWhileStill(
+      watch,
+      () => {
+        log.push('the children of main');
+        return Promise.reject(failure);
+      },
+      STILL_RUN_ATTEMPTS,
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      'the page changed during each of 3 axe runs',
+    );
+    expect((error as Error).cause).toBe(failure);
+  });
+
   it('runs without its module: a11y.ts injects it into the page by source', async () => {
     // A fresh context has none of the module's scope, as the page has none.
     const injected = runInNewContext(
@@ -286,49 +303,6 @@ describe('runWhileStill', () => {
     await expect(
       injected(watch, () => Promise.resolve('still'), 1),
     ).resolves.toEqual({ result: 'still', discarded: [] });
-  });
-});
-
-describe('isRealChange', () => {
-  const classRecord = (oldValue: string, now: string) => ({
-    type: 'attributes',
-    attributeName: 'class',
-    oldValue,
-    target: { getAttribute: () => now },
-  });
-
-  it('ignores a class toggle that only touches htmx-* classes', () => {
-    expect(isRealChange(classRecord('btn', 'btn htmx-request'))).toBe(false);
-    expect(
-      isRealChange(classRecord('btn htmx-swapping', 'btn htmx-settling')),
-    ).toBe(false);
-    expect(isRealChange(classRecord('btn htmx-added', 'btn'))).toBe(false);
-  });
-
-  it('counts a real class change, even beside an htmx one', () => {
-    expect(isRealChange(classRecord('btn', 'btn btn-primary'))).toBe(true);
-    expect(isRealChange(classRecord('btn htmx-request', 'btn-primary'))).toBe(
-      true,
-    );
-  });
-
-  it('counts a childList record and any other attribute', () => {
-    const record = {
-      attributeName: null,
-      oldValue: null,
-      target: { getAttribute: () => null },
-    };
-    expect(isRealChange({ ...record, type: 'childList' })).toBe(true);
-    expect(
-      isRealChange({ ...record, type: 'attributes', attributeName: 'hidden' }),
-    ).toBe(true);
-  });
-
-  it('runs without its module: a11y.ts injects it into the page by source', () => {
-    const injected = runInNewContext(
-      `(${String(isRealChange)})`,
-    ) as typeof isRealChange;
-    expect(injected(classRecord('a', 'a htmx-request'))).toBe(false);
   });
 });
 

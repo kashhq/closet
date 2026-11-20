@@ -189,43 +189,6 @@ export interface PageWatch {
   stop(): void;
 }
 
-/** The slice of a MutationRecord that isRealChange reads. */
-export interface ChangeRecord {
-  type: string;
-  attributeName: string | null;
-  oldValue: string | null;
-  /** Read for a `class` record: the node's class list now. */
-  target: Node | { getAttribute(name: string): string | null };
-}
-
-/**
- * Whether a DOM mutation is a change to what axe judged. htmx's own
- * bookkeeping (`htmx-request`, `htmx-settling`, `htmx-swapping`,
- * `htmx-added`, toggled around every request and swap) is not: a `class`
- * record whose old and new class sets differ only in `htmx-*` classes is
- * dropped, so a poll cannot fail every attempt (#1213). A swap's childList
- * record still counts. The watch observes with `attributeOldValue`. a11y.ts
- * injects it by its source, so it must reference nothing outside itself.
- */
-export function isRealChange(record: ChangeRecord): boolean {
-  if (record.type !== 'attributes' || record.attributeName !== 'class') {
-    return true;
-  }
-  const classesOf = (value: string | null) =>
-    new Set((value ?? '').split(/\s+/).filter((name) => name !== ''));
-  const before = classesOf(record.oldValue);
-  const after = classesOf(
-    'getAttribute' in record.target
-      ? record.target.getAttribute('class')
-      : null,
-  );
-  const isHtmx = (name: string) => name.startsWith('htmx-');
-  return (
-    [...before].some((name) => !after.has(name) && !isHtmx(name)) ||
-    [...after].some((name) => !before.has(name) && !isHtmx(name))
-  );
-}
-
 /** One axe run and two reruns before a page that keeps changing fails. */
 export const STILL_RUN_ATTEMPTS = 3;
 
@@ -248,6 +211,7 @@ export async function runWhileStill<T>(
   attempts: number,
 ): Promise<StillRun<T>> {
   const discarded: string[][] = [];
+  let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const watching = watch();
     try {
@@ -263,6 +227,7 @@ export async function runWhileStill<T>(
         return { result: outcome.result, discarded };
       }
       discarded.push(changes);
+      lastError = 'error' in outcome ? outcome.error : undefined;
     } finally {
       watching.stop();
     }
@@ -270,6 +235,8 @@ export async function runWhileStill<T>(
   const last = discarded.at(-1) ?? [];
   throw new Error(
     `the page changed during each of ${attempts} axe runs: ${last.slice(0, 5).join('; ')}`,
+    // The last run's own throw (axe's detached node) is the symptom to debug.
+    lastError === undefined ? undefined : { cause: lastError },
   );
 }
 

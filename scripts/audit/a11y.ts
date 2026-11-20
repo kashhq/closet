@@ -8,7 +8,6 @@ import {
   type ElementDescriptor,
   FIELD_FONT,
   FIELD_FONT_MIN_PX,
-  isRealChange,
   kindOf,
   type Offender,
   runWhileStill,
@@ -149,7 +148,6 @@ async function measureInPage(limits: {
   const injected = window as unknown as {
     axe: typeof Axe;
     closetRunWhileStill: typeof runWhileStill;
-    closetIsRealChange: typeof isRealChange;
   };
   // Every change to the document while axe runs (runWhileStill), by its
   // target: a node axe judged may have been swapped out since.
@@ -160,7 +158,6 @@ async function measureInPage(limits: {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeOldValue: true,
     });
     const nameOf = (node: Node) => {
       if (!(node instanceof Element)) return node.nodeName;
@@ -169,13 +166,11 @@ async function measureInPage(limits: {
     };
     return {
       changes: () =>
-        [...seen, ...observer.takeRecords()]
-          .filter((record) => injected.closetIsRealChange(record))
-          .map((record) =>
-            record.type === 'attributes'
-              ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
-              : `the children of ${nameOf(record.target)}`,
-          ),
+        [...seen, ...observer.takeRecords()].map((record) =>
+          record.type === 'attributes'
+            ? `${record.attributeName ?? 'an attribute'} of ${nameOf(record.target)}`
+            : `the children of ${nameOf(record.target)}`,
+        ),
       stop: () => observer.disconnect(),
     };
   };
@@ -207,11 +202,23 @@ async function measureInPage(limits: {
       })),
     };
   };
-  const { result: results, discarded } = await injected.closetRunWhileStill(
-    watch,
-    runAxe,
-    limits.attempts,
-  );
+  // The run freezes htmx instead of filtering its bookkeeping: `htmx-request`
+  // dims a link (main.css) and shows the spinner (`.htmx-indicator`), which
+  // changes what axe judges. A cancelled beforeRequest (htmx 2 stops before it
+  // adds the indicator classes) keeps polls and `load` triggers from starting
+  // one; requests already in flight finished in measurePage's wait. The
+  // observer stays the backstop for non-htmx changes.
+  const freezeHtmx = (evt: Event) => evt.preventDefault();
+  document.addEventListener('htmx:beforeRequest', freezeHtmx, true);
+  let still: Awaited<
+    ReturnType<typeof runWhileStill<Awaited<ReturnType<typeof runAxe>>>>
+  >;
+  try {
+    still = await injected.closetRunWhileStill(watch, runAxe, limits.attempts);
+  } finally {
+    document.removeEventListener('htmx:beforeRequest', freezeHtmx, true);
+  }
+  const { result: results, discarded } = still;
   const { violations } = results;
   const NOT_TEXT = new Set([
     'hidden',
@@ -317,7 +324,6 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
   await page.evaluate(found.axeSource);
   // Self-contained by contract (its doc), so its source runs in the page.
   await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
-  await page.evaluate(`window.closetIsRealChange = ${String(isRealChange)}`);
   const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
