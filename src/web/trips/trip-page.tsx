@@ -276,7 +276,7 @@ function DayBlock(props: {
   return (
     <div
       id={dayAnchor(day)}
-      class="flex flex-col gap-2 scroll-mt-under-bar"
+      class="flex flex-col gap-3 scroll-mt-under-bar"
       data-trip-day={day ?? 'any'}
     >
       <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -355,7 +355,7 @@ function TripOutfitRow(props: {
     <Card
       as="article"
       variant="content"
-      class="gap-2 p-2"
+      class="gap-3 p-2"
       data-trip-outfit={outfit.id}
     >
       <div class="flex items-start gap-2">
@@ -495,11 +495,11 @@ function PackingRowView(props: {
   const name = garment.name ?? t('trips.UNNAMED_GARMENT');
   return (
     <li
-      class="py-1.5"
       data-packing-garment={garment.id}
       {...outboxRegion(queuedTarget('packed', props.tripId, garment.id), name)}
     >
-      <label class="flex items-center gap-3 cursor-pointer">
+      {/* The row's padding is the label's, so the whole row is the tap. */}
+      <label class="flex items-center gap-3 py-1.5 cursor-pointer">
         <input
           type="checkbox"
           name="packed"
@@ -624,14 +624,17 @@ function ExtrasSection({ model }: { model: TripPageModel }) {
             <ul class="flex flex-col">
               {items.map((item) => (
                 <li
-                  class="flex items-center gap-3 py-1"
+                  class="flex items-center gap-3"
                   data-trip-item={item.id}
                   {...outboxRegion(
                     queuedTarget('item', trip.id, item.id),
                     item.label,
                   )}
                 >
-                  <label class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                  {/* A row a finger runs down: the label's padding makes it
+                      44 px, the whole row its tap, and keeps the ×es' hit
+                      areas from meeting (#1210). */}
+                  <label class="flex items-center gap-3 py-3 flex-1 min-w-0 cursor-pointer">
                     <input
                       type="checkbox"
                       name="packed"

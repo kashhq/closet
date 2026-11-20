@@ -56,7 +56,7 @@ function SelfieUpload(props: {
         class={
           props.labelled
             ? 'relative btn btn-sm btn-outline'
-            : 'relative btn btn-ghost btn-xs btn-square'
+            : 'relative btn btn-ghost btn-sm btn-square'
         }
         title={label}
         data-selfie-upload={source}
@@ -196,7 +196,9 @@ export function EntrySelfie(props: {
   }
   if (!props.canTake) return null;
   return (
-    <div class="flex items-center gap-0.5" data-selfie-take={entryId}>
+    // btn-sm squares 2.5 apart: each one's hit area reaches 4.4 px past it
+    // on a phone, so a closer pair's areas meet (#1210).
+    <div class="flex items-center gap-2.5" data-selfie-take={entryId}>
       <SelfieUpload entryId={entryId} returnTo={returnTo} source="camera" />
       <SelfieUpload entryId={entryId} returnTo={returnTo} source="library" />
     </div>

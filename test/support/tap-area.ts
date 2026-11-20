@@ -5,9 +5,10 @@
  * (touch-targets.ts). Each control's tap is a disc `min` px across (a
  * fingertip is round, and a square's corners would fail every round 44 px
  * button), centred on the control's tap box (tapBox: it, its labels and its
- * positioned pseudo-elements) and kept inside the viewport; the disc is the control's when the browser's own hit
- * test at its centre and at eight points on its rim lands on the control, a
- * descendant, or one of its labels.
+ * positioned pseudo-elements) and kept inside the viewport; the disc is the
+ * control's when the browser's own hit test at its centre and at eight
+ * points on its rim lands on the control, a descendant, or one of its
+ * labels.
  *
  * Hit testing, not geometry, so it counts what a tap counts: the theme's
  * transparent ::after and ::before hit areas (views/assets/main.css, Touch
@@ -47,16 +48,18 @@ export function tapMisses(
         el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth,
     ),
   ].map((el) => ({ el, left: el.scrollLeft, top: el.scrollTop }));
-  // Chromium hit tests whole pixels: a fractional point is the next pixel
-  // row or column (43.25 lands on a box starting at 44). So each point is
-  // that of a whole pixel, rounded toward the centre, and the rim sits half
-  // a pixel in, or a box exactly `min` across would lose its edge pixel: a
-  // disc within a pixel of `min` passes.
+  // Chromium hit tests a point (x, y) as the pixel square from it to
+  // (x + 1, y + 1), and where two boxes meet the later one painted wins: a
+  // point on a row's last pixel lands on the row below. So each probe's
+  // square is placed inside the disc, ending at a rim point past the centre
+  // and starting at one before it; and the rim sits half a pixel in, so a
+  // box exactly `min` across keeps its edge pixels: a disc within a pixel of
+  // `min` passes.
   const radius = min / 2 - 0.5;
   const towardCentre = (at: number, offset: number): number => {
-    if (offset > 0) return Math.floor(at);
-    if (offset < 0) return Math.ceil(at);
-    return Math.round(at);
+    if (offset > 0) return at - 1;
+    if (offset < 0) return at;
+    return at - 0.5;
   };
   const diagonal = radius * Math.SQRT1_2;
   const points: readonly (readonly [number, number])[] = [
