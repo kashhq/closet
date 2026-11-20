@@ -359,7 +359,7 @@ Commit `c2ae39c`, persona `demo`, 2026-11-19T22:57:55.390Z. 20 runs per step aft
 
 ## Accessibility
 
-68 pages at 390 × 844 in Chromium, axe-core 4.14.0; counts are violating nodes. `field font < 16 px` is a text field iOS zooms into, `target < 44 px` a tap target smaller on either side.
+68 pages at 390 × 844 in Chromium, axe-core 4.14.1; counts are violating nodes. `field font < 16 px` is a text field iOS zooms into, `target < 44 px` a tap target smaller on either side.
 
 | Rule | Impact | Nodes | Pages |
 | --- | --- | --: | --- |

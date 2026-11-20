@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { AxeBuilder } from '@axe-core/playwright';
 import { type Browser, chromium, type Page } from '@playwright/test';
+import type Axe from 'axe-core';
 import {
   type A11yReport,
   designClassesOf,
@@ -49,6 +49,8 @@ interface Found {
   axeVersion: string;
   /** designClassesOf main.css and daisyUI's component sheets: the classes a kind keeps. */
   design: ReadonlySet<string>;
+  /** axe-core's browser build, evaluated into each page before the run. */
+  axeSource: string;
 }
 
 const ROOT = join(__dirname, '..', '..');
@@ -75,19 +77,28 @@ interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
   offenders: Offender[];
 }
 
+/** One axe rule's violation as the page reports it: no element leaves the page. */
+interface InPageViolation {
+  id: string;
+  impact: string;
+  help: string;
+  nodes: { selector: string; element: ElementDescriptor; detail: string }[];
+}
+
 /**
- * The text-entry fields iOS zooms into, the tap targets, and the element
- * each of axe's targets names, measured in the page, each described for
- * kindOf. Runs in the browser (serialized by page.evaluate): no closures, no
- * imports.
+ * axe's run, the text-entry fields iOS zooms into and the tap targets, each
+ * violating element described for kindOf, all in one call in the page.
+ * axe hands back the element it judged (`elementRef`), so nothing is looked
+ * up again after it: a fragment swapped in meanwhile cannot make a target
+ * miss or name another element (#1207). Runs in the browser (serialized by
+ * page.evaluate, axe injected before it): no closures, no imports.
  */
-function measureInPage(limits: {
+async function measureInPage(limits: {
   fontMin: number;
   targetMin: number;
-  /** axe's selectors, which axe guarantees resolve in this document. */
-  axeTargets: string[];
-}): {
-  axe: ElementDescriptor[];
+}): Promise<{
+  axeVersion: string;
+  violations: InPageViolation[];
   fields: { selector: string; element: ElementDescriptor; px: number }[];
   targets: {
     selector: string;
@@ -95,7 +106,7 @@ function measureInPage(limits: {
     width: number;
     height: number;
   }[];
-} {
+}> {
   const describe = (el: Element): string => {
     const id = el.id ? `#${el.id}` : '';
     const name = el.getAttribute('name');
@@ -126,11 +137,24 @@ function measureInPage(limits: {
       },
     };
   };
-  const axe = limits.axeTargets.map((selector) => {
-    const el = document.querySelector(selector);
-    if (!el) throw new Error(`axe's target ${selector} matches nothing`);
-    return element(el);
-  });
+  const engine = (window as unknown as { axe: typeof Axe }).axe;
+  const results = await engine.run(document, { elementRef: true });
+  const violations = results.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact ?? 'minor',
+    help: violation.help,
+    nodes: violation.nodes.flatMap((node) =>
+      node.element
+        ? [
+            {
+              selector: node.target.join(' '),
+              element: element(node.element),
+              detail: node.failureSummary ?? '',
+            },
+          ]
+        : [],
+    ),
+  }));
   const NOT_TEXT = new Set([
     'hidden',
     'checkbox',
@@ -216,7 +240,12 @@ function measureInPage(limits: {
       },
     ];
   });
-  return { axe, fields, targets };
+  return {
+    axeVersion: results.testEngine.version,
+    violations,
+    fields,
+    targets,
+  };
 }
 
 function cookieValue(actor: Actor): string {
@@ -224,39 +253,28 @@ function cookieValue(actor: Actor): string {
 }
 
 async function measurePage(page: Page, found: Found): Promise<Measured> {
-  const axe = await new AxeBuilder({ page }).analyze();
-  found.axeVersion = axe.testEngine.version;
-  const { rules, design } = found;
-  const nodes = axe.violations.flatMap((violation) => {
-    rules[violation.id] = {
-      impact: violation.impact ?? 'minor',
-      help: violation.help,
-    };
-    return violation.nodes.map((node) => {
-      // A target in a frame or a shadow root is a path of selectors no
-      // document.querySelector resolves: the app renders neither, so one is
-      // refused rather than given a kind it cannot be held to.
-      const [selector, ...nested] = node.target;
-      if (typeof selector !== 'string' || nested.length > 0) {
-        throw new Error(
-          `axe's ${violation.id} target ${JSON.stringify(node.target)} is a nested path (a frame or an encapsulated root)`,
-        );
-      }
-      return { measure: violation.id, selector, node };
-    });
-  });
+  // htmx's swaps in flight settle before the run reads the page.
+  await page.waitForFunction(() => !document.querySelector('.htmx-request'));
+  await page.evaluate(found.axeSource);
   const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
-    axeTargets: nodes.map((node) => node.selector),
   });
-  const offenders: Offender[] = [
-    ...nodes.map(({ measure, selector, node }, index) => ({
-      measure,
-      selector,
-      kind: kindOf(measured.axe[index], design),
-      detail: node.failureSummary ?? '',
-    })),
+  found.axeVersion = measured.axeVersion;
+  const { rules, design } = found;
+  const offenders: Offender[] = [];
+  for (const violation of measured.violations) {
+    rules[violation.id] = { impact: violation.impact, help: violation.help };
+    offenders.push(
+      ...violation.nodes.map((node) => ({
+        measure: violation.id,
+        selector: node.selector,
+        kind: kindOf(node.element, design),
+        detail: node.detail,
+      })),
+    );
+  }
+  offenders.push(
     ...measured.fields.map((field) => ({
       measure: FIELD_FONT,
       selector: field.selector,
@@ -269,7 +287,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
       kind: kindOf(target.element, design),
       detail: `${target.width} × ${target.height} px`,
     })),
-  ];
+  );
   return { ...tally(offenders), offenders };
 }
 
@@ -337,6 +355,7 @@ export async function auditAccessibility(
     rules: {},
     axeVersion: 'unknown',
     design: await designClasses(),
+    axeSource: await readFile(require.resolve('axe-core'), 'utf8'),
   };
   const pages: PageA11y[] = [];
   const failures: string[] = [];

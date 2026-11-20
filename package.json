@@ -96,7 +96,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^9.18.0",
     "@fastify/swagger": "^9.9.3",
     "@fontsource-variable/fraunces": "^5.3.0",
@@ -115,6 +114,7 @@
     "@types/pg": "^8.23.1",
     "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "5.0.3",
+    "axe-core": "^4.14.1",
     "concurrently": "^10.0.7",
     "daisyui": "^5.1.27",
     "dependency-cruiser": "18.5.0",
