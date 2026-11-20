@@ -373,7 +373,11 @@ function GarmentList({ pieces }: { pieces: OutfitPiece[] }) {
             class="flex flex-col items-center gap-1 w-20"
           >
             <span class="relative">
-              <GarmentThumb garment={piece} class="rounded-box bg-base-200" />
+              <GarmentThumb
+                garment={piece}
+                class="rounded-box bg-base-200"
+                decorative
+              />
               <FootMark marks={piece.marks} />
             </span>
             <span class="text-xs text-center line-clamp-2 leading-tight">

@@ -1082,7 +1082,7 @@ body {
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  padding: 0.125rem 0.375rem 0.125rem 0.5rem;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--radius-selector, 1.9rem);
   background: var(--color-base-200);
   border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
@@ -1090,27 +1090,6 @@ body {
   line-height: 1.4;
   min-width: 0;
   max-width: 100%;
-}
-
-.ms-pill-remove {
-  cursor: pointer;
-  color: var(--color-muted);
-  font-size: 0.875rem;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.75rem;
-  min-height: 1.4rem;
-  margin: -0.125rem -0.375rem -0.125rem 0;
-  border-radius: 0 var(--radius-selector, 1.9rem) var(--radius-selector, 1.9rem) 0;
-  background: color-mix(in oklch, var(--color-base-content) 10%, transparent);
-  align-self: stretch;
-}
-
-.ms-pill-remove:hover {
-  color: var(--color-base-content);
-  background: color-mix(in oklch, var(--color-base-content) 20%, transparent);
 }
 
 .ms-chevron {

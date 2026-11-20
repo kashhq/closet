@@ -26,6 +26,7 @@ export const PLACEHOLDER_KINDS = {
   LOGOUT_PROMPT: { appName: 'data' },
   TOO_MANY_ATTEMPTS: { after: 'data' },
   CLONE_NAME: { name: 'data' },
+  CAPSULE_SCOPE_LABEL: { scope: 'data' },
   UPDATED_AGO: { ago: 'data' },
   'outbox.WAITING_MANY': { count: 'data' },
   'outbox.SYNCING_MANY': { count: 'data' },

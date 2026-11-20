@@ -192,12 +192,14 @@ export function PhotoLibraryIcon(props: { class: string }) {
 export function GarmentThumb(props: {
   garment: { name: string | null; photo: SignablePhotoRef | null };
   class: string;
+  /** Beside the garment's name in the same link: the alt would repeat it. */
+  decorative?: boolean;
 }) {
   const { garment } = props;
   return garment.photo ? (
     <img
       src={imageUrl(garment.photo, 'thumb')}
-      alt={garment.name ?? ''}
+      alt={props.decorative ? '' : (garment.name ?? '')}
       class={`size-20 object-cover ${props.class}`}
       width="80"
       height="80"

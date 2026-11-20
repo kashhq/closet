@@ -34,8 +34,14 @@
     const placeholder = det.dataset.placeholder || '';
     const selectedLabel = det.dataset.selectedLabel || '';
 
-    const boxes = () => [...optionsEl.querySelectorAll('input[type="checkbox"]')];
+    const boxes = () => [
+      ...optionsEl.querySelectorAll('input[type="checkbox"]'),
+    ];
 
+    // A pill is text, never a control: the pills are the summary's content,
+    // and a button inside <summary> is a control inside a control (axe's
+    // nested-interactive, #1210) and a mis-tap that opens the list. A colour
+    // comes off by its checkbox in the list, or Clear all.
     function pillFor(box) {
       const option = box.closest('.ms-option');
       const pill = el('span', 'ms-pill badge badge-ghost');
@@ -43,19 +49,6 @@
       const swatch = option.querySelector('.ms-swatch');
       if (swatch) pill.append(el('span', swatch.className));
       pill.append(el('span', 'capitalize', box.value));
-      // Styled by .ms-pill-remove alone (views/assets/main.css): daisyUI's
-      // badge-neutral sets light text, invisible on that light background.
-      const remove = el('button', 'ms-pill-remove', '×');
-      remove.type = 'button';
-      remove.setAttribute('aria-label', box.value);
-      remove.addEventListener('click', function (event) {
-        // Inside <summary>: without this the click also toggles the dropdown.
-        event.preventDefault();
-        event.stopPropagation();
-        box.checked = false;
-        renderPills();
-      });
-      pill.append(remove);
       return pill;
     }
 
@@ -116,5 +109,7 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => initAll());
-  document.addEventListener('htmx:afterSwap', (event) => initAll(event.detail.target));
+  document.addEventListener('htmx:afterSwap', (event) =>
+    initAll(event.detail.target),
+  );
 })();

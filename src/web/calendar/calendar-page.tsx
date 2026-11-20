@@ -31,6 +31,7 @@ import { PlanSheet, planSheetOpener } from './plan-sheet';
 import { dayAnchor, weekUrl } from './urls';
 import { AwayLink } from '../trips/away-link';
 import { WEEK_GRID, weekRow, weekRows } from '../layout/calendar-grid';
+import { CELL_LINK, LINKED_CELL } from './cell-link';
 
 /**
  * GET /calendar: the week as an agenda (R6; docs/plans/2026-09-26-redesign.md,
@@ -128,22 +129,21 @@ export function CalendarPage(props: {
 
 /**
  * The week's days at a glance, each a link down to its block: the letter,
- * the date (today filled) and a dot when something is planned.
+ * the date (today filled) and a dot when something is planned. The letter
+ * is the cell's, outside the link (CELL_LINK).
  */
 function WeekStrip({ view }: { view: CalendarView }) {
   return (
     <ol class={`${WEEK_GRID.strip} my-2 text-center select-none`}>
       {view.days.map((day) => (
-        <li>
+        <li class={`flex flex-col items-center gap-0.5 py-1 ${LINKED_CELL}`}>
+          <span class="text-xs text-muted">{t(DAY_LETTERS[day.weekday])}</span>
           <a
             href={`#${dayAnchor(day.date)}`}
-            class="flex flex-col items-center gap-0.5 py-1 rounded-field hover:bg-base-200"
+            class={`flex flex-col items-center gap-0.5 ${CELL_LINK}`}
             aria-label={dayLabel(day.date)}
             aria-current={day.isToday ? 'date' : undefined}
           >
-            <span class="text-xs text-muted">
-              {t(DAY_LETTERS[day.weekday])}
-            </span>
             <span
               class={`flex items-center justify-center size-8 rounded-full text-sm font-semibold ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
             >

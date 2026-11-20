@@ -532,17 +532,17 @@ describe('calendar', () => {
       );
 
       const html = await monthPage('?month=2029-03');
-      const cell = /<a[^>]*data-month-day="2029-03-14"[\s\S]*?<\/a>/.exec(
+      const cell = /<div[^>]*data-month-day="2029-03-14"[\s\S]*?<\/td>/.exec(
         html,
       )![0];
       // All day comes before the evening: its collage is the one shown.
       expect(extractImgSrcs(cell)).toHaveLength(1);
       expect(cell).toContain('+1');
-      expect(cell).toMatch(/<a[^>]*data-worn=""/);
+      expect(cell).toMatch(/<div[^>]*data-worn=""/);
       expect(cell).toContain(
         'aria-label="Wednesday, Mar 14, Month pictured, Month another, Worn"',
       );
-      const empty = /<a[^>]*data-month-day="2029-03-15"[\s\S]*?<\/a>/.exec(
+      const empty = /<div[^>]*data-month-day="2029-03-15"[\s\S]*?<\/td>/.exec(
         html,
       )![0];
       expect(extractImgSrcs(empty)).toEqual([]);
@@ -559,7 +559,7 @@ describe('calendar', () => {
           const html = await monthPage(query);
           expect(html, query).toMatch(/>\s*September 2026\s*</);
           expect(html).toMatch(
-            /aria-current="date" data-month-day="2026-09-25"/,
+            /data-month-day="2026-09-25"[^>]*>\s*<a[^>]*aria-current="date"/,
           );
         }
       } finally {

@@ -804,6 +804,7 @@
   "ALL_GARMENTS": "All garments",
   "CAPSULES": "Capsules",
   "CAPSULE": "Capsule",
+  "CAPSULE_SCOPE_LABEL": "{scope}, choose a capsule",
   "CLOSET": "Closet",
   "WARDROBE_OF": "{name}’s wardrobe",
   "MANAGE_SHARING": "Manage sharing",
@@ -1210,7 +1211,7 @@
     "AVOIDED_HEADING": "Pairs you said clash",
     "AVOIDED_HINT": "From Clashes in Ideas: never suggested together.",
     "AVOIDED_PAIR": "{a} and {b}",
-    "ALLOW_PAIR_LABEL": "Allow {pair} together again",
+    "ALLOW_PAIR_LABEL": "Allow again: {pair}",
     "style": {
       "elevated-basics": "Elevated basics",
       "smart-casual": "Smart casual",
@@ -1483,7 +1484,7 @@
     "TITLE": "Today",
     "OFFLINE": "Offline: this is Today from your last visit. Wearing an outfit needs a connection.",
     "REFRESH": "Refresh",
-    "REFRESH_LABEL": "Show other ideas",
+    "REFRESH_LABEL": "Refresh ideas",
     "STRIP_LABEL": "Ideas for today, more to either side",
     "MORE_IDEAS": "More ideas",
     "WEAR_THIS": "Wear this",
@@ -1721,9 +1722,9 @@
       "in": "in",
       "cm": "cm"
     },
-    "unitName": {
-      "in": "Inches",
-      "cm": "Centimeters"
+    "unitLabel": {
+      "in": "in (inches)",
+      "cm": "cm (centimeters)"
     },
     "measurement": {
       "height": "Height",

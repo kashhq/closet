@@ -212,7 +212,7 @@ function UnitSwitch({ unit }: { unit: LengthUnit }) {
           value={choice}
           class={`btn btn-sm join-item ${choice === unit ? 'btn-active' : ''}`}
           aria-pressed={choice === unit ? 'true' : 'false'}
-          aria-label={t(`sizes.unitName.${choice}`)}
+          aria-label={t(`sizes.unitLabel.${choice}`)}
         >
           {t(`sizes.unit.${choice}`)}
         </button>
