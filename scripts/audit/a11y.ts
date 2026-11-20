@@ -77,6 +77,8 @@ async function designClasses(): Promise<Set<string>> {
 
 interface Measured extends Pick<PageA11y, 'counts' | 'kinds'> {
   offenders: Offender[];
+  /** What changed during each axe run discarded before the still one (runWhileStill). */
+  reruns: string[][];
 }
 
 /** One axe rule's violation as the page reports it: no element leaves the page. */
@@ -102,6 +104,7 @@ async function measureInPage(limits: {
   attempts: number;
 }): Promise<{
   axeVersion: string;
+  reruns: string[][];
   violations: InPageViolation[];
   fields: { selector: string; element: ElementDescriptor; px: number }[];
   targets: {
@@ -199,7 +202,7 @@ async function measureInPage(limits: {
       })),
     };
   };
-  const results = await injected.closetRunWhileStill(
+  const { result: results, discarded } = await injected.closetRunWhileStill(
     watch,
     runAxe,
     limits.attempts,
@@ -292,6 +295,7 @@ async function measureInPage(limits: {
   });
   return {
     axeVersion: results.version,
+    reruns: discarded,
     violations,
     fields,
     targets,
@@ -341,7 +345,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
       detail: `${target.width} × ${target.height} px`,
     })),
   );
-  return { ...tally(offenders), offenders };
+  return { ...tally(offenders), offenders, reruns: measured.reruns };
 }
 
 async function visit(
@@ -417,7 +421,7 @@ export async function auditAccessibility(
     for (const step of visits) {
       const label = `#${step.issue} ${step.name} (${step.target})`;
       try {
-        const { counts, kinds, offenders } = await visit(
+        const { counts, kinds, offenders, reruns } = await visit(
           browser,
           origin,
           fixture,
@@ -429,6 +433,11 @@ export async function auditAccessibility(
         detail[step.id] = offenders;
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
         console.log(`${label}: ${total} accessibility violation(s)`);
+        reruns.forEach((changes) =>
+          console.log(
+            `${label}: axe rerun, the page changed: ${changes.slice(0, 5).join('; ')}`,
+          ),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`${label} (accessibility): ${message}`);

@@ -212,7 +212,10 @@ describe('runWhileStill', () => {
       },
       STILL_RUN_ATTEMPTS,
     );
-    expect(result).toBe('run 2');
+    expect(result).toEqual({
+      result: 'run 2',
+      discarded: [['the children of div#today-body']],
+    });
     expect(runs).toBe(2);
   });
 
@@ -243,7 +246,7 @@ describe('runWhileStill', () => {
     const { watch } = stubPage();
     await expect(
       injected(watch, () => Promise.resolve('still'), 1),
-    ).resolves.toBe('still');
+    ).resolves.toEqual({ result: 'still', discarded: [] });
   });
 });
 

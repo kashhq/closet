@@ -192,6 +192,12 @@ export interface PageWatch {
 /** One axe run and two reruns before a page that keeps changing fails. */
 export const STILL_RUN_ATTEMPTS = 3;
 
+/** runWhileStill's answer: the still run's result and what each discarded run saw change. */
+export interface StillRun<T> {
+  result: T;
+  discarded: string[][];
+}
+
 /**
  * `run`'s result from a run during which the page held still: a run that saw
  * a change (a `load` trigger, a poll, a late module swapping the DOM) is
@@ -203,20 +209,22 @@ export async function runWhileStill<T>(
   watch: () => PageWatch,
   run: () => Promise<T>,
   attempts: number,
-): Promise<T> {
-  let changes: string[] = [];
+): Promise<StillRun<T>> {
+  const discarded: string[][] = [];
   for (let attempt = 0; attempt < attempts; attempt++) {
     const watching = watch();
     try {
       const result = await run();
-      changes = [...new Set(watching.changes())];
-      if (changes.length === 0) return result;
+      const changes = [...new Set(watching.changes())];
+      if (changes.length === 0) return { result, discarded };
+      discarded.push(changes);
     } finally {
       watching.stop();
     }
   }
+  const last = discarded.at(-1) ?? [];
   throw new Error(
-    `the page changed during each of ${attempts} axe runs: ${changes.slice(0, 5).join('; ')}`,
+    `the page changed during each of ${attempts} axe runs: ${last.slice(0, 5).join('; ')}`,
   );
 }
 

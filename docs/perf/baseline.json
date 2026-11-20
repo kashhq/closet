@@ -16006,19 +16006,17 @@
     "target": "GET /",
     "counts": {
      "label-content-name-mismatch": 1,
-     "target < 44 px": 7
+     "target < 44 px": 4
     },
     "kinds": {
      "label-content-name-mismatch": [
       "button[type=button].btn.btn-ghost.btn-xs in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in main.page-shell",
-      "a.link.link-hover in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.link.link-hover /outfits/ideas in main.page-shell",
       "button[type=button].btn.btn-ghost.btn-xs in main.page-shell",
-      "button[type=submit].btn.btn-ghost.btn-xs in form /calendar/*/worn",
-      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
-      "input[type=file] in form /calendar/*/selfie"
+      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week"
      ]
     }
    },
@@ -16036,7 +16034,7 @@
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16060,7 +16058,7 @@
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
@@ -16083,8 +16081,8 @@
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.badge.badge-primary.badge-sm in main.page-shell",
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.badge.badge-primary.badge-sm /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16108,10 +16106,10 @@
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.badge.badge-info.badge-sm in main.page-shell",
-      "a.badge.badge-sm.badge-warning in main.page-shell",
-      "a.btn.btn-sm in main.page-shell",
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.badge.badge-info.badge-sm /wardrobe in main.page-shell",
+      "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-sm /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16135,8 +16133,8 @@
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.badge.badge-sm.badge-warning in main.page-shell",
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16160,7 +16158,7 @@
       "summary.btn.btn-primary.btn-sm in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16180,7 +16178,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /wardrobe in header.app-bar",
       "button[type=button].btn.btn-primary.btn-sm in main.page-shell",
       "button[type=button].btn.btn-sm in main.page-shell",
       "input[type=checkbox].checkbox.checkbox-sm in form#bulk-form /wardrobe/bulk"
@@ -16197,7 +16195,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /capsules/* in header.app-bar",
       "button[type=submit].btn.btn-primary.btn-sm in main.page-shell"
      ]
     }
@@ -16212,8 +16210,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-primary.btn-sm in main.page-shell"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
      ]
     }
    },
@@ -16260,10 +16258,12 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-outline.btn-sm in main.page-shell",
-      "a.btn.btn-primary.btn-sm in main.page-shell"
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /capsules/*/edit in header.app-bar",
+      "a.btn.btn-outline.btn-sm /outfits/ideas in main.page-shell",
+      "a.btn.btn-outline.btn-sm /styling in main.page-shell",
+      "a.btn.btn-outline.btn-sm /wardrobe in main.page-shell",
+      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
      ]
     }
    },
@@ -16277,7 +16277,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar"
      ]
     }
    },
@@ -16291,7 +16291,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /capsules/* in header.app-bar",
       "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16306,9 +16306,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-primary in section#garment-details-title",
-      "a.link.link-primary in section#garment-repairs",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.link.link-primary * in section#garment-details-title",
+      "a.link.link-primary /wardrobe/*/edit in section#garment-repairs",
       "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
       "input[type=checkbox].btn.btn-sm in section#garment-capsules",
       "input[type=radio].btn.btn-sm in form.group /wardrobe/*/away",
@@ -16326,8 +16326,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-outline.btn-sm in main.page-shell",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
       "input[type=radio].btn.btn-sm in form /wardrobe"
      ]
     }
@@ -16346,7 +16346,7 @@
       "summary in form /wardrobe/*"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
       "button[type=button].ms-pill-remove in form /wardrobe/*",
       "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/*/repairs/*/delete",
       "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*",
@@ -16369,7 +16369,7 @@
       "summary in form /wardrobe/*/clone"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
       "button[type=button].ms-pill-remove in form /wardrobe/*/clone",
       "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/*/clone",
@@ -16388,7 +16388,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/new in header.app-bar"
      ]
     }
    },
@@ -16437,7 +16437,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
       "input[type=checkbox] in form#styling-form /styling",
       "summary.btn.btn-ghost.btn-sm in main.page-shell",
       "summary.btn.btn-outline.btn-sm in header.app-bar"
@@ -16454,7 +16454,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in main.page-shell",
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
       "input[type=checkbox] in form#styling-form /styling",
       "summary in aside#styling-aside.page-aside",
       "summary.btn.btn-ghost.btn-sm in main.page-shell",
@@ -16472,7 +16472,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-primary.btn-sm in header.app-bar"
+      "a.btn.btn-primary.btn-sm /styling in header.app-bar"
      ]
     }
    },
@@ -16486,8 +16486,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in main.page-shell",
-      "a.btn.btn-primary.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.btn.btn-primary.btn-sm /styling in header.app-bar",
       "button[type=submit] in form /calendar"
      ]
     }
@@ -16506,8 +16506,8 @@
       "img in section#outfit-garments-title"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-hover in main.page-shell",
+      "a.btn.btn-circle.btn-ghost.btn-sm /outfits in header.app-bar",
+      "a.link.link-hover /calendar in main.page-shell",
       "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
       "input[type=file] in form /calendar/*/selfie"
      ]
@@ -16520,14 +16520,14 @@
     "target": "GET /calendar",
     "counts": {
      "label-content-name-mismatch": 7,
-     "target < 44 px": 24
+     "target < 44 px": 27
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a in main.page-shell"
+      "a * in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square in nav",
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
       "button[type=button].btn.btn-ghost.btn-sm in section#*",
       "button[type=submit].btn.btn-ghost.btn-xs in form /calendar/*/worn",
       "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
@@ -16543,14 +16543,14 @@
     "target": "GET /calendar",
     "counts": {
      "label-content-name-mismatch": 7,
-     "target < 44 px": 15
+     "target < 44 px": 18
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a in main.page-shell"
+      "a * in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square in nav",
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
       "button[type=button].btn.btn-ghost.btn-sm in section#*",
       "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
       "summary.btn.btn-ghost.btn-xs in section#*"
@@ -16568,10 +16568,10 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a in main.page-shell"
+      "a /calendar in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square in nav"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
      ]
     }
    },
@@ -16586,10 +16586,10 @@
     },
     "kinds": {
      "label-content-name-mismatch": [
-      "a in main.page-shell"
+      "a /calendar in main.page-shell"
      ],
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square in nav"
+      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
      ]
     }
    },
@@ -16603,9 +16603,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-outline.btn-sm in nav",
-      "a.btn.btn-primary.btn-sm in nav"
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
+      "a.btn.btn-outline.btn-sm /calendar/plan in nav",
+      "a.btn.btn-primary.btn-sm /calendar/plan in nav"
      ]
     }
    },
@@ -16619,7 +16619,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-primary.btn-sm in header.app-bar"
+      "a.btn.btn-primary.btn-sm /trips/new in header.app-bar"
      ]
     }
    },
@@ -16633,10 +16633,11 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-xs in section#trip-outfits-heading",
-      "a.link.link-hover in section#trip-outfits-heading",
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /trips/*/edit in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /outfits/ideas in section#trip-outfits-heading",
+      "a.btn.btn-ghost.btn-xs /trips/*/outfits/new in section#trip-outfits-heading",
+      "a.link.link-hover /outfits/* in section#trip-outfits-heading",
       "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/items/packed",
       "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/outfits/*/delete",
       "button[type=submit].btn.btn-sm in form /trips/*/items",
@@ -16655,7 +16656,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar"
      ]
     }
    },
@@ -16669,7 +16670,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
       "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16684,9 +16685,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-outline.btn-sm in nav",
-      "a.btn.btn-primary.btn-sm in nav"
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
+      "a.btn.btn-outline.btn-sm /trips/*/outfits/new in nav",
+      "a.btn.btn-primary.btn-sm /trips/*/outfits/new in nav"
      ]
     }
    },
@@ -16700,8 +16701,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in main.page-shell",
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16716,8 +16717,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-block.btn-outline.btn-primary.btn-sm in section#inbox-own",
-      "a.link.link-hover in section#inbox-own",
+      "a.btn.btn-block.btn-outline.btn-primary.btn-sm /wardrobe/*/bought in section#inbox-own",
+      "a.link.link-hover * in section#inbox-own",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "summary.btn.btn-ghost.btn-sm in header.app-bar"
@@ -16734,8 +16735,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-primary in section#garment-details-title"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
+      "a.link.link-primary * in section#garment-details-title"
      ]
     }
    },
@@ -16757,8 +16758,8 @@
       "summary in form /wardrobe"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-outline.btn-sm in main.page-shell",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
       "button[type=button].ms-pill-remove in form /wardrobe",
       "input[type=checkbox].btn.btn-sm in form /wardrobe",
       "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe",
@@ -16776,7 +16777,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar"
      ]
     }
    },
@@ -16794,8 +16795,8 @@
       "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-primary in form /auth/profile/style",
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
+      "a.link.link-primary /auth/profile/week in form /auth/profile/style",
       "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow",
       "button[type=submit].btn.btn-primary.btn-sm in form /auth/profile/style/rules",
       "input[type=checkbox].btn.btn-sm in form /auth/profile/style",
@@ -16815,8 +16816,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-primary in main.page-shell",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.link.link-primary * in main.page-shell",
       "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/orders/*/dismiss",
       "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/orders/*/add"
      ]
@@ -16832,7 +16833,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16847,8 +16848,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in main.page-shell",
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16863,8 +16864,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar",
-      "a.link.link-hover in main.page-shell",
+      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
+      "a.link.link-hover /outfits/ideas in main.page-shell",
       "summary.btn.btn-outline.btn-sm in main.page-shell"
      ]
     }
@@ -16879,13 +16880,13 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-xs in nav",
-      "a.btn.btn-outline.btn-sm in main.page-shell",
-      "a.btn.btn-outline.btn-sm in section#insights-attention.card",
-      "a.btn.btn-outline.btn-sm in section#insights-unworn.card",
-      "a.btn.btn-outline.btn-xs in section#insights-unworn.card",
-      "a.btn.btn-primary.btn-xs in nav"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
+      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
+      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
+      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
      ]
     }
    },
@@ -16899,13 +16900,13 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-xs in nav",
-      "a.btn.btn-outline.btn-sm in main.page-shell",
-      "a.btn.btn-outline.btn-sm in section#insights-attention.card",
-      "a.btn.btn-outline.btn-sm in section#insights-unworn.card",
-      "a.btn.btn-outline.btn-xs in section#insights-unworn.card",
-      "a.btn.btn-primary.btn-xs in nav"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
+      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
+      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
+      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
+      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
      ]
     }
    },
@@ -16919,7 +16920,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
       "button[type=button].btn.btn-primary.btn-sm in section#recap-summary.card"
      ]
     }
@@ -16934,9 +16935,9 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "a.btn.btn-ghost.btn-sm in nav",
-      "a.btn.btn-primary.btn-sm in main.page-shell"
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
+      "a.btn.btn-ghost.btn-sm /wardrobe/recap in nav",
+      "a.btn.btn-primary.btn-sm /calendar in main.page-shell"
      ]
     }
    },
@@ -16950,7 +16951,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft in main.page-shell",
+      "a.btn.btn-sm.btn-soft /wardrobe/tag in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
@@ -16969,7 +16970,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
       "input[type=radio].btn.btn-sm in form.group /wardrobe/*/condition"
      ]
     }
@@ -17000,8 +17001,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-outline.btn-sm in main.page-shell",
-      "a.btn.btn-primary.btn-sm in main.page-shell",
+      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
+      "a.btn.btn-primary.btn-sm /wardrobe/new in main.page-shell",
       "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
       "summary.btn.btn-ghost.btn-sm in header.app-bar"
@@ -17034,7 +17035,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17048,7 +17049,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17062,8 +17063,8 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-sm in section#sign-out.card",
-      "a.link.link-hover in main.page-shell"
+      "a.btn.btn-sm /auth/sign-out-everywhere in section#sign-out.card",
+      "a.link.link-hover /about in main.page-shell"
      ]
     }
    },
@@ -17077,7 +17078,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-ghost.btn-sm /auth/register in header.app-bar"
      ]
     }
    },
@@ -17091,7 +17092,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
      ]
     }
    },
@@ -17105,7 +17106,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17119,7 +17120,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17133,7 +17134,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17147,7 +17148,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
      ]
     }
    },
@@ -17161,7 +17162,7 @@
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
       "button[type=submit].btn.btn-ghost.btn-xs in form /auth/tokens/*/revoke",
       "button[type=submit].btn.btn-primary.btn-sm in form /auth/tokens"
      ]
@@ -17190,7 +17191,7 @@
       "button[type=submit].btn.btn-sm in form /auth/profile/sizes/unit"
      ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
+      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
       "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit",
       "button[type=submit].btn.btn-ghost.btn-sm in form.card.card-body /auth/profile/sizes/brands/*",
       "button[type=submit].btn.btn-primary.btn-sm in form.card.card-body /auth/profile/sizes/brands",
