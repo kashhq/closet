@@ -211,13 +211,23 @@ export async function runWhileStill<T>(
   attempts: number,
 ): Promise<StillRun<T>> {
   const discarded: string[][] = [];
+  let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const watching = watch();
     try {
-      const result = await run();
+      const outcome = await run().then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error }),
+      );
       const changes = [...new Set(watching.changes())];
-      if (changes.length === 0) return { result, discarded };
+      // A throw after a change is its symptom (axe's detached node): discard
+      // and rerun. With no change it is a real failure, passed on as it was.
+      if (changes.length === 0 && 'error' in outcome) throw outcome.error;
+      if (changes.length === 0 && 'result' in outcome) {
+        return { result: outcome.result, discarded };
+      }
       discarded.push(changes);
+      lastError = 'error' in outcome ? outcome.error : undefined;
     } finally {
       watching.stop();
     }
@@ -225,6 +235,8 @@ export async function runWhileStill<T>(
   const last = discarded.at(-1) ?? [];
   throw new Error(
     `the page changed during each of ${attempts} axe runs: ${last.slice(0, 5).join('; ')}`,
+    // The last run's own throw (axe's detached node) is the symptom to debug.
+    lastError === undefined ? undefined : { cause: lastError },
   );
 }
 

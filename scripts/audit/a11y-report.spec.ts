@@ -238,6 +238,62 @@ describe('runWhileStill', () => {
     expect(runs).toBe(STILL_RUN_ATTEMPTS);
   });
 
+  it('retries a run that threw after the page changed, and returns the rerun', async () => {
+    const { log, watch } = stubPage();
+    let runs = 0;
+    const result = await runWhileStill(
+      watch,
+      () => {
+        runs += 1;
+        if (runs === 1) {
+          log.push('the children of div#today-body');
+          return Promise.reject(new Error('node is detached'));
+        }
+        return Promise.resolve('still');
+      },
+      STILL_RUN_ATTEMPTS,
+    );
+    expect(result).toEqual({
+      result: 'still',
+      discarded: [['the children of div#today-body']],
+    });
+  });
+
+  it('rethrows the same error when the run threw and nothing changed', async () => {
+    const { watch } = stubPage();
+    const failure = new Error('axe crashed');
+    let runs = 0;
+    await expect(
+      runWhileStill(
+        watch,
+        () => {
+          runs += 1;
+          return Promise.reject(failure);
+        },
+        STILL_RUN_ATTEMPTS,
+      ),
+    ).rejects.toBe(failure);
+    expect(runs).toBe(1);
+  });
+
+  it("keeps the last run's throw as the cause when every run changed and threw", async () => {
+    const { log, watch } = stubPage();
+    const failure = new Error('node is detached');
+    const error = await runWhileStill(
+      watch,
+      () => {
+        log.push('the children of main');
+        return Promise.reject(failure);
+      },
+      STILL_RUN_ATTEMPTS,
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      'the page changed during each of 3 axe runs',
+    );
+    expect((error as Error).cause).toBe(failure);
+  });
+
   it('runs without its module: a11y.ts injects it into the page by source', async () => {
     // A fresh context has none of the module's scope, as the page has none.
     const injected = runInNewContext(

@@ -202,11 +202,23 @@ async function measureInPage(limits: {
       })),
     };
   };
-  const { result: results, discarded } = await injected.closetRunWhileStill(
-    watch,
-    runAxe,
-    limits.attempts,
-  );
+  // The run freezes htmx instead of filtering its bookkeeping: `htmx-request`
+  // dims a link (main.css) and shows the spinner (`.htmx-indicator`), which
+  // changes what axe judges. A cancelled beforeRequest (htmx 2 stops before it
+  // adds the indicator classes) keeps polls and `load` triggers from starting
+  // one; requests already in flight finished in measurePage's wait. The
+  // observer stays the backstop for non-htmx changes.
+  const freezeHtmx = (evt: Event) => evt.preventDefault();
+  document.addEventListener('htmx:beforeRequest', freezeHtmx, true);
+  let still: Awaited<
+    ReturnType<typeof runWhileStill<Awaited<ReturnType<typeof runAxe>>>>
+  >;
+  try {
+    still = await injected.closetRunWhileStill(watch, runAxe, limits.attempts);
+  } finally {
+    document.removeEventListener('htmx:beforeRequest', freezeHtmx, true);
+  }
+  const { result: results, discarded } = still;
   const { violations } = results;
   const NOT_TEXT = new Set([
     'hidden',
