@@ -407,7 +407,7 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
             hx-swap="outerHTML"
             aria-label={t('today.REFRESH_LABEL')}
           >
-            ⤮ {t('today.REFRESH')}
+            <span aria-hidden="true">⤮</span> {t('today.REFRESH')}
           </button>
         )}
       </RowHeading>

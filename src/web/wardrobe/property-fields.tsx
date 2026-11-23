@@ -261,9 +261,9 @@ function CareLabelFields(props: PropertiesProps) {
           class="flex flex-col gap-4"
         >
           <div>
-            <h3 id="garment-care-label-title" class="font-medium">
+            <h2 id="garment-care-label-title" class="font-medium">
               {t('care.LABEL')}
-            </h3>
+            </h2>
             <p class="text-xs text-muted">{t('care.LABEL_HINT')}</p>
           </div>
           {groups.map((group) => (

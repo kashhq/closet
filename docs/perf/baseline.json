@@ -15980,45 +15980,15 @@
    "height": 844
   },
   "axeVersion": "4.14.1",
-  "rules": {
-   "label-content-name-mismatch": {
-    "impact": "serious",
-    "help": "Elements must have their visible text as part of their accessible name"
-   },
-   "nested-interactive": {
-    "impact": "serious",
-    "help": "Interactive controls must not be nested"
-   },
-   "image-redundant-alt": {
-    "impact": "minor",
-    "help": "Alternative text of images should not be repeated as text"
-   },
-   "heading-order": {
-    "impact": "moderate",
-    "help": "Heading levels should only increase by one"
-   }
-  },
+  "rules": {},
   "pages": [
    {
     "id": "158 Today",
     "issue": 158,
     "name": "Today",
     "target": "GET /",
-    "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 4
-    },
-    "kinds": {
-     "label-content-name-mismatch": [
-      "button[type=button].btn.btn-ghost.btn-xs in main.page-shell"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /calendar/plan in main.page-shell",
-      "a.link.link-hover /outfits/ideas in main.page-shell",
-      "button[type=button].btn.btn-ghost.btn-xs in main.page-shell",
-      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "159 Grid",
@@ -16026,21 +15996,12 @@
     "name": "Grid",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 7
+     "target < 44 px": 2
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16050,20 +16011,11 @@
     "name": "Search",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 6
+     "target < 44 px": 1
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16073,22 +16025,13 @@
     "name": "Filters: category, colour, warmth",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 10
+     "target < 44 px": 5
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
       "a.badge.badge-primary.badge-sm /wardrobe in main.page-shell",
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16098,24 +16041,14 @@
     "name": "Care filters: needs a wash, attention",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 10
+     "target < 44 px": 4
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
       "a.badge.badge-info.badge-sm /wardrobe in main.page-shell",
       "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
-      "a.btn.btn-sm /wardrobe in main.page-shell",
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16125,22 +16058,13 @@
     "name": "Show archived",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 8
+     "target < 44 px": 3
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
       "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16150,21 +16074,12 @@
     "name": "Capsule filter",
     "target": "GET /wardrobe",
     "counts": {
-     "label-content-name-mismatch": 1,
-     "target < 44 px": 7
+     "target < 44 px": 2
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "summary.btn.btn-primary.btn-sm in main.page-shell"
-     ],
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft /laundry in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-primary.btn-sm in main.page-shell"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16174,13 +16089,10 @@
     "name": "Select mode",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 4
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "button[type=button].btn.btn-primary.btn-sm in main.page-shell",
-      "button[type=button].btn.btn-sm in main.page-shell",
       "input[type=checkbox].checkbox.checkbox-sm in form#bulk-form /wardrobe/bulk"
      ]
     }
@@ -16190,30 +16102,16 @@
     "issue": 159,
     "name": "Capsule picker",
     "target": "GET /wardrobe",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /capsules/* in header.app-bar",
-      "button[type=submit].btn.btn-primary.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "159 Tagging mode",
     "issue": 159,
     "name": "Tagging mode",
     "target": "GET /wardrobe/tag",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "159 Laundry tab",
@@ -16221,14 +16119,11 @@
     "name": "Laundry tab",
     "target": "GET /laundry",
     "counts": {
-     "target < 44 px": 4
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=submit].btn.btn-primary.btn-sm in main.page-shell",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16238,13 +16133,11 @@
     "name": "Capsules tab",
     "target": "GET /capsules",
     "counts": {
-     "target < 44 px": 3
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16253,68 +16146,32 @@
     "issue": 159,
     "name": "A capsule",
     "target": "GET /capsules/:id",
-    "counts": {
-     "target < 44 px": 6
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar",
-      "a.btn.btn-ghost.btn-sm /capsules/*/edit in header.app-bar",
-      "a.btn.btn-outline.btn-sm /outfits/ideas in main.page-shell",
-      "a.btn.btn-outline.btn-sm /styling in main.page-shell",
-      "a.btn.btn-outline.btn-sm /wardrobe in main.page-shell",
-      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "159 New capsule form",
     "issue": 159,
     "name": "New capsule form",
     "target": "GET /capsules/new",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /capsules in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "159 Edit capsule form",
     "issue": 159,
     "name": "Edit capsule form",
     "target": "GET /capsules/:id/edit",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /capsules/* in header.app-bar",
-      "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "160 Garment page",
     "issue": 160,
     "name": "Garment page",
     "target": "GET /wardrobe/:id",
-    "counts": {
-     "target < 44 px": 15
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.link.link-primary * in section#garment-details-title",
-      "a.link.link-primary /wardrobe/*/edit in section#garment-repairs",
-      "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
-      "input[type=checkbox].btn.btn-sm in section#garment-capsules",
-      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/away",
-      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/condition"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "161 Add form",
@@ -16322,13 +16179,11 @@
     "name": "Add form",
     "target": "GET /wardrobe/new",
     "counts": {
-     "target < 44 px": 7
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
-      "input[type=radio].btn.btn-sm in form /wardrobe"
+      "input[type=number].input in form /wardrobe"
      ]
     }
    },
@@ -16338,20 +16193,11 @@
     "name": "Edit form",
     "target": "GET /wardrobe/:id/edit",
     "counts": {
-     "nested-interactive": 1,
-     "target < 44 px": 26
+     "target < 44 px": 1
     },
     "kinds": {
-     "nested-interactive": [
-      "summary in form /wardrobe/*"
-     ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
-      "button[type=button].ms-pill-remove in form /wardrobe/*",
-      "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/*/repairs/*/delete",
-      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*",
-      "input[type=radio].btn.btn-sm in form /wardrobe/*",
-      "input[type=radio].btn.btn-sm in form.card /wardrobe/*/repairs"
+      "input[type=number].input in form /wardrobe/*"
      ]
     }
    },
@@ -16361,20 +16207,11 @@
     "name": "Clone form",
     "target": "GET /wardrobe/:id/clone",
     "counts": {
-     "nested-interactive": 1,
-     "target < 44 px": 25
+     "target < 44 px": 1
     },
     "kinds": {
-     "nested-interactive": [
-      "summary in form /wardrobe/*/clone"
-     ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
-      "button[type=button].ms-pill-remove in form /wardrobe/*/clone",
-      "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/*/clone",
-      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
-      "input[type=radio].btn.btn-sm in form /wardrobe/*/clone"
+      "input[type=number].input in form /wardrobe/*/clone"
      ]
     }
    },
@@ -16383,14 +16220,8 @@
     "issue": 161,
     "name": "Link page",
     "target": "GET /wardrobe/new/from-link",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/new in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "163 Styling",
@@ -16398,15 +16229,12 @@
     "name": "Styling",
     "target": "GET /styling",
     "counts": {
-     "target < 44 px": 11
+     "target < 44 px": 8
     },
     "kinds": {
      "target < 44 px": [
-      "button[role=switch][type=button].btn.btn-outline.btn-sm in form#styling-form /styling",
       "input[type=checkbox] in form#styling-form /styling",
-      "summary in aside#styling-aside.page-aside",
-      "summary.btn.btn-ghost.btn-sm in main.page-shell",
-      "summary.btn.btn-outline.btn-sm in header.app-bar"
+      "summary in aside#styling-aside.page-aside"
      ]
     }
    },
@@ -16416,14 +16244,11 @@
     "name": "Style this (?with=)",
     "target": "GET /styling",
     "counts": {
-     "target < 44 px": 10
+     "target < 44 px": 7
     },
     "kinds": {
      "target < 44 px": [
-      "button[role=switch][type=button].btn.btn-outline.btn-sm in form#styling-form /styling",
-      "input[type=checkbox] in form#styling-form /styling",
-      "summary.btn.btn-ghost.btn-sm in main.page-shell",
-      "summary.btn.btn-outline.btn-sm in header.app-bar"
+      "input[type=checkbox] in form#styling-form /styling"
      ]
     }
    },
@@ -16433,14 +16258,11 @@
     "name": "Edit an outfit (?outfit=)",
     "target": "GET /styling",
     "counts": {
-     "target < 44 px": 10
+     "target < 44 px": 7
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
-      "input[type=checkbox] in form#styling-form /styling",
-      "summary.btn.btn-ghost.btn-sm in main.page-shell",
-      "summary.btn.btn-outline.btn-sm in header.app-bar"
+      "input[type=checkbox] in form#styling-form /styling"
      ]
     }
    },
@@ -16450,15 +16272,12 @@
     "name": "For a planned evening (?for=)",
     "target": "GET /styling",
     "counts": {
-     "target < 44 px": 11
+     "target < 44 px": 8
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
       "input[type=checkbox] in form#styling-form /styling",
-      "summary in aside#styling-aside.page-aside",
-      "summary.btn.btn-ghost.btn-sm in main.page-shell",
-      "summary.btn.btn-outline.btn-sm in header.app-bar"
+      "summary in aside#styling-aside.page-aside"
      ]
     }
    },
@@ -16467,245 +16286,112 @@
     "issue": 164,
     "name": "Outfits (Saved)",
     "target": "GET /outfits",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-primary.btn-sm /styling in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "164 Saved, picking for a day",
     "issue": 164,
     "name": "Saved, picking for a day",
     "target": "GET /outfits",
-    "counts": {
-     "target < 44 px": 28
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
-      "a.btn.btn-primary.btn-sm /styling in header.app-bar",
-      "button[type=submit] in form /calendar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "164 Outfit page (Worn strip)",
     "issue": 164,
     "name": "Outfit page (Worn strip)",
     "target": "GET /outfits/:id",
-    "counts": {
-     "image-redundant-alt": 4,
-     "target < 44 px": 63
-    },
-    "kinds": {
-     "image-redundant-alt": [
-      "img in section#outfit-garments-title"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /outfits in header.app-bar",
-      "a.link.link-hover /calendar in main.page-shell",
-      "button[type=button].btn.btn-ghost.btn-sm in main.page-shell",
-      "input[type=file] in form /calendar/*/selfie"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "165 Week agenda",
     "issue": 165,
     "name": "Week agenda",
     "target": "GET /calendar",
-    "counts": {
-     "label-content-name-mismatch": 7,
-     "target < 44 px": 27
-    },
-    "kinds": {
-     "label-content-name-mismatch": [
-      "a * in main.page-shell"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
-      "button[type=button].btn.btn-ghost.btn-sm in section#*",
-      "button[type=submit].btn.btn-ghost.btn-xs in form /calendar/*/worn",
-      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
-      "input[type=file] in form /calendar/*/selfie",
-      "summary.btn.btn-ghost.btn-xs in section#*"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "165 Next week",
     "issue": 165,
     "name": "Next week",
     "target": "GET /calendar",
-    "counts": {
-     "label-content-name-mismatch": 7,
-     "target < 44 px": 18
-    },
-    "kinds": {
-     "label-content-name-mismatch": [
-      "a * in main.page-shell"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square /calendar in nav",
-      "button[type=button].btn.btn-ghost.btn-sm in section#*",
-      "button[type=submit].btn.btn-primary.btn-sm.btn-soft in form /calendar/plan-week",
-      "summary.btn.btn-ghost.btn-xs in section#*"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "165 Month collages",
     "issue": 165,
     "name": "Month collages",
     "target": "GET /calendar/month",
-    "counts": {
-     "label-content-name-mismatch": 22,
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "label-content-name-mismatch": [
-      "a /calendar in main.page-shell"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "165 Last month",
     "issue": 165,
     "name": "Last month",
     "target": "GET /calendar/month",
-    "counts": {
-     "label-content-name-mismatch": 13,
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "label-content-name-mismatch": [
-      "a /calendar in main.page-shell"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm.btn-square /calendar/month in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "165 + Plan sheet",
     "issue": 165,
     "name": "+ Plan sheet",
     "target": "GET /calendar/plan",
-    "counts": {
-     "target < 44 px": 7
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /calendar in header.app-bar",
-      "a.btn.btn-outline.btn-sm /calendar/plan in nav",
-      "a.btn.btn-primary.btn-sm /calendar/plan in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 Trips",
     "issue": 166,
     "name": "Trips",
     "target": "GET /trips",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-primary.btn-sm /trips/new in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 Trip page and packing list",
     "issue": 166,
     "name": "Trip page and packing list",
     "target": "GET /trips/:id",
-    "counts": {
-     "target < 44 px": 47
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar",
-      "a.btn.btn-ghost.btn-sm /trips/*/edit in header.app-bar",
-      "a.btn.btn-ghost.btn-xs /outfits/ideas in section#trip-outfits-heading",
-      "a.btn.btn-ghost.btn-xs /trips/*/outfits/new in section#trip-outfits-heading",
-      "a.link.link-hover /outfits/* in section#trip-outfits-heading",
-      "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/items/packed",
-      "button[type=submit].btn.btn-ghost.btn-square.btn-xs in form /trips/*/outfits/*/delete",
-      "button[type=submit].btn.btn-sm in form /trips/*/items",
-      "input[type=checkbox].checkbox.checkbox-sm in form /trips/*/items/packed",
-      "input[type=checkbox].checkbox.checkbox-sm in form /trips/*/packed"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 New trip form",
     "issue": 166,
     "name": "New trip form",
     "target": "GET /trips/new",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /trips in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 Edit trip form",
     "issue": 166,
     "name": "Edit trip form",
     "target": "GET /trips/:id/edit",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
-      "button[type=button].btn.btn-error.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 Add-an-outfit page",
     "issue": 166,
     "name": "Add-an-outfit page",
     "target": "GET /trips/:id/outfits/new",
-    "counts": {
-     "target < 44 px": 12
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in header.app-bar",
-      "a.btn.btn-outline.btn-sm /trips/*/outfits/new in nav",
-      "a.btn.btn-primary.btn-sm /trips/*/outfits/new in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "166 Ideas for the trip",
     "issue": 166,
     "name": "Ideas for the trip",
     "target": "GET /outfits/ideas",
-    "counts": {
-     "target < 44 px": 3
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in main.page-shell",
-      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "167 Wishlist",
@@ -16713,15 +16399,12 @@
     "name": "Wishlist",
     "target": "GET /wardrobe/wishlist",
     "counts": {
-     "target < 44 px": 9
+     "target < 44 px": 4
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-block.btn-outline.btn-primary.btn-sm /wardrobe/*/bought in section#inbox-own",
       "a.link.link-hover * in section#inbox-own",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16730,56 +16413,24 @@
     "issue": 167,
     "name": "Wishlist item",
     "target": "GET /wardrobe/:id",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
-      "a.link.link-primary * in section#garment-details-title"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "167 Wishlist form",
     "issue": 167,
     "name": "Wishlist form",
     "target": "GET /wardrobe/new",
-    "counts": {
-     "heading-order": 1,
-     "nested-interactive": 1,
-     "target < 44 px": 83
-    },
-    "kinds": {
-     "heading-order": [
-      "h3 in form /wardrobe"
-     ],
-     "nested-interactive": [
-      "summary in form /wardrobe"
-     ],
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/wishlist in header.app-bar",
-      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
-      "button[type=button].ms-pill-remove in form /wardrobe",
-      "input[type=checkbox].btn.btn-sm in form /wardrobe",
-      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe",
-      "input[type=radio].btn.btn-sm in form /wardrobe"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "167 Bought it form",
     "issue": 167,
     "name": "Bought it form",
     "target": "GET /wardrobe/:id/bought",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe/* in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "167 Style profile",
@@ -16787,22 +16438,11 @@
     "name": "Style profile",
     "target": "GET /auth/profile/style",
     "counts": {
-     "label-content-name-mismatch": 2,
-     "target < 44 px": 36
+     "target < 44 px": 1
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow"
-     ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
-      "a.link.link-primary /auth/profile/week in form /auth/profile/style",
-      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow",
-      "button[type=submit].btn.btn-primary.btn-sm in form /auth/profile/style/rules",
-      "input[type=checkbox].btn.btn-sm in form /auth/profile/style",
-      "input[type=radio].btn.btn-ghost.btn-sm in form /auth/profile/style",
-      "input[type=radio].btn.btn-sm in form /auth/profile/style",
-      "input[type=radio].btn.btn-sm in form /auth/profile/style/rules"
+      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow"
      ]
     }
    },
@@ -16811,135 +16451,64 @@
     "issue": 167,
     "name": "From your orders",
     "target": "GET /wardrobe/orders",
-    "counts": {
-     "target < 44 px": 19
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.link.link-primary * in main.page-shell",
-      "button[type=submit].btn.btn-ghost.btn-sm in form /wardrobe/orders/*/dismiss",
-      "button[type=submit].btn.btn-primary.btn-sm in form /wardrobe/orders/*/add"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "168 Ideas",
     "issue": 168,
     "name": "Ideas",
     "target": "GET /outfits/ideas",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "168 Ideas for a planned evening",
     "issue": 168,
     "name": "Ideas for a planned evening",
     "target": "GET /outfits/ideas",
-    "counts": {
-     "target < 44 px": 3
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell",
-      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "168 Ideas with a garment",
     "issue": 168,
     "name": "Ideas with a garment",
     "target": "GET /outfits/ideas",
-    "counts": {
-     "target < 44 px": 3
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /outfits/ideas in header.app-bar",
-      "a.link.link-hover /outfits/ideas in main.page-shell",
-      "summary.btn.btn-outline.btn-sm in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "169 Insights",
     "issue": 169,
     "name": "Insights",
     "target": "GET /wardrobe/insights",
-    "counts": {
-     "target < 44 px": 12
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
-      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
-      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
-      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
-      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
-      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "169 Insights, unworn 30 days",
     "issue": 169,
     "name": "Insights, unworn 30 days",
     "target": "GET /wardrobe/insights",
-    "counts": {
-     "target < 44 px": 12
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.btn.btn-ghost.btn-xs /wardrobe/insights in nav",
-      "a.btn.btn-outline.btn-sm /wardrobe in section#insights-attention.card",
-      "a.btn.btn-outline.btn-sm /wardrobe/insights/unworn in section#insights-unworn.card",
-      "a.btn.btn-outline.btn-sm /wardrobe/recap in main.page-shell",
-      "a.btn.btn-outline.btn-xs /styling in section#insights-unworn.card",
-      "a.btn.btn-primary.btn-xs /wardrobe/insights in nav"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "169 Year in review",
     "issue": 169,
     "name": "Year in review",
     "target": "GET /wardrobe/recap",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "button[type=button].btn.btn-primary.btn-sm in section#recap-summary.card"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "169 Year in review, last year",
     "issue": 169,
     "name": "Year in review, last year",
     "target": "GET /wardrobe/recap",
-    "counts": {
-     "target < 44 px": 3
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "a.btn.btn-ghost.btn-sm /wardrobe/recap in nav",
-      "a.btn.btn-primary.btn-sm /calendar in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "170 Shared wardrobe",
@@ -16947,16 +16516,12 @@
     "name": "Shared wardrobe",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 6
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-sm.btn-soft /wardrobe/tag in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "button[type=button].btn.btn-ghost.btn-sm.btn-square in main.page-shell",
       "input[type=text] in form#search-form /wardrobe",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16965,15 +16530,8 @@
     "issue": 170,
     "name": "Shared garment",
     "target": "GET /wardrobe/:id",
-    "counts": {
-     "target < 44 px": 4
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /wardrobe in header.app-bar",
-      "input[type=radio].btn.btn-sm in form.group /wardrobe/*/condition"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "170 Shared capsules",
@@ -16981,13 +16539,11 @@
     "name": "Shared capsules",
     "target": "GET /capsules",
     "counts": {
-     "target < 44 px": 3
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -16997,15 +16553,11 @@
     "name": "Shared wishlist",
     "target": "GET /wardrobe/wishlist",
     "counts": {
-     "target < 44 px": 5
+     "target < 44 px": 1
     },
     "kinds": {
      "target < 44 px": [
-      "a.btn.btn-outline.btn-sm /wardrobe/new/from-link in main.page-shell",
-      "a.btn.btn-primary.btn-sm /wardrobe/new in main.page-shell",
-      "button[type=button].btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar",
-      "summary.btn.btn-ghost.btn-sm in header.app-bar"
+      "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
    },
@@ -17015,13 +16567,12 @@
     "name": "Styling a shared wardrobe",
     "target": "GET /styling",
     "counts": {
-     "target < 44 px": 9
+     "target < 44 px": 8
     },
     "kinds": {
      "target < 44 px": [
       "input[type=checkbox] in form#styling-form /styling",
-      "summary in aside#styling-aside.page-aside",
-      "summary.btn.btn-ghost.btn-sm in main.page-shell"
+      "summary in aside#styling-aside.page-aside"
      ]
     }
    },
@@ -17030,143 +16581,80 @@
     "issue": 170,
     "name": "Share page, garment (signed out)",
     "target": "GET /share",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "170 Share page, outfit (signed out)",
     "issue": 170,
     "name": "Share page, outfit (signed out)",
     "target": "GET /share",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Profile",
     "issue": 171,
     "name": "Profile",
     "target": "GET /auth/profile",
-    "counts": {
-     "target < 44 px": 2
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-sm /auth/sign-out-everywhere in section#sign-out.card",
-      "a.link.link-hover /about in main.page-shell"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Sign-in page",
     "issue": 171,
     "name": "Sign-in page",
     "target": "GET /auth/login",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /auth/register in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Registration page",
     "issue": 171,
     "name": "Registration page",
     "target": "GET /auth/register",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-ghost.btn-sm /auth/login in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Change email page",
     "issue": 171,
     "name": "Change email page",
     "target": "GET /auth/update-email",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Change password page",
     "issue": 171,
     "name": "Change password page",
     "target": "GET /auth/change-password",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Sign out everywhere page",
     "issue": 171,
     "name": "Sign out everywhere page",
     "target": "GET /auth/sign-out-everywhere",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Delete account page",
     "issue": 171,
     "name": "Delete account page",
     "target": "GET /auth/delete-account",
-    "counts": {
-     "target < 44 px": 1
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Agent access (tokens)",
     "issue": 171,
     "name": "Agent access (tokens)",
     "target": "GET /auth/tokens",
-    "counts": {
-     "target < 44 px": 14
-    },
-    "kinds": {
-     "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
-      "button[type=submit].btn.btn-ghost.btn-xs in form /auth/tokens/*/revoke",
-      "button[type=submit].btn.btn-primary.btn-sm in form /auth/tokens"
-     ]
-    }
+    "counts": {},
+    "kinds": {}
    },
    {
     "id": "171 Sign-out page",
@@ -17182,21 +16670,11 @@
     "name": "Sizes",
     "target": "GET /auth/profile/sizes",
     "counts": {
-     "label-content-name-mismatch": 2,
-     "target < 44 px": 20
+     "target < 44 px": 1
     },
     "kinds": {
-     "label-content-name-mismatch": [
-      "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit",
-      "button[type=submit].btn.btn-sm in form /auth/profile/sizes/unit"
-     ],
      "target < 44 px": [
-      "a.btn.btn-circle.btn-ghost.btn-sm /auth/profile in header.app-bar",
-      "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit",
-      "button[type=submit].btn.btn-ghost.btn-sm in form.card.card-body /auth/profile/sizes/brands/*",
-      "button[type=submit].btn.btn-primary.btn-sm in form.card.card-body /auth/profile/sizes/brands",
-      "button[type=submit].btn.btn-primary.btn-sm in form.card.card-body /auth/profile/sizes/brands/*",
-      "button[type=submit].btn.btn-sm in form /auth/profile/sizes/unit"
+      "button[type=submit].btn.btn-active.btn-sm in form /auth/profile/sizes/unit"
      ]
     }
    }

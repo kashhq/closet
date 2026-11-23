@@ -18,6 +18,7 @@ import {
   TARGET_SIZE,
   TARGET_TOLERANCE_PX,
 } from './a11y-report';
+import { tapMisses } from '../../test/support/tap-area';
 import type { Actor, AuditRequest, Fixture } from './fixture';
 
 /**
@@ -112,6 +113,7 @@ async function measureInPage(limits: {
     element: ElementDescriptor;
     width: number;
     height: number;
+    lands: string;
   }[];
 }> {
   const describe = (el: Element): string => {
@@ -148,6 +150,7 @@ async function measureInPage(limits: {
   const injected = window as unknown as {
     axe: typeof Axe;
     closetRunWhileStill: typeof runWhileStill;
+    closetTapMisses: typeof tapMisses;
   };
   // Every change to the document while axe runs (runWhileStill), by its
   // target: a node axe judged may have been swapped out since.
@@ -269,39 +272,41 @@ async function measureInPage(limits: {
       (node) =>
         node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim(),
     );
-  const targets = [
+  const candidates = [
     ...document.querySelectorAll(
       'a[href], button, input:not([type="hidden"]), select, textarea, summary, ' +
         '[role="button"], [role="link"], [role="tab"], [role="checkbox"], [role="radio"], ' +
         '[role="switch"], [role="menuitem"], [role="option"]',
     ),
-  ].flatMap((el) => {
-    if (el.closest('[inert]') || el.matches(':disabled')) return [];
-    if (inline(el)) return [];
+  ].filter((el) => {
+    if (el.closest('[inert]') || el.matches(':disabled')) return false;
+    if (inline(el)) return false;
     // A control is tapped through its label too: a visually hidden radio
-    // behind a chip is the chip's size.
+    // behind a chip is shown as the chip.
     const labels =
       el instanceof HTMLInputElement ||
       el instanceof HTMLSelectElement ||
       el instanceof HTMLTextAreaElement
         ? [...(el.labels ?? [])]
         : [];
-    const boxes = [el, ...labels].flatMap((part) => shown(part) ?? []);
-    if (boxes.length === 0) return [];
-    const big = boxes.some(
-      (box) => box.width >= limits.targetMin && box.height >= limits.targetMin,
-    );
-    if (big) return [];
-    // The biggest of them: a hidden input's 1 px says nothing of its chip.
-    const box = boxes.reduce((a, b) =>
-      b.width * b.height > a.width * a.height ? b : a,
-    );
+    return [el, ...labels].some((part) => shown(part));
+  });
+  // Hit tested, not measured (tapMisses): the theme's hit areas count, and
+  // a neighbour's painted over them counts against.
+  const misses = injected.closetTapMisses(candidates, limits.targetMin);
+  const targets = candidates.flatMap((el, i) => {
+    const miss = misses[i];
+    if (!miss) return [];
+    const lands = miss.hit
+      ? [describe(miss.hit), ...miss.hit.classList].join('.')
+      : 'nothing';
     return [
       {
         selector: describe(el),
         element: element(el),
-        width: Math.round(box.width * 10) / 10,
-        height: Math.round(box.height * 10) / 10,
+        width: miss.width,
+        height: miss.height,
+        lands: `(${miss.dx}, ${miss.dy}) from its centre lands on ${lands}`,
       },
     ];
   });
@@ -324,6 +329,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
   await page.evaluate(found.axeSource);
   // Self-contained by contract (its doc), so its source runs in the page.
   await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
+  await page.evaluate(`window.closetTapMisses = ${String(tapMisses)}`);
   const measured = await page.evaluate(measureInPage, {
     fontMin: FIELD_FONT_MIN_PX,
     targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
@@ -354,7 +360,7 @@ async function measurePage(page: Page, found: Found): Promise<Measured> {
       measure: TARGET_SIZE,
       selector: target.selector,
       kind: kindOf(target.element, design),
-      detail: `${target.width} × ${target.height} px`,
+      detail: `${target.width} × ${target.height} px; ${target.lands}`,
     })),
   );
   return { ...tally(offenders), offenders, reruns: measured.reruns };

@@ -1001,6 +1001,8 @@ function CapsuleScope(props: {
   const current = props.capsules.find(
     (capsule) => String(capsule.id) === search.capsule,
   );
+  // The summary's text, which its aria-label starts from (#1210).
+  const scope = current ? current.name : t('ALL_GARMENTS');
   // The closet ("All") drops the scope rather than sending it empty: the
   // pushed URL then carries no `capsule=` (the form's hidden capsule goes
   // too, through hx-params).
@@ -1018,11 +1020,9 @@ function CapsuleScope(props: {
     <details class="dropdown shrink-0" id="capsule-scope">
       <summary
         class={`btn btn-sm rounded-full max-w-32 flex-nowrap ${current ? 'btn-primary' : 'btn-outline'}`}
-        aria-label={t('CAPSULE')}
+        aria-label={t('CAPSULE_SCOPE_LABEL', { scope })}
       >
-        <span class="truncate">
-          {current ? current.name : t('ALL_GARMENTS')}
-        </span>
+        <span class="truncate">{scope}</span>
         <span aria-hidden="true">▾</span>
       </summary>
       <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-300 z-20 w-56 mt-1 p-2">

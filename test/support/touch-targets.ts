@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { tapMisses } from './tap-area';
 
 /**
  * The phone's sizing rules (#636; views/assets/main.css, Touch sizing and
@@ -34,78 +35,38 @@ export async function expectNoZoomingFields(page: Page): Promise<void> {
 }
 
 /**
- * Every visible control's hit box is at least 44 px each way. The hit box
- * is what a tap there activates: the element's border box, unioned with
- * its ::before and ::after when they are positioned boxes (the theme's hit
- * areas, a stretched link), and with its labels' boxes (a checkbox in its
- * label, a file input hidden inside one). A pseudo-element's box is its
- * resolved insets against its containing block: the element when it is
- * positioned, else its offsetParent; none when the element's own overflow
- * clips them. Not measured: what an ancestor's overflow clips, and what a
- * neighbour's area covers.
+ * Every visible control takes a fingertip MIN_TARGET_PX across: tapMisses
+ * (tap-area.ts, the page audit's measure too) hit tests a disc on each, so
+ * the theme's hit areas and labels count, and an ancestor's clipping or a
+ * neighbour's area over it counts against.
  */
 export async function expectTouchTargets(page: Page): Promise<void> {
+  await page.evaluate(`window.closetTapMisses = ${String(tapMisses)}`);
   const small = await page.locator(CONTROLS).evaluateAll((controls, min) => {
-    type Box = { left: number; top: number; right: number; bottom: number };
-    const union = (a: Box, b: Box): Box => ({
-      left: Math.min(a.left, b.left),
-      top: Math.min(a.top, b.top),
-      right: Math.max(a.right, b.right),
-      bottom: Math.max(a.bottom, b.bottom),
-    });
-    const pseudoBox = (el: Element, which: '::before' | '::after') => {
-      const style = getComputedStyle(el, which);
-      if (style.content === 'none' || style.display === 'none') return null;
-      if (style.position !== 'absolute' && style.position !== 'fixed')
-        return null;
-      const positioned = getComputedStyle(el).position !== 'static';
-      const block = positioned
-        ? el
-        : ((el as HTMLElement).offsetParent ?? document.documentElement);
-      const outer = block.getBoundingClientRect();
-      const left = outer.left + block.clientLeft;
-      const top = outer.top + block.clientTop;
-      // An inline link has no client size: its box is the block.
-      const width = block.clientWidth || outer.width;
-      const height = block.clientHeight || outer.height;
-      return {
-        left: left + parseFloat(style.left),
-        top: top + parseFloat(style.top),
-        right: left + width - parseFloat(style.right),
-        bottom: top + height - parseFloat(style.bottom),
-      };
-    };
-    const hitBox = (el: Element): Box => {
-      let box: Box = el.getBoundingClientRect();
-      // Its own overflow clips its pseudo-elements (a `truncate` link).
-      const clips = getComputedStyle(el).overflow !== 'visible';
-      for (const which of ['::before', '::after'] as const) {
-        const pseudo = clips ? null : pseudoBox(el, which);
-        if (pseudo) box = union(box, pseudo);
-      }
-      const labels = (el as HTMLInputElement).labels ?? [];
-      for (const label of Array.from(labels)) {
-        box = union(box, hitBox(label));
-      }
-      return box;
-    };
+    const shown = controls.filter((el) =>
+      el.checkVisibility({ visibilityProperty: true }),
+    );
+    const misses = (
+      window as unknown as { closetTapMisses: typeof tapMisses }
+    ).closetTapMisses(shown, min);
     const name = (el: Element) =>
       (
         el.getAttribute('aria-label') ??
         el.textContent?.trim().replace(/\s+/g, ' ') ??
         ''
       ).slice(0, 40);
-    return controls
-      .filter((el) => el.checkVisibility({ visibilityProperty: true }))
-      .map((el) => {
-        const box = hitBox(el);
-        return {
+    return shown.flatMap((el, i) => {
+      const miss = misses[i];
+      if (!miss) return [];
+      const hit = miss.hit ? miss.hit.tagName.toLowerCase() : 'nothing';
+      return [
+        {
           control: `${el.tagName.toLowerCase()} "${name(el)}"`,
-          width: Math.round(box.right - box.left),
-          height: Math.round(box.bottom - box.top),
-        };
-      })
-      .filter(({ width, height }) => Math.min(width, height) < min);
+          size: `${miss.width} × ${miss.height}`,
+          missed: `(${miss.dx}, ${miss.dy}) lands on ${hit}`,
+        },
+      ];
+    });
   }, MIN_TARGET_PX);
   expect(small, `controls under ${MIN_TARGET_PX} px on ${page.url()}`).toEqual(
     [],

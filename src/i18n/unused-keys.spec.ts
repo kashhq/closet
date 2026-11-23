@@ -37,7 +37,7 @@ const DYNAMIC_PREFIXES = [
   'roles.', // wardrobe/labels.ts
   'sizes.measurement.',
   'sizes.unit.',
-  'sizes.unitName.',
+  'sizes.unitLabel.',
   'style.budget.', // style/labels.ts
   'style.style.',
   'trips.phase.', // trips/labels.ts

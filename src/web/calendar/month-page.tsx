@@ -11,6 +11,7 @@ import {
 } from '../weather/views';
 import type { MonthDayView, MonthView } from './calendar-view';
 import { MONTH_CELL } from '../layout/calendar-grid';
+import { CELL_LINK, LINKED_CELL } from './cell-link';
 import { PageShell } from '../layout/page-shell';
 import { calendarTabs } from './calendar-tabs';
 import { DAY_LETTERS, dayLabel, monthLabel } from '../date-labels';
@@ -98,26 +99,31 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
  */
 function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
   const [first] = day.entries;
-  // The link's aria-label stands in for its content, so the chip is read as
-  // its description instead.
+  // The link's aria-label says the day, its outfits and worn, so the chip is
+  // read as its description instead; the link holds only the date
+  // (CELL_LINK), the rest is the cell's.
   const weather = ctx.weatherEnabled && day.inForecast;
   const more = day.entries.length - 1;
   const worn = isWorn(day);
   return (
-    <a
-      href={dayUrl(day.date)}
-      class={`flex flex-col items-center gap-0.5 min-h-16 p-0.5 rounded-field overflow-hidden hover:bg-base-200 ${MONTH_CELL.day}`}
-      aria-label={cellLabel(day)}
-      aria-current={day.isToday ? 'date' : undefined}
-      aria-describedby={weather ? weatherDayId(day.date) : undefined}
+    <div
+      class={`flex flex-col items-center gap-0.5 min-h-16 p-0.5 overflow-hidden ${LINKED_CELL} ${MONTH_CELL.day}`}
       data-month-day={day.date}
       data-worn={worn ? '' : undefined}
     >
-      <span
-        class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
+      <a
+        href={dayUrl(day.date)}
+        class={CELL_LINK}
+        aria-label={cellLabel(day)}
+        aria-current={day.isToday ? 'date' : undefined}
+        aria-describedby={weather ? weatherDayId(day.date) : undefined}
       >
-        {day.dayNum}
-      </span>
+        <span
+          class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
+        >
+          {day.dayNum}
+        </span>
+      </a>
       {weather && <WeatherCellSlot ctx={ctx} day={day.date} />}
       {first && <CellCollage first={first} entries={day.entries} />}
       {worn && <span class="size-1 rounded-full bg-accent"></span>}
@@ -126,7 +132,7 @@ function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
           {t('calendar.MORE', { count: more })}
         </span>
       )}
-    </a>
+    </div>
   );
 }
 
