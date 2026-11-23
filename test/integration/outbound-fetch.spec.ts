@@ -1,3 +1,4 @@
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import {
   createServer,
   type IncomingHttpHeaders,
@@ -5,6 +6,8 @@ import {
   type Server,
 } from 'node:http';
 import {
+  type ClientHttp2Session,
+  type ClientHttp2Stream,
   createSecureServer,
   type Http2SecureServer,
   type Http2ServerRequest,
@@ -27,7 +30,16 @@ import {
   constants as zlibConstants,
   gzipSync,
 } from 'node:zlib';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { H2_SESSION_CHANNEL } from '../../src/web/security/outbound-dial';
 import { isPublicAddress } from '../../src/web/security/public-address';
 import {
   BYTE_LIMITS,
@@ -226,12 +238,34 @@ async function listenH2(
     get openSessions() {
       return open.size;
     },
+    // Sessions first: destroying only their sockets leaves each session for
+    // the GC, and one collected undestroyed aborts the worker
+    // (Http2Session::~Http2Session, docs/decisions.md 2026-11-22).
     close: () =>
       new Promise((resolve) => {
+        for (const session of open) session.destroy();
         for (const socket of sockets) socket.destroy();
         server.close(() => resolve());
       }),
   };
+}
+
+/**
+ * Every client h2 session the fetcher builds, from outbound-dial's channel,
+ * so a spec can hold the one it opened to `destroyed`.
+ */
+const clientSessions: ClientHttp2Session[] = [];
+const recordClientSession = (message: unknown) => {
+  clientSessions.push((message as { session: ClientHttp2Session }).session);
+};
+
+/**
+ * Every fetch, whatever its outcome, has destroyed the client session it
+ * built by the time it settles: one left to the GC aborts the process. Run
+ * before a test's servers close, whose hang-up would destroy a leaked one.
+ */
+function expectClientSessionsDestroyed(): void {
+  expect(clientSessions.splice(0).filter((s) => !s.destroyed)).toEqual([]);
 }
 
 /** A resolver answering from a table; `calls` records every lookup. */
@@ -297,15 +331,20 @@ describe('outbound fetch (SSRF guard)', () => {
   let privateServer: TestServer;
 
   beforeAll(async () => {
+    subscribe(H2_SESSION_CHANNEL, recordClientSession);
     privateServer = await listen(
       PRIVATE_IP,
       html('<title>Router admin</title>'),
     );
   });
 
-  afterAll(() => privateServer.close());
+  afterAll(async () => {
+    unsubscribe(H2_SESSION_CHANNEL, recordClientSession);
+    await privateServer.close();
+  });
 
   afterEach(async () => {
+    expectClientSessionsDestroyed();
     await Promise.all(servers.splice(0).map((server) => server.close()));
     expect(privateServer.hits).toEqual([]);
   });
@@ -1216,6 +1255,7 @@ describe('outbound fetch (SSRF guard)', () => {
     ]);
     const h2Servers: { close(): Promise<void> }[] = [];
     afterEach(async () => {
+      expectClientSessionsDestroyed();
       await Promise.all(h2Servers.splice(0).map((server) => server.close()));
     });
 
@@ -1449,7 +1489,109 @@ describe('outbound fetch (SSRF guard)', () => {
         '/3',
       ]);
       expect(shop.sessions).toBe(4);
+      // Each hop's own, destroyed by the hop that followed it (or the refusal).
+      expect(clientSessions.map((session) => session.destroyed)).toEqual([
+        true,
+        true,
+        true,
+        true,
+      ]);
       await expect.poll(() => shop.openSessions).toBe(0);
+    });
+
+    // The client session's every way out ends in destroy(): a session the GC
+    // collects undestroyed aborts the process (docs/decisions.md 2026-11-22).
+    describe('destroys its session', () => {
+      it('when the fetch times out between the dial and the request', async () => {
+        const shop = await serveH2(h2Html('<title>Tee</title>'));
+        const timeout = new AbortController();
+        // The session is built inside the dial's last callback, which then
+        // resolves: this microtask runs after that and before the request.
+        const abortOnBuild = () =>
+          queueMicrotask(() =>
+            timeout.abort(new DOMException('timed out', 'TimeoutError')),
+          );
+        subscribe(H2_SESSION_CHANNEL, abortOnBuild);
+        const { fetcher } = fetcherFor();
+        const timeoutSpy = vi
+          .spyOn(AbortSignal, 'timeout')
+          .mockReturnValueOnce(timeout.signal);
+
+        try {
+          await expectRefused(
+            fetcher.fetch(`https://shop.test:${shop.port}/`, {
+              accept: ['html'],
+            }),
+            'timeout',
+          );
+        } finally {
+          timeoutSpy.mockRestore();
+          unsubscribe(H2_SESSION_CHANNEL, abortOnBuild);
+        }
+        expect(clientSessions).toHaveLength(1);
+        expect(clientSessions[0].destroyed).toBe(true);
+        expect(shop.hits).toEqual([]);
+      });
+
+      it('when the session fails after its answer arrived', async () => {
+        let goAway: (() => void) | undefined;
+        const shop = await serveHostile(({ streamId, send }) => {
+          send(
+            responseHeaders(streamId, { 'content-type': 'text/html' }),
+            frame(FRAME.DATA, 0, streamId, Buffer.from('<title>Te')),
+          );
+          // GOAWAY with an error code: Node destroys the session with
+          // ERR_HTTP2_SESSION_ERROR, here after the answer's headers.
+          goAway = () => {
+            const payload = Buffer.alloc(8);
+            payload.writeUInt32BE(streamId);
+            payload.writeUInt32BE(INTERNAL_ERROR, 4);
+            send(frame(FRAME.GOAWAY, 0, 0, payload));
+          };
+        });
+        // Node's own channel: the stream, so the GOAWAY waits for its answer.
+        const onStream = (message: unknown) => {
+          const { stream } = message as { stream: ClientHttp2Stream };
+          stream.once('response', () => goAway?.());
+        };
+        subscribe('http2.client.stream.created', onStream);
+        const { fetcher, logs } = fetcherFor(5_000);
+
+        try {
+          await expectRefused(
+            fetcher.fetch(`https://shop.test:${shop.port}/`, {
+              accept: ['html'],
+            }),
+            'network',
+          );
+        } finally {
+          unsubscribe('http2.client.stream.created', onStream);
+        }
+        // The session's error, which Node also destroys the stream with.
+        expect(logs.messages('warn')).toEqual([
+          expect.stringMatching(/ \(ERR_HTTP2_SESSION_ERROR\)$/),
+        ]);
+        expect(clientSessions).toHaveLength(1);
+        expect(clientSessions[0].destroyed).toBe(true);
+      });
+
+      it('when its answer is refused unread', async () => {
+        const shop = await serveH2((_req, res) => {
+          // An endless body the fetch never reads.
+          res.writeHead(200, { 'content-type': 'application/pdf' });
+          res.write(Buffer.alloc(1024));
+        });
+        const { fetcher } = fetcherFor(5_000);
+
+        await expectRefused(
+          fetcher.fetch(`https://shop.test:${shop.port}/`, {
+            accept: ['html'],
+          }),
+          'unexpected-content-type',
+        );
+        expect(clientSessions).toHaveLength(1);
+        expect(clientSessions[0].destroyed).toBe(true);
+      });
     });
 
     it.each([

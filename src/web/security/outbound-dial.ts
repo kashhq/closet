@@ -1,3 +1,4 @@
+import { channel } from 'node:diagnostics_channel';
 import {
   type ClientHttp2Session,
   connect as connectHttp2,
@@ -75,6 +76,18 @@ const HTTP2_LIMITS: SecureClientSessionOptions & {
   maxReservedRemoteStreams: 0,
 };
 
+/**
+ * Publishes `{ session }` for every h2 session built here, as it is built.
+ * outbound-fetch.spec.ts subscribes to prove each ends destroyed on every
+ * path: a session collected undestroyed aborts the process
+ * (`Http2Session::~Http2Session`'s CHECK, docs/decisions.md 2026-11-22).
+ * Node's own `http2.client.stream.created` cannot stand in: it never sees a
+ * session that ends before its request. Nothing subscribes in production,
+ * where publishing costs one `hasSubscribers` read.
+ */
+export const H2_SESSION_CHANNEL = 'closet:outbound-dial:h2-session';
+const h2Sessions = channel(H2_SESSION_CHANNEL);
+
 /** A connection to the target's checked address, its protocol chosen. */
 export function dial(
   { host, address, port, secure, origin }: DialTarget,
@@ -116,6 +129,7 @@ export function dial(
         ...HTTP2_LIMITS,
         createConnection: () => tlsSocket,
       });
+      if (h2Sessions.hasSubscribers) h2Sessions.publish({ session });
       // As the socket's: from creation, never removed.
       session.on('error', reject);
       resolve({ protocol: 'h2', socket: tlsSocket, session });
