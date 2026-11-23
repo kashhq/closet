@@ -265,8 +265,11 @@ export function UserWeatherLine(props: {
 
 /** No location yet: the line is the way to set one. */
 function WeatherPrompt() {
+  // mb-5, not the line's mb-3: on a phone the link's 44 px hit area reaches
+  // 12 px under this 20 px line, and a btn-sm's 4.4 px above it, so the
+  // calendar's Plan my week button under it needs the room (#1210).
   return (
-    <p id={WEATHER_LINE_ID} class="mb-3 px-2 text-sm">
+    <p id={WEATHER_LINE_ID} class="mb-5 px-2 text-sm">
       <a class="link link-hover text-muted" href={WEATHER_SETTINGS_PATH}>
         {t('weather.SET_LOCATION')}
       </a>

@@ -375,7 +375,7 @@ export function renderA11y(report: A11yReport): string[] {
     '## Accessibility',
     '',
     `${report.pages.length} pages at ${report.viewport.width} × ${report.viewport.height} in Chromium, axe-core ${report.axeVersion}; ` +
-      `counts are violating nodes. \`${FIELD_FONT}\` is a text field iOS zooms into, \`${TARGET_SIZE}\` a tap target smaller on either side.`,
+      `counts are violating nodes. \`${FIELD_FONT}\` is a text field iOS zooms into, \`${TARGET_SIZE}\` a tap target a 44 px fingertip disc does not wholly reach (hit tested by \`tapMisses\`).`,
     '',
   ];
   if (totals.size === 0) {
