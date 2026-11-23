@@ -176,6 +176,12 @@
   :is(.input, .select):is(.input-sm, .input-xs, .select-sm, .select-xs) {
     --size: calc(var(--size-field) * 10);
   }
+  /* ...and as wide as it is tall: the wardrobe's search, collapsed to its
+     icon (`w-9`), is still a finger's target (#1210). min-width outranks
+     the call site's width. */
+  :is(.input, .select, .textarea) {
+    min-inline-size: 2.75rem;
+  }
   /* A menu's rows (Profile's account links, a ⋯ menu) are a list a finger
      runs down: each row 44 px, its text centred, as an iOS list's. */
   .menu :where(li:not(.menu-title) > :not(ul, details, .menu-title, .btn)),
@@ -244,6 +250,25 @@
       inset-block: min(0px, calc((100% - 2.75rem) / 2));
       inset-inline: min(0px, calc((100% - 2.75rem) / 2));
     }
+    /* A joined segment (the sizes unit switch) has no room beside it for
+       its area: it is 44 px wide itself, plus the border its next segment
+       overlaps (daisyUI's join pulls each one back by --border). */
+    .join-item:is(.btn-sm, .btn-xs) {
+      min-inline-size: calc(2.75rem + var(--border));
+    }
+  }
+}
+
+/* A row a finger taps, or one holding a small control whose 44 px area has
+   to fit inside it (#1210): at least 44 px tall where the pointer is
+   coarse, a fine pointer's row as drawn. For a label that wraps its small
+   checkbox ("Select all"), a summary that is the row (Styling's preview)
+   and a list whose rows each end in a btn-xs (avoided pairs). Never
+   `min-h-11` at a call site; spacing between two small controls is a
+   `pointer-coarse:` gap at theirs. */
+@utility tap-row {
+  @media (pointer: coarse) {
+    min-block-size: 2.75rem;
   }
 }
 

@@ -268,7 +268,7 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
           aria-hidden (each strip says its choice). The fit line stays
           outside it, so it is read on its own. */}
       <details class="group min-h-0 overflow-y-auto" data-preview-toggle="">
-        <summary class="relative flex cursor-pointer list-none flex-col px-4 pt-2 [&::-webkit-details-marker]:hidden">
+        <summary class="tap-row relative flex cursor-pointer list-none flex-col px-4 pt-2 [&::-webkit-details-marker]:hidden">
           <span class="sr-only">{t(PREVIEW_KEY)}</span>
           <StylingPreview rows={model.rows} />
           <span

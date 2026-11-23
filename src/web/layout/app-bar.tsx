@@ -108,8 +108,12 @@ export function AppBar(props: AppBarProps) {
       {props.scope && (
         <div class="flex items-center shrink-0">{props.scope}</div>
       )}
+      {/* Two btn-sm side by side (⋯ and ＋) need 9 px between them on a
+          phone for their 44 px areas (main.css, Touch hit areas; #1210). */}
       {props.actions && (
-        <div class="flex items-center gap-1 shrink-0">{props.actions}</div>
+        <div class="flex items-center gap-1 pointer-coarse:gap-2.5 shrink-0">
+          {props.actions}
+        </div>
       )}
       <Account ctx={ctx} returnTo={props.returnTo} />
     </header>

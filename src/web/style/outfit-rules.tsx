@@ -269,7 +269,7 @@ function AvoidedPairs({ pairs }: { pairs: AvoidedPair[] }) {
             b: garmentLabel(b),
           });
           return (
-            <li class="flex items-center justify-between gap-2">
+            <li class="tap-row flex items-center justify-between gap-2">
               <span>{pair}</span>
               <PostForm action={IDEAS_ALLOW_PATH}>
                 <input type="hidden" name="garmentId" value={String(a.id)} />
