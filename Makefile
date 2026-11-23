@@ -165,7 +165,7 @@ define e2e_server
 endef
 
 ci-e2e:
-	$(call e2e_server,$(TIER) e2e --budget $(E2E_BUDGET_SECONDS) --floor playwright=$(E2E_FLOOR) -- npx playwright test --project=chromium --reporter=list,ci-e2e)
+	$(call e2e_server,npm run test:audit-browser && $(TIER) e2e --budget $(E2E_BUDGET_SECONDS) --floor playwright=$(E2E_FLOOR) -- npx playwright test --project=chromium --reporter=list,ci-e2e)
 
 # Not a gate: 390 px (and a 1440 px block of) screenshots of the seed personas into screenshots/ (ci.yml's e2e job uploads
 # them). test/screenshots.spec.ts runs only with SEED_SCREENSHOTS, which playwright.config.ts

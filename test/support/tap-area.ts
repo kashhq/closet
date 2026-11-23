@@ -52,10 +52,11 @@ export function tapMisses(
   // (x + 1, y + 1), and where two boxes meet the later one painted wins: a
   // point on a row's last pixel lands on the row below. So each probe's
   // square is placed inside the disc, ending at a rim point past the centre
-  // and starting at one before it; and the rim sits half a pixel in, so a
-  // box exactly `min` across keeps its edge pixels: a disc within a pixel of
-  // `min` passes.
-  const radius = min / 2 - 0.5;
+  // and starting at one before it. Whole-pixel hit testing means a box
+  // reaches a probe when it overlaps the probe's pixel, so a box 43 across
+  // (edge 21.5 from its centre) still reaches the rim's last pixel [21, 22]
+  // and a 42 one (edge 21) does not: the documented tolerance is one pixel.
+  const radius = min / 2;
   const towardCentre = (at: number, offset: number): number => {
     if (offset > 0) return at - 1;
     if (offset < 0) return at;

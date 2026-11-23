@@ -59,10 +59,24 @@ export default defineConfig({
           // statement-budget helper from test/support/, which no project globs).
           include: ['src/**/*.spec.{ts,tsx}', 'scripts/**/*.spec.ts'],
           exclude: [
+            'scripts/**/*.browser.spec.ts',
             'src/web/calendar/**/*.spec.{ts,tsx}',
             'src/calendar-date.spec.ts',
             'src/web/date-labels.spec.ts',
           ],
+        },
+      },
+      {
+        // The page audit's in-browser measures against fixed HTML in a real
+        // Chromium page (scripts/audit/a11y.browser.spec.ts, #1209): layout is
+        // the thing under test, so no DOM shim stands in. Not `unit*`, and
+        // left out of test:all and test:cov, because ci-unit and ci-db need
+        // no browser; `make ci-e2e` runs it first, after it installs
+        // Chromium. Locally: npm run test:audit-browser.
+        extends: true,
+        test: {
+          name: 'audit-browser',
+          include: ['scripts/**/*.browser.spec.ts'],
         },
       },
       {
