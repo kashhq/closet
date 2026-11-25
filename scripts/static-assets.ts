@@ -109,7 +109,13 @@ export function pageModuleEntries(
     outbox: path.join(sources, 'outbox.ts'),
   };
   for (const file of fs.readdirSync(page).sort()) {
-    if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
+    // A `.browser.spec.ts` beside its module is a test, never a client entry (#1225).
+    if (
+      !file.endsWith('.ts') ||
+      file.endsWith('.d.ts') ||
+      file.endsWith('.spec.ts')
+    )
+      continue;
     entries[path.basename(file, '.ts')] = path.join(page, file);
   }
   return entries;
