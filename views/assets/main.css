@@ -7,13 +7,13 @@
    and comments became 44 dead classes, and daisyUI components
    (drawer, navbar, react-day-picker) nothing renders (docs/decisions.md
    2026-10-26). */
-@import 'tailwindcss' source('../../src');
+@import "tailwindcss" source("../../src");
 @source "../../public/js";
 @source "./page";
 @source "./outbox.ts";
 /* The two webfonts' @font-face rules, built from node_modules by
    `npm run generate:fonts` (views/assets/fonts.css says how). */
-@import '../../public/vendor/fonts/fonts.css';
+@import "../../public/vendor/fonts/fonts.css";
 
 /* The redesign's direction A, "Atelier" (docs/plans/2026-09-26-redesign.md,
    section 4): warm paper and ink, one clay accent used sparingly (a worn
@@ -33,7 +33,7 @@
 }
 
 @plugin "daisyui/theme" {
-  name: 'closet-light';
+  name: "closet-light";
   default: true;
   prefersdark: false;
   color-scheme: light;
@@ -72,7 +72,7 @@
 /* The same design at night: warm charcoal, the plinth lighter than the
    page so dark garments stay visible, ink turned to paper. */
 @plugin "daisyui/theme" {
-  name: 'closet-dark';
+  name: "closet-dark";
   default: false;
   prefersdark: true;
   color-scheme: dark;
@@ -110,8 +110,8 @@
    bar's title, and a card's title): the plan's one risk for this
    direction is the serif spreading into the UI. */
 @theme {
-  --font-sans: 'Inter Variable', system-ui, sans-serif;
-  --font-serif: 'Fraunces Variable', Georgia, serif;
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, serif;
 }
 /* Muted text (#88): one tone for secondary text (hints, captions, section
    labels, empty states, meta lines), the base content at 65%. It is the
@@ -128,16 +128,8 @@
    eslint.config.mjs refuses text-base-content/0 to /69 in markup, so
    these two are the only ways below /70. */
 @theme inline {
-  --color-muted: color-mix(
-    in oklab,
-    var(--color-base-content) 65%,
-    transparent
-  );
-  --color-faint: color-mix(
-    in oklab,
-    var(--color-base-content) 30%,
-    transparent
-  );
+  --color-muted: color-mix(in oklab, var(--color-base-content) 65%, transparent);
+  --color-faint: color-mix(in oklab, var(--color-base-content) 30%, transparent);
 }
 
 @layer base {
@@ -167,16 +159,16 @@
     --size-field: 0.275rem;
   }
   input:not(
-    [type='checkbox'],
-    [type='radio'],
-    [type='range'],
-    [type='file'],
-    [type='color'],
-    [type='button'],
-    [type='submit'],
-    [type='reset'],
-    [type='image']
-  ),
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="file"],
+      [type="color"],
+      [type="button"],
+      [type="submit"],
+      [type="reset"],
+      [type="image"]
+    ),
   select,
   textarea {
     font-size: max(16px, 1em);
@@ -237,27 +229,23 @@
 @layer components {
   @media (pointer: coarse) {
     :is(
-      .btn-sm,
-      .btn-xs,
-      .tab,
-      .link,
-      .checkbox,
-      .radio,
-      .toggle,
-      :is(a, button, label, summary).badge
-    ) {
-      position: relative;
-    }
-    :is(
         .btn-sm,
         .btn-xs,
         .tab,
         .link,
+        .checkbox,
+        .radio,
+        .toggle,
         :is(a, button, label, summary).badge
-      ):not(input)::after,
+      ) {
+      position: relative;
+    }
+    :is(.btn-sm, .btn-xs, .tab, .link, :is(a, button, label, summary).badge):not(
+        input
+      )::after,
     :is(.checkbox, .radio, .toggle):not(.btn, .tab)::after,
     input:is(.btn-sm, .btn-xs, .tab)::before {
-      content: '';
+      content: "";
       position: absolute;
       inset-block: min(0px, calc((100% - 2.75rem) / 2));
       inset-inline: min(0px, calc((100% - 2.75rem) / 2));
@@ -497,10 +485,10 @@ html {
   }
   /* `safe`: a row too wide for the screen starts at its start edge, where
      the scroller reaches it (space-between does so of itself). */
-  .action-bar[data-align='end'] {
+  .action-bar[data-align="end"] {
     justify-content: safe flex-end;
   }
-  .action-bar[data-align='between'] {
+  .action-bar[data-align="between"] {
     @apply justify-between;
   }
 
@@ -588,17 +576,17 @@ html {
     padding-top: var(--app-bar-h);
     padding-bottom: calc(var(--spacing-dock) + 2rem);
   }
-  .page-shell:not([data-layout='single']) {
+  .page-shell:not([data-layout="single"]) {
     max-width: var(--container-page-wide);
   }
   .page-body,
   .page-aside {
     padding: 1rem 1rem 0;
   }
-  .page-body[data-gutter='bleed'] {
+  .page-body[data-gutter="bleed"] {
     padding-inline: 0;
   }
-  .page-body[data-gutter='flush'] {
+  .page-body[data-gutter="flush"] {
     padding: 0;
   }
   /* The body's named flow (page-shell.tsx's `gap`): a column that far apart,
@@ -609,24 +597,24 @@ html {
     flex-direction: column;
     gap: var(--page-gap);
   }
-  .page-body[data-gap='3'],
-  .page-aside[data-gap='3'] {
+  .page-body[data-gap="3"],
+  .page-aside[data-gap="3"] {
     --page-gap: 0.75rem;
   }
-  .page-body[data-gap='4'],
-  .page-aside[data-gap='4'] {
+  .page-body[data-gap="4"],
+  .page-aside[data-gap="4"] {
     --page-gap: 1rem;
   }
-  .page-body[data-gap='5'],
-  .page-aside[data-gap='5'] {
+  .page-body[data-gap="5"],
+  .page-aside[data-gap="5"] {
     --page-gap: 1.25rem;
   }
-  .page-body[data-gap='6'],
-  .page-aside[data-gap='6'] {
+  .page-body[data-gap="6"],
+  .page-aside[data-gap="6"] {
     --page-gap: 1.5rem;
   }
-  .page-body[data-gap='8'],
-  .page-aside[data-gap='8'] {
+  .page-body[data-gap="8"],
+  .page-aside[data-gap="8"] {
     --page-gap: 2rem;
   }
   /* A split page on a phone is one column, the subject then the body: the
@@ -634,12 +622,12 @@ html {
      A layout rule that sets a body's padding names the layout in :where(),
      so it weighs what .page-body does and the gutter (flush, bleed: a class
      and an attribute) always outranks it. */
-  :where(.page-shell[data-layout='split']) > .page-body {
+  :where(.page-shell[data-layout="split"]) > .page-body {
     padding-top: var(--page-gap, 1rem);
   }
   /* A panel page on a phone is one column, the body then the aside, which
      continues the body's flow: its gap between them (PageAside). */
-  :where(.page-shell[data-layout='panel']) > .page-aside {
+  :where(.page-shell[data-layout="panel"]) > .page-aside {
     padding-top: var(--page-gap, 1rem);
   }
   /* A panel whose aside is the phone's bar (`asideBelowLg: 'bar'`, Styling's
@@ -651,16 +639,16 @@ html {
      Capped to the room between the app bar and the dock, a child that may
      grow (`min-h-0`) scrolls inside it. z-10, under a menu (z-20) opening in
      the body. From lg it is the panel's column like any other (below). */
-  .page-shell[data-aside='bar'] > .page-aside {
+  .page-shell[data-aside="bar"] > .page-aside {
     display: flex;
     flex-direction: column;
     padding: 0;
   }
   @media (max-width: 1023.98px) {
-    .page-shell[data-aside='bar'] {
+    .page-shell[data-aside="bar"] {
       padding-bottom: max(var(--spacing-dock), 2rem);
     }
-    .page-shell[data-aside='bar'] > .page-aside {
+    .page-shell[data-aside="bar"] > .page-aside {
       position: sticky;
       bottom: var(--spacing-dock);
       z-index: 10;
@@ -672,33 +660,33 @@ html {
   }
   /* On a phone the settings index is Profile itself, and a setting's page is
      the narrow column it was before it had a nav beside it. */
-  .page-shell[data-layout='index'] > .page-aside {
+  .page-shell[data-layout="index"] > .page-aside {
     display: none;
   }
   @media (max-width: 1023.98px) {
-    .page-shell[data-layout='index'] {
+    .page-shell[data-layout="index"] {
       max-width: var(--container-page-narrow);
     }
   }
   /* On a phone the facets are a closed bottom sheet (§3.3), so their aside
      takes no room above the body. */
   @media (max-width: 1023.98px) {
-    .page-shell[data-layout='facets'] > .page-aside {
+    .page-shell[data-layout="facets"] > .page-aside {
       padding: 0;
     }
     /* A subject shown from lg only (`subjectBelowLg: 'hidden'`, FormPage's
        aside, #1069): below lg the page is the narrow column a `single` page
        is, pixel for pixel; the body's padding is already its 1rem. */
-    .page-shell[data-subject='lg'] {
+    .page-shell[data-subject="lg"] {
       max-width: var(--container-page-narrow);
     }
-    .page-shell[data-subject='lg'] > .page-aside {
+    .page-shell[data-subject="lg"] > .page-aside {
       display: none;
     }
   }
 
   @media (min-width: 1024px) {
-    .page-shell:not([data-layout='single']) {
+    .page-shell:not([data-layout="single"]) {
       display: grid;
       align-items: start;
     }
@@ -714,16 +702,17 @@ html {
     }
     /* A subject and its facts: the photo or collage left, the facts at a
        reading measure right. */
-    .page-shell[data-layout='split'] {
-      grid-template: 'aside body' auto / 5fr 7fr;
+    .page-shell[data-layout="split"] {
+      grid-template:
+        "aside body" auto / 5fr 7fr;
     }
-    .page-shell[data-layout='split'] > .page-body,
-    .page-shell[data-layout='index'] > .page-body {
+    .page-shell[data-layout="split"] > .page-body,
+    .page-shell[data-layout="index"] > .page-body {
       max-width: var(--container-page-narrow);
     }
     /* Side by side, the two regions start on one line. */
-    :where(.page-shell[data-layout='split']) > .page-body,
-    :where(.page-shell[data-layout='panel']) > .page-aside {
+    :where(.page-shell[data-layout="split"]) > .page-body,
+    :where(.page-shell[data-layout="panel"]) > .page-aside {
       padding-top: 1rem;
     }
     /* A sticky region (split's subject, panel's aside: a trip's packing
@@ -738,35 +727,37 @@ html {
        anchored menu (the garment menu lives in the app bar; Not for me is an
        inline details; the extras' copy is a native select), and a sheet is
        top-layer. */
-    .page-shell[data-layout='split'] > .page-aside,
-    .page-shell[data-layout='panel'] > .page-aside {
+    .page-shell[data-layout="split"] > .page-aside,
+    .page-shell[data-layout="panel"] > .page-aside {
       max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
       overflow-y: auto;
       padding-bottom: 0.25rem;
       margin-bottom: -0.25rem;
     }
     /* Work and its result: the result beside it, right. */
-    .page-shell[data-layout='panel'] {
-      grid-template: 'body aside' auto / 1fr 20rem;
+    .page-shell[data-layout="panel"] {
+      grid-template:
+        "body aside" auto / 1fr 20rem;
     }
     /* A bar aside's content pads its own sides (the phone's bar); its top
        and its steps are here, so it starts on the body's line. */
-    .page-shell[data-aside='bar'] > .page-aside {
+    .page-shell[data-aside="bar"] > .page-aside {
       padding-top: 0.5rem;
       gap: 0.5rem;
     }
     /* A filtered gallery: the filters left (§3.3 docks its sheet here). */
-    .page-shell[data-layout='facets'],
-    .page-shell[data-layout='index'] {
-      grid-template: 'aside body' auto / 15rem 1fr;
+    .page-shell[data-layout="facets"],
+    .page-shell[data-layout="index"] {
+      grid-template:
+        "aside body" auto / 15rem 1fr;
     }
-    .page-shell[data-layout='index'] > .page-aside {
+    .page-shell[data-layout="index"] > .page-aside {
       display: block;
     }
     /* The facets scroll inside their sticky column, the aside itself the
        scroller: a fragment swaps its content in place (PageFragment), so
        the scroll survives an Apply. */
-    .page-shell[data-layout='facets'] > .page-aside {
+    .page-shell[data-layout="facets"] > .page-aside {
       max-height: calc(100dvh - var(--app-bar-h));
       overflow-y: auto;
       overscroll-behavior: contain;
@@ -779,7 +770,7 @@ html {
      where no scroll reaches it). After the lg block so it wins over its grid.
      The body carries the sides and the gap; a card in it brings its own
      `max-w-*`. */
-  .page-shell[data-layout='centred'] {
+  .page-shell[data-layout="centred"] {
     display: flex;
     flex-direction: column;
     justify-content: safe center;
@@ -787,7 +778,7 @@ html {
     min-height: 100%;
     padding-top: calc(var(--app-bar-h) + 1rem);
   }
-  .page-shell[data-layout='centred'] > .page-body {
+  .page-shell[data-layout="centred"] > .page-body {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -795,7 +786,7 @@ html {
     width: 100%;
   }
   /* Only the padding yields to the gutter (see the split rule above). */
-  :where(.page-shell[data-layout='centred']) > .page-body {
+  :where(.page-shell[data-layout="centred"]) > .page-body {
     padding: 0 1rem;
   }
 }
@@ -847,7 +838,7 @@ html {
       [data-sheet-anchor] {
         anchor-name: --sheet-trigger;
       }
-      :root:has([data-sheet-anchor]) .modal[data-sheet='menu'] > .modal-box {
+      :root:has([data-sheet-anchor]) .modal[data-sheet="menu"] > .modal-box {
         position: fixed;
         place-self: normal;
         position-anchor: --sheet-trigger;
@@ -875,9 +866,9 @@ html {
    daisyUI's layers rank above components, and this overrides its modal. */
 @layer utilities {
   @media (min-width: 1024px) {
-    .page-shell[data-layout='facets']
+    .page-shell[data-layout="facets"]
       > .page-aside
-      > .modal[data-sheet='filters']:not([open]) {
+      > .modal[data-sheet="filters"]:not([open]) {
       position: static;
       display: block;
       visibility: visible;
@@ -913,7 +904,7 @@ html {
         background-color: var(--color-base-100);
       }
     }
-    .page-shell[data-layout='facets'] [data-filters-opener] {
+    .page-shell[data-layout="facets"] [data-filters-opener] {
       display: none;
     }
   }
@@ -1066,12 +1057,7 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
      depth; a browser without color-mix keeps the ring alone. */
   @supports (color: color-mix(in oklab, red, red)) {
     &:focus-within {
-      box-shadow: 0 1px
-        color-mix(
-          in oklab,
-          var(--color-base-content) calc(var(--depth) * 10%),
-          transparent
-        );
+      box-shadow: 0 1px color-mix(in oklab, var(--color-base-content) calc(var(--depth) * 10%), transparent);
     }
   }
 
@@ -1103,8 +1089,7 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
   /* The open list, under the summary with a small gap, squared off on top. */
   & .ms-dropdown {
     @apply absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-[260px] overflow-y-auto rounded-b-[var(--radius-field)] border border-base-content/20 bg-base-100 py-1;
-    box-shadow: 0 4px 12px
-      color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    box-shadow: 0 4px 12px color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
   & .ms-search {
     @apply mx-2 my-1.5 flex items-center gap-1.5 rounded-[var(--radius-field)] border border-base-content/20 bg-base-200 px-2 py-1 text-muted;
