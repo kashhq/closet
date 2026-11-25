@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check upstream-check install
+.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish release devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check upstream-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -78,10 +78,11 @@ help:
 	@echo "make review PR=<n>    — one local review round: claude -p over PR <n>'s diff, its record posted"
 	@echo "make merge PR=<n>     — squash-merge PR <n> once its review rounds allow it"
 	@echo "make publish          — the publisher host's timer only: move ghcr.io/kashhq/closet:latest to the newest green main"
+	@echo "make release          — name a shipped commit: VERSION=x.y.z [SHA=<commit>] [DRY_RUN=1]; git tag vX.Y.Z, GHCR X.Y.Z and X.Y, a GitHub Release (a person, at the checkout)"
 	@echo "make devkit-sync      — pin the latest kashhq/devkit in .devkit-rev (a one-line commit) and materialize it"
 	@echo "make devkit-check     — fail if the materialized devkit/ differs from .devkit-rev (part of ci-quick)"
 	@echo "make toolchain-check  — fail if a Dockerfile or workflow disagrees with the Node in .nvmrc (part of ci-quick)"
-	@echo "make release-check    — fail unless the image is APP_VERSION's only source (part of ci-quick)"
+	@echo "make release-check    — fail unless the image is APP_VERSION's only source and package.json/lock say 0.0.0 (devkit/bin/release_check.sh, scripts/ci/version_sources.sh; part of ci-quick)"
 	@echo "make workflows-check  — fail unless the workflows follow devkit's Actions rules (part of ci-quick)"
 	@echo "make actionlint-check — fail unless every .github/workflows file is valid to actionlint (scripts/ci/actionlint.sh; part of ci-quick)"
 	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index, the original project's name never back (part of ci-quick)"
@@ -241,6 +242,12 @@ review: ; devkit/bin/pr_review.sh "$(PR)"
 publish:
 	devkit/bin/publish.sh .
 
+# A person at the checkout names an already-shipped commit (devkit README "Releases"; docs/decisions.md
+# 2026-11-25): make release VERSION=0.1.0 [SHA=<commit>] [DRY_RUN=1]. Never moves a build.
+release:
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=x.y.z [SHA=<commit>] [DRY_RUN=1]" >&2; exit 2; }
+	devkit/bin/release_tag.sh "$(VERSION)" $(SHA) $(if $(DRY_RUN),--dry-run)
+
 devkit-sync:
 	devkit/bin/devkit-sync.sh
 
@@ -255,6 +262,7 @@ toolchain-check:
 
 release-check:
 	devkit/bin/release_check.sh
+	scripts/ci/version_sources.sh
 
 workflows-check:
 	devkit/bin/workflows_check.sh

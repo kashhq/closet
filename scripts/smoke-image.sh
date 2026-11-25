@@ -287,7 +287,7 @@ awk '/<!-- smoke:quickstart -->/ {on=1} on && /^```yaml$/ {inblock=1; next} inbl
   "$(dirname "$0")/../README.md" >"$COMPOSE_FILE"
 [ -s "$COMPOSE_FILE" ] || fail "README.md has no yaml block after <!-- smoke:quickstart -->"
 sed -i.bak \
-  -e "s#ghcr.io/kashhq/closet:latest#$IMAGE#" \
+  -e "s#ghcr.io/kashhq/closet:[A-Za-z0-9._-]*#$IMAGE#" \
   -e "s#'3000:3000'#'$PORT:3000'#" \
   -e "s#<secret>#smoke-test-access-token-secret-not-for-deployment#" \
   -e "s#<password>#smoke-readme-password#" "$COMPOSE_FILE"

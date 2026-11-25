@@ -10,17 +10,22 @@
  * commit is format-only (each one that rewrapped also changed content), and ignoring one would
  * hand its new lines to its parents.
  *
- * So this compares text instead. The upstream corpus is every text blob in the tree of every
- * commit not authored by the owner, with all whitespace removed (line breaks too, so a split or
- * a joined line still matches) and a trailing comma before a closing bracket dropped (a
- * formatter adds or removes it when it rewraps). An owner line counts as inherited when its own
- * text, normalized the same way and trimmed of the punctuation at its ends (a quote, a comma, a
- * wrapper's bracket), is at least MIN_CHARS long and occurs anywhere in that corpus.
+ * So this compares text instead, against every text blob in the tree of every commit not
+ * authored by the owner, normalized: all whitespace removed and a trailing comma before a closing
+ * bracket dropped (a formatter adds or removes it when it rewraps); a line's core is that, trimmed
+ * of the punctuation at its ends (a quote, a comma, a wrapper's bracket). An owner line counts as
+ * inherited when (scripts/upstream-match.ts, inheritedLines):
+ * - its core is at least MIN_CHARS long and occurs anywhere in the blobs, matched with line
+ *   breaks removed, so a line that joins inherited lines or wraps inherited text still matches; or
+ * - it starts a run of two or three owner lines, adjacent in one file, whose joined core equals
+ *   the core of one upstream line: a formatter split that line into pieces under MIN_CHARS
+ *   (#1236). Equality with a whole upstream line, not a substring, because short boilerplate lines
+ *   (`<button`, `type="button"`) sit next to each other in any codebase.
+ * The hit is reported at the line, or the run's first line.
  *
- * MIN_CHARS keeps out the fragments every codebase shares: below 40 characters the matches are
- * one-name imports and two-class rows; a line that long and found verbatim in upstream text is
- * either inherited or a one-form fact, which scripts/ci/upstream_exempt.txt lists with its
- * reason.
+ * MIN_CHARS (40) keeps out the fragments every codebase shares: below it the matches are one-name
+ * imports and two-class rows; a line that long and found verbatim in upstream text is either
+ * inherited or a one-form fact, which scripts/ci/upstream_exempt.txt lists with its reason.
  *
  * Usage: upstream-rewraps.ts <owned-lines> <owner email>...; <owned-lines> holds
  * `<file>\t<line number>\t<trimmed text>` per substantive owner line, as upstream_lines.sh's awk
@@ -28,19 +33,21 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import {
+  buildCorpus,
+  inheritedLines,
+  MIN_CHARS,
+  type OwnedLine,
+  type UpstreamCorpus,
+} from './upstream-match';
 
-const MIN_CHARS = 40;
 const BINARY_PROBE_BYTES = 8000;
 
 function git(args: string[], input?: string): Buffer {
   return execFileSync('git', args, { input, maxBuffer: 1 << 30 });
 }
 
-function normalize(text: string): string {
-  return text.replace(/\s+/g, '').replace(/,([)\]}])/g, '$1');
-}
-
-function upstreamCorpus(owners: Set<string>): string {
+function upstreamCorpus(owners: Set<string>): UpstreamCorpus {
   const upstreamCommits = git(['log', '--format=%H%x09%ae', 'HEAD'])
     .toString()
     .split('\n')
@@ -68,31 +75,27 @@ function upstreamCorpus(owners: Set<string>): string {
     const body = batch.subarray(headerEnd + 1, headerEnd + 1 + size);
     at = headerEnd + 2 + size;
     if (body.subarray(0, BINARY_PROBE_BYTES).includes(0)) continue;
-    texts.add(normalize(body.toString('utf8')));
+    texts.add(body.toString('utf8'));
   }
+  const corpus = buildCorpus(texts);
   console.error(
-    `upstream-rewraps: ${upstreamCommits.length} upstream commits, ${texts.size} distinct text blobs`,
+    `upstream-rewraps: ${upstreamCommits.length} upstream commits, ${texts.size} distinct text blobs, ${corpus.lines.size} distinct lines of ${MIN_CHARS}+`,
   );
-  // NUL never occurs in a text blob, so no match spans two of them.
-  return [...texts].join('\0');
+  return corpus;
 }
 
 function main(): void {
   const [ownedPath, ...ownerEmails] = process.argv.slice(2);
   const corpus = upstreamCorpus(new Set(ownerEmails));
-  const verdicts = new Map<string, boolean>();
-  for (const line of readFileSync(ownedPath, 'utf8').split('\n')) {
-    if (!line) continue;
-    const [file, lineNumber, ...rest] = line.split('\t');
-    const text = rest.join('\t');
-    const core = normalize(text).replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
-    if (core.length < MIN_CHARS) continue;
-    let inherited = verdicts.get(core);
-    if (inherited === undefined) {
-      inherited = corpus.includes(core);
-      verdicts.set(core, inherited);
-    }
-    if (inherited) console.log(`${file}\t${lineNumber}\t${text}`);
+  const owned: OwnedLine[] = readFileSync(ownedPath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [file, lineNumber, ...rest] = line.split('\t');
+      return { file, lineNumber, text: rest.join('\t') };
+    });
+  for (const { file, lineNumber, text } of inheritedLines(owned, corpus)) {
+    console.log(`${file}\t${lineNumber}\t${text}`);
   }
 }
 
