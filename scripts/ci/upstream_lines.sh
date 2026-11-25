@@ -57,6 +57,10 @@ if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
   echo "upstream-check: fork point $base ($BASE_FILE) is not in this clone, so nothing to check against" >&2
   exit 2
 fi
+git merge-base --is-ancestor "$base" HEAD || {
+  echo "upstream-check: fork point $base is not an ancestor of HEAD" >&2
+  exit 2
+}
 
 ancestors=$(mktemp)
 git rev-list "$base" > "$ancestors"
@@ -91,7 +95,7 @@ while IFS= read -r -d '' file; do
         if (substr(line, 1, tab - 1) == file) allowed[substr(line, tab + 1)] = 1
       }
     }
-    /^[0-9a-f]{40} / { commit = $1; next }
+    length($1) == 40 && $1 ~ /^[0-9a-f]+$/ { commit = $1; next }
     /^author-mail / { mail = $2; next }
     /^\t/ {
       total++

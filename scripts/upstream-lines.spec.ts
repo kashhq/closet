@@ -21,8 +21,19 @@ const BOT_LINE = 'const botWrittenLineLongEnoughToBeInTheCorpus = run(1, 2);';
 
 let repo: string;
 
+// No user or system git config (signing, hooks, default branch) leaks into the scratch repo.
+const hermetic = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+};
+
 function git(...args: string[]): string {
-  return execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  return execFileSync('git', args, {
+    cwd: repo,
+    encoding: 'utf8',
+    env: hermetic,
+  }).trim();
 }
 
 function commit(email: string, files: Record<string, string>): string {
@@ -33,7 +44,7 @@ function commit(email: string, files: Record<string, string>): string {
   execFileSync('git', ['commit', '-q', '-m', 'c'], {
     cwd: repo,
     env: {
-      ...process.env,
+      ...hermetic,
       GIT_AUTHOR_NAME: 'n',
       GIT_AUTHOR_EMAIL: email,
       GIT_COMMITTER_NAME: 'n',
@@ -48,6 +59,7 @@ function run(base: string) {
   const result = spawnSync('bash', ['scripts/ci/upstream_lines.sh'], {
     cwd: repo,
     encoding: 'utf8',
+    env: hermetic,
   });
   return { status: result.status, out: result.stdout, err: result.stderr };
 }
@@ -55,6 +67,8 @@ function run(base: string) {
 beforeEach(() => {
   repo = mkdtempSync(join(tmpdir(), 'upstream-lines-'));
   git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'n');
+  git('config', 'user.email', 'n@example.com');
   mkdirSync(join(repo, 'scripts/ci'), { recursive: true });
   for (const file of ['upstream-rewraps.ts', 'upstream-match.ts']) {
     copyFileSync(join(ROOT, 'scripts', file), join(repo, 'scripts', file));
@@ -108,6 +122,17 @@ describe('upstream_lines.sh', () => {
     expect(result.out).toMatch(/^1\t1\ta\.txt$/m);
     expect(result.out).toMatch(/^1\t1\tb\.txt$/m);
     expect(result.status).toBe(1);
+  });
+
+  it('refuses a fork point that is not an ancestor of HEAD', () => {
+    commit(OWNER, { 'a.txt': 'a line the owner wrote today\n' });
+    git('checkout', '-q', '-b', 'side');
+    const side = commit(OWNER, { 'b.txt': 'a line on the side branch\n' });
+    git('checkout', '-q', 'main');
+    commit(OWNER, { 'c.txt': 'a line on the main branch\n' });
+    const result = run(side);
+    expect(result.status).toBe(2);
+    expect(result.err).toContain('is not an ancestor of HEAD');
   });
 
   it('refuses a clone that lacks the fork point', () => {
