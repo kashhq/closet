@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { wardrobeShare } from '../../src/db/schema';
+import { inspiration, wardrobeShare } from '../../src/db/schema';
 import { t as text } from '../../src/web/i18n';
 import { jpegPhoto } from './garments';
 import { createTestApp, OWNER_EMAIL, type TestApp, userIdOf } from './harness';
@@ -173,7 +173,38 @@ describe('MCP: saved looks', () => {
     });
     expect(await tool(t, granteeToken, 'list_inspiration')).toEqual({
       looks: [],
+      next: null,
     });
+  });
+
+  // #528: a page of `limit`, `next` back as `before`, null on the last.
+  it('pages the list: `next` is the last id of a full page, null at the end', async () => {
+    const [{ id: older }] = await t.db
+      .insert(inspiration)
+      .values({ ownerId, sourceUrl: 'https://example.com/older-look' })
+      .returning({ id: inspiration.id });
+    const page = (args: Record<string, unknown>) =>
+      tool<{ looks: { id: number }[]; next: number | null }>(
+        t,
+        token,
+        'list_inspiration',
+        args,
+      );
+    const [{ id: newest }] = await t.db
+      .insert(inspiration)
+      .values({ ownerId, sourceUrl: 'https://example.com/newest-look' })
+      .returning({ id: inspiration.id });
+    const first = await page({ limit: 1 });
+    expect(first).toEqual({
+      looks: [expect.objectContaining({ id: newest })],
+      next: newest,
+    });
+    const second = await page({ limit: 1, before: newest });
+    expect(second.looks.map((row) => row.id)).toEqual([older]);
+    expect(second.next).toBe(older);
+    const rest = await page({ before: older });
+    expect(rest.looks.map((row) => row.id)).toContain(look);
+    expect(rest.next).toBeNull();
   });
 
   it.each(['get_inspiration', 'set_inspiration_pieces'])(

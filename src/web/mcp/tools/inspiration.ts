@@ -7,6 +7,7 @@ import {
   INSPIRATION_PIECE_ROLES,
   PATTERNS,
 } from '../../../wardrobe/properties';
+import { LIST_LIMIT_MAX } from '../../api/resource';
 import { HttpError } from '../../errors';
 import { t } from '../../i18n';
 import {
@@ -16,6 +17,7 @@ import {
   listInspirations,
   wishlisted,
 } from '../../inspiration/queries';
+import { LOOK_PAGE_SIZE } from '../../inspiration/page-size';
 import { typesOfRole } from '../../inspiration/piece-input';
 import {
   type LookRecreation,
@@ -153,12 +155,27 @@ export const inspirationTools = [
   defineTool({
     name: 'list_inspiration',
     title: 'List my saved looks',
-    description:
-      "Your saved looks (Outfits › Inspiration), newest first: outfits you saw and kept as a photo, a link or both, each with its title, its link, whether it has a photo and how many pieces it is tagged with. A look with no pieces is untagged: read its link's page and tag it with set_inspiration_pieces. Your own only.",
-    input: z.object({}),
+    description: `Your saved looks (Outfits › Inspiration), newest first: outfits you saw and kept as a photo, a link or both, each with its title, its link, whether it has a photo and how many pieces it is tagged with. ${LOOK_PAGE_SIZE} a page unless \`limit\` asks: pass the answer's \`next\` (null on the last page) back as \`before\` for the next. A look with no pieces is untagged: read its link's page and tag it with set_inspiration_pieces. Your own only.`,
+    input: z.object({
+      before: rowId()
+        .optional()
+        .describe("The previous page's `next`, passed back as it came."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(LIST_LIMIT_MAX)
+        .optional()
+        .describe(
+          `How many a page holds: ${LOOK_PAGE_SIZE} unless asked, at most ${LIST_LIMIT_MAX}.`,
+        ),
+    }),
     writes: false,
-    async run(_args, ctx) {
-      const looks = await listInspirations(ctx.db, ctx.userId);
+    async run({ before, limit = LOOK_PAGE_SIZE }, ctx) {
+      const { looks, next } = await listInspirations(ctx.db, ctx.userId, {
+        before,
+        limit,
+      });
       return {
         looks: looks.map((look) => ({
           id: look.id,
@@ -167,6 +184,7 @@ export const inspirationTools = [
           hasPhoto: look.photo !== null,
           pieceCount: look.pieceCount,
         })),
+        next,
       };
     },
   }),
