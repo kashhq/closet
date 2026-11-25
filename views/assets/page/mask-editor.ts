@@ -93,8 +93,13 @@ function editCutout(
   const source = alignOriginal(original, canvas.width, canvas.height);
 
   let brush: Brush = 'erase';
-  // Where the stroke under way last painted, in canvas pixels.
-  let last: { x: number; y: number } | null = null;
+  // The stroke under way: the one pointer that owns it (a second finger is
+  // ignored until it ends, or its moves would paint a streak between the two)
+  // and where it last painted, in canvas pixels.
+  let stroke: {
+    pointerId: number;
+    last: { x: number; y: number } | null;
+  } | null = null;
 
   const selectBrush = (next: Brush) => {
     brush = next;
@@ -110,7 +115,7 @@ function editCutout(
    * radius apart, so a fast stroke leaves no gaps. The size is in screen
    * pixels, the canvas drawn smaller or larger than its own.
    */
-  const paintTo = (event: PointerEvent) => {
+  const paintTo = (active: NonNullable<typeof stroke>, event: PointerEvent) => {
     const box = canvas.getBoundingClientRect();
     const scaleX = canvas.width / box.width;
     const scaleY = canvas.height / box.height;
@@ -119,13 +124,13 @@ function editCutout(
       y: (event.clientY - box.top) * scaleY,
     };
     const radius = Number(sizeInput.value) * scaleX;
-    const from = last ?? point;
+    const from = active.last ?? point;
     const steps = Math.max(
       1,
       Math.ceil(Math.hypot(point.x - from.x, point.y - from.y) / (radius / 3)),
     );
     const stroke = new Path2D();
-    for (let step = last ? 1 : 0; step <= steps; step += 1) {
+    for (let step = active.last ? 1 : 0; step <= steps; step += 1) {
       const x = from.x + ((point.x - from.x) * step) / steps;
       const y = from.y + ((point.y - from.y) * step) / steps;
       stroke.moveTo(x + radius, y);
@@ -140,20 +145,20 @@ function editCutout(
       context.drawImage(source, 0, 0);
     }
     context.restore();
-    last = point;
+    active.last = point;
   };
 
   const startStroke = (event: PointerEvent) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || stroke) return;
     canvas.setPointerCapture(event.pointerId);
-    last = null;
-    paintTo(event);
+    stroke = { pointerId: event.pointerId, last: null };
+    paintTo(stroke, event);
   };
   const continueStroke = (event: PointerEvent) => {
-    if (canvas.hasPointerCapture(event.pointerId)) paintTo(event);
+    if (stroke?.pointerId === event.pointerId) paintTo(stroke, event);
   };
-  const endStroke = () => {
-    last = null;
+  const endStroke = (event: PointerEvent) => {
+    if (stroke?.pointerId === event.pointerId) stroke = null;
   };
 
   const listeners = new AbortController();
@@ -162,6 +167,7 @@ function editCutout(
   canvas.addEventListener('pointermove', continueStroke, { signal });
   canvas.addEventListener('pointerup', endStroke, { signal });
   canvas.addEventListener('pointercancel', endStroke, { signal });
+  canvas.addEventListener('lostpointercapture', endStroke, { signal });
   eraseButton.addEventListener('click', () => selectBrush('erase'), { signal });
   restoreButton.addEventListener('click', () => selectBrush('restore'), {
     signal,
