@@ -29,7 +29,7 @@ const HOUSEHOLD_CURRENCY = 'USD';
 
 /**
  * "From your orders" (#25): the review list of what the order mail's poll
- * found (poll.ts), for ORDER_MAIL_OWNER's account only: anyone else, and
+ * found (poll.ts), for the order mail's owner only: anyone else, and
  * everyone with the order mail off, gets a 404 like a route that does not
  * exist. Registered either way, so the static path always wins over
  * /wardrobe/:id (whose id check would answer "orders" with a 400).

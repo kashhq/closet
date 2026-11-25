@@ -2761,6 +2761,36 @@ export const orderItem = pgTable(
   ],
 );
 
+// The order mail's owner (#976): the account ORDER_MAIL_OWNER named when
+// the order mail first bound it (adoptOrderMailOwner, at boot) or the
+// operator last rebound it (`npm run order-mail:bind-owner -- --confirm`),
+// and never found by email again. One row: the primary key is a boolean that
+// can only be true. The row outlives its account: deletion sets `user_id`
+// null, so "bound, then deleted" stays apart from "never bound" and no boot
+// re-adopts whoever registers the address next. Not synced (no owner).
+export const orderMailOwner = pgTable(
+  'order_mail_owner',
+  {
+    singleton: boolean('singleton').primaryKey().default(true),
+    userId: integer('user_id'),
+    boundAt: timestamp('bound_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check('order_mail_owner_singleton_check', sql`${table.singleton}`),
+    // The foreign key's index.
+    unique('order_mail_owner_user_id_unique').on(table.userId),
+    foreignKey({
+      name: 'order_mail_owner_user_id_foreign',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+  ],
+);
+
 // Relations for db.query (relational queries); they add nothing to the
 // schema. Names follow the MikroORM entities' properties.
 

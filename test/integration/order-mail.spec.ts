@@ -1,7 +1,15 @@
 import { eq } from 'drizzle-orm';
+import { PassThrough } from 'node:stream';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { garment, orderEmail, orderItem, user } from '../../src/db/schema';
+import { runBindOrderMailOwner } from '../../src/maintenance/bind-order-mail-owner';
+import {
+  garment,
+  orderEmail,
+  orderItem,
+  orderMailOwner,
+  user,
+} from '../../src/db/schema';
 import { PartialFailure } from '../../src/metrics/partial-failure';
 import { t as text } from '../../src/web/i18n';
 import { JmapError } from '../../src/web/wardrobe/order-mail/jmap';
@@ -9,7 +17,12 @@ import {
   pollOrderMail,
   pollOrderMailWhole,
 } from '../../src/web/wardrobe/order-mail/poll';
-import { pollStart } from '../../src/web/wardrobe/order-mail/queries';
+import { resolveOrderMailOwner } from '../../src/web/wardrobe/order-mail/owner';
+import { OrderMailOwnerWatch } from '../../src/web/wardrobe/order-mail/owner-watch';
+import {
+  adoptOrderMailOwner,
+  pollStart,
+} from '../../src/web/wardrobe/order-mail/queries';
 import {
   type JmapStub,
   startJmapStub,
@@ -25,6 +38,7 @@ import {
   recordQueries,
   type TestApp,
   unescapeHtml,
+  userIdOf,
 } from './harness';
 import { html, type LinkSites, startLinkSites } from './link-sites';
 import {
@@ -962,10 +976,7 @@ describe('order email import, owner missing', () => {
     expect(res.statusCode).toBe(200);
     return res.json().checks.order_mail_owner;
   };
-  const errors = (app: TestApp) =>
-    app.logs
-      .messages('error', 'OrderMail')
-      .filter((m) => /ORDER_MAIL_OWNER/.test(m));
+  const errors = (app: TestApp) => app.logs.messages('error', 'OrderMail');
 
   it('boots with the order mail off, one error naming the key and a degraded readiness when no account has the address', async () => {
     const app = await boot('nobody@example.com');
@@ -1001,6 +1012,165 @@ describe('order email import, owner missing', () => {
     expect(await app.db.select().from(orderEmail)).toHaveLength(0);
     expect((await check(app)).status).toBe('down');
     expect(errors(app)).toHaveLength(1);
+  });
+});
+
+/**
+ * #976: the owner is a stored id. A boot reads the row and never looks the
+ * address up again; only a boot with no row adopts, once. `restart` runs the
+ * boot's step again on the same database, as the next deploy would.
+ */
+describe('order email import, the stored owner', () => {
+  let jmap: JmapStub;
+  let t: TestApp;
+
+  beforeAll(async () => {
+    jmap = await startJmapStub(TOKEN);
+    t = await createTestApp(
+      {
+        ORDER_MAIL_JMAP_TOKEN: TOKEN,
+        ORDER_MAIL_SENDERS: SENDER,
+        ORDER_MAIL_OWNER: OWNER_EMAIL,
+      },
+      { orderMail: jmap.options },
+    );
+  });
+
+  afterAll(async () => {
+    await t.cleanup();
+    await jmap.close();
+  });
+
+  const restart = async (ownerEmail = OWNER_EMAIL) => {
+    const logger = t.logger.child({ logger: 'OrderMail' });
+    const watch = new OrderMailOwnerWatch(logger);
+    const ownerId = await resolveOrderMailOwner(
+      t.db,
+      ownerEmail,
+      watch,
+      logger,
+    );
+    return { ownerId, missing: watch.missing };
+  };
+  const stored = async () =>
+    (await t.db.select().from(orderMailOwner)).map((row) => row.userId);
+  const bind = async (args: string[], ownerEmail: string) => {
+    const errors = new PassThrough();
+    let stderr = '';
+    errors.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    const status = await runBindOrderMailOwner({
+      args,
+      db: t.db,
+      ownerEmail,
+      output: new PassThrough(),
+      errors,
+      logger: t.logger,
+    });
+    return { status, stderr };
+  };
+
+  it('gives no warning when the stored email differs from ORDER_MAIL_OWNER only in capitals', async () => {
+    await t.db
+      .update(user)
+      .set({ email: 'Owner@Example.com' })
+      .where(eq(user.id, t.owner.id));
+    expect(await restart()).toEqual({ ownerId: t.owner.id, missing: false });
+    expect(t.logs.messages('warn', 'OrderMail')).toEqual([]);
+  });
+
+  it('keeps the adopted id through a rename, and binds nobody once the owner is deleted and the address re-registered', async () => {
+    expect(await stored()).toEqual([t.owner.id]);
+    expect(t.orderMail!.ownerId).toBe(t.owner.id);
+
+    await t.db
+      .update(user)
+      .set({ email: 'renamed@example.com' })
+      .where(eq(user.id, t.owner.id));
+    expect(await restart()).toEqual({ ownerId: t.owner.id, missing: false });
+    expect(t.logs.messages('warn', 'OrderMail')).toHaveLength(1);
+
+    await t.db.delete(user).where(eq(user.id, t.owner.id));
+    const newcomer = await t.register(OWNER_EMAIL);
+    expect(await stored()).toEqual([null]);
+    expect(await restart()).toEqual({ ownerId: undefined, missing: true });
+    // No fallback: the row stays null, the newcomer sees no review list.
+    expect(await stored()).toEqual([null]);
+    const page = await t.inject({
+      method: 'GET',
+      url: '/wardrobe/orders',
+      headers: { cookie: newcomer },
+    });
+    expect(page.statusCode).toBe(404);
+    expect(t.logs.text()).not.toContain('renamed@example.com');
+
+    // The owner moves only on purpose.
+    expect(await bind([], OWNER_EMAIL)).toMatchObject({ status: 2 });
+    expect(await bind(['--confirm'], 'nobody@example.com')).toMatchObject({
+      status: 1,
+    });
+    expect(await bind(['--confirm'], OWNER_EMAIL)).toEqual({
+      status: 0,
+      stderr: '',
+    });
+    const newcomerId = await userIdOf(t, OWNER_EMAIL);
+    expect(await stored()).toEqual([newcomerId]);
+    expect(await restart()).toEqual({ ownerId: newcomerId, missing: false });
+  });
+
+  it('adopts with no row only an account the history belongs to, and two racing boots bind one', async () => {
+    const holderEmail = 'holder@example.com';
+    await t.register(holderEmail);
+    const holder = await userIdOf(t, holderEmail);
+    const [email] = await t.db
+      .insert(orderEmail)
+      .values({
+        accountId: 'stored-owner',
+        emailId: 'Mstored001',
+        receivedAt: new Date('2026-11-01T09:00:00Z'),
+        outcome: 'imported',
+        items: 1,
+      })
+      .returning({ id: orderEmail.id });
+    await t.db.insert(orderItem).values({
+      ownerId: holder,
+      orderEmailId: email.id,
+      productUrl: 'https://shop.example/p/1',
+      orderedOn: '2026-11-01',
+    });
+    // An install from before 0071: polled, items, no row.
+    await t.db.delete(orderMailOwner);
+    await t.register('stranger@example.com');
+    expect(await restart('stranger@example.com')).toEqual({
+      ownerId: undefined,
+      missing: true,
+    });
+    expect(await stored()).toEqual([]);
+
+    const races = await Promise.all([
+      adoptOrderMailOwner(t.db, holderEmail),
+      adoptOrderMailOwner(t.db, holderEmail),
+    ]);
+    expect(races.filter((race) => race.adopted)).toHaveLength(1);
+    expect(await stored()).toEqual([holder]);
+    expect(await restart(holderEmail)).toEqual({
+      ownerId: holder,
+      missing: false,
+    });
+  });
+
+  // What a deleted owner leaves (its items cascade, its emails stay), and
+  // nothing dates an account: refused even for the account that polled.
+  it('refuses with no row when the order mail has emails but no items, naming the bind command', async () => {
+    await t.db.delete(orderItem);
+    await t.db.delete(orderMailOwner);
+    const errorsBefore = t.logs.messages('error', 'OrderMail').length;
+    expect(await restart('holder@example.com')).toEqual({
+      ownerId: undefined,
+      missing: true,
+    });
+    expect(await stored()).toEqual([]);
+    const [refusal] = t.logs.messages('error', 'OrderMail').slice(errorsBefore);
+    expect(refusal).toContain('npm run order-mail:bind-owner -- --confirm');
   });
 });
 

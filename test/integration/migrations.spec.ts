@@ -160,6 +160,8 @@ describe('migrations', () => {
         'order_item_owner_id_product_url_unique',
         'order_item_order_email_id_index',
         'order_item_garment_id_index',
+        // The order mail's owner (#976): its user_id foreign key's.
+        'order_mail_owner_user_id_unique',
         // The quiet close of Muse's rounds (#337): each owner's newest
         // suggestion and proposal, read every minute; the latest round.
         'garment_owner_id_suggested_at_index',

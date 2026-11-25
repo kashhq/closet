@@ -219,7 +219,9 @@ const ConfigSchema = Type.Object({
   // read. Required with the token.
   ORDER_MAIL_SENDERS: Type.String({ default: '' }),
   // The sign-in email of the closet account the imported items belong to.
-  // Required with the token.
+  // Required with the token. Read only to adopt that account once (the first
+  // boot with the token) or by `order-mail:bind-owner`; from then on the
+  // owner is the stored id (order_mail_owner, #976), never this address.
   ORDER_MAIL_OWNER: Type.String({ default: '' }),
   // How often the account is polled.
   ORDER_MAIL_POLL_MINUTES: Type.Integer({
