@@ -63,7 +63,7 @@ import { createViewContextBuilder } from './web/view-context';
 import { createJmapClient } from './web/wardrobe/order-mail/jmap';
 import type { OrderMailDeps } from './web/wardrobe/order-mail/poll';
 import { OrderMailOwnerWatch } from './web/wardrobe/order-mail/owner-watch';
-import { orderMailOwnerId } from './web/wardrobe/order-mail/queries';
+import { resolveOrderMailOwner } from './web/wardrobe/order-mail/owner';
 import {
   createOpenMeteoClient,
   type WeatherEndpoints,
@@ -254,15 +254,17 @@ export async function createApp(
   });
   // Both can refuse the boot before any onClose hook exists, so a refusal
   // ends the pool here: the owner lookup failing (an unanswering database),
-  // an unmounted photo share (StorageIdentityError, main.ts). An owner no
-  // account has refuses nothing: it turns the order mail off (OrderMailOwnerWatch).
-  const orderMailWatch = new OrderMailOwnerWatch(
-    logger.child({ logger: 'OrderMail' }),
-  );
-  const orderMailOwner = await resolveOrderMailOwner(
+  // an unmounted photo share (StorageIdentityError, main.ts). An owner
+  // missing refuses nothing: it turns the order mail off (OrderMailOwnerWatch),
+  // reported by readiness's optional check and a gauge, never a 503.
+  const orderMailLogger = logger.child({ logger: 'OrderMail' });
+  const orderMailWatch = new OrderMailOwnerWatch(orderMailLogger);
+  const orderMailOwner = await orderMailOwnerAtBoot(
     config,
     db,
+    metrics,
     orderMailWatch,
+    orderMailLogger,
   ).catch(async (error: unknown) => {
     await db.$client.end();
     throw error;
@@ -609,7 +611,7 @@ function createOrderMail(
   if (!config.ORDER_MAIL_JMAP_TOKEN || ownerId === undefined) {
     boot.info(
       config.ORDER_MAIL_JMAP_TOKEN
-        ? 'Order mail: off (ORDER_MAIL_OWNER names no account)'
+        ? 'Order mail: off (no owner: see the OrderMail error above)'
         : 'Order mail: off (ORDER_MAIL_JMAP_TOKEN unset)',
     );
     return undefined;
@@ -639,26 +641,24 @@ function createOrderMail(
 }
 
 /**
- * ORDER_MAIL_OWNER's account id, once per boot (#706), or undefined with
- * the order mail off: no token, or no account with the address. The latter
- * is one error naming the key (never the address) and a degraded
- * /health/ready, never a refused boot: the owner changing their email or
- * deleting their account must not make the next deploy an outage. Bound by
- * id, an email change or another account taking the address moves nothing
- * until a boot.
+ * The order mail's stored owner (#976), or undefined: no token (no row is
+ * read or written, no gauge), or none to be had (OrderMailOwnerWatch set).
  */
-async function resolveOrderMailOwner(
+async function orderMailOwnerAtBoot(
   config: Config,
   db: Db,
+  metrics: Metrics,
   watch: OrderMailOwnerWatch,
+  logger: Logger,
 ): Promise<number | undefined> {
   if (!config.ORDER_MAIL_JMAP_TOKEN) return undefined;
-  const ownerId = await orderMailOwnerId(
+  metrics.trackOrderMailOwner(() => watch.missing);
+  return resolveOrderMailOwner(
     db,
     normalizeEmail(config.ORDER_MAIL_OWNER),
+    watch,
+    logger,
   );
-  if (ownerId === undefined) watch.markMissing('boot');
-  return ownerId;
 }
 
 /**

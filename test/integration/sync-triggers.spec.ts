@@ -223,8 +223,8 @@ describe('the sync triggers', () => {
     // A garment's photo: a new version stamps the garment, a lease does not.
     const photo = await asFixture(t.db, async (tx) => {
       const { rows } = await tx.execute<{ id: number }>(
-        sql`insert into file (shareable_id, file_name, created_on, created_by_id, cutout_status)
-            values (${randomUUID()}, ${`${randomUUID()}.webp`}, '2026-11-13', ${t.owner.id}, 'pending')
+        sql`insert into file (file_name, created_on, created_by_id, cutout_status)
+            values (${`${randomUUID()}.webp`}, '2026-11-13', ${t.owner.id}, 'pending')
             returning id`,
       );
       await tx

@@ -5,7 +5,7 @@ import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
-import { setPublicShare } from '../share/queries';
+import { type ShareableIdAfter, setPublicShare } from '../share/queries';
 import type { Actor } from '../sharing/access';
 import { newOutfitSlots } from './gone-garments';
 import { type OutfitContext, outfitContext } from './page-context';
@@ -119,14 +119,15 @@ export async function editOutfit(
 /**
  * Share (`shared`) or Stop sharing the actor's outfit's public link (#669,
  * setPublicShare): the owner's alone, as every outfit write. Answers the
- * link's id after the write.
+ * link's id after the write. Pages and the API (PUT and DELETE
+ * /outfits/{id}/share) alike, idempotent as setGarmentPublicShare.
  */
-export async function setOutfitPublicShare(
+export async function setOutfitPublicShare<Shared extends boolean>(
   { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
-  shared: boolean,
-): Promise<{ shareableId: string | null }> {
+  shared: Shared,
+): Promise<{ shareableId: ShareableIdAfter<Shared> }> {
   const written = await setPublicShare(db, 'outfit', id, actor.userId, shared);
   if (!written) throw outfitNotFound();
   logOp(logger, actor, 'outfit.share.set', { outfitId: id, shared });

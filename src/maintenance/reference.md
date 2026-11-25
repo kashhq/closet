@@ -17,7 +17,8 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
                        pool, exit status), reconcile.cli.ts (`npm run maintenance:reconcile`),
                        set-password.cli.ts (`npm run user:set-password -- <email>`): the locked-out recovery,
                        revoke-push.cli.ts (`npm run push:revoke-all`): every push subscription, after
-                       a secret rotation, retrim-thumbs.ts + .cli.ts (`npm run maintenance:retrim-thumbs`):
+                       a secret rotation, bind-order-mail-owner.ts + .cli.ts (`npm run order-mail:bind-owner`,
+                       #976: the order mail's stored owner moved on purpose), retrim-thumbs.ts + .cli.ts (`npm run maintenance:retrim-thumbs`):
                        the #373 backfill of cutouts' trimmed thumbs, sync-prune.ts (pruneSyncTombstones:
                        the changes feed's deletions past 90 days, raising sync_floor; src/web/sync/AGENTS.md),
                        weather-prune.ts (pruneWeatherCaches: forecast and normals rows no home, here or trip
@@ -49,6 +50,10 @@ npm run user:set-password -- <email>
                               # docker exec -it closet npm run user:set-password -- <email>
 npm run push:revoke-all       # removes every account's push subscriptions: the step after rotating
                               # ACCESS_TOKEN_SECRET (Deployment). docker exec closet npm run push:revoke-all
+npm run order-mail:bind-owner -- --confirm
+                              # binds the order mail to the account ORDER_MAIL_OWNER names now, whatever
+                              # was bound (#976; src/web/wardrobe/order-mail.md); 2 without --confirm, 1 no
+                              # such account. Takes effect at the next restart: docker restart closet
 npm run maintenance:retrim-thumbs [-- --dry-run]
                               # gives every photo with a ready or edited cutout its thumb trimmed to the
                               # garment (#373), under a new variant key (the `rederive` event) so caches

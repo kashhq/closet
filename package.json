@@ -39,6 +39,7 @@
     "maintenance:repoint-cutout": "node dist/maintenance/repoint-cutout.cli.js",
     "user:set-password": "node dist/maintenance/set-password.cli.js",
     "push:revoke-all": "node dist/maintenance/revoke-push.cli.js",
+    "order-mail:bind-owner": "node dist/maintenance/bind-order-mail-owner.cli.js",
     "cutout:fetch-model": "node dist/cutout/fetch-model.cli.js",
     "seed": "node dist/seed/seed.cli.js",
     "lighthouse": "lhci autorun --config=lighthouserc.js",

@@ -454,9 +454,6 @@ export const file = pgTable(
   'file',
   {
     id: serial('id').primaryKey(),
-    // A random UUID set by the app on insert. Nothing reads it since the
-    // share preview is addressed by the shared item's id (#669); #960 drops it.
-    shareableId: varchar('shareable_id', { length: 255 }).notNull(),
     fileName: varchar('file_name', { length: 255 }).notNull(),
     // An ISO timestamp as text, as MikroORM wrote it.
     createdOn: varchar('created_on', { length: 255 }).notNull(),
@@ -524,7 +521,6 @@ export const file = pgTable(
       'file_variant_key_check',
       sql`${table.variantKey} is null or (${table.cutoutStatus} in ('ready', 'edited') and ${table.variantKey} ~ '^[0-9a-f]{12}$')`,
     ),
-    uniqueIndex('file_shareable_id_unique').on(table.shareableId),
     // What the photo foreign keys of garment, selfie and inspiration point
     // at: a row shows only its owner's photo (#703).
     unique('file_id_created_by_id_unique').on(table.id, table.createdById),
@@ -2755,6 +2751,36 @@ export const orderItem = pgTable(
       name: 'order_item_garment_id_foreign',
       columns: [table.garmentId],
       foreignColumns: [garment.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+  ],
+);
+
+// The order mail's owner (#976): the account ORDER_MAIL_OWNER named when
+// the order mail first bound it (adoptOrderMailOwner, at boot) or the
+// operator last rebound it (`npm run order-mail:bind-owner -- --confirm`),
+// and never found by email again. One row: the primary key is a boolean that
+// can only be true. The row outlives its account: deletion sets `user_id`
+// null, so "bound, then deleted" stays apart from "never bound" and no boot
+// re-adopts whoever registers the address next. Not synced (no owner).
+export const orderMailOwner = pgTable(
+  'order_mail_owner',
+  {
+    singleton: boolean('singleton').primaryKey().default(true),
+    userId: integer('user_id'),
+    boundAt: timestamp('bound_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check('order_mail_owner_singleton_check', sql`${table.singleton}`),
+    // The foreign key's index.
+    unique('order_mail_owner_user_id_unique').on(table.userId),
+    foreignKey({
+      name: 'order_mail_owner_user_id_foreign',
+      columns: [table.userId],
+      foreignColumns: [user.id],
     })
       .onUpdate('cascade')
       .onDelete('set null'),

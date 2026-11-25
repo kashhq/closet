@@ -83,8 +83,8 @@ interface WebConfig {
   /** Web Push identity; set exactly when PWA_ENABLED (no /push routes otherwise). */
   vapid: VapidConfig | undefined;
   /**
-   * ORDER_MAIL_OWNER's account id, resolved at boot, when the order mail is
-   * on (#25, #706): the one account whose review list exists
+   * The order mail's stored owner, read at boot, when the order mail is on
+   * (#25, #706, #976): the one account whose review list exists
    * (/wardrobe/orders); a 404 for all otherwise.
    */
   orderMailOwnerId: number | undefined;
@@ -135,8 +135,8 @@ export interface WebOptions {
    */
   proxyWatch: UntrustedProxyWatch;
   /**
-   * Whether ORDER_MAIL_OWNER's account is missing (boot or later):
-   * /health/ready's order_mail_owner check.
+   * Whether the order mail's owner is missing (boot or later):
+   * /health/ready's optional order_mail_owner check.
    */
   orderMailWatch: OrderMailOwnerWatch;
   /**

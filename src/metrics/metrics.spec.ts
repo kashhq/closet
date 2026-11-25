@@ -579,6 +579,7 @@ describe('Metrics', () => {
       ms: { request: 1 },
     });
     metrics.trackCutoutQueue(() => Promise.resolve(depthOnly(2)));
+    metrics.trackOrderMailOwner(() => false);
 
     const { contentType, body } = await metrics.exposition();
     expect(contentType).toBe('text/plain; version=0.0.4; charset=utf-8');
@@ -593,6 +594,7 @@ describe('Metrics', () => {
         "# TYPE http_request_duration_seconds histogram",
         "# TYPE job_duration_seconds histogram",
         "# TYPE mcp_tool_call_duration_seconds histogram",
+        "# TYPE order_mail_owner_missing gauge",
         "# TYPE photo_requests_total counter",
         "# TYPE push_sends_total counter",
         "app_info{version}",
@@ -684,6 +686,7 @@ describe('Metrics', () => {
         "mcp_tool_call_duration_seconds_bucket{le="5",outcome,tool}",
         "mcp_tool_call_duration_seconds_count{outcome,tool}",
         "mcp_tool_call_duration_seconds_sum{outcome,tool}",
+        "order_mail_owner_missing{}",
         "push_sends_total{outcome}",
       ]
     `);

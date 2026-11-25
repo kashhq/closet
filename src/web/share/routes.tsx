@@ -12,6 +12,7 @@ import {
   type SharePreview,
   sharedBy,
 } from './share-page';
+import { publicShareUrl } from './urls';
 
 // Navigation state from a link, never a 400: a missing or unknown value
 // renders the empty page (a 404), as a link to a deleted or stopped item does.
@@ -59,7 +60,7 @@ function sharePreview(
   // The image is addressed by the item's share id, as the page is, so Stop
   // sharing ends both (findPhotoByShareableId resolves the same photo).
   return {
-    url: `${origin}/share?shareableId=${encodeURIComponent(shareableId)}&type=${shared.type}`,
+    url: publicShareUrl(origin, shared.type, shareableId),
     title: item.name ?? undefined,
     // Without a first name the layout's default description stands.
     description: owner && `${t('SHARED_BY')} ${owner}`,

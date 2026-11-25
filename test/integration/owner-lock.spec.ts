@@ -839,7 +839,6 @@ describe('the owner lock', () => {
         asFixture(t.db, async (tx) => {
           const photoId = await insertPhotoRow(tx, {
             fileName: `${randomUUID()}.webp`,
-            shareableId: randomUUID(),
             createdOn: new Date().toISOString(),
             createdById: uploader,
           });
@@ -952,7 +951,6 @@ describe('the owner lock', () => {
         const id = await asFixture(t.db, (tx) =>
           insertPhotoRow(tx, {
             fileName: `${randomUUID()}.webp`,
-            shareableId: randomUUID(),
             createdOn: new Date().toISOString(),
             createdById,
           }),

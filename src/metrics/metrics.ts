@@ -342,6 +342,25 @@ export class Metrics {
   }
 
   /**
+   * `order_mail_owner_missing` (#976): 1 while the order mail is off for
+   * want of an owner (OrderMailOwnerWatch), else 0; registered by createApp
+   * only with ORDER_MAIL_JMAP_TOKEN set, so an unconfigured order mail has no
+   * series. Readiness reports the same as an optional check, never a 503: the
+   * gauge is what a dashboard or rule can select. Read in memory, never from
+   * the database.
+   */
+  trackOrderMailOwner(missing: () => boolean): void {
+    new Gauge({
+      name: 'order_mail_owner_missing',
+      help: 'Whether the order mail is off because its owner account is missing (1) or not (0).',
+      registers: [this.registry],
+      collect() {
+        this.set(missing() ? 1 : 0);
+      },
+    });
+  }
+
+  /**
    * The background-removal queue's pending photos, counted in the database
    * (any server's writes count): `cutout_queue_depth`, and
    * `cutout_queue_oldest_age_seconds`, how long the oldest has waited (#689:

@@ -494,7 +494,8 @@ export const ROUTES: Route[] = [
       },
     }),
   ),
-  // The public link (#669): outfits are the owner's alone. No API twin yet (#959).
+  // The public link (#669): outfits are the owner's alone; its API twin PUT
+  // or DELETE .../share (#959).
   ...(['share', 'share/stop'] as const).map(
     (verb): Route => ({
       name: `POST /outfits/:id/${verb}`,
@@ -511,6 +512,13 @@ export const ROUTES: Route[] = [
         manager: 'notFound',
         viewer: 'notFound',
         stranger: 'notFound',
+      },
+      api: {
+        ok: verb === 'share' ? 200 : 204,
+        request: (f, q) => ({
+          method: verb === 'share' ? 'PUT' : 'DELETE',
+          url: `/api/v1/outfits/${f.outfitId}/share${q}`,
+        }),
       },
     }),
   ),
@@ -1291,8 +1299,30 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
+  // The share preview is a capability URL: a shared garment's or outfit's
+  // own id opens it for everyone, whoever they are (#669).
+  ...(['garment', 'outfit'] as const).map(
+    (kind): Route => ({
+      name: `GET /file/watermark/:shareableId of a shared ${kind}`,
+      kind: 'read',
+      ok: 200,
+      secret: kind === 'garment' ? garmentName : outfitName,
+      vias: ['own'],
+      request: (f) => ({
+        method: 'GET',
+        url: `/file/watermark/${kind === 'garment' ? f.garmentShareId : f.outfitShareId}`,
+      }),
+      expect: {
+        owner: 'ok',
+        manager: 'ok',
+        viewer: 'ok',
+        stranger: 'ok',
+      },
+      anonymous: 'ok',
+    }),
+  ),
   // The public image routes serve garment photos by unguessable name to
-  // anyone; a selfie's name or share id is a 404 to everyone, its owner
+  // anyone; a selfie's name is a 404 to everyone, its owner
   // included (their pages use /selfies/).
   ...(['', 'thumb/', 'nobg/'] as const).map(
     (variant): Route => ({
@@ -1314,22 +1344,4 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
-  {
-    name: 'GET /file/watermark/:shareableId of a selfie',
-    kind: 'read',
-    ok: 200,
-    secret: selfieName,
-    vias: ['own'],
-    request: (f) => ({
-      method: 'GET',
-      url: `/file/watermark/${f.selfieShareableId}`,
-    }),
-    expect: {
-      owner: 'notFound',
-      manager: 'notFound',
-      viewer: 'notFound',
-      stranger: 'notFound',
-    },
-    anonymous: 'notFound',
-  },
 ];

@@ -120,7 +120,7 @@ const ChangesPage = Type.Object(
  */
 export const syncApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
-  { db, logger, cutouts },
+  { db, config, logger, cutouts },
   done,
 ) => {
   app.get(
@@ -146,14 +146,19 @@ ${coverageTable(READ_COVERAGE)}`,
         actor,
         request.query.cursor,
         request.query.limit ?? CHANGES_PAGE_SIZE,
-        cutouts.enabled,
+        { cutoutsEnabled: cutouts.enabled, siteUrl: config.siteUrl },
       );
-      if (page.revokedWardrobes.length > 0) {
+      const { revokedWardrobes, regrantedWardrobes, ...answer } = page;
+      if (revokedWardrobes.length > 0) {
         logger.debug(
-          `Changes for user ${actor.userId}: wardrobes ${page.revokedWardrobes.join(', ')} no longer shared, dropped from the cursor`,
+          `Changes for user ${actor.userId}: wardrobes ${revokedWardrobes.join(', ')} no longer shared, dropped from the cursor`,
         );
       }
-      const { revokedWardrobes, ...answer } = page;
+      if (regrantedWardrobes.length > 0) {
+        logger.debug(
+          `Changes for user ${actor.userId}: wardrobes ${regrantedWardrobes.join(', ')} read under another grant since, resent from their start`,
+        );
+      }
       return revokedWardrobes.length > 0
         ? { ...answer, revokedWardrobes }
         : answer;
