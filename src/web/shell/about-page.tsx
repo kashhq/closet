@@ -16,18 +16,18 @@ export function AboutPage({ ctx }: { ctx: ViewContext }) {
       bar={{ title: t('ABOUT_HEADING', { appName }) }}
     >
       <div class="prose">
-        {/* ABOUT_INTRO carries the upstream attribution link (the one
-              permitted upstream reference, AGENTS.md Gotchas). */}
-        <p
-          class="mb-6"
-          dangerouslySetInnerHTML={{
-            __html: tHtml('ABOUT_INTRO', { appName }),
-          }}
-        />
+        <p class="mb-6">{t('ABOUT_INTRO', { appName })}</p>
         <h2 class="text-xl font-semibold mt-8 mb-3">
           {t('ABOUT_OPEN_SOURCE')}
         </h2>
-        <p class="mb-6">{t('ABOUT_OPEN_SOURCE_DESC', { appName })}</p>
+        {/* The licence and the link to the source: the page's one string
+            with markup. */}
+        <p
+          class="mb-6"
+          dangerouslySetInnerHTML={{
+            __html: tHtml('ABOUT_OPEN_SOURCE_DESC', { appName }),
+          }}
+        />
         <h2 class="text-xl font-semibold mt-8 mb-3">{t('ABOUT_NOTICES')}</h2>
         <p class="mb-6">
           {t('ABOUT_NOTICES_DESC', { appName })}{' '}

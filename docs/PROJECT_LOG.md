@@ -1,14 +1,10 @@
-# Project Log
+# The early project log
 
-This document is intended for the maintaining team to use to document decisions. This may be a medium for documenting, reviewing, and approving as a means of expressing consensus on project business decisions where the direct output is not necessarily code or assets that may be otherwise checked in and version controlled.
-
-> **Example Entry (Date in ISO8601 format, Year-Month-Day):**
->
-> The team agrees to _BLANK_ project business decision(s)...
+The project's early record, by date: what was decided in a session whose result is not a file in the repo. Decisions since 2026-10 are dated entries in `docs/decisions.md`.
 
 ## 2026-09-25
 
-The fork becomes **Closet**, a private household app: rebranded (single upstream attribution kept per AGPL), marketing/privacy/terms pages removed, one account for now with registration locked.
+The fork becomes **Closet**, a private household app: rebranded, marketing/privacy/terms pages removed, one account for now with registration locked.
 
 Deployment decisions: pgvault Postgres over SQLite (nightly dumps, shared triage tooling); an HTTPS hostname is the canonical URL because the PWA needs a secure context, an `http://` hostname is the plain twin; the image publishes on every push to `main` and the homelab autoupdater deploys it, so pushing `main` is deploying.
 

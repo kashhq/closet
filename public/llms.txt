@@ -1,31 +1,30 @@
 # Closet
 
-> Private, self-hosted household wardrobe organizer. Catalog garments with photos, build outfits, schedule them on a calendar, and share a wardrobe between users.
+> A household's wardrobe on its own server: photographed garments, the outfits made from them, a calendar of what to wear, and a wardrobe one person can share with another.
 
-## What It Is
+## In short
 
-Closet is a self-hosted fork of Libre Closet (AGPL-3.0). It runs as a server-rendered progressive web app on your own hardware; data stays in a PostgreSQL database.
+Closet is MIT-licensed, self-hosted software. It is a progressive web app rendered on the server and meant to be installed on a phone; everything it stores lives in its own PostgreSQL database and data directory.
 
-## Routes
+## Pages
 
 - / - Today, the home screen
-- /wardrobe - garment catalog
-- /outfits - saved outfits and the outfit composer
-- /calendar - outfit schedule
-- /about - about and license attribution
-- /auth/login - sign in (always required)
+- /wardrobe - the garments
+- /outfits - saved outfits and the outfit builder
+- /calendar - the planned week and month
+- /about - what Closet is and its licence
+- /auth/login - sign in (every page needs it)
 
-## Tech Stack
+## Built with
 
-- Fastify 5 (TypeScript), server-rendered JSX (hono/jsx), no client framework
-- htmx, Tailwind + daisyUI
-- PostgreSQL (Drizzle ORM)
-- Server-side background removal (BiRefNet on ONNX runtime, in a child process); photos are processed on the server, never in the browser
-- Workbox service worker, Web Push
-- Photos stored on local disk
+- TypeScript on Fastify 5, pages rendered as JSX on the server (hono/jsx), no client framework
+- htmx for interaction; Tailwind CSS and daisyUI for styling
+- PostgreSQL through Drizzle ORM
+- Background removal on the server (BiRefNet under ONNX Runtime, in a child process): no photo is processed in the browser
+- A Workbox service worker for offline reads; Web Push for notifications
+- Photo files on local disk
 
-## Links
+## Where to find it
 
-- Repository: https://github.com/kashhq/closet
-- Container: ghcr.io/kashhq/closet
-- Upstream: https://github.com/lazztech/libre-closet
+- Source: https://github.com/kashhq/closet
+- Image: ghcr.io/kashhq/closet

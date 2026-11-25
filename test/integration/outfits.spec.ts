@@ -160,7 +160,7 @@ describe('outfits', () => {
   it('GET /outfits shows its empty state before any outfit exists', async () => {
     const list = await t.inject({ method: 'GET', url: '/outfits' });
     expect(list.statusCode).toBe(200);
-    expect(hasText(list.body, 'No outfits yet.')).toBe(true);
+    expect(hasText(list.body, 'No saved outfits.')).toBe(true);
     expect(list.body).toContain('href="/styling"');
   });
 
@@ -366,7 +366,7 @@ describe('outfits', () => {
       expect(res.body).not.toContain('hx-post="/calendar"');
       // Notes are the outfit page's.
       expect(hasText(res.body, 'Mondays')).toBe(false);
-      expect(hasText(res.body, 'No outfits yet.')).toBe(false);
+      expect(hasText(res.body, 'No saved outfits.')).toBe(false);
     });
 
     it('shows an outfit with its garments, notes and edit/delete actions', async () => {

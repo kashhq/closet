@@ -4,7 +4,7 @@ Date: 2026-09-25. Commit measured: `6a5e64f` (main == origin/main).
 Method: a scratch worktree (`npm ci` 62 s), every step timed with wall-clock
 wrappers, jest `--json` for per-file timings, istanbul maps for coverage,
 real GitHub Actions step timings from `gh api .../actions/runs/<id>/jobs`
-(fork `agandhi4/closet`; note `gh` defaults to `lazztech/libre-closet`, so
+(fork `agandhi4/closet`; note `gh` defaults to the original project's repository, so
 `gh run list` without `-R agandhi4/closet` shows stale upstream runs).
 Machine: 16 cores, Node 24.16 (the repo pins 22.x; CI uses 22). No repo file
 was edited. Worktree, Postgres container and servers were removed afterwards.

@@ -7,7 +7,7 @@ properties (6), adding garments from a link (0), wears and washes with multiples
 occasion (8), capsules (2), weather (7), the outfit gallery (3), Today (9), trips (4), weekly auto-plan (12),
 insights (10), wishlist (11), outfit selfies (13), AI guidance (5, optional). The owner wants the app full-featured: features seen in Cladwell, Whering, ALTA and
 others are welcome and are collected under "Candidate features" as research finds them.
-`docs/DESIGN.md` listed wear tracking and packing lists / capsules as out of scope for v0.1; this
+The original design doc (since retired) listed wear tracking and packing lists / capsules as out of scope for v0.1; this
 is that next step.
 
 ## Owner decisions (2026-09-26)
@@ -70,7 +70,7 @@ form, prefilled, for review. Nothing is saved until the form is posted.
   day-old rule already covers orphans).
 - **New columns**: `garment.source_url` (the product page, a link back from the garment page) and
   `garment.price` (optional, numeric). Price is filled by extraction or by hand, and with wear counts
-  it gives cost per wear, which `docs/DESIGN.md` listed as future work.
+  it gives cost per wear, which the original design doc listed as future work.
 - **Share to Closet.** The manifest gets a `share_target`, so on Android "Share" on a product page
   in any app sends its link straight to this flow. iOS does not support share targets for web apps;
   there it is copy the link, then paste.
@@ -785,7 +785,7 @@ Surveyed: Cladwell, Whering, Indyx, Alta, Acloset, Stylebook, Pureple, Save Your
 Clueless, Smart Closet, OpenWardrobe, and **Wardrowbe** (github.com/theEvgene/wardrowbe, MIT,
 self-hosted, household support, Open-Meteo, suggestions from a model). Wardrowbe is the closest
 thing to this app; read how it does something before designing that thing here. Its MIT code may
-be adapted with its notice kept (this repo is AGPL).
+be adapted with its notice kept (this repo is MIT since 2026-11-25).
 
 **Folded into the sections above** (high value, low effort, fits the model):
 

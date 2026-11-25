@@ -98,7 +98,7 @@ describe('user:set-password', () => {
 
     const result = await run([email], 'short\n');
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('at least 8 characters');
+    expect(result.stderr).toContain('8 characters or more');
     expect(await hashOf(email)).toBe(before);
   });
 

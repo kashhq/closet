@@ -293,7 +293,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await staleRow.getByText('Change', { exact: true }).click();
   await staleRow.getByRole('button', { name: 'Remove from calendar' }).click();
   await expect(staleSheet).toBeVisible();
-  await expect(staleSheet).toContainText('Remove this scheduled outfit?');
+  await expect(staleSheet).toContainText('Take this outfit off the calendar?');
   await expect(status).not.toContainText('That did not go through');
   await staleSheet.locator('[data-confirm-accept]').click();
   await expect(staleRow).toHaveCount(0);
@@ -309,9 +309,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await menu.click();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirmSheet).toBeVisible();
-  await expect(confirmSheet).toContainText(
-    'Are you sure you want to delete this?',
-  );
+  await expect(confirmSheet).toContainText('Delete this for good?');
   await expect(
     confirmSheet.getByRole('button', { name: 'Cancel' }).first(),
   ).toBeFocused();

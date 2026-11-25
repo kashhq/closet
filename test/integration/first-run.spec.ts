@@ -47,7 +47,7 @@ describe('First run', () => {
     expectNoScriptNavigation(res);
     const html = res.body;
     expect(html).toContain('data-first-run="empty"');
-    expect(primaries(html)).toEqual(['Add your first garment']);
+    expect(primaries(html)).toEqual(['Add a garment to start']);
     // The button opens the add sheet in place, camera first.
     expect(html).toMatch(/data-first-run-add=""/);
     expect(html).toContain('id="add-sheet"');

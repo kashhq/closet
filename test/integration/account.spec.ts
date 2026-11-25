@@ -583,7 +583,7 @@ describe('account', () => {
     // A native post that asks first: its refusal page must be visible.
     expect(res.body).toContain('hx-boost="false"');
     expect(res.body).toContain(
-      'data-confirm="Are you sure you want to delete your account?"',
+      'data-confirm="Delete your account and everything in it?"',
     );
     // What deletion removes, and that the export is no way to keep it (#654).
     expect(res.body).toContain('Deleting your account removes your garments');
@@ -657,19 +657,19 @@ describe('account', () => {
         'a mismatched confirmation',
         { newPassword: NEW_PASSWORD, confirmPassword: 'Different456!' },
         'confirmPassword',
-        'Passwords must match',
+        'The two passwords differ',
       ],
       [
         'a too-short password',
         { newPassword: 'Ab1', confirmPassword: 'Ab1' },
         'newPassword',
-        'at least 8 characters',
+        '8 characters or more',
       ],
       [
         'a password without a digit or capital',
         { newPassword: 'lowercaseonly', confirmPassword: 'lowercaseonly' },
         'newPassword',
-        'one uppercase letter',
+        'capital and small letters',
       ],
     ])(
       '%s is a 400 validation re-render; the hash is unchanged',

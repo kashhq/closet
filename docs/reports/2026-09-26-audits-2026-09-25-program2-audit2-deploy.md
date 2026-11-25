@@ -7,7 +7,7 @@ Scope note: the homelab stack config (compose, Caddy, DSM, secrets) and backups 
 Evidence sources:
 - `docker/Dockerfile`, `.github/workflows/*`, `package.json`, `scripts/write-build-info.ts`, `src/build-info.ts`, `src/main.ts`, `src/app.ts`, `src/app.module.ts`, `src/dal/dal.module.ts`, `src/dal/migrations/postgres/*`
 - `homelab/deploy.sh` (`deploy_stack`, `cmd_update`), `hosts/synology/{manifest,deploy-update.*,deploy-sync.*}`, `stacks/closet/docker-compose.yml`, `docs/upgrades.md`
-- GitHub Actions API for `agandhi4/closet`. The `gh` default repo in this checkout resolves to upstream `Lazztech/Libre-Closet`, so a bare `gh run list` shows upstream runs. Always pass `-R agandhi4/closet`.
+- GitHub Actions API for `agandhi4/closet`. The `gh` default repo in this checkout resolves to upstream the original project's repository, so a bare `gh run list` shows upstream runs. Always pass `-R agandhi4/closet`.
 - Local build: cold `--no-cache` build took 62 s on 16 cores (builder `npm ci` 26 s, runtime `npm ci --omit=dev` 28 s, the two in parallel).
 
 ---

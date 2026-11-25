@@ -215,7 +215,7 @@ describe('wardrobe share lifecycle', () => {
     // Plain boosted links, whole pages: the title and the tabs change too.
     expect(menu).toContain(`href="/wardrobe?ownerId=${owner.id}"`);
     expect(menu).not.toContain('hx-target');
-    expect(menu).toContain('View only');
+    expect(menu).toContain('Can view');
     expect(menu).toContain('href="/auth/profile/sharing"');
 
     const shared = await t.inject({

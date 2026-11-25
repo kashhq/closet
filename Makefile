@@ -84,7 +84,7 @@ help:
 	@echo "make release-check    — fail unless the image is APP_VERSION's only source (part of ci-quick)"
 	@echo "make workflows-check  — fail unless the workflows follow devkit's Actions rules (part of ci-quick)"
 	@echo "make actionlint-check — fail unless every .github/workflows file is valid to actionlint (scripts/ci/actionlint.sh; part of ci-quick)"
-	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index (part of ci-quick)"
+	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index, the original project's name never back (part of ci-quick)"
 	@echo "make layer-check      — fail on an import in src/ that reaches up scripts/ci/layers.conf's layer stack (part of ci-quick)"
 	@echo "make guard-check      — fail on a code-structure rule in scripts/ci/guards.conf (devkit/bin/guard_check.py; part of ci-quick)"
 	@echo "make plain-js-check   — fail on a new plain-JS module in public/js/, or a converted one still listed in scripts/ci/plain_js.conf (part of ci-quick)"

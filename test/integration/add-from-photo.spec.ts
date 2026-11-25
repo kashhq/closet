@@ -262,7 +262,7 @@ describe('adding a garment from a photo', () => {
         headers: { cookie },
       });
       expect(page.statusCode).toBe(200);
-      expect(page.body).toContain('Removing background…');
+      expect(page.body).toContain('Cutting out the background…');
       expect(page.body).toContain('hx-trigger="every 2s"');
 
       t.cutouts.start(fakeRunner());

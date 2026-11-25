@@ -972,7 +972,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.locator('#garment-category').fill('jacket');
       await page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(page.locator('#garment-photo-status')).toHaveText(
-        /Removing background/,
+        /Cutting out the background/,
       );
       await shot(page, `76-demo-add-from-photo-saved${suffix}`);
       await cutouts.release(personaEmail('demo'));

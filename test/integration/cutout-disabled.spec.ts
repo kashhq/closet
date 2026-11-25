@@ -53,7 +53,7 @@ describe('cutouts switched off', () => {
       (await t.inject({ method: 'GET', url: `/wardrobe/${id}` })).body,
     );
     expect(html).toContain('id="editMaskBtn"');
-    expect(html).not.toContain('Removing background');
+    expect(html).not.toContain('Cutting out the background');
     expect(html).not.toContain(`/wardrobe/${id}/cutout?poll=`);
   });
 
@@ -80,7 +80,7 @@ describe('cutouts switched off', () => {
           (await t.inject({ method: 'GET', url, headers: HX_FRAGMENT })).body,
         );
         expect(html).toContain('id="editMaskBtn"');
-        expect(html).not.toContain('Removing background');
+        expect(html).not.toContain('Cutting out the background');
         expect(html).not.toContain('/cutout?poll=');
         expect(html).not.toContain('/cutout/retry');
       }

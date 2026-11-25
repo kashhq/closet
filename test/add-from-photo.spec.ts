@@ -7,7 +7,7 @@ import { SAME_ORIGIN, signIn } from './support/e2e-session';
 
 /**
  * Adding a garment from a photo (#97) at phone width: a fresh account's
- * Today leads with "Add your first garment" (#666), whose one tap opens the
+ * Today leads with "Add a garment to start" (#666), whose one tap opens the
  * add sheet, the camera row opens the camera
  * (`capture=environment`), the chosen photo
  * is prepared on the phone and posted, the new garment form opens with it,
@@ -25,7 +25,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 async function openAddSheet(page: Page) {
   await page.goto('/');
   await page
-    .getByRole('button', { name: 'Add your first garment', exact: true })
+    .getByRole('button', { name: 'Add a garment to start', exact: true })
     .click();
   const sheet = page.locator('#add-sheet');
   await expect(sheet).toBeVisible();
@@ -279,7 +279,7 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
   await expect(page).toHaveURL(/\/wardrobe\/\d+(\?created=1)?$/);
   await expect(page.getByText('Camera shirt').first()).toBeVisible();
   await expect(page.locator('#garment-photo-status')).toHaveText(
-    /Removing background/,
+    /Cutting out the background/,
   );
   await cutouts.release(email);
   await expect(page.locator('#garment-photo img')).toHaveAttribute(

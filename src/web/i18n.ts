@@ -139,8 +139,8 @@ export function tAround(
 }
 
 /**
- * A string whose English text carries markup (ABOUT_INTRO's attribution
- * link), for `dangerouslySetInnerHTML`. The template comes from the bundled
+ * A string whose English text carries markup (ABOUT_OPEN_SOURCE_DESC's
+ * link to the source), for `dangerouslySetInnerHTML`. The template comes from the bundled
  * language file and is trusted; the parameters are escaped, so config or user
  * values can never inject markup through it.
  */
