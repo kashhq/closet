@@ -17,9 +17,9 @@ import {
   SchemaBehindError,
 } from '../../src/db/migrate';
 import {
-  applyLegacyMigrations,
-  legacyMigrationNames,
-} from '../support/legacy-migrations';
+  createLegacyDatabase,
+  LEGACY_MIGRATION_STAMPS,
+} from '../support/legacy-database';
 import { captureLogs } from '../support/log-capture';
 import { schemaDrift } from '../support/schema-drift';
 import {
@@ -31,7 +31,7 @@ import { silentLogger } from './logger';
 
 /**
  * src/db/migrate.ts on the three kinds of database it meets: one built by the
- * legacy MikroORM migrations (production's), one that stopped short of them,
+ * legacy MikroORM migrations (production's, as legacy-database.ts rebuilds it), one that stopped short of them,
  * and a fresh one; one ahead of the build (a rollback, #651); plus two
  * runners racing on the same database. The app
  * boots once, on the legacy database (one app per spec file); the other
@@ -114,7 +114,7 @@ async function forgetUnknownMigration(env: Record<string, string>) {
 }
 
 it('knows the newest legacy migration', () => {
-  expect(legacyMigrationNames().at(-1)).toBe(LAST_LEGACY_MIGRATION);
+  expect(LEGACY_MIGRATION_STAMPS.at(-1)).toBe(LAST_LEGACY_MIGRATION);
 });
 
 describe('a database built by the legacy MikroORM migrations', () => {
@@ -127,7 +127,7 @@ describe('a database built by the legacy MikroORM migrations', () => {
       {
         beforeBoot: async (env) => {
           databaseEnv = env;
-          await applyLegacyMigrations(env);
+          await createLegacyDatabase(env);
           // Production has rows; the boot must leave them alone.
           await withClient(env, (client) =>
             client.query(
@@ -248,8 +248,7 @@ describe('a legacy database without the last MikroORM migration', () => {
 
   beforeAll(async () => {
     database = await createScratchDatabase('closet_it');
-    const names = legacyMigrationNames();
-    await applyLegacyMigrations(database.env, { to: names.at(-2) });
+    await createLegacyDatabase(database.env, { complete: false });
   });
 
   afterAll(() => database?.drop());
