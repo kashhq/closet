@@ -206,7 +206,6 @@ describe('garment writes', () => {
     );
 
     const clone = (await garmentRow(t, cloneId))!;
-    expect(clone.photo?.shareableId).toMatch(/^[0-9a-f-]{36}$/);
     expect(await storedFiles()).toContain(clone.photo!.fileName);
   });
 });

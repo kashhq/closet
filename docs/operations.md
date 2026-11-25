@@ -81,6 +81,19 @@ Rolling forward again is a plain deploy: 0057 runs again on the next boot.
 
 **No deploy overlap for 0057.** Until an old container stops, its forecast and normals upserts would fail against the new keys, but there is no such window: `container_name: closet` makes `docker compose up -d` stop and remove the old container before the new one starts and migrates (One container at a time, above). That is this repo's documented behaviour; the compose file itself is homelab's (`stacks/closet/README.md`) and is not readable from here, so a change there to start-before-stop would bring the window back: the old build's saves fail (logged, the caches refill) until it stops, nothing else is lost.
 
+**Rolling back past 0072 (#960).** 0072 drops `file.shareable_id`, which nothing has read since #669 keyed the share preview by the shared item's own id. An older image still inserts a minted UUID into it and never selects it for anything but the row it just wrote (`newPhotoRow`), so a nullable column is enough: its inserts fill it, the rows made since 0072 hold null, and nothing queries by it. The old unique index is not needed (no query upserts or conflicts on it; the UUIDs never collide) and is not recreated. The dropped values are not restored; they were random and unused. After rolling back every later migration the same way (Migrations and rollback, below):
+
+```sql
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+ALTER TABLE file ADD COLUMN shareable_id varchar(255);
+-- 0072's row (its journal when): without this the older image refuses to boot (#651).
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1795629611349;
+COMMIT;
+```
+
+Rolling forward again is a plain deploy: 0072 runs again and drops the column.
+
 Deploy now, data fixes and production's paths: homelab `stacks/closet/README.md`.
 
 ## Migrations and rollback

@@ -74,7 +74,7 @@ export async function takeSelfie(
   t: TestApp,
   entryId: number,
   cookie?: string,
-): Promise<{ id: number; fileName: string; shareableId: string }> {
+): Promise<{ id: number; fileName: string }> {
   const res = await postSelfie(
     t,
     entryId,
@@ -95,7 +95,6 @@ export async function selfieOf(t: TestApp, entryId: number) {
     .select({
       id: selfie.id,
       fileName: file.fileName,
-      shareableId: file.shareableId,
     })
     .from(selfie)
     .innerJoin(file, eq(file.id, selfie.photoId))

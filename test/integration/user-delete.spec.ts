@@ -181,7 +181,6 @@ describe('account deletion', () => {
       const photo = () =>
         insertPhotoRow(tx, {
           fileName: `${randomUUID()}.webp`,
-          shareableId: randomUUID(),
           createdOn: new Date().toISOString(),
           createdById: owner,
         });
