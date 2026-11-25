@@ -124,6 +124,16 @@ describe('upstream_lines.sh', () => {
     expect(result.status).toBe(1);
   });
 
+  it('counts a content line that is a bare sha, not mistaking it for a blame header', () => {
+    const base = commit('up@example.com', {
+      'sha.txt': `${'a'.repeat(40)}\n`,
+    });
+    commit(OWNER, { 'mine.txt': 'a line the owner wrote today\n' });
+    const result = run(base);
+    expect(result.out).toMatch(/^1\t1\tsha\.txt$/m);
+    expect(result.status).toBe(1);
+  });
+
   it('refuses a fork point that is not an ancestor of HEAD', () => {
     commit(OWNER, { 'a.txt': 'a line the owner wrote today\n' });
     git('checkout', '-q', '-b', 'side');

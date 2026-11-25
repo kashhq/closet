@@ -95,7 +95,7 @@ while IFS= read -r -d '' file; do
         if (substr(line, 1, tab - 1) == file) allowed[substr(line, tab + 1)] = 1
       }
     }
-    length($1) == 40 && $1 ~ /^[0-9a-f]+$/ { commit = $1; next }
+    !/^\t/ && length($1) == 40 && $1 ~ /^[0-9a-f]+$/ { commit = $1; next }
     /^author-mail / { mail = $2; next }
     /^\t/ {
       total++
