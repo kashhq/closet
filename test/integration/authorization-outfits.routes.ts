@@ -1314,22 +1314,4 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
-  {
-    name: 'GET /file/watermark/:shareableId of a selfie',
-    kind: 'read',
-    ok: 200,
-    secret: selfieName,
-    vias: ['own'],
-    request: (f) => ({
-      method: 'GET',
-      url: `/file/watermark/${f.selfieShareableId}`,
-    }),
-    expect: {
-      owner: 'notFound',
-      manager: 'notFound',
-      viewer: 'notFound',
-      stranger: 'notFound',
-    },
-    anonymous: 'notFound',
-  },
 ];

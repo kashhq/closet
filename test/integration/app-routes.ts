@@ -104,7 +104,6 @@ export const ADDRESS: Fixture = {
   entryId: 106,
   selfieId: 107,
   selfieFileName: 'selfie.webp',
-  selfieShareableId: '00000000-0000-4000-8000-000000000107',
   inspirationId: 150,
   inspirationTitle: 'Inspo',
   inspirationFileName: 'look.webp',

@@ -590,7 +590,6 @@ describe('Photos.copy', () => {
 
     expect(row).toMatchObject({ createdById: 7 });
     expect(row!.fileName).toMatch(/^[0-9a-f-]{36}\.webp$/);
-    expect(row!.shareableId).toMatch(/^[0-9a-f-]{36}$/);
     const base = row!.fileName.replace('.webp', '');
     expect((await stored(row!.fileName)).equals(await stored('a.webp'))).toBe(
       true,
@@ -697,7 +696,6 @@ describe('Photos.storeUpload', () => {
     );
     expect(row).toEqual({
       fileName: expect.stringMatching(/^[0-9a-f-]{36}\.webp$/) as string,
-      shareableId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
       createdOn: expect.any(String) as string,
       createdById: 7,
     });

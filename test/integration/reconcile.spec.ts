@@ -88,7 +88,6 @@ describe('storage reconciliation', () => {
     await asFixture(t.db, (tx) =>
       tx.insert(file).values({
         fileName,
-        shareableId: randomUUID(),
         createdOn: new Date(Date.now() - ageMs).toISOString(),
         createdById: t.owner.id,
       }),
@@ -672,7 +671,6 @@ describe('storage reconciliation and outfit selfies', () => {
     await asFixture(t.db, (tx) =>
       tx.insert(file).values({
         fileName: orphan,
-        shareableId: randomUUID(),
         createdOn: new Date().toISOString(),
         createdById: t.owner.id,
       }),

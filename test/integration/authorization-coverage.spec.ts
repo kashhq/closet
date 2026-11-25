@@ -41,6 +41,8 @@ const EXEMPT: Record<RouteKey, string> = {
   'GET /*':
     'public by design: public/ (scripts, styles, icons), static files that belong to nobody',
   'GET /.well-known/*': 'public by design: well-known static files',
+  'GET /file/watermark/:shareableId':
+    "public by design: the share preview of a shared garment or outfit, a capability URL whose random id is the credential (#669); no photo's own id or name resolves, so there is no owner to refuse; covered by share-page.spec.ts (404 once sharing stops) and file-route.spec.ts (404 for any other id)",
   'GET /wardrobe-share/invite/:token':
     'public by design: the invite landing page, a capability URL whose token is the credential; covered by share-lifecycle.spec.ts "the public invite page never shows the inviter email"',
   'POST /wardrobe-share/invite/:token/accept':

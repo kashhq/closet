@@ -183,7 +183,6 @@ export async function findVariantKey(
  */
 export interface NewPhotoRow {
   fileName: string;
-  shareableId: string;
   /** ISO timestamp as text, as the column has always held it. */
   createdOn: string;
   createdById: number;

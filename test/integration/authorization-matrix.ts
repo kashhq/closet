@@ -162,7 +162,6 @@ export interface Fixture {
   /** The entry's outfit selfie (#19), and its photo's names. */
   selfieId: number;
   selfieFileName: string;
-  selfieShareableId: string;
   /** A saved look of the owner's (#22) with a photo, and its title and photo's name. */
   inspirationId: number;
   inspirationTitle: string;
@@ -861,7 +860,6 @@ export function describeMatrix(
         entryId: entry.id,
         selfieId: ownSelfie.id,
         selfieFileName: ownSelfie.fileName,
-        selfieShareableId: ownSelfie.shareableId,
         inspirationId: look.id,
         inspirationTitle,
         inspirationFileName: look.fileName,

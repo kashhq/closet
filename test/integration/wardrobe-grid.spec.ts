@@ -64,7 +64,6 @@ describe('wardrobe grid', () => {
             .insert(file)
             .values({
               fileName: `${randomUUID()}.webp`,
-              shareableId: randomUUID(),
               createdOn: new Date().toISOString(),
               createdById: t.owner.id,
             })
