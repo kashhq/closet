@@ -18,7 +18,7 @@ const BIND = '`npm run order-mail:bind-owner -- --confirm`';
 const MESSAGES: Record<OrderMailOwnerMissing, string> = {
   'no-account':
     'ORDER_MAIL_OWNER names no closet account: the order mail is off until it names one and the app restarts',
-  history: `ORDER_MAIL_OWNER's account owns none of the order mail's earlier items, so it was not adopted as their owner: the order mail is off until ${BIND} binds it and the app restarts`,
+  history: `ORDER_MAIL_OWNER's account owns none of the order mail's earlier items, and earlier emails with no item are what a deleted owner leaves, so it was not adopted: the order mail is off until ${BIND} binds it and the app restarts`,
   deleted: `The order mail's owner account was deleted: the order mail is off until ${BIND} binds another and the app restarts`,
   unbound:
     "The order mail's owner was deleted or rebound since the boot: the order mail is off until the app restarts",

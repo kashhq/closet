@@ -1,5 +1,6 @@
 import type { Db } from '../../../db/client';
 import type { Logger } from '../../../logger';
+import { normalizeEmail } from '../../auth/queries';
 import type { OrderMailOwnerWatch } from './owner-watch';
 import {
   adoptOrderMailOwner,
@@ -55,7 +56,9 @@ function storedOwner(
     return undefined;
   }
   // The address is never logged, only that the key no longer names the owner.
-  if (email !== ownerEmail) {
+  // Normalized as every lookup compares it: a row stored before 0005 may
+  // keep its capitals.
+  if (normalizeEmail(email ?? '') !== ownerEmail) {
     logger.warn(
       `ORDER_MAIL_OWNER is no longer the email of the order mail's owner, user ${userId}: the owner stays that account; \`npm run order-mail:bind-owner -- --confirm\` moves it to the account the key names (docs/operations.md#health)`,
     );

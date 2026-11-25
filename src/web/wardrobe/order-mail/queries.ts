@@ -66,8 +66,10 @@ export interface OrderMailOwnerAdoption {
  * order mail has no history or that history is the account's alone. An
  * install that polled before keeps its emails when the owner's account is
  * deleted (only items cascade), so whoever registers the old address later
- * owns no item and is refused here; an owner who never had an item is bound
- * by the CLI instead. `ownerEmail` is normalized, as findUserByEmail's.
+ * owns no item and is refused here. Emails with no item at all are refused
+ * too: that is exactly what a deleted owner leaves, and nothing dates an
+ * account (order_email names no user, `user` has no created_at), so an
+ * owner who never had an item is bound by the CLI instead. `ownerEmail` is normalized, as findUserByEmail's.
  */
 export async function adoptOrderMailOwner(
   db: Db,

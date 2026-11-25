@@ -1069,6 +1069,15 @@ describe('order email import, the stored owner', () => {
     return { status, stderr };
   };
 
+  it('gives no warning when the stored email differs from ORDER_MAIL_OWNER only in capitals', async () => {
+    await t.db
+      .update(user)
+      .set({ email: 'Owner@Example.com' })
+      .where(eq(user.id, t.owner.id));
+    expect(await restart()).toEqual({ ownerId: t.owner.id, missing: false });
+    expect(t.logs.messages('warn', 'OrderMail')).toEqual([]);
+  });
+
   it('keeps the adopted id through a rename, and binds nobody once the owner is deleted and the address re-registered', async () => {
     expect(await stored()).toEqual([t.owner.id]);
     expect(t.orderMail!.ownerId).toBe(t.owner.id);
@@ -1147,6 +1156,21 @@ describe('order email import, the stored owner', () => {
       ownerId: holder,
       missing: false,
     });
+  });
+
+  // What a deleted owner leaves (its items cascade, its emails stay), and
+  // nothing dates an account: refused even for the account that polled.
+  it('refuses with no row when the order mail has emails but no items, naming the bind command', async () => {
+    await t.db.delete(orderItem);
+    await t.db.delete(orderMailOwner);
+    const errorsBefore = t.logs.messages('error', 'OrderMail').length;
+    expect(await restart('holder@example.com')).toEqual({
+      ownerId: undefined,
+      missing: true,
+    });
+    expect(await stored()).toEqual([]);
+    const [refusal] = t.logs.messages('error', 'OrderMail').slice(errorsBefore);
+    expect(refusal).toContain('npm run order-mail:bind-owner -- --confirm');
   });
 });
 
