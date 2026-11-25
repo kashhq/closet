@@ -108,6 +108,8 @@ export const PLACEHOLDER_KINDS = {
   BULK_WASHED: { count: 'data' },
   BULK_WASHED_SKIPPED: { count: 'data', skipped: 'data' },
   BULK_WASHED_ONE_SKIPPED: { skipped: 'data' },
+  BULK_WASHED_SKIPPED_WISHLIST: { count: 'data' },
+  BULK_WASHED_SKIPPED_UNSEEN: { count: 'data' },
   BULK_ADDED: { count: 'data' },
   SELECT_ALL: { count: 'data' },
   WARDROBE_OF: { name: 'data' },
