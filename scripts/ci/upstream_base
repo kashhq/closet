@@ -1,0 +1,4 @@
+# The fork point (#1234): the last commit inherited from the original project, the parent of the
+# owner's first commit. "Upstream" is this commit and its ancestors, never an author list: a bot
+# or contributor after the fork is not upstream. Read by upstream_lines.sh and upstream-rewraps.ts.
+037e4239a57031fa44843f75783b2c1d8ab3dea0
