@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { wardrobeShare } from '../../src/db/schema';
 import type { SharePermission } from '../../src/db/schema';
+import {
+  acceptInvite,
+  createInvite,
+  removeShare,
+} from '../../src/web/sharing/queries';
 import { deviceToken, expectProblem } from './api';
 import { createTestApp, type TestApp, userIdOf } from './harness';
 
@@ -217,6 +222,14 @@ async function sync(token: string, cursor?: string) {
 const changeOf = (changes: Change[], resource: string, id: number) =>
   changes.find((c) => c.resource === resource && c.id === id);
 
+/** An invite of `permission` from the owner, accepted by `granteeId`: what its link does. */
+async function accepted(granteeId: number, permission: SharePermission) {
+  const invite = await createInvite(t.db, t.owner.id, permission);
+  const answer = await acceptInvite(t.db, invite.inviteToken, granteeId);
+  if (!answer.accepted) throw new Error(`invite refused: ${answer.reason}`);
+  return answer.shareId;
+}
+
 describe('the changes feed', () => {
   it('resends a garment and an outfit when shared and when stopped, with the link as each reader is shown it', async () => {
     const garmentId = await newGarment('Synced');
@@ -257,5 +270,49 @@ describe('the changes feed', () => {
       expect(change, `${resource} resent`).toBeDefined();
       expect(change?.data).not.toHaveProperty('publicShareUrl');
     }
+  });
+
+  // No garment row moves on a grant's change: the feed resends the wardrobe
+  // because the cursor's grant for it differs.
+  it('a VIEW share raised to MANAGE is resent the garments shared already, now with their links; then nothing', async () => {
+    const email = 'share-api-raised@example.com';
+    const token = await grantee(email, 'VIEW');
+    const granteeId = await userIdOf(t, email);
+    const garmentId = await newGarment('Shared before the raise');
+    const link = await share(owner, `/garments/${garmentId}`);
+    const viewed = await sync(token);
+    expect(
+      changeOf(viewed.changes, 'garment', garmentId)?.data,
+    ).not.toHaveProperty('publicShareUrl');
+
+    // A MANAGE invite accepted by a VIEW grantee folds into their share.
+    await accepted(granteeId, 'MANAGE');
+    const raised = await sync(token, viewed.cursor);
+    expect(
+      changeOf(raised.changes, 'garment', garmentId)?.data.publicShareUrl,
+    ).toBe(link);
+    expect((await sync(token, raised.cursor)).changes).toEqual([]);
+  });
+
+  it('a MANAGE share revoked and given again as VIEW between two syncs is resent its garments without their links', async () => {
+    const email = 'share-api-lowered@example.com';
+    await t.register(email);
+    const granteeId = await userIdOf(t, email);
+    const shareId = await accepted(granteeId, 'MANAGE');
+    const token = (await deviceToken(t, { email })).token;
+    const garmentId = await newGarment('Shared before the downgrade');
+    const link = await share(owner, `/garments/${garmentId}`);
+    const managed = await sync(token);
+    expect(
+      changeOf(managed.changes, 'garment', garmentId)?.data.publicShareUrl,
+    ).toBe(link);
+
+    await removeShare(t.db, { userId: t.owner.id, surface: 'page' }, shareId);
+    await accepted(granteeId, 'VIEW');
+    const lowered = await sync(token, managed.cursor);
+    const resent = changeOf(lowered.changes, 'garment', garmentId);
+    expect(resent, 'garment resent').toBeDefined();
+    expect(resent?.data).not.toHaveProperty('publicShareUrl');
+    expect((await sync(token, lowered.cursor)).changes).toEqual([]);
   });
 });

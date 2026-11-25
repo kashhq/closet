@@ -50,6 +50,7 @@ import {
 import {
   type ChangesCursor,
   endOf,
+  type Grant,
   isCurrentEpoch,
   isExpired,
   KIND,
@@ -289,6 +290,11 @@ export interface ChangesPage {
   /** Owners in the cursor the caller no longer sees: a share revoked or left. */
   revokedWardrobes: number[];
   /**
+   * Owners whose grant changed since the cursor (readChanges), read again
+   * from their start. Logged, not answered: to the client it is a resend.
+   */
+  regrantedWardrobes: number[];
+  /**
    * On every page of a full sync: the wardrobes it covers (the caller's own,
    * then each accepted share). After its last page the client drops every
    * row it was not re-sent and every wardrobe not listed: a cursorless read
@@ -341,24 +347,37 @@ export async function readChanges(
         `a cursor of epoch ${cursor.epoch ?? 'none'}, not ${epoch.epoch}`,
       );
     }
+    const regranted: number[] = [];
     const reads = wardrobes.map((wardrobe): WardrobeRead => {
-      const at =
+      const held =
         cursor?.positions.get(wardrobe.ownerId) ?? startOf(wardrobe.floor);
       // Past the wardrobe's own revision: a restore the epoch missed, whose
       // next writes would reuse the revisions this cursor is past.
-      if (at.revision > wardrobe.revision) {
+      if (held.revision > wardrobe.revision) {
         throw expired(
-          `owner ${wardrobe.ownerId} at revision ${at.revision}, above its ${wardrobe.revision}`,
+          `owner ${wardrobe.ownerId} at revision ${held.revision}, above its ${wardrobe.revision}`,
         );
       }
-      if (isExpired(at, wardrobe.floor)) {
+      // Checked on the held position even when it is read again below: the
+      // client still holds the rows it was sent, so a deletion pruned since
+      // would leave one behind.
+      if (isExpired(held, wardrobe.floor)) {
         throw expired(
-          `owner ${wardrobe.ownerId} at revision ${at.revision}, floor ${wardrobe.floor}`,
+          `owner ${wardrobe.ownerId} at revision ${held.revision}, floor ${wardrobe.floor}`,
         );
       }
+      // A grant that changed since (a share raised to MANAGE, or revoked
+      // and given again between two syncs) reshapes rows the client holds
+      // (a garment's public link, #959) though none of them moved: the
+      // wardrobe is read again from its start, as a share new to the cursor
+      // is. A share write never touches the owner's rows or revision.
+      const changed =
+        cursor?.positions.has(wardrobe.ownerId) === true &&
+        cursor.grants.get(wardrobe.ownerId) !== wardrobe.grant;
+      if (changed) regranted.push(wardrobe.ownerId);
       return {
         ...wardrobe,
-        at,
+        at: changed ? startOf(wardrobe.floor) : held,
         ...(wardrobe.ownerId === actor.userId
           ? { roots: OWN_ROOTS, stamps: OWN_STAMPS }
           : { roots: SHARED_ROOTS, stamps: SHARED_STAMPS }),
@@ -387,6 +406,7 @@ export async function readChanges(
       revokedWardrobes: cursor
         ? [...cursor.positions.keys()].filter((ownerId) => !seen.has(ownerId))
         : [],
+      regrantedWardrobes: regranted,
       ...(fullSync && { snapshot: { wardrobes: owners } }),
     };
   });
@@ -466,5 +486,10 @@ function nextCursor(
     // A wardrobe not reached yet stays out: it starts fresh next time, at
     // the floor of then.
   });
-  return { coverage: FEED_COVERAGE, positions };
+  const grants = new Map<number, Grant>(
+    reads
+      .filter((read) => positions.has(read.ownerId))
+      .map((read) => [read.ownerId, read.grant]),
+  );
+  return { coverage: FEED_COVERAGE, positions, grants };
 }

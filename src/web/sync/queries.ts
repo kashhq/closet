@@ -9,7 +9,7 @@ import type {
 } from '../../db/sync-tables';
 import { HttpError } from '../errors';
 import { acceptedSharesWith } from '../sharing/access';
-import { type Epoch, KIND, type Position } from './cursor';
+import { type Epoch, type Grant, KIND, type Position } from './cursor';
 
 /** A synced root as sync-tables.ts lists it. */
 export type FeedRoot = (typeof SYNC_ROOTS)[number];
@@ -56,13 +56,16 @@ export interface FeedWardrobe {
   /** The owner's newest revision in this snapshot: the end of the read. */
   revision: number;
   floor: number;
+  /** What the caller may do there: the cursor keeps it beside the position. */
+  grant: Grant;
 }
 
 /**
  * The caller's own wardrobe, then each one shared with them (the access
- * resolver's accepted shares) by owner id: the order a page fills in. The
- * epoch rides on every row (its one-row table joined on), so reading it
- * costs no statement and it is the snapshot's own.
+ * resolver's accepted shares) by owner id: the order a page fills in, each
+ * with its grant (their own, or the share's permission). The epoch rides on
+ * every row (its one-row table joined on), so reading it costs no statement
+ * and it is the snapshot's own.
  */
 export async function feedWardrobes(
   db: Queryable,
@@ -79,12 +82,12 @@ export async function feedWardrobes(
   // missing user.
   const rows = await unionAll(
     db
-      .select(columns)
+      .select({ ...columns, grant: sql<Grant>`'OWN'` })
       .from(user)
       .leftJoin(syncEpoch, sql`true`)
       .where(eq(user.id, userId)),
     db
-      .select(columns)
+      .select({ ...columns, grant: sql<Grant>`${wardrobeShare.permission}` })
       .from(wardrobeShare)
       .innerJoin(user, eq(user.id, wardrobeShare.grantorId))
       .leftJoin(syncEpoch, sql`true`)
@@ -96,7 +99,12 @@ export async function feedWardrobes(
   if (!own) throw new HttpError(401);
   if (own.epoch === null) throw new SyncEpochMissingError();
   const wardrobes = rows
-    .map(({ ownerId, revision, floor }) => ({ ownerId, revision, floor }))
+    .map(({ ownerId, revision, floor, grant }) => ({
+      ownerId,
+      revision,
+      floor,
+      grant,
+    }))
     .sort(
       (a, b) =>
         Number(b.ownerId === userId) - Number(a.ownerId === userId) ||
