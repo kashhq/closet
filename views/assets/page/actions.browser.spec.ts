@@ -35,7 +35,6 @@ const attrs = (record: Record<string, string | undefined>) =>
 declare global {
   interface Window {
     log: string[];
-    htmx?: object;
   }
 }
 
@@ -103,7 +102,7 @@ describe('the delegated actions', () => {
         await page.click('#go');
         expect(await log(page)).toEqual(['submit:filters']);
       },
-      (page) => page.evaluate(() => void (window.htmx = {})),
+      (page) => page.evaluate(() => void Object.assign(window, { htmx: {} })),
     );
     await withPage(markup, async (page) => {
       await page.click('#go');
@@ -241,10 +240,13 @@ describe('the delegated actions', () => {
       `<form id="up"><input id="pick" type="file" ${attrs(photoPick())}></form>`,
       async (page) => {
         await page.setInputFiles('#pick', []);
-        await page.setInputFiles('#pick', {
-          name: 'a.jpg',
-          mimeType: 'image/jpeg',
-          buffer: Buffer.from('x'),
+        await page.evaluate(() => {
+          const transfer = new DataTransfer();
+          transfer.items.add(new File(['x'], 'a.jpg', { type: 'image/jpeg' }));
+          const input = document.querySelector<HTMLInputElement>('#pick');
+          if (!input) return;
+          input.files = transfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
         });
         await page.waitForFunction(() => window.log.length > 0);
         expect(await log(page)).toEqual(['submit:up']);
