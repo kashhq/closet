@@ -187,10 +187,11 @@ lower-case letters and hyphens, else `*`, so a calendar grid is one kind and
 no seeded date, id or name reaches one): each axe-core rule (all
 of axe's default rules), `field font < 16 px` (a text field iOS zooms the
 page into on focus, shown or not) and `target < 44 px` (a visible tap
-target a fingertip does not wholly reach: a 43.5 px disc on it, hit tested
+target a fingertip does not wholly reach: a 44 px disc on it, hit tested
 by the browser, lands elsewhere at its centre or rim, so main.css's hit
 areas and a control's labels count and a neighbour's area over it counts
-against; the half pixel absorbs font rounding between macOS and Linux;
+against; each rim probe's pixel ends on the rim, so a box 43 px across
+passes and 42 px fails (#1209);
 `tapMisses`, `test/support/tap-area.ts`, #1210; a link inside running text
 is exempt). The browser's writes are answered 204
 in the browser, so the walk still starts on the seed and no budget is spent.

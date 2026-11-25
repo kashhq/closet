@@ -74,7 +74,7 @@ export function AddOutfitPage(props: {
         <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
           {t('trips.DAY')}
         </p>
-        <ul class="flex flex-wrap gap-2">
+        <ul class="chip-row">
           {chip(
             addOutfitUrl(trip.id, { occasion }),
             day === undefined,
@@ -94,7 +94,7 @@ export function AddOutfitPage(props: {
         <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
           {t('OCCASION')}
         </p>
-        <ul class="flex flex-wrap gap-2">
+        <ul class="chip-row">
           {chip(
             addOutfitUrl(trip.id, { day }),
             occasion === undefined,

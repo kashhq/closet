@@ -391,8 +391,10 @@ function PlannedCard(props: {
 export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
   const { row, today } = props;
   return (
+    // Refresh is a btn-xs over the strip, which paints later: a phone's gap
+    // leaves its 44 px area room (main.css, Touch hit areas; #1210).
     <section
-      class="flex flex-col gap-2"
+      class="flex flex-col gap-2 pointer-coarse:gap-2.5"
       data-today-row="ideas"
       data-occasion={row.occasion}
       data-page={row.page}
@@ -439,11 +441,13 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
         </p>
       )}
       {row.ideas.length > 0 && (
+        // Its margin keeps its 44 px area clear of + Plan another below it
+        // on a phone (#1210).
         <a
           href={ideasUrl({
             destination: { kind: 'day', day: today, occasion: row.occasion },
           })}
-          class="link link-hover text-sm px-2 self-start"
+          class="link link-hover text-sm px-2 self-start pointer-coarse:mb-2"
         >
           {t('today.MORE_IDEAS')}
         </a>

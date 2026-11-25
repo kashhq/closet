@@ -645,7 +645,7 @@ function ConditionFields({ care }: { care: CareFormValues }) {
       <span class="label">
         <span class="label-text">{t('CONDITION')}</span>
       </span>
-      <div class="flex flex-wrap gap-2">
+      <div class="chip-row">
         {CONDITIONS.map((condition) => (
           <input
             type="radio"

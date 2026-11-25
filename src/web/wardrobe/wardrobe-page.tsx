@@ -404,7 +404,7 @@ function Prompts({ model }: { model: WardrobeModel }) {
   const { toTag, toWash, drafts } = model;
   if (!drafts && toTag === 0 && toWash === 0) return null;
   return (
-    <div id="wardrobe-prompts" class="mb-3 flex flex-wrap gap-2">
+    <div id="wardrobe-prompts" class="mb-3 chip-row">
       {drafts && (
         <Prompt
           text={
@@ -1443,7 +1443,7 @@ function FilterGroup(props: {
       >
         {props.title}
       </h4>
-      <div class="flex flex-wrap gap-2">{props.children}</div>
+      <div class="chip-row">{props.children}</div>
     </div>
   );
 }
@@ -1786,7 +1786,7 @@ function BulkDialog() {
                     {t('BULK_MATERIALS_ADD')}
                   </p>
                 )}
-                <div class="flex flex-wrap gap-2">
+                <div class="chip-row">
                   {choice.clearable && (
                     <input
                       type="radio"

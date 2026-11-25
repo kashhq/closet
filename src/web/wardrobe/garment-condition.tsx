@@ -47,7 +47,7 @@ export function GarmentCondition(props: {
         native
         class="group flex flex-col gap-2"
       >
-        <div class="flex flex-wrap gap-2">
+        <div class="chip-row">
           {CONDITIONS.map((condition) => (
             <input
               type="radio"

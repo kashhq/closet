@@ -80,7 +80,7 @@ export function PlanSheet({ day }: { day: IsoDate }) {
           <legend class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             {t('CALENDAR_PLAN_OCCASION')}
           </legend>
-          <div class="flex flex-wrap gap-2">
+          <div class="chip-row">
             {OCCASIONS.map((occasion) => (
               <input
                 type="radio"

@@ -39,7 +39,7 @@ export function GarmentCapsules(props: {
           action={garmentUrl(garmentId, viewOwner, '/capsules')}
           class="flex flex-col gap-1 flex-1 min-w-0"
         >
-          <div class="flex flex-wrap gap-2">
+          <div class="chip-row">
             {capsules.map((capsule) => (
               <>
                 <input

@@ -64,7 +64,7 @@ export function PieceList(props: {
       {!full && props.hints.length > 0 && (
         <div class="flex flex-col gap-2" data-piece-hints="">
           <p class="text-sm text-muted">{t('inspiration.HINTS')}</p>
-          <div class="flex flex-wrap gap-2">
+          <div class="chip-row">
             {props.hints.map((hint) => (
               <PostForm action={inspirationPiecesPath(lookId)}>
                 <PieceHiddenFields piece={hint} />
