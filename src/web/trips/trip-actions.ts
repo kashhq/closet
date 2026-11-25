@@ -1,6 +1,8 @@
+import type { FastifyRequest } from 'fastify';
 import type { Db, Queryable } from '../../db/client';
 import { selectScalars } from '../../db/select-scalars';
 import type { IsoDate } from '../../calendar-date';
+import type { Logger } from '../../logger';
 import { DEFAULT_OCCASION, type Occasion } from '../../wardrobe/occasions';
 import { tripPhase, wearableToday } from '../../wardrobe/packing';
 import type { PickedLocation } from '../../weather/location';
@@ -20,7 +22,9 @@ import {
 } from '../outfits/queries';
 import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
+import { type RateLimitChecker, withinLimit } from '../security/rate-limit';
 import type { Actor } from '../sharing/access';
+import type { PickedPlace } from '../weather/place-input';
 import { type TripModel, tripModel, tripPageModel } from './model';
 import { type PackedChange, setPacked } from './packed';
 import {
@@ -32,6 +36,7 @@ import {
   deleteTrip,
   findTrip,
   findTripOutfit,
+  type NewTripPlace,
   type NotATripDay,
   ownTripSql,
   pickForTrip,
@@ -151,23 +156,84 @@ export async function requireAddOutfitPage(
 }
 
 /**
+ * A new trip's picked place, as addTrip takes it: the place and the
+ * destination budget it is charged against (WEATHER_LOCATION_LIMIT: a
+ * located trip is a forecast to fetch and a cached row), or no charge when
+ * this instance locates nothing (no WEATHER_ENABLED). The budget is the
+ * request's, so the route builds it (newTripPlace).
+ */
+export interface PlaceAsk {
+  place: PickedPlace;
+  /** Counts the place against the budget: false once it is spent. */
+  charge: (() => Promise<boolean>) | null;
+}
+
+/**
+ * Why a new trip's asked place was not located (the API's `placeUnlocated`):
+ * `budget`, spent this minute, so the place can be found again later;
+ * `no-weather`, the instance has no weather, so no place is ever located.
+ * Either way the place's label is the destination.
+ */
+export const PLACE_UNLOCATED = ['budget', 'no-weather'] as const;
+export type PlaceUnlocated = (typeof PLACE_UNLOCATED)[number];
+
+/**
+ * The page's and the API's create's place (#861): without WEATHER_ENABLED,
+ * whose search is the only source of one (the form shows no picker), its
+ * label alone, its coordinates neither stored nor charged.
+ */
+export function newTripPlace(
+  place: PickedPlace | null,
+  {
+    weatherEnabled,
+    budget,
+    request,
+    logger,
+    who,
+  }: {
+    weatherEnabled: boolean;
+    budget: RateLimitChecker;
+    request: FastifyRequest;
+    logger: Logger;
+    who: string;
+  },
+): PlaceAsk | null {
+  if (!place) return null;
+  return {
+    place,
+    charge: weatherEnabled
+      ? () => withinLimit(budget, request, { logger, who })
+      : null,
+  };
+}
+
+/**
  * A new trip of the actor's (the form, POST /api/v1/trips): createTripAt,
  * or with the API's `clientId` createTripOnce, whose retry answers the
  * first trip (`created` false) and whose id of a trip deleted since is a
- * 410. Logs whether it was located, never the place: where someone travels
- * is theirs.
+ * 410. An asked place names the destination (setTripDestination's rule);
+ * it is located only when the trip is created and its charge allows, so a
+ * retry or a 410 spends no slot. Past the budget, or without weather, the
+ * trip is created unlocated, never refused (#863), and `placeUnlocated`
+ * says why. Logs whether it was located, never the place: where someone
+ * travels is theirs.
  */
 export async function addTrip(
   { db, logger }: ActionDeps,
   actor: Actor,
   input: {
     fields: TripFields;
-    place: { name: string; location: PickedLocation } | null;
+    place: PlaceAsk | null;
     today: IsoDate;
     clientId?: string;
   },
-): Promise<{ id: number; created: boolean }> {
-  const { fields, place, today, clientId } = input;
+): Promise<{
+  id: number;
+  created: boolean;
+  placeUnlocated: PlaceUnlocated | undefined;
+}> {
+  const { place: ask, today, clientId } = input;
+  const { fields, place } = placeToStore(input.fields, ask);
   const once = clientId
     ? await createTripOnce(db, actor.userId, fields, place, today, clientId)
     : {
@@ -175,17 +241,46 @@ export async function addTrip(
         created: true,
       };
   if (once === 'gone') throw new HttpError(410, t('TRIP_DELETED'));
-  const { id, away } = once.row;
+  const { id, away, located } = once.row;
+  // A retry answers the first trip as it was saved: nothing unlocated now.
+  const placeUnlocated =
+    once.created && ask && !located ? whyUnlocated(ask) : undefined;
   logOp(logger, actor, 'trip.created', {
     tripId: id,
     changed: once.created,
     startsOn: fields.startsOn,
     endsOn: fields.endsOn,
-    located: once.created ? place !== null : undefined,
+    located: once.created ? located : undefined,
+    placeUnlocated,
     autoEntriesRemoved: away,
     clientId: clientId?.slice(0, 8),
   });
-  return { id, created: once.created };
+  return { id, created: once.created, placeUnlocated };
+}
+
+/**
+ * addTrip's write of its asked place: the place's label names the
+ * destination either way (setTripDestination's rule), so an unlocated one
+ * keeps it for the person's Find; the create's transaction charges it
+ * (`locate`) once the trip row is in.
+ */
+function placeToStore(
+  fields: TripFields,
+  ask: PlaceAsk | null,
+): { fields: TripFields; place: NewTripPlace | null } {
+  if (!ask) return { fields, place: null };
+  return {
+    fields: { ...fields, destination: ask.place.name },
+    place: {
+      ...ask.place,
+      locate: ask.charge ?? (() => Promise.resolve(false)),
+    },
+  };
+}
+
+/** An asked place left unlocated: its budget refused it, or nothing could charge it. */
+function whyUnlocated(ask: PlaceAsk): PlaceUnlocated {
+  return ask.charge ? 'budget' : 'no-weather';
 }
 
 /** The trip form's save of the actor's trip (updateTrip). */

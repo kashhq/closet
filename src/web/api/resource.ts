@@ -18,8 +18,14 @@ import { ROW_ID_MAX } from '../schemas';
  */
 
 /** A stored enum's values as its schema: the spec lists them for a client. */
-export function literals<T extends string | number>(values: readonly T[]) {
-  return Type.Union(values.map((value) => Type.Literal(value)));
+export function literals<T extends string | number>(
+  values: readonly T[],
+  options: { description?: string } = {},
+) {
+  return Type.Union(
+    values.map((value) => Type.Literal(value)),
+    options,
+  );
 }
 
 /**

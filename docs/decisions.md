@@ -1741,6 +1741,11 @@ Why: joining up to three adjacent owner lines and searching the line-break-free 
 Decision: `scripts/upstream-match.ts` keeps the single-line rule (a core of 40+ found anywhere in the blobs) and lets a run of 2 or 3 lines count only when they are adjacent in the file (line numbers rising by 1) and their joined core equals the core of one upstream line (a `Set`). The single-line search is one pass over the blobs, needles indexed by their first 40 characters.
 Consequence: a run broken by a punctuation-only line (`}, {`, not in the owner-line input) is not joined; that split is left to blame and review.
 
+## 2026-11-25 — A spent destination budget drops a new trip's place, never the trip (#863, #861)
+Why: with a picked place, Save charged `WEATHER_LOCATION_LIMIT` first and answered 429 with nothing created once it was spent, on the page and the API; with WEATHER_ENABLED off a posted place was still stored and charged.
+Decision: `addTrip` takes a `PlaceAsk` (the place and a `charge` the route builds from the request's budget, `withinLimit`, or none without weather: `newTripPlace`); the place's label always names the destination, and the create's transaction asks `locate` only after its insert, so a clientId retry or a 410 spends no slot. Unlocated, it answers why: `placeUnlocated` `budget` (the page's `?created=later` toast) or `no-weather` (coordinates never stored there).
+Consequence: a create never fails for the budget; the place is set later from the trip page or PUT /trips/{id}/destination, which still answer 429.
+
 ## 2026-11-25 — The CSP allows no inline script: behaviour is a data-* name a head module reads, and the importmap is a hash, not a nonce (#672)
 
 Why: `script-src 'unsafe-inline'` let any escaping miss run; `base-uri` and `form-action` do not fall back to `default-src`. The issue asked for a per-response nonce, which breaks what the app relies on: a tab root renders byte for byte the same (stale-while-revalidate's compare), a page's ETag hashes its body (#708), and the worker's confirming 304 lays the new headers over the stored body (`confirmedHeaders`), so a new nonce would block the stored copy's scripts. A boosted navigation keeps the first load's CSP, so a nonce works only through htmx's `inlineScriptNonce`, which stamps any script a swap carries, an injected one too.

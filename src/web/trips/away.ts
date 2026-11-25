@@ -7,8 +7,8 @@ import type { IsoDate } from '../../calendar-date';
  * owner is away, and on which trip. Trips stay standalone outfit lists
  * (AGENTS.md); this is a read, folded as a scalar subquery into the
  * statements that already read the days: the week page (weekContext), "Plan
- * my week" (planMyWeek) and the daily re-plan (replanUser), which skip the
- * days it names.
+ * my week" (planMyWeek) and the daily re-plan's claim (claimAutoEntries,
+ * through awayOnSql), which skip the days it names.
  */
 
 /** A trip as the calendar names it on its days ("Away: Lisbon"). */
@@ -42,6 +42,20 @@ export function awayTripsSql(
     where ${trip.ownerId} = ${ownerId}
       and ${trip.startsOn} <= ${last}
       and ${trip.endsOn} >= ${first})`;
+}
+
+/**
+ * Whether one of the owner's trips covers `day` (a date expression of the
+ * statement), as a boolean column: the re-plan's claim marks each auto
+ * entry by it, so the entries on days away are removed before the week is
+ * read (#862). Served by trip_owner_id_starts_on_index.
+ */
+export function awayOnSql(ownerId: number, day: SQL): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1 from ${trip}
+    where ${trip.ownerId} = ${ownerId}
+      and ${trip.startsOn} <= ${day}
+      and ${trip.endsOn} >= ${day})`;
 }
 
 /** The trips `day` is one of, first to start first (two may overlap). */

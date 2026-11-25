@@ -1,4 +1,4 @@
-import { and, count, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   garmentWear,
@@ -26,6 +26,7 @@ import {
   unescapeHtml,
   asFixture,
 } from './harness';
+import { deviceToken } from './api';
 import { interleave } from './interleave';
 import { callTool, createAccessToken, tool } from './mcp';
 import {
@@ -1282,6 +1283,144 @@ describe('trips', () => {
         expect.stringMatching(
           /^Rate limit reached: POST \/trips\/\d+\/destination for user \d+$/,
         ),
+      );
+    });
+
+    // #863: the budget pays for the place, never for the trip.
+    it('creates the trip unlocated, saying why, once the destination budget is spent, on the page and the API', async () => {
+      const email = 'trip-budget@example.com';
+      const cookie = await t.register(email);
+      const bearer = (await deviceToken(t, { email })).token;
+      const today = t.today();
+      const fields = {
+        name: 'Spent budget',
+        destination: 'Austin, Texas, United States',
+        startsOn: addDays(today, 3),
+        endsOn: addDays(today, 5),
+        notes: '',
+      };
+      const first = await post('/trips', fields, { cookie });
+      const id = Number(
+        /^\/trips\/(\d+)/.exec(String(first.headers.location))![1],
+      );
+      for (let i = 0; i < 10; i++) {
+        const res = await post(
+          `/trips/${id}/destination`,
+          {
+            name: `Stop ${i}`,
+            latitude: String(30 + i / 10),
+            longitude: '-97.74',
+          },
+          { cookie },
+        );
+        expect(res.statusCode).toBe(303);
+      }
+
+      t.logs.clear();
+      const page = await post(
+        '/trips',
+        { ...fields, latitude: '30.27', longitude: '-97.74' },
+        { cookie },
+      );
+      expect(page.statusCode, page.body).toBe(303);
+      const location = String(page.headers.location);
+      expect(location).toMatch(/^\/trips\/\d+\?created=later$/);
+      const pageTrip = Number(/^\/trips\/(\d+)/.exec(location)![1]);
+      const shown = unescapeHtml(
+        (
+          await t.inject({
+            method: 'GET',
+            url: location,
+            headers: { cookie },
+          })
+        ).body,
+      );
+      expect(shown).toContain(
+        'Trip created without its place: too many places were set this minute.',
+      );
+      expect(t.logs.ops('trip.created').at(-1)).toMatchObject({
+        tripId: pageTrip,
+        located: false,
+        placeUnlocated: 'budget',
+      });
+      expect(t.logs.messages('warn', 'Web')).toContainEqual(
+        expect.stringMatching(
+          /^Rate limit reached: POST \/trips for user \d+$/,
+        ),
+      );
+
+      const api = await t.api(bearer, {
+        method: 'POST',
+        url: '/api/v1/trips',
+        payload: {
+          name: fields.name,
+          startsOn: fields.startsOn,
+          endsOn: fields.endsOn,
+          place: {
+            name: fields.destination,
+            latitude: 30.27,
+            longitude: -97.74,
+          },
+        },
+      });
+      expect(api.statusCode, api.body).toBe(201);
+      const made = api.json<{ id: number; placeUnlocated?: string }>();
+      expect(made.placeUnlocated).toBe('budget');
+
+      const rows = await t.db
+        .select({ destination: trip.destination, latitude: trip.latitude })
+        .from(trip)
+        .where(inArray(trip.id, [pageTrip, made.id]))
+        .orderBy(asc(trip.id));
+      expect(rows).toEqual([
+        { destination: fields.destination, latitude: null },
+        { destination: fields.destination, latitude: null },
+      ]);
+    });
+
+    // A slot pays for a located trip, so only a create that writes one is
+    // charged: a clientId retry answers the first trip and spends nothing.
+    it('charges the destination budget only for a trip created, never for a clientId retry', async () => {
+      const email = 'trip-retry@example.com';
+      await t.register(email);
+      const bearer = (await deviceToken(t, { email })).token;
+      const today = t.today();
+      const create = (name: string, clientId: string) =>
+        t.api(bearer, {
+          method: 'POST',
+          url: '/api/v1/trips',
+          payload: {
+            name,
+            startsOn: addDays(today, 3),
+            endsOn: addDays(today, 5),
+            clientId,
+            place: {
+              name: 'Austin, Texas, United States',
+              latitude: 30.27,
+              longitude: -97.74,
+            },
+          },
+        });
+      const clientId = '6d1f2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
+      const first = await create('Retried', clientId);
+      expect(first.statusCode, first.body).toBe(201);
+      t.logs.clear();
+      // As many retries as the budget's 10 a minute.
+      for (let i = 0; i < 10; i++) {
+        const retry = await create('Retried', clientId);
+        expect(retry.statusCode, retry.body).toBe(200);
+        expect(retry.json()).toEqual({ id: first.json<{ id: number }>().id });
+      }
+      const next = await create('Next', '7e2a3d4c-5b6f-4a71-9c8d-0e1f2a3b4c5d');
+      expect(next.statusCode, next.body).toBe(201);
+      expect(next.json()).not.toHaveProperty('placeUnlocated');
+      const [row] = await t.db
+        .select({ latitude: trip.latitude })
+        .from(trip)
+        .where(eq(trip.id, next.json<{ id: number }>().id));
+      expect(row.latitude).not.toBeNull();
+      expect(t.logs.messages('warn', 'Web')).not.toContainEqual(
+        expect.stringMatching(/^Rate limit reached/),
       );
     });
 
