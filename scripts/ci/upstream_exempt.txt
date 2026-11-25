@@ -1,0 +1,143 @@
+# Inherited lines that are facts, not expression (#1225), read by scripts/ci/upstream_lines.sh.
+# Each is <path><TAB><the line, trimmed>, and exempts every occurrence of that text in that file.
+# A line belongs here only when no other wording is possible without changing what it does or
+# says: a syntax keyword or directive, a schema's key, a package's name and range, a command, a
+# one-word label, the name of a month or day. Anything with a choice of words is rewritten instead.
+# An entry that stops matching fails make upstream-check: delete it then.
+
+# Dockerfile instructions with one possible form.
+Dockerfile	WORKDIR /app
+Dockerfile	RUN npm run build
+
+# The Compose schema's keys and values in README's quick start (scripts/smoke-image.sh runs the
+# block as written), Markdown code fences, and the commands the README tells a reader to run.
+README.md	```yaml
+README.md	services:
+README.md	ports:
+README.md	- '3000:3000'
+README.md	volumes:
+README.md	environment:
+README.md	DATA_PATH: /app/data
+README.md	restart: unless-stopped
+README.md	```bash
+README.md	npx web-push generate-vapid-keys
+README.md	npm run start:dev
+public/llms-full.txt	```bash
+
+# The robots.txt directive (the file shuts every crawler out).
+public/robots.txt	User-agent: *
+
+# Config schema keys and settings whose only form is the tool's own.
+eslint.config.mjs	// @ts-check
+eslint.config.mjs	languageOptions: {
+eslint.config.mjs	rules: {
+eslint.config.mjs	'@typescript-eslint/no-explicit-any': 'off',
+eslint.config.mjs	'@typescript-eslint/no-floating-promises': 'warn',
+lighthouserc.js	numberOfRuns: 1,
+lighthouserc.js	preset: 'lighthouse:recommended',
+lighthouserc.js	assertions: {
+playwright.config.ts	export default defineConfig({
+playwright.config.ts	fullyParallel: true,
+playwright.config.ts	use: {
+playwright.config.ts	trace: 'on-first-retry',
+tsconfig.json	"compilerOptions": {
+tsconfig.json	"module": "commonjs",
+tsconfig.json	"esModuleInterop": true,
+tsconfig.json	"isolatedModules": true,
+tsconfig.json	"sourceMap": true,
+tsconfig.json	"incremental": true,
+tsconfig.build.json	"extends": "./tsconfig.json",
+src/types/fastify.d.ts	declare module 'fastify' {
+views/assets/src-sw.ts	import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+views/assets/src-sw.ts	import { registerRoute, setCatchHandler } from 'workbox-routing';
+
+# package.json's keys, and dependencies whose locked version is still the range's floor.
+# "version" is #637's to settle.
+package.json	"version": "0.5.1",
+package.json	"private": true,
+package.json	"engines": {
+package.json	"scripts": {
+package.json	"dependencies": {
+package.json	"devDependencies": {
+package.json	"pulltorefreshjs": "^0.1.22",
+package.json	"web-push": "^3.6.7",
+package.json	"@types/web-push": "^3.6.4",
+package.json	"ts-node": "^10.9.2",
+
+# daisyUI's component class and a utility row in the mask editor's markup.
+src/web/wardrobe/garment-page.tsx	<div class="flex flex-wrap items-center gap-3">
+src/web/wardrobe/garment-page.tsx	<div class="join">
+
+# One-word UI labels and the calendar's names of months and days: the English word is the string.
+src/i18n/en/lang.json	"validation": {
+src/i18n/en/lang.json	"PROFILE": "Profile",
+src/i18n/en/lang.json	"WARDROBE": "Wardrobe",
+src/i18n/en/lang.json	"OUTFITS": "Outfits",
+src/i18n/en/lang.json	"EMAIL": "Email",
+src/i18n/en/lang.json	"PASSWORD": "Password",
+src/i18n/en/lang.json	"UPDATE": "Update",
+src/i18n/en/lang.json	"SHARE": "Share",
+src/i18n/en/lang.json	"NAME": "Name",
+src/i18n/en/lang.json	"CATEGORY": "Category",
+src/i18n/en/lang.json	"BRAND": "Brand",
+src/i18n/en/lang.json	"COLOR": "Color",
+src/i18n/en/lang.json	"SIZE": "Size",
+src/i18n/en/lang.json	"NOTES": "Notes",
+src/i18n/en/lang.json	"SAVE": "Save",
+src/i18n/en/lang.json	"DELETE": "Delete",
+src/i18n/en/lang.json	"CANCEL": "Cancel",
+src/i18n/en/lang.json	"MASK_BRUSH_ERASE": "Erase",
+src/i18n/en/lang.json	"MASK_BRUSH_RESTORE": "Restore",
+src/i18n/en/lang.json	"ARCHIVE": "Archive",
+src/i18n/en/lang.json	"ARCHIVED": "Archived",
+src/i18n/en/lang.json	"SEARCH": "Search",
+src/i18n/en/lang.json	"RESULTS": "results",
+src/i18n/en/lang.json	"FILTERS": "Filters",
+src/i18n/en/lang.json	"SELECTED": "selected",
+src/i18n/en/lang.json	"CATEGORY_ACCESSORIES": "Accessories",
+src/i18n/en/lang.json	"CATEGORY_BAGS": "Bags",
+src/i18n/en/lang.json	"CATEGORY_OUTERWEAR": "Outerwear",
+src/i18n/en/lang.json	"CATEGORY_DRESSES": "Dresses",
+src/i18n/en/lang.json	"CATEGORY_TOPS": "Tops",
+src/i18n/en/lang.json	"CATEGORY_BOTTOMS": "Bottoms",
+src/i18n/en/lang.json	"CATEGORY_FOOTWEAR": "Footwear",
+src/i18n/en/lang.json	"CATEGORY_OTHER": "Other",
+src/i18n/en/lang.json	"SHARED_BY": "Shared by",
+src/i18n/en/lang.json	"CALENDAR": "Calendar",
+src/i18n/en/lang.json	"PERMISSION_MANAGE": "Can edit",
+src/i18n/en/lang.json	"PENDING": "Pending",
+src/i18n/en/lang.json	"REVOKE": "Revoke",
+src/i18n/en/lang.json	"ACCEPT": "Accept",
+src/i18n/en/lang.json	"DECLINE": "Decline",
+src/i18n/en/lang.json	"LEAVE": "Leave",
+src/i18n/en/lang.json	"ABOUT_TITLE": "About",
+src/i18n/en/lang.json	"MONTH_JAN": "Jan",
+src/i18n/en/lang.json	"MONTH_FEB": "Feb",
+src/i18n/en/lang.json	"MONTH_MAR": "Mar",
+src/i18n/en/lang.json	"MONTH_APR": "Apr",
+src/i18n/en/lang.json	"MONTH_MAY": "May",
+src/i18n/en/lang.json	"MONTH_JUN": "Jun",
+src/i18n/en/lang.json	"MONTH_JUL": "Jul",
+src/i18n/en/lang.json	"MONTH_AUG": "Aug",
+src/i18n/en/lang.json	"MONTH_SEP": "Sep",
+src/i18n/en/lang.json	"MONTH_OCT": "Oct",
+src/i18n/en/lang.json	"MONTH_NOV": "Nov",
+src/i18n/en/lang.json	"MONTH_DEC": "Dec",
+src/i18n/en/lang.json	"CALENDAR_CAL_SUN_LETTER": "S",
+src/i18n/en/lang.json	"CALENDAR_CAL_MON_LETTER": "M",
+src/i18n/en/lang.json	"CALENDAR_CAL_TUE_LETTER": "T",
+src/i18n/en/lang.json	"CALENDAR_CAL_WED_LETTER": "W",
+src/i18n/en/lang.json	"CALENDAR_CAL_THU_LETTER": "T",
+src/i18n/en/lang.json	"CALENDAR_CAL_FRI_LETTER": "F",
+src/i18n/en/lang.json	"CALENDAR_CAL_SAT_LETTER": "S",
+src/i18n/en/lang.json	"CALENDAR_DAY_SUN": "Sunday",
+src/i18n/en/lang.json	"CALENDAR_DAY_MON": "Monday",
+src/i18n/en/lang.json	"CALENDAR_DAY_TUE": "Tuesday",
+src/i18n/en/lang.json	"CALENDAR_DAY_WED": "Wednesday",
+src/i18n/en/lang.json	"CALENDAR_DAY_THU": "Thursday",
+src/i18n/en/lang.json	"CALENDAR_DAY_FRI": "Friday",
+src/i18n/en/lang.json	"CALENDAR_DAY_SAT": "Saturday",
+
+# Commented-out examples in the committed defaults.
+.env	#PWA_ENABLED=true
+.env	#DISABLE_REGISTRATION=true

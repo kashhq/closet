@@ -65,7 +65,7 @@ GATE_JOBS_IMAGE="image ci-image ci-smoke CI_IMAGE=$IMAGE CI_BUILD_VERSION=gate-$
 # image's input set), so they cannot change what the image builds or boots. Keep it in step with
 # the Dockerfile: a new COPY of one of these paths must drop it from here.
 # shellcheck disable=SC2034
-GATE_IMAGE_EXCLUDE_PATHS='^(LICENSE$|\.github/|test/|docs/metrics/|(playwright|vitest|drizzle)\.config\.ts$|eslint\.config\.mjs$|knip\.jsonc$|lighthouserc\.js$|renovate\.json$)'
+GATE_IMAGE_EXCLUDE_PATHS='^(\.github/|test/|docs/metrics/|(playwright|vitest|drizzle)\.config\.ts$|eslint\.config\.mjs$|knip\.jsonc$|lighthouserc\.js$|renovate\.json$)'
 
 # Both vitest tiers again with the wall clock shifted (devkit README "Clock shift"), each once per
 # offset before the real-clock db run, which rewrites the coverage report the ratchet reads. The

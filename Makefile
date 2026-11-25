@@ -93,7 +93,7 @@ help:
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
 	@echo "make secrets-staged   — the same scan over the staged paths only (the pre-commit hook's half)"
 	@echo "make ci-guards-staged — ci-guards with devkit-check reading the index (the pre-commit hook's half)"
-	@echo "make upstream-check   — fail while any substantive line in the tree was written by someone other than the owner (scripts/ci/upstream_lines.sh; minutes, in no tier)"
+	@echo "make upstream-check   — fail while any substantive line in the tree was written by someone other than the owner, less scripts/ci/upstream_exempt.txt's facts (scripts/ci/upstream_lines.sh; minutes, in no tier)"
 	@echo "make hooks-check      — fail unless core.hooksPath is .githooks and both hooks are executable"
 
 ci-deps:
