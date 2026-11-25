@@ -28,13 +28,12 @@ const BUNDLED_AT_BUILD: readonly string[] = [
   'workbox-expiration',
   'workbox-navigation-preload',
   'workbox-precaching',
-  'workbox-recipes',
   'workbox-routing',
   'workbox-strategies',
 ];
 
-// Icons are drawn inline in src/web/layout/ and src/web/styling/ (no package,
-// so no licence file travels with them). Both sets are MIT.
+// Icons are path data drawn through Icon (src/web/layout/icon.tsx), no
+// package, so no licence file travels with them. Both sets are MIT.
 const ICON_CREDITS = `ICONS
 
 The app's inline SVG icons are drawn from two MIT-licensed sets:

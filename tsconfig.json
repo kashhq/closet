@@ -1,19 +1,21 @@
 {
   "compilerOptions": {
+    // CommonJS for Node 22 (its resolution follows: node10); a default
+    // import of a CommonJS package works through esModuleInterop. Each file
+    // compiles alone (isolatedModules), as Vitest's transform needs.
     "module": "commonjs",
-    "moduleResolution": "node",
+    "target": "ES2023",
     "esModuleInterop": true,
     "isolatedModules": true,
-    "removeComments": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "skipLibCheck": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    // dist/ keeps source maps for stack traces and no comments; the build
+    // config (tsconfig.build.json) turns incremental off.
+    "outDir": "dist",
+    "sourceMap": true,
+    "removeComments": true,
+    "incremental": true,
+    "baseUrl": ".",
     // Views under src/web/ are typed JSX rendered to strings by hono/jsx
     // (escape by default). The build (tsc) and Vitest (Vite's Oxc, which reads
     // them from this file) share the two settings.

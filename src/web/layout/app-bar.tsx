@@ -7,6 +7,7 @@ import type { ViewContext } from '../view-context';
 import { LinkTabs, type LinkTabsProps } from './link-tabs';
 import { BackLink } from './parts';
 import { formPage, FRESHNESS_ID } from '../page-contract';
+import { Icon } from './icon';
 
 export interface AppBarProps {
   ctx: ViewContext;
@@ -145,21 +146,11 @@ function TitleMenu(props: { title: Child; children: Child }) {
         >
           {props.title}
         </h1>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="2"
-          stroke="currentColor"
+        <Icon
+          paths="m19.5 8.25-7.5 7.5-7.5-7.5"
           class="size-4 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m19.5 8.25-7.5 7.5-7.5-7.5"
-          />
-        </svg>
+          weight="2"
+        />
       </summary>
       <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-300 z-20 w-64 mt-2 p-2">
         {props.children}
@@ -239,19 +230,10 @@ function initial(email: string): string {
 /** The avatar of an account without an email (`user.email` is nullable). */
 function PersonIcon() {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="1.5"
-      stroke="currentColor"
+    <Icon
+      paths="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
       class="size-5"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-      />
-    </svg>
+      weight="1.5"
+    />
   );
 }

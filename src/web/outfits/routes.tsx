@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import { type Static, Type } from '@sinclair/typebox';
 import { sessionUserId } from '../auth/require-session';
 import { parseIsoDate, todayIn } from '../../calendar-date';

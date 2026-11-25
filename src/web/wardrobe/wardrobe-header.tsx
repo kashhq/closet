@@ -27,6 +27,7 @@ import {
   WISHLIST_PATH,
 } from './urls';
 import { needsNetwork } from '../page-contract';
+import { Icon } from '../layout/icon';
 
 /**
  * The Wardrobe's header and tabs (docs/plans/2026-09-26-redesign.md,
@@ -406,17 +407,7 @@ function AddItem(props: { href: string; icon: string; children: Child }) {
   return (
     <li>
       <a href={props.href} class="py-3 gap-3">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="size-5"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d={props.icon} />
-        </svg>
+        <Icon paths={props.icon} class="size-5" weight="1.5" />
         {props.children}
       </a>
     </li>
@@ -460,21 +451,5 @@ function wardrobeTabs(
 }
 
 function PlusIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="2"
-      stroke="currentColor"
-      class="size-5"
-      aria-hidden="true"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M12 4.5v15m7.5-7.5h-15"
-      />
-    </svg>
-  );
+  return <Icon paths="M12 4.5v15m7.5-7.5h-15" class="size-5" weight="2" />;
 }

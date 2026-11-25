@@ -60,6 +60,7 @@ import type {
   RegisterBody,
   UpdateEmailBody,
 } from './validation';
+import { Icon } from '../layout/icon';
 
 /** The pages under /auth. Each takes the page context and what to show. */
 
@@ -304,21 +305,11 @@ function SettingsRow(props: {
           <span class="font-medium">{props.label}</span>
           <span class="text-sm text-muted truncate">{props.summary}</span>
         </span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="2"
-          stroke="currentColor"
+        <Icon
+          paths="m8.25 4.5 7.5 7.5-7.5 7.5"
           class="size-4 shrink-0 text-muted"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m8.25 4.5 7.5 7.5-7.5 7.5"
-          />
-        </svg>
+          weight="2"
+        />
       </a>
     </li>
   );

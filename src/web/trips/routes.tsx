@@ -1,5 +1,5 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Static } from '@sinclair/typebox';
 import { isOccasion, type Occasion } from '../../wardrobe/occasions';
 import { sessionUserId } from '../auth/require-session';

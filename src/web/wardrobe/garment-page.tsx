@@ -909,6 +909,15 @@ function RotateButtons(props: { action: string }) {
   );
 }
 
+/** The two brushes, erase first and pressed: the module flips `aria-pressed`. */
+const MASK_BRUSHES = [
+  { id: 'erase', label: 'MASK_BRUSH_ERASE', pressed: true },
+  { id: 'restore', label: 'MASK_BRUSH_RESTORE', pressed: false },
+] as const;
+
+/** The brush radius in screen pixels, from a fine edge to a wide sweep. */
+const MASK_BRUSH_SIZE = { min: '4', max: '80', value: '20' } as const;
+
 /**
  * The mask editor (views/assets/page/mask-editor.ts), opened by the pencil
  * on the photo. The brushes are toggles whose `aria-pressed` the module
@@ -931,22 +940,16 @@ function MaskEditorDialog() {
       </h3>
       <div class="flex flex-wrap items-center gap-3">
         <div class="join">
-          <button
-            id={ids.erase}
-            type="button"
-            class="btn btn-sm join-item btn-active"
-            aria-pressed="true"
-          >
-            {t('MASK_BRUSH_ERASE')}
-          </button>
-          <button
-            id={ids.restore}
-            type="button"
-            class="btn btn-sm join-item"
-            aria-pressed="false"
-          >
-            {t('MASK_BRUSH_RESTORE')}
-          </button>
+          {MASK_BRUSHES.map((brush) => (
+            <button
+              type="button"
+              id={ids[brush.id]}
+              class={`join-item btn btn-sm${brush.pressed ? ' btn-active' : ''}`}
+              aria-pressed={String(brush.pressed)}
+            >
+              {t(brush.label)}
+            </button>
+          ))}
         </div>
         <label class="flex items-center gap-2 flex-1 min-w-32">
           <span class="text-xs text-muted shrink-0">
@@ -954,15 +957,13 @@ function MaskEditorDialog() {
           </span>
           <input
             id={ids.size}
-            type="range"
-            min="4"
-            max="80"
-            value="20"
             class="range range-xs flex-1"
+            type="range"
+            {...MASK_BRUSH_SIZE}
           />
         </label>
       </div>
-      <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
+      <div class="rounded-box border border-base-300 bg-base-200 overflow-auto">
         <canvas
           id={ids.canvas}
           class="mask-checkerboard block max-w-full mx-auto cursor-crosshair touch-none"

@@ -9,6 +9,7 @@ import { categoryRole, type GarmentRole } from '../../wardrobe/properties';
 import { jsonForScript } from '../html';
 import { t } from '../i18n';
 import { historyBack } from '../page-contract';
+import { Icon } from './icon';
 
 /**
  * Small pieces the garment, outfit and share pages have in common: the
@@ -17,22 +18,13 @@ import { historyBack } from '../page-contract';
  */
 
 /**
- * The hanger's paths (hugeicons' hanger-stroke-rounded), drawn in the
- * text's colour: the dock's Wardrobe tab and HangerIcon, one drawing.
+ * The hanger (hugeicons' hanger-stroke-rounded): the dock's Wardrobe tab
+ * and HangerIcon, one drawing.
  */
-export const HANGER_PATHS = (
-  <>
-    <path
-      d="M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path
-      d="M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5"
-      stroke-linecap="round"
-    />
-  </>
-);
+export const HANGER_PATHS = [
+  'M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z',
+  'M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5',
+] as const;
 
 /**
  * The hanger: a garment in general (EmptyState, the first-run card) and
@@ -40,17 +32,7 @@ export const HANGER_PATHS = (
  */
 export function HangerIcon(props: { class: string; strokeWidth: string }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width={props.strokeWidth}
-      stroke="currentColor"
-      class={props.class}
-      aria-hidden="true"
-    >
-      {HANGER_PATHS}
-    </svg>
+    <Icon paths={HANGER_PATHS} class={props.class} weight={props.strokeWidth} />
   );
 }
 
@@ -86,72 +68,35 @@ export function GarmentSilhouette(props: {
     return <HangerIcon class={props.class} strokeWidth={props.strokeWidth} />;
   }
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width={props.strokeWidth}
-      stroke="currentColor"
+    <Icon
+      paths={SILHOUETTES[role]}
       class={props.class}
-      aria-hidden="true"
-      data-silhouette={role}
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d={SILHOUETTES[role]}
-      />
-    </svg>
-  );
-}
-
-/**
- * The frame of a Heroicons outline icon (24 box, 1.5 stroke in the text's
- * colour), decorative: the control it sits in carries the name.
- */
-function OutlineIcon(props: { class: string; children: Child }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      class={props.class}
-      aria-hidden="true"
-    >
-      {props.children}
-    </svg>
+      weight={props.strokeWidth}
+      data={{ 'data-silhouette': role }}
+    />
   );
 }
 
 /** Waiting: a queued write's "Waiting to sync" (src/web/outbox.tsx). */
 export function ClockIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      class={props.class}
+    />
   );
 }
 
 /** Taking a photo with the camera: the garment photo form, outfit selfies. */
 export function CameraIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-      />
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths={[
+        'M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z',
+        'M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z',
+      ]}
+      class={props.class}
+    />
   );
 }
 
@@ -178,13 +123,10 @@ export const PREPARE_AND_SUBMIT_PHOTO =
 /** Choosing a photo already taken (the library): the photo sheet, outfit selfies. */
 export function PhotoLibraryIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+      class={props.class}
+    />
   );
 }
 
@@ -301,20 +243,11 @@ export function BackLink(props: { href: string; historyBack?: boolean }) {
       aria-label={t('BACK')}
       {...historyBack(props.historyBack === true)}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-        stroke="currentColor"
+      <Icon
+        paths="M3 12h18M3 12l7.5-7.5M3 12l7.5 7.5"
         class="size-4"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-        />
-      </svg>
+        weight="2"
+      />
     </a>
   );
 }

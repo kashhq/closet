@@ -1,3 +1,6 @@
 {
-    "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  // The seed's persona bibles are its data: prettier re-pads their tables
+  // and the seed stops parsing (docs/conventions.md, Tooling gotchas).
+  "[markdown]": { "editor.formatOnSave": false }
 }

@@ -26,6 +26,7 @@ import type { OutfitList } from './outfit-list';
 import { OutfitListTabs } from './outfit-list-tabs';
 import { outfitUrl, savedTilesUrl, savedUrl } from './urls';
 import { PageSentinel } from '../page-sentinel';
+import { Icon } from '../layout/icon';
 
 /** Tiles above the fold on a phone (two rows of two): their images load at once. */
 const EAGER_TILES = 4;
@@ -350,20 +351,11 @@ function NoOutfits({
     <EmptyState
       message={t('NO_OUTFITS')}
       icon={
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1"
-          stroke="currentColor"
+        <Icon
+          paths="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
           class="size-16"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
-          />
-        </svg>
+          weight="1"
+        />
       }
     >
       <a href={stylingUrl({ destination })} class="btn btn-primary btn-sm">

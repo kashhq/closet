@@ -1,15 +1,6 @@
-import { Migration } from '@mikro-orm/migrations';
+import { legacySql } from '../legacy-sql';
 
-export class Migration20260306212749 extends Migration {
-  override async up(): Promise<void> {
-    this.addSql(`alter table "garment" drop column "colors";`);
-
-    this.addSql(`alter table "garment" add column "color" varchar(255) null;`);
-  }
-
-  override async down(): Promise<void> {
-    this.addSql(`alter table "garment" drop column "color";`);
-
-    this.addSql(`alter table "garment" add column "colors" jsonb null;`);
-  }
-}
+export const Migration20260306212749 = legacySql([
+  // One colour per garment replaced the list.
+  `alter table "garment" drop column "colors", add column "color" varchar(255);`,
+]);

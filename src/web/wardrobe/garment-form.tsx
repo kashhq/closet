@@ -24,6 +24,7 @@ import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { categoryLabel, normalizeCategory } from './garment';
 import { GarmentPhotoView, type PhotoSubject } from './garment-photo';
 import { valueLabel } from './labels';
+import { Icon } from '../layout/icon';
 import {
   LinkImportSection,
   type LinkImportView,
@@ -285,9 +286,8 @@ function NameAndCategory(props: { model: GarmentFormModel; category: string }) {
       >
         <input
           {...inputAttributes('garment-category', 'w-full', errors.category)}
-          type="text"
-          name="category"
           list="category-suggestions"
+          name="category"
           value={categoryLabel(values.category)}
           maxlength={CATEGORY_MAX}
           required
@@ -732,52 +732,32 @@ function ColorPicker(props: { selected: string[]; errors?: string[] }) {
                 {...colorPill(color)}
                 hidden={!selected.has(color)}
               >
-                <span class={`ms-swatch ms-swatch--${color}`}></span>
                 <span class="capitalize">{color}</span>
               </span>
             ))}
           </span>
-          <svg
-            class="ms-chevron"
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <Icon paths="m6 9 6 6 6-6" class="ms-chevron size-4" weight="2" />
         </summary>
-        <div class="ms-dropdown-anchor">
+        {/* A zero-height anchor: the open list overlays the fields below. */}
+        <div class="relative h-0">
           <div class="ms-dropdown">
-            <div class="ms-search">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+            <label class="ms-search">
+              <Icon
+                paths={[
+                  'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
+                  'M21 21l-4.35-4.35',
+                ]}
+                class="size-3.5 shrink-0"
+                weight="2"
+              />
               <input
-                type="text"
                 class="ms-search-input"
                 placeholder={t('SEARCH_COLORS')}
                 aria-label={t('SEARCH_COLORS')}
                 autocomplete="off"
                 {...colorPickerPart('search')}
               />
-            </div>
+            </label>
             <div class="ms-options">
               {GARMENT_COLORS.map((color) => (
                 <label class="ms-option" {...colorOption(color)}>
@@ -787,7 +767,6 @@ function ColorPicker(props: { selected: string[]; errors?: string[] }) {
                     value={color}
                     checked={selected.has(color)}
                   />
-                  <span class={`ms-swatch ms-swatch--${color}`}></span>
                   <span class="capitalize">{color}</span>
                 </label>
               ))}

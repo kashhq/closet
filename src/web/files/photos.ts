@@ -247,15 +247,15 @@ export class Photos {
 
   /** storeImage for a multipart part; a 400 without one. */
   storeUpload(
-    upload: MultipartFile | undefined,
+    part: MultipartFile | undefined,
     userId: number,
   ): Promise<NewPhotoRow> {
-    if (!upload) throw new HttpError(400, t('refusal.request.noFile'));
+    if (!part) throw new HttpError(400, t('refusal.request.noFile'));
     return this.storeImage(
       {
-        stream: upload.file,
-        mimetype: upload.mimetype,
-        filename: upload.filename,
+        stream: part.file,
+        mimetype: part.mimetype,
+        filename: part.filename,
       },
       userId,
     );
@@ -1023,8 +1023,8 @@ export class Photos {
     const fileName = await findPhotoByShareableId(this.db, shareableId);
     if (!fileName) throw new NotServed();
     const transformer = decoder()
-      .jpeg()
-      .resize(IMAGE_MAX_PX, IMAGE_MAX_PX, { fit: sharp.fit.inside });
+      .resize(IMAGE_MAX_PX, IMAGE_MAX_PX, { fit: sharp.fit.inside })
+      .toFormat('jpeg');
     if (this.config.watermarkEnabled) {
       transformer.composite([
         { input: await this.watermarkIcon(), gravity: 'southwest' },
@@ -1042,14 +1042,9 @@ export class Photos {
     this.watermark ??= sharp(this.config.watermarkIconPath, {
       limitInputPixels: MAX_INPUT_PIXELS,
     })
-      .resize(150, 150)
-      .extend({
-        top: 0,
-        bottom: 20,
-        left: 20,
-        right: 0,
-        background: TRANSPARENT,
-      })
+      .resize({ width: 150, height: 150 })
+      // A margin below and to the left keeps the mark off the photo's corner.
+      .extend({ bottom: 20, left: 20, background: TRANSPARENT })
       .composite([
         {
           input: Buffer.from([0, 0, 0, 200]),
@@ -1135,7 +1130,7 @@ export class Photos {
     source: Readable,
     transformer: Sharp,
     targetFileName: string,
-  ): Promise<void> {
+  ) {
     try {
       await this.transcode(source, transformer, targetFileName);
     } catch (error) {
@@ -1207,7 +1202,7 @@ export class Photos {
     source: Readable,
     transformer: Sharp,
     targetFileName: string,
-  ): Promise<void> {
+  ) {
     const passThrough = new PassThrough();
     const stored = this.storage.store(targetFileName, passThrough);
     const piped = pipeline(source, transformer, passThrough).catch(
@@ -1373,8 +1368,8 @@ function contentBox(
 // Bytes Photos cannot read as any image: a 400.
 function refuseNonImage(source: ImageSource): void {
   if (source.mimetype?.startsWith('image/')) return;
-  // https://github.com/fastify/fastify-multipart/issues/497
-  // An unconsumed multipart stream hangs the request: drain, then refuse.
+  // A multipart part left unread stalls the whole request (fastify-multipart
+  // #497), so the bytes are drained before the refusal.
   source.stream.resume();
   throw new HttpError(400, t('refusal.upload.wrongType'));
 }

@@ -1,4 +1,4 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AuthContext, SessionUser } from './auth/session';
 import { requestOrigin } from './security/origin';
 

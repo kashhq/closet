@@ -1,7 +1,7 @@
-import fastifyCompress from '@fastify/compress';
-import fastifyCookie from '@fastify/cookie';
-import fastifyFormbody from '@fastify/formbody';
-import fastifyMultipart from '@fastify/multipart';
+import compressPlugin from '@fastify/compress';
+import cookiePlugin from '@fastify/cookie';
+import formbodyPlugin from '@fastify/formbody';
+import multipartPlugin from '@fastify/multipart';
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
@@ -500,17 +500,16 @@ export async function createApp(
     done();
   });
 
-  await app.register(fastifyCookie);
+  await app.register(cookiePlugin);
   // Pages and fragments; a static file goes out precompressed when it has
   // a variant (static-assets.ts), which this leaves alone.
-  await app.register(fastifyCompress);
+  await app.register(compressPlugin);
   // Forms post urlencoded bodies; JSON is Fastify's own parser.
-  await app.register(fastifyFormbody);
-  await app.register(fastifyMultipart, {
-    limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB
-      files: 5,
-    },
+  await app.register(formbodyPlugin);
+  // The parser's outer bounds per request (100 MiB a part); a photo past
+  // the decoders' pixel or HEIC caps is refused before that (photos.ts).
+  await app.register(multipartPlugin, {
+    limits: { files: 5, fileSize: 100 * 2 ** 20 },
   });
 
   await registerStaticAssets(
