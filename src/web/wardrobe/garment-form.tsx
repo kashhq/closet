@@ -13,6 +13,12 @@ import {
   FormField,
   inputAttributes,
 } from '../form-field';
+import {
+  colorOption,
+  colorPicker,
+  colorPickerPart,
+  colorPill,
+} from '../page-contract';
 import type { ViewContext } from '../view-context';
 import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { categoryLabel, normalizeCategory } from './garment';
@@ -243,7 +249,7 @@ export function GarmentFormPage(props: {
         />
       )}
       <NameAndCategory model={model} category={category} />
-      <ColorMultiSelect selected={values.colors} errors={errors.color} />
+      <ColorPicker selected={values.colors} errors={errors.color} />
       <BrandAndSize model={model} />
       <OwnershipFields model={model} wishlist={wishlist} />
       <MoreDetails model={model} wishlist={wishlist} category={category} />
@@ -694,13 +700,15 @@ function TextArea(props: {
 }
 
 /**
- * One checkbox per built-in colour (the form's `color` fields), inside a
- * searchable dropdown that public/js/color-multiselect.js enhances with
- * pills. Without the script it is still a working list of checkboxes. A
- * posted value outside the list (a hand-made request) is refused by the
- * server and named in the message, never rendered as an option.
+ * One checkbox per built-in colour (the form's `color` fields), in a
+ * searchable dropdown whose summary shows the ticked colours as pills.
+ * Every pill is rendered here, hidden unless its colour is ticked, with the
+ * count: views/assets/page/color-picker.ts only shows and hides them as the
+ * ticks change, and without it the field is still a working list. A posted
+ * value outside the list (a hand-made request) is refused by the server and
+ * named in the message, never rendered as an option.
  */
-function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
+function ColorPicker(props: { selected: string[]; errors?: string[] }) {
   const selected = new Set(props.selected);
   const count = GARMENT_COLORS.filter((color) => selected.has(color)).length;
   return (
@@ -708,14 +716,26 @@ function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
       <span class="label">
         <span class="label-text">{t('COLOR')}</span>
       </span>
-      <details
-        class="color-ms w-full min-w-0"
-        data-placeholder={t('SELECT_COLOR')}
-        data-selected-label={t('SELECTED')}
-      >
+      <details class="color-ms w-full min-w-0" {...colorPicker()}>
         <summary>
           <span class="ms-pills">
-            <span class="ms-placeholder">{t('SELECT_COLOR')}</span>
+            <span
+              class="ms-placeholder"
+              {...colorPickerPart('placeholder')}
+              hidden={count > 0}
+            >
+              {t('SELECT_COLOR')}
+            </span>
+            {GARMENT_COLORS.map((color) => (
+              <span
+                class="ms-pill badge badge-ghost"
+                {...colorPill(color)}
+                hidden={!selected.has(color)}
+              >
+                <span class={`ms-swatch ms-swatch--${color}`}></span>
+                <span class="capitalize">{color}</span>
+              </span>
+            ))}
           </span>
           <svg
             class="ms-chevron"
@@ -755,11 +775,12 @@ function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
                 placeholder={t('SEARCH_COLORS')}
                 aria-label={t('SEARCH_COLORS')}
                 autocomplete="off"
+                {...colorPickerPart('search')}
               />
             </div>
             <div class="ms-options">
               {GARMENT_COLORS.map((color) => (
-                <label class="ms-option">
+                <label class="ms-option" {...colorOption(color)}>
                   <input
                     type="checkbox"
                     name="color"
@@ -771,14 +792,19 @@ function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
                 </label>
               ))}
             </div>
-            <div class="ms-empty" hidden>
+            <div class="ms-empty" {...colorPickerPart('empty')} hidden>
               {t('NO_MATCHES')}
             </div>
             <div class="ms-footer">
               <span class="ms-count">
-                {count} {t('SELECTED')}
+                <span {...colorPickerPart('count')}>{count}</span>{' '}
+                {t('SELECTED')}
               </span>
-              <button type="button" class="ms-clear">
+              <button
+                type="button"
+                class="ms-clear"
+                {...colorPickerPart('clear')}
+              >
                 {t('CLEAR_ALL')}
               </button>
             </div>

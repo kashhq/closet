@@ -30,7 +30,7 @@ const IMPORTS = {
   pulltorefreshjs: '/modules/pulltorefresh/index.esm.js',
   toast: '/js/toast.js',
   'confirm-sheet': '/js/confirm-sheet.js',
-  'mask-editor': '/js/mask-editor.js',
+  'mask-editor': pageModuleUrl('mask-editor'),
   'photo-input': '/js/photo-input.js',
   'snap-strip': '/js/snap-strip.js',
   styling: '/js/styling.js',

@@ -1287,7 +1287,7 @@ function thumbOf(decoded: Sharp): Sharp {
  * through here (writeThumb, cutoutFiles), so none differs by its path. Only
  * the thumb is trimmed: the stored cutout keeps the original's frame,
  * which the mask editor relies on (it pads the original the same way to
- * paint it back; public/js/mask-editor.js). The trimmed square is resized
+ * paint it back; views/assets/page/mask-editor.ts). The trimmed square is resized
  * to exactly THUMB_MAX_PX, enlarging a small garment on purpose: a tile
  * draws it at that size anyway, and every tile then carries the same
  * resolution.

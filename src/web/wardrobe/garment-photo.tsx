@@ -10,6 +10,7 @@ import { PostForm } from '../form';
 import { t } from '../i18n';
 import { CameraIcon, GarmentSilhouette } from '../layout/parts';
 import { sheetOpener } from '../layout/sheet';
+import { EDIT_MASK_ID, editMaskSources } from '../page-contract';
 import type { GarmentDetail } from './queries';
 import { garmentUrl } from './urls';
 
@@ -275,11 +276,6 @@ function CutoutFailed(props: { retryUrl: string | undefined }) {
   );
 }
 
-/**
- * The pencil: mask-editor.js reads what it edits and where it saves from
- * the data attributes at the tap (the button is swapped with the photo),
- * and writes the new version back into them after a save.
- */
 /** The photo viewer opens on the cutout while one is shown, else on the photo itself. */
 function viewerVariant(photo: GarmentPhoto): 'nobg' | 'original' {
   return showsCutout(photo.cutoutStatus) ? 'nobg' : 'original';
@@ -293,6 +289,11 @@ function viewerPhotos(garment: PhotoSubject, photo: GarmentPhoto) {
     : [original];
 }
 
+/**
+ * The pencil: views/assets/page/mask-editor.ts reads what it edits and
+ * where it saves from these attributes at the tap (the button is swapped
+ * with the photo), and writes the saved photo's URLs back into them.
+ */
 function EditMaskButton(props: {
   garment: PhotoSubject;
   photo: GarmentPhoto;
@@ -300,14 +301,16 @@ function EditMaskButton(props: {
 }) {
   return (
     <button
-      id="editMaskBtn"
+      id={EDIT_MASK_ID}
       type="button"
       class="btn btn-circle absolute bottom-3 right-3 btn-neutral opacity-80 hover:opacity-100"
       title={t('MASK_EDITOR_TITLE')}
       aria-label={t('MASK_EDITOR_TITLE')}
-      data-original-url={imageUrl(props.photo, 'original')}
-      data-nobg-url={imageUrl(props.photo, 'nobg')}
-      data-save-url={garmentUrl(props.garment.id, props.viewOwner, '/nobg')}
+      {...editMaskSources({
+        original: imageUrl(props.photo, 'original'),
+        cutout: imageUrl(props.photo, 'nobg'),
+        save: garmentUrl(props.garment.id, props.viewOwner, '/nobg'),
+      })}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

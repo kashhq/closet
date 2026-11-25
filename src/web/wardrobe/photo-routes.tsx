@@ -223,7 +223,7 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
-  // The mask editor's save (public/js/mask-editor.js): the edited cutout
+  // The mask editor's save (views/assets/page/mask-editor.ts): the edited cutout
   // replaces the stored one; the answer is the photo's new URLs (signed:
   // imageUrl), which the page points at. `version` stays for a page whose
   // script predates them (it rewrites `v`, which the signature covers, so

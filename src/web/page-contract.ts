@@ -188,3 +188,64 @@ export const locateStatus = (text: {
 });
 /** The hidden form the position posts through. */
 export const LOCATE_FORM_ID = 'weather-here-form';
+
+// --- color-picker.ts: the garment form's colour field --------------------
+
+/**
+ * The colour field (garment-form.tsx, ColorPicker): a <details> whose
+ * checkboxes are the form's `color` fields. The server renders every pill
+ * and the count for the checked state; color-picker.ts only shows and hides
+ * what is already there, so no stored value reaches markup through a script
+ * (audit2-correctness H5).
+ */
+export const COLOR_PICKER = 'data-color-picker';
+export const colorPicker = () => ({ [COLOR_PICKER]: '' });
+export type ColorPickerPart =
+  | 'placeholder'
+  | 'search'
+  | 'empty'
+  | 'count'
+  | 'clear';
+export const COLOR_PICKER_PART = 'data-color-picker-part';
+export const colorPickerPart = (part: ColorPickerPart) => ({
+  [COLOR_PICKER_PART]: part,
+});
+export const colorPickerPartSelector = (part: ColorPickerPart) =>
+  `[${COLOR_PICKER_PART}="${part}"]`;
+/** One colour's row in the list, valued with the colour (the search hides it). */
+export const COLOR_OPTION = 'data-color-option';
+export const colorOption = (color: string) => ({ [COLOR_OPTION]: color });
+/** One colour's pill in the summary, shown while its box is checked. */
+export const COLOR_PILL = 'data-color-pill';
+export const colorPill = (color: string) => ({ [COLOR_PILL]: color });
+
+// --- mask-editor.ts: the cutout's brush ---------------------------------
+
+/**
+ * The garment page's mask editor (garment-page.tsx, MaskEditorDialog) and
+ * the pencil on the photo that opens it (garment-photo.tsx). The pencil is
+ * swapped with the photo, so the editor reads its URLs at the tap.
+ */
+export const MASK_EDITOR_IDS = {
+  dialog: 'maskEditorDialog',
+  canvas: 'maskEditorCanvas',
+  erase: 'maskBrushErase',
+  restore: 'maskBrushRestore',
+  size: 'maskBrushSize',
+  accept: 'maskEditorAccept',
+  skip: 'maskEditorSkip',
+} as const;
+export const EDIT_MASK_ID = 'editMaskBtn';
+/** The stored original and cutout the editor loads, and where it posts the edit. */
+export const MASK_ORIGINAL_URL = 'data-original-url';
+export const MASK_CUTOUT_URL = 'data-nobg-url';
+export const MASK_SAVE_URL = 'data-save-url';
+export const editMaskSources = (urls: {
+  original: string;
+  cutout: string;
+  save: string;
+}) => ({
+  [MASK_ORIGINAL_URL]: urls.original,
+  [MASK_CUTOUT_URL]: urls.cutout,
+  [MASK_SAVE_URL]: urls.save,
+});
