@@ -1,3 +1,5 @@
+import { jsonForScript } from '../html';
+
 /**
  * The URL of a page module built from views/assets/page/<name>.ts (or
  * views/assets/outbox.ts) into public/js/gen/ (buildPageModules,
@@ -50,7 +52,19 @@ const IMPORTS = {
 /** The names the bundles leave to the importmap. */
 export const IMPORT_MAP_NAMES = Object.keys(IMPORTS);
 
-export function importMap(version: string) {
+/**
+ * The importmap's script text: the page's one inline script, which the CSP
+ * allows by its sha256 (src/web/security/csp.ts, #672). createApp calls it
+ * once and hands the one string to the CSP and to every page
+ * (`ViewContext.importMap`); nothing else may call it, or the hash and the
+ * page could name different texts. Fixed per build, so the header and every
+ * page stay byte-stable.
+ */
+export function importMapScript(version: string): string {
+  return jsonForScript(importMap(version));
+}
+
+function importMap(version: string) {
   const v = `?v=${version}`;
   return {
     imports: Object.fromEntries(

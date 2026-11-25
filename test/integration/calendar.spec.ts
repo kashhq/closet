@@ -346,7 +346,7 @@ describe('calendar', () => {
       ).toEqual(['/outfits/ideas', '/outfits', '/styling']);
       // The day's button names the radio it checks before opening the sheet.
       expect(dayColumns(html).get('2030-10-09')).toMatch(
-        /data-sheet-open="plan-sheet-2030-10-09"[^>]*data-plan="plan-2030-10-09-all-day"[^>]*data-day-plan="2030-10-09"/,
+        /data-sheet-open="plan-sheet-2030-10-09"[^>]*data-checks="plan-2030-10-09-all-day"[^>]*data-day-plan="2030-10-09"/,
       );
     });
 
@@ -379,7 +379,7 @@ describe('calendar', () => {
         expect(open('2026-09-25')).toEqual(['evening']);
         expect(open('2026-09-26')).toEqual([]);
         expect(columns.get('2026-09-25')).toContain(
-          'data-plan="plan-2026-09-25-evening"',
+          'data-checks="plan-2026-09-25-evening"',
         );
         // A day with open slots has them as its one way into the sheet,
         // with or without an outfit already; without any, its "+ Plan".
@@ -462,7 +462,7 @@ describe('calendar', () => {
         ]);
         expect(openers('2026-09-26')).toEqual(['work', 'evening', 'night-out']);
         expect(columns.get('2026-09-26')).toContain(
-          'data-plan="plan-2026-09-26-work"',
+          'data-checks="plan-2026-09-26-work"',
         );
         expect(html).toMatch(
           /<div class="hidden lg:flex lg:flex-col lg:row-start-3" data-cell="work">/,

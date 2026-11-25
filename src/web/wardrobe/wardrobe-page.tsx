@@ -65,7 +65,13 @@ import {
   type WardrobeHeaderProps,
   WardrobeMenu,
 } from './wardrobe-header';
-import { needsNetwork, searchShortcut } from '../page-contract';
+import {
+  nativeWithout,
+  needsNetwork,
+  pageModule,
+  searchShortcut,
+  submitsVia,
+} from '../page-contract';
 import { Icon } from '../layout/icon';
 
 /**
@@ -884,28 +890,15 @@ const INCLUDE_KEYWORD = "#search-form [name='keyword']";
 const FILTER_SHEET_ID = 'filter-modal';
 const FILTER_FORM_ID = 'filter-form';
 
-// The search form's Enter, with htmx loaded: the filter form's request
-// (its fields, this keyword through its hx-include), never this form's
-// own (#1144). Its Apply, the default button, may sit in the phone's
-// closed sheet, which `requestSubmit()` does not need. Without htmx, or
-// on a page without the filter form (browsing renders both today; the
-// search must not depend on it), the form's native GET goes as it is.
-const SEARCH_THROUGH_FILTERS = `const filters = document.getElementById('${FILTER_FORM_ID}'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }`;
-
-// A scope-row link on a page without the filter form (the scope row and
-// the facets render together today, browsing only) stops htmx's own
-// listener on it, which this inline handler precedes, so the link's href,
-// which carries every filter, is followed natively. Not `hx-on`: the CSP
-// has no 'unsafe-eval', which htmx needs to run it.
-const HREF_WITHOUT_FILTERS = `if (!document.getElementById('${FILTER_FORM_ID}')) event.stopImmediatePropagation();`;
-
 /**
  * A scope-row request built from the filter form as it stands (its ticks,
  * applied or not; the owner and the capsule it carries) and the keyword,
  * `change` naming what this control changes: `drop` a filter (a chip's ×),
  * `set` values over the form's (the capsule menu). The request is bare
  * `/wardrobe`: an href's query would repeat the form's fields (#1144).
- * Without the filter form it is the link's href (`HREF_WITHOUT_FILTERS`).
+ * Without the filter form it is the link's href, followed natively
+ * (`nativeWithout`, actions.ts: the scope row and the facets render
+ * together today, browsing only, but a link must not depend on it).
  */
 function fromFilters(change: {
   drop?: keyof GridSearch;
@@ -917,13 +910,9 @@ function fromFilters(change: {
     'hx-params': change.drop ? `not ${change.drop}` : undefined,
     'hx-vals': change.set ? JSON.stringify(change.set) : undefined,
     ...SWAP_BODY,
-    onclick: HREF_WITHOUT_FILTERS,
+    ...nativeWithout(FILTER_FORM_ID),
   };
 }
-
-// `/` focuses the search (views/assets/page/search-shortcut.ts; owner decision 5 of
-// the desktop plan): the module loads with the search form.
-const SEARCH_SHORTCUT_IMPORT = "import 'search-shortcut';";
 
 /**
  * The scope row, sticky under the app bar (the plan's replacement for the
@@ -1115,7 +1104,11 @@ function FilterChips(props: {
  * keeps some width while it holds a keyword. Enter submits the filter form
  * instead (`SEARCH_THROUGH_FILTERS`), which sends this keyword with its
  * own fields (Apply's request), so a facet ticked and not yet applied is
- * searched with, never dropped by the facets the answer brings (#1144).
+ * searched with, never dropped by the facets the answer brings (#1144):
+ * `submitsVia`, actions.ts, with htmx loaded and the filter form on the
+ * page (the search must not depend on it); else the form's native GET.
+ * Its Apply, the default button, may sit in the phone's closed sheet,
+ * which `requestSubmit()` does not need.
  * Not this form's `hx-include` of the filter form: its hidden filters would
  * go too, a filter sent twice (a 400). They stay for the no-script GET.
  * The page's only keyword field at every width, from lg too beside the
@@ -1131,19 +1124,16 @@ function SearchForm(props: {
     <form
       method="get"
       action="/wardrobe"
-      onsubmit={SEARCH_THROUGH_FILTERS}
+      {...submitsVia(FILTER_FORM_ID)}
+      // `/` focuses the search (views/assets/page/search-shortcut.ts; owner
+      // decision 5 of the desktop plan): the module loads with this form.
+      {...pageModule('search-shortcut')}
       // Not boosted: htmx would send this form's own request as well.
       hx-boost="false"
       id="search-form"
       role="search"
       class="flex shrink-0 justify-end focus-within:flex-1"
     >
-      {/* The `/` shortcut, through the importmap for its versioned URL. A
-          fixed string with nothing interpolated. */}
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: SEARCH_SHORTCUT_IMPORT }}
-      />
       {Object.entries(searchParams(search))
         .filter(([name, value]) => name !== 'keyword' && value !== '')
         .map(([name, value]) => (
@@ -1459,24 +1449,22 @@ const BULK_SET_ID = 'bulk-dialog';
  * it too), a native post carrying what the page needs back in its action's
  * query. Its bar (`selectBar`) is the page's action bar, outside the form:
  * the live count and the mode's actions, joined to it through `form=` and
- * `data-select-count`. The count is the one line of script: it re-counts
- * the checked boxes on every change, and once when it loads.
+ * `data-select-count`. The count is public/js/select-count.js, loaded with
+ * the form (page-mount.ts): it re-counts the checked boxes on every change
+ * and the pages the sentinel appends, and once when it loads.
  */
-const SELECT_COUNT_IMPORT = "import 'select-count';";
 const PICK_FORM_ID = 'pick-form';
 const SELECTED_COUNT_ID = 'selected-count';
 
 function SelectForm(props: { id: string; action: string; children: Child }) {
   return (
     <PostForm id={props.id} action={props.action}>
-      {/* The count follows toggles and the pages the sentinel appends
-          (public/js/select-count.js, through the importmap for its versioned
-          URL). A fixed string with nothing interpolated. */}
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: SELECT_COUNT_IMPORT }}
-      />
-      <div data-select-count={SELECTED_COUNT_ID}>{props.children}</div>
+      <div
+        data-select-count={SELECTED_COUNT_ID}
+        {...pageModule('select-count')}
+      >
+        {props.children}
+      </div>
     </PostForm>
   );
 }

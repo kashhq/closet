@@ -41,7 +41,7 @@ import {
   stylingUrl,
 } from './urls';
 import { FIELD_GRID } from '../layout/columns';
-import { needsNetwork } from '../page-contract';
+import { closesMenu, needsNetwork, pageModule } from '../page-contract';
 
 /**
  * GET /styling (#42; docs/plans/2026-09-26-redesign.md, "Styling"): the
@@ -114,13 +114,6 @@ const ALL_GARMENTS_KEY = 'ALL_GARMENTS' satisfies StringKey;
 const SAVE_CHANGES_KEY = 'styling.SAVE_CHANGES' satisfies StringKey;
 const PREVIEW_KEY = 'styling.PREVIEW' satisfies StringKey;
 
-// The page's own script (public/js/styling.js, through the importmap): an
-// inline module, so it runs again after a boosted navigation brings a new
-// page (a <script src> module runs once per document). A fixed string with
-// nothing interpolated.
-const STYLING_INIT = `import { initStyling } from 'styling';
-initStyling(document.getElementById('styling-rows'));`;
-
 export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
   const { ctx, model } = props;
   const viewOwner = model.shared?.ownerId;
@@ -171,10 +164,6 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
             <StylingRows model={model} context={context} />
           </PostForm>
           <AddRow model={model} />
-          <script
-            type="module"
-            dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
-          />
         </>
       ) : (
         <Empty model={model} />
@@ -209,7 +198,13 @@ export function StylingRows(props: {
 }) {
   const { model, context } = props;
   return (
-    <div id="styling-rows" class="flex flex-col gap-4">
+    // The page's own script (public/js/styling.js) sets up the rows on
+    // every visit and every rows answer (page-mount.ts).
+    <div
+      id="styling-rows"
+      class="flex flex-col gap-4"
+      {...pageModule('styling')}
+    >
       <PicksToggle context={context} />
       {model.notice === 'no-idea' && (
         <p class="alert alert-info alert-soft mx-4 py-2 text-sm" role="status">
@@ -671,7 +666,7 @@ function AddRow({ model }: { model: StylingModel }) {
               hx-target="#styling-rows"
               hx-swap="outerHTML"
               {...needsNetwork()}
-              onclick="this.closest('details').open = false"
+              {...closesMenu()}
             >
               {roleLabel(role)}
             </button>

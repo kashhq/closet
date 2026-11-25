@@ -9,7 +9,7 @@
  * and `data-selected` and `aria-selected` move to it.
  *
  * - initSnapStrips(root) centres each strip on its `data-selected` item and
- *   starts watching it. A page's inline module calls it on every visit (a
+ *   starts watching it. page-mount.ts calls it on every visit (a
  *   boosted navigation brings new strips; a <script src> module would run
  *   once per document); htmx:load covers strips swapped in later and a
  *   history restore, whose snapshot keeps the chosen item marked. Calling it

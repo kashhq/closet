@@ -26,6 +26,7 @@ import {
   locateButton,
   locateStatus,
   needsNetwork,
+  pageModule,
 } from '../page-contract';
 
 /**
@@ -54,12 +55,6 @@ const swapInto = (id: string) =>
   }) as const;
 const LOCATION_SWAP = swapInto(LOCATION_ID);
 const OFFSET_SWAP = swapInto(OFFSET_ID);
-
-// A fixed module string (never a value): runs each time the location part
-// is swapped in, so the new button is wired (an inline module, not a
-// <script src>, which would run once per document).
-const LOCATE_MODULE = `import { initLocate } from 'locate';
-initLocate(document.getElementById('${LOCATION_ID}'));`;
 
 export function WeatherSettingsPage(props: {
   ctx: ViewContext;
@@ -116,7 +111,9 @@ export function WeatherLocation(props: {
   const active = activeLocation(settings, now);
   const here = active?.source === 'here' ? settings.here : null;
   return (
-    <div id={LOCATION_ID} class="flex flex-col gap-3">
+    // views/assets/page/locate.ts wires the button each time the part
+    // arrives, the page or a location answer's swap (page-mount.ts).
+    <div id={LOCATION_ID} class="flex flex-col gap-3" {...pageModule('locate')}>
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm">
           {settings.home
@@ -164,11 +161,6 @@ export function WeatherLocation(props: {
         locatedAt={here?.locatedAt ?? null}
         timeZone={timeZone}
         now={now}
-      />
-      <script
-        type="module"
-        // A fixed string (LOCATE_MODULE), no value spliced in.
-        dangerouslySetInnerHTML={{ __html: LOCATE_MODULE }}
       />
     </div>
   );

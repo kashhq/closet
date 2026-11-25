@@ -3,11 +3,8 @@ import type { IsoDate } from '../../calendar-date';
 import { dayLabel } from '../date-labels';
 import { selfieUrl } from '../files/image-url';
 import { t } from '../i18n';
-import {
-  CameraIcon,
-  PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
-} from '../layout/parts';
+import { CameraIcon, PhotoLibraryIcon } from '../layout/parts';
+import { photoPick } from '../page-contract';
 import { Sheet, sheetOpener } from '../layout/sheet';
 import type { SelfieRef } from './queries';
 
@@ -70,7 +67,7 @@ function SelfieUpload(props: {
           accept="image/*"
           capture={source === 'camera' ? 'environment' : undefined}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </PostForm>

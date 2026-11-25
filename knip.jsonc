@@ -27,7 +27,7 @@
     // Forked or loaded by path from the specs (the cutout runner's specs,
     // test/support/legacy-migrations.ts).
     "test/fixtures/cutout-children/*.mjs",
-    "test/support/legacy-migrations/*.ts"
+    "test/support/legacy-migrations/*.ts",
   ],
   // The browser's importmap (src/web/layout/import-map.ts): the bare names the client modules
   // import each other by, a TypeScript module's source or a plain one's file. Keep in step with it; an alias missing here reads as an
@@ -46,9 +46,12 @@
     "select-count": ["public/js/select-count.js"],
     "recap-export": ["public/js/recap-export.js"],
     "click-gate": ["public/js/click-gate.js"],
+    "share-confirm": ["public/js/share-confirm.js"],
     "share-saved": ["views/assets/page/share-saved.ts"],
     "search-shortcut": ["views/assets/page/search-shortcut.ts"],
-    "pwa-install": ["node_modules/@khmyznikov/pwa-install/dist/pwa-install.bundle.js"]
+    "pwa-install": [
+      "node_modules/@khmyznikov/pwa-install/dist/pwa-install.bundle.js",
+    ],
   },
   "ignoreDependencies": [
     // Copied from node_modules into public/modules/ by path (CLIENT_MODULES in
@@ -58,6 +61,6 @@
     "@fontsource-variable/fraunces",
     "@fontsource-variable/inter",
     // A pino transport, named by string in src/logger.ts.
-    "pino-pretty"
-  ]
+    "pino-pretty",
+  ],
 }

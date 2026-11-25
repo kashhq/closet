@@ -16,7 +16,6 @@ import {
   CameraIcon,
   PHOTO_ACCEPT,
   PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
   SavedToast,
   StripFlags,
 } from '../layout/parts';
@@ -29,7 +28,12 @@ import {
   ShareLinkButton,
 } from '../share/share-button';
 import { StyleThisLink } from '../styling/style-this';
-import { MASK_EDITOR_IDS } from '../page-contract';
+import {
+  closesMenu,
+  MASK_EDITOR_IDS,
+  pageModule,
+  photoPick,
+} from '../page-contract';
 import type { ViewContext } from '../view-context';
 import {
   type WearPanel,
@@ -120,25 +124,6 @@ export interface GarmentPageModel {
   decided: DecisionToast | undefined;
 }
 
-/** The ⋯ menu's Photo closes the menu as the sheet opens over it. */
-const CLOSE_MENU = "this.closest('details').removeAttribute('open')";
-
-/**
- * Opens the photo sheet as the page loads, after a rotate (?photoRotated=1),
- * so repeated quarter turns are one tap each. A fixed string, placed after
- * the dialog; StripFlags drops the marker, so a reload does not reopen it.
- */
-const REOPEN_PHOTO_SHEET = `import { openSheet } from 'confirm-sheet';
-openSheet(document.getElementById('${PHOTO_SHEET_ID}'), null);`;
-
-/**
- * Binds the mask editor (views/assets/page/mask-editor.ts) from an inline
- * module, a fixed string, so it binds again after a boosted navigation back
- * here: on #garment-photo-slot, because the cutout polling swaps the pencil.
- */
-const MASK_SCRIPT = `import { bindMaskEditor } from 'mask-editor';
-bindMaskEditor(document.getElementById('garment-photo-slot'));`;
-
 /** The one-shot flags the garment page's toasts read (GarmentPageQuery). */
 const GARMENT_PAGE_FLAGS = [
   'created',
@@ -178,7 +163,13 @@ export function GarmentPage(props: {
       }}
       layout="split"
       aside={
-        <div id="garment-photo-slot">
+        // The mask editor (views/assets/page/mask-editor.ts) binds here, on
+        // every visit (page-mount.ts), for whoever may change a photo: the
+        // cutout polling swaps the pencil inside, never the slot.
+        <div
+          id="garment-photo-slot"
+          {...(model.canEdit && garment.photo ? pageModule('mask-editor') : {})}
+        >
           <GarmentPhotoView
             garment={garment}
             viewOwner={model.viewOwner}
@@ -326,29 +317,22 @@ function CareLabelSection({ garment }: { garment: GarmentDetail }) {
 
 /**
  * For whoever may change the photo: the photo sheet, and with a photo the
- * mask editor and the module that wires its pencil.
+ * mask editor (bound on #garment-photo-slot, above).
  */
 function PhotoTools({ model }: { model: GarmentPageModel }) {
   if (!model.canEdit) return null;
   const { garment } = model;
   return (
     <>
-      <PhotoSheet garment={garment} viewOwner={model.viewOwner} />
-      {model.justRotatedPhoto && (
-        <script
-          type="module"
-          dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }}
-        />
-      )}
-      {garment.photo && (
-        <>
-          <MaskEditorDialog />
-          <script
-            type="module"
-            dangerouslySetInnerHTML={{ __html: MASK_SCRIPT }}
-          />
-        </>
-      )}
+      {/* After a rotate (?photoRotated=1) the sheet opens again, so repeated
+          quarter turns are one tap each; StripFlags drops the flag, so a
+          reload does not reopen it. */}
+      <PhotoSheet
+        garment={garment}
+        viewOwner={model.viewOwner}
+        opensOnLoad={model.justRotatedPhoto}
+      />
+      {garment.photo && <MaskEditorDialog />}
     </>
   );
 }
@@ -522,7 +506,8 @@ function GarmentMenu({
             <button
               type="button"
               {...sheetOpener(PHOTO_SHEET_ID)}
-              onclick={CLOSE_MENU}
+              // The menu closes as the sheet opens over it.
+              {...closesMenu()}
             >
               {photoActionLabel(garment)}
             </button>
@@ -780,7 +765,7 @@ function photoActionLabel(garment: GarmentDetail): string {
 /**
  * The photo sheet (the ⋯ menu's Photo): take one with the camera or choose
  * one from the library. Choosing uploads at once: the photo is prepared on
- * the phone (PREPARE_AND_SUBMIT_PHOTO), posted as a native multipart post
+ * the phone (`photoPick`), posted as a native multipart post
  * to POST /wardrobe/:id/photo, and its 303 reloads this page with
  * ?photoSaved=1, its cutout pending. Native, as the add sheet's and the
  * selfies': a refused photo (too large, not an image) is the error page,
@@ -795,6 +780,7 @@ function photoActionLabel(garment: GarmentDetail): string {
 function PhotoSheet(props: {
   garment: GarmentDetail;
   viewOwner: number | undefined;
+  opensOnLoad: boolean;
 }) {
   const action = garmentUrl(props.garment.id, props.viewOwner, '/photo');
   return (
@@ -804,6 +790,7 @@ function PhotoSheet(props: {
       labelledBy="garment-photo-sheet-title"
       gap={3}
       dismiss="close"
+      opensOnLoad={props.opensOnLoad}
     >
       <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
         {photoActionLabel(props.garment)}
@@ -860,7 +847,7 @@ function PhotoSource(props: { action: string; source: 'camera' | 'library' }) {
           accept={PHOTO_ACCEPT}
           capture={camera ? 'environment' : undefined}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </PostForm>

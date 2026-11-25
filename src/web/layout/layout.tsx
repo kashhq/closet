@@ -7,7 +7,7 @@ import { THEME_BASE_100 } from '../theme-colors';
 import type { ViewContext } from '../view-context';
 import { PhotoViewer } from '../files/photo-viewer';
 import { AppStatus } from './app-status';
-import { importMap, pageModuleUrl } from './import-map';
+import { pageModuleUrl } from './import-map';
 import { ConfirmSheet } from './confirm-sheet';
 import { pageIdentity } from '../page-contract';
 
@@ -39,7 +39,14 @@ import { pageIdentity } from '../page-contract';
 //    at base size, widening the date column, then shrank (the calendar
 //    scenario measured between the two). The settle exists for CSS
 //    transitions between the two classes, which nothing here uses.
+//  - No script from a swap, and no eval (#672): htmx drops every <script> a
+//    boosted body, a fragment or an error page brings, a same-origin src
+//    included, so a page's setup is page-mount.ts's `data-page-module` and a
+//    data island an attribute. Never `inlineScriptNonce`: htmx would stamp
+//    it on whatever script a swap carries, an injected one too.
 const HTMX_CONFIG = {
+  allowEval: false,
+  allowScriptTags: false,
   attributesToSettle: [],
   disableInheritance: true,
   historyCacheSize: 3,
@@ -56,6 +63,36 @@ export interface PageMeta {
   ogDescription?: string;
   ogUrl?: string;
   ogImage?: string;
+  /** Also describe the page as a schema.org WebPage, by its og title and description (sign in, register). */
+  webPage?: boolean;
+}
+
+/**
+ * The schema.org WebPage of a public entry page, for link previews. In the
+ * head, like every <script> (#672): htmx drops each one a swap brings,
+ * data included (`allowScriptTags: false`), and `expectFullPage` refuses
+ * one in the body.
+ */
+function WebPageData(props: {
+  ctx: ViewContext;
+  name: string;
+  description: string;
+}) {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: props.name,
+    description: props.description,
+    isPartOf: { '@id': `${props.ctx.siteUrl}/#website` },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // Structured data is JSON by definition; jsonForScript keeps it
+      // from closing the element.
+      dangerouslySetInnerHTML={{ __html: jsonForScript(data) }}
+    />
+  );
 }
 
 export interface LayoutProps extends PageMeta {
@@ -98,6 +135,7 @@ export function Layout({
   ogDescription = t('APP_DESCRIPTION'),
   ogUrl = ctx.ogUrl,
   ogImage = ctx.ogImage,
+  webPage,
   children,
 }: LayoutProps) {
   // Every first-party static URL carries ?v=appVersion (src/build-info.ts):
@@ -145,6 +183,9 @@ export function Layout({
         <meta name="twitter:description" content={ogDescription} />
         <meta name="twitter:image" content={ogImage} />
         <meta property="og:site_name" content={ctx.appName} />
+        {webPage && (
+          <WebPageData ctx={ctx} name={ogTitle} description={ogDescription} />
+        )}
 
         <link rel="icon" href={`/favicon.ico${v}`} sizes="48x48" />
         {/* iOS scales it to 180 px; Firefox also reads it as the site icon
@@ -164,11 +205,11 @@ export function Layout({
         {/* Libraries are served from node_modules (registerStaticAssets in
             app.ts), never a CDN. */}
         <script defer src={`/modules/htmx.min.js${v}`}></script>
+        {/* The page's one inline script, allowed by its hash (csp.ts):
+            written as is, the string the header was hashed from. */}
         <script
           type="importmap"
-          dangerouslySetInnerHTML={{
-            __html: jsonForScript(importMap(ctx.appVersion)),
-          }}
+          dangerouslySetInnerHTML={{ __html: ctx.importMap }}
         />
         {/* Heartbeat-driven online/offline state and the banner in
             AppStatus; runs everywhere, service worker or not. */}
@@ -207,6 +248,15 @@ export function Layout({
         {/* The shared photo viewer (src/web/files/photo-viewer.tsx): one
             document listener opens any [data-photo-open]. */}
         <script type="module" src={`/js/photo-viewer.js${v}`}></script>
+        {/* The one-line behaviours a control asks for by data-* (the CSP
+            allows no inline handler) and each page's own setup on every
+            visit (data-page-module): delegated, and in the head, so every
+            swap is seen. */}
+        <script type="module" src={`${pageModuleUrl('actions')}${v}`}></script>
+        <script
+          type="module"
+          src={`${pageModuleUrl('page-mount')}${v}`}
+        ></script>
         <OutboxScript ctx={ctx} v={v} />
         {ctx.pwaEnabled && (
           // Service worker registration, update toast, Web Push, the install

@@ -1,26 +1,25 @@
 import { t } from '../i18n';
 import { Icon } from '../layout/icon';
+import { copyButton, selectsOnTap } from '../page-contract';
 
 /**
- * An inline click handler: copies the button's `data-copy` to the clipboard
- * and flashes the button green for a second: `resting`, the class it wears
- * otherwise, becomes its success twin (a button's `btn-success`, a menu
- * item's `text-success`). The copied text reaches the handler as a data
- * attribute, never spliced into its source. Also the wardrobe-share invite
- * link's copy button.
+ * A button that copies `text` to the clipboard and flashes green for a
+ * second (actions.ts): `resting`, the class it wears otherwise, becomes its
+ * success twin (a button's `btn-success`, a menu item's `text-success`).
+ * Also the wardrobe-share invite link's copy button.
  */
 function copyAndFlash(
+  text: string,
   resting: 'btn-outline' | 'btn-ghost' | 'text-base-content',
-): string {
+) {
   const flashed =
     resting === 'text-base-content' ? 'text-success' : 'btn-success';
-  return `navigator.clipboard.writeText(this.dataset.copy).then(() => { this.classList.replace('${resting}', '${flashed}'); setTimeout(() => this.classList.replace('${flashed}', '${resting}'), 1000); })`;
+  return copyButton(text, resting, flashed);
 }
 
 /**
  * A value in a read-only input plus a copy button: the wardrobe-share invite
- * links, a new personal access token and its connect command. The value
- * reaches the handler as a data attribute, never spliced into its source.
+ * links, a new personal access token and its connect command.
  * `name` is the field's accessible name (what the value is), `label` the
  * button's.
  */
@@ -37,13 +36,12 @@ export function CopyableText(props: {
         value={props.value}
         aria-label={props.name}
         readonly
-        onclick="this.select()"
+        {...selectsOnTap()}
       />
       <button
         type="button"
         class={`btn btn-ghost btn-${props.size}`}
-        data-copy={props.value}
-        onclick={copyAndFlash('btn-ghost')}
+        {...copyAndFlash(props.value, 'btn-ghost')}
       >
         {props.label}
       </button>
@@ -88,10 +86,10 @@ export function ShareLinkButton(props: {
           'hx-post': share.shareUrl,
           'hx-confirm': t('publicShare.CONFIRM_START'),
         }
-      : {
-          'data-copy': publicLink(props.siteUrl, share.type, share.shareableId),
-          onclick: copyAndFlash(resting),
-        };
+      : copyAndFlash(
+          publicLink(props.siteUrl, share.type, share.shareableId),
+          resting,
+        );
   return (
     <button
       type="button"

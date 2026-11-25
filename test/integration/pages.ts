@@ -428,6 +428,9 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectInPlaceWritesKeepFocus(res);
   expectOneStatusRegion(res);
   expectNoScriptNavigation(res);
+  expect(inlineScripts(res.body)).toEqual([]);
+  expect(res.body.match(/<script type="importmap">/g)).toHaveLength(1);
+  expect(nestedForms(res.body)).toEqual([]);
   expectAppBar(res);
   expectPageShell(res);
   expectActionBar(res);
@@ -495,6 +498,54 @@ export function pageTitle(body: string): string | undefined {
  */
 export function expectNoScriptNavigation(res: LightMyRequestResponse): void {
   expect(res.body).not.toMatch(/\blocation(\.href)?\s*=/);
+}
+
+/**
+ * What the CSP or htmx would refuse in a page or a fragment (#672,
+ * src/web/security/csp.ts): an `on*` attribute anywhere, and a `<script>`
+ * outside `<head>`, data included, since htmx drops every one a swap brings
+ * (`allowScriptTags: false`). In the head only a `src`, the layout's
+ * importmap (allowed by its hash) or schema.org data. A fragment has no
+ * head, so all of it is body. ESLint refuses these in the source; this
+ * catches what it cannot see, a translated string's markup or props built
+ * elsewhere. Each offending tag, cut to 120 characters.
+ */
+export function inlineScripts(html: string): string[] {
+  const headEnd = html.indexOf('</head>');
+  const head = headEnd === -1 ? '' : html.slice(0, headEnd);
+  const body = headEnd === -1 ? html : html.slice(headEnd);
+  const tags = (part: string) => part.match(/<[a-z][^>]*>/gi) ?? [];
+  const handler = (tag: string) => /\son[a-z]+\s*=/i.test(tag);
+  const script = (tag: string) => /^<script\b/i.test(tag);
+  const headOffenders = tags(head).filter(
+    (tag) =>
+      handler(tag) ||
+      (script(tag) &&
+        !/\ssrc="/.test(tag) &&
+        !/\stype="(importmap|application\/ld\+json)"/.test(tag)),
+  );
+  const bodyOffenders = tags(body).filter((tag) => handler(tag) || script(tag));
+  return [...headOffenders, ...bodyOffenders].map((tag) => tag.slice(0, 120));
+}
+
+/**
+ * Each `<form>` opened inside another. The parser drops a nested form's
+ * tag, so its controls belong to the outer one: a Cancel meant to close a
+ * sheet would submit, and maybe post, the form around it (#672). Each
+ * offending tag, cut to 120 characters.
+ */
+export function nestedForms(html: string): string[] {
+  const nested: string[] = [];
+  let depth = 0;
+  for (const [tag] of html.matchAll(/<\/?form\b[^>]*>/gi)) {
+    if (tag.startsWith('</')) {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth > 0) nested.push(tag.slice(0, 120));
+    depth += 1;
+  }
+  return nested;
 }
 
 /**
@@ -654,6 +705,10 @@ export function expectFragment(res: LightMyRequestResponse): void {
   expect(res.body).not.toContain('id="toast-host"');
   expect(res.body.trim().length).toBeGreaterThan(0);
   expectNoRawI18nKeys(res);
+  // htmx drops every <script> a swap brings (allowScriptTags: false, #672):
+  // a fragment's setup is a data-page-module element (page-mount.ts).
+  expect(inlineScripts(res.body)).toEqual([]);
+  expect(nestedForms(res.body)).toEqual([]);
 }
 
 /**

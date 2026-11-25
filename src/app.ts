@@ -45,6 +45,8 @@ import {
   type OutboundFetcher,
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
+import { contentSecurityPolicy } from './web/security/csp';
+import { importMapScript } from './web/layout/import-map';
 import { registerRateLimit } from './web/security/rate-limit';
 import {
   assertStatelessRoute,
@@ -410,6 +412,10 @@ export async function createApp(
     tokens,
     logger: sessionLogger,
   });
+  // The page's one inline script, made once: every page renders this string
+  // (ViewContext.importMap) and the CSP allows it by its hash (csp.ts), so
+  // the two cannot differ (#672).
+  const importMap = importMapScript(build.assetVersion);
   const buildViewContext = createViewContextBuilder({
     appName: config.APP_NAME,
     iconName: config.ICON_NAME,
@@ -422,6 +428,7 @@ export async function createApp(
     orderMailOwnerId: orderMail?.ownerId,
     release: build.release,
     assetVersion: build.assetVersion,
+    importMap,
     timeZone: config.APP_TIMEZONE,
   });
   // Declared up front so every request object has the same shape; the hook
@@ -462,8 +469,9 @@ export async function createApp(
   );
 
   // Security headers on all responses
+  const everyResponse = securityHeaders(importMap);
   app.addHook('onSend', (_request, reply, payload, done) => {
-    reply.headers(SECURITY_HEADERS);
+    reply.headers(everyResponse);
     done(null, payload);
   });
   // Clear-Site-Data on a redirect is repeated on the page it lands on, which
@@ -687,19 +695,14 @@ function createWeather(
   });
 }
 
-// Inline script: the pages' one-line handlers and inline modules (AGENTS.md,
-// Conventions). blob: images: the mask editor draws the original and the
-// cutout from object URLs. No eval (htmx's filters, hx-on and js: values are
-// unused) and no blob: scripts or workers: those were the in-browser
-// background-removal model's, removed on 2026-09-26.
-const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none';";
-
-// Every response's, set by the root onSend hook.
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Content-Security-Policy': CONTENT_SECURITY_POLICY,
-} as const;
+// Every response's, set by the root onSend hook. The CSP is this build's
+// (src/web/security/csp.ts: the hash of the importmap every page renders).
+function securityHeaders(importMap: string) {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Content-Security-Policy': contentSecurityPolicy(importMap),
+  } as const;
+}

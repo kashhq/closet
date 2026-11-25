@@ -319,7 +319,7 @@ describe('property filters, select mode and bulk edit', () => {
       const res = await get('/wardrobe?bulkUpdated=3&bulkSkipped=1');
       expectNoRawI18nKeys(res);
       expect(res.body).toContain('Set on 3 garments · 1 skipped');
-      expect(res.body).toContain('"bulkUpdated","bulkSkipped"');
+      expect(res.body).toContain('data-strip-flags="bulkUpdated bulkSkipped ');
     });
 
     it('writes nothing for a VIEW grantee', async () => {

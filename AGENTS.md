@@ -130,6 +130,7 @@ The detail of each rule, its code and its spec: `src/web/security/AGENTS.md`. Wh
 - **CSRF**: the root same-origin hook 403s a POST, PUT, PATCH or DELETE whose `Origin` is not this site (a missing Origin passes only on the bearer surfaces and the reviewed `STATELESS_ROUTES`, which write nothing); nothing changes state on a GET; the service worker never sends a navigation POST to the server (#542).
 - **Rate limits** are per route, opt-in (each budget is named in the security doc).
 - **Refusals do not reveal ids**: unseeable is a 404 like an unknown id; seeable but not changeable is a 403.
+- **CSP** (`src/web/security/csp.ts`, #672): no `'unsafe-inline'` script; the importmap is the one inline script, by its hash, never a nonce (a page must stay byte-stable); htmx runs no script from a swap.
 - **Outbound fetches** of a user-supplied URL go only through `createOutboundFetcher` (`make guard-check`); redirect targets through `safeReturnTo`; a path carrying a secret sets `config: { secretPath: true }`; log lines name requests through `loggableUrl()`; public pages never show an email.
 - **Sessions**: signing out is `POST /auth/logout`; a new password or Sign out everywhere ends the others (the session version, `sv`, #700).
 
@@ -141,7 +142,7 @@ In full: `docs/conventions.md#config`, `#logging`. `loadConfig()` (`src/config.t
 
 In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 
-- **Server owns the HTML**: htmx attributes, then CSS, then a one-line inline handler reading `data-*`; bigger is a client module (`views/assets/page/<name>.ts`, never a new `public/js/` file: `make plain-js-check`) with a reason in the PR. No `_hyperscript`. View logic beside its markup.
+- **Server owns the HTML**: htmx attributes, then CSS, then a delegated `data-*` action (`views/assets/page/actions.ts`); a page's own setup is `pageModule(name)` (`page-mount.ts`); bigger is a client module (`views/assets/page/<name>.ts`, never a new `public/js/` file: `make plain-js-check`) with a reason in the PR. **No inline script, no `on*` attribute** (the CSP, #672; ESLint and `expectFullPage`). No `_hyperscript`. View logic beside its markup.
 - **Every user-facing string goes through i18n** (`t`/`tHtml`, `src/i18n/en/lang.json`).
 - **daisyUI semantic tokens, no hardcoded colors** (ESLint). Muted text is `text-muted`; `text-faint` never for text; no `opacity-*` on text.
 - **No runtime CDN imports**: client packages from `public/modules/` or `public/vendor/`; zero external requests (`delivery.spec.ts`).

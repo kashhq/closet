@@ -87,7 +87,7 @@ describe('cutouts: upload, page and polling', () => {
     // on the phone first.
     expect(html).not.toContain('id="editMaskBtn"');
     expect(html).not.toContain('name="nobgPhoto"');
-    expect(html).toContain("import('photo-input')");
+    expect(html).toContain('data-photo-pick=""');
     expectNativePostForms(res);
     expectNoRawI18nKeys(res);
   });

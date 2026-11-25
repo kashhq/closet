@@ -330,13 +330,10 @@ describe('year in review', () => {
     expect(html).toContain('href="/wardrobe/recap?year=2025"');
     expect(html).not.toContain('rel="next"');
     expect(html).toContain('id="recap-export"');
-    expect(html).toContain(
-      `import { prepareRecapExport } from 'recap-export';`,
-    );
+    // The card's data rides on the button: htmx drops a <script> island
+    // from a boosted page (#672).
     const island =
-      /<script type="application\/json" id="recap-card-data">([^<]*)<\/script>/.exec(
-        html,
-      );
+      /data-card="(\{.*?\})" data-page-module="recap-export"/s.exec(html);
     const card = JSON.parse(island![1]) as {
       fileName: string;
       title: string;

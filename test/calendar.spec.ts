@@ -14,7 +14,7 @@ import { OUTFIT_PAGE_SIZE as PAGE_SIZE } from '../src/web/outfits/page-size';
 
 /**
  * Planning an outfit on the calendar from its page: the plan sheet (htmx,
- * an inline handler for the occasion) posts and the app lands on that week;
+ * actions.ts checks the occasion) posts and the app lands on that week;
  * then "Plan my week", after which Saved still opens on the person's outfit
  * (#659) and the planner's are one tab away; a layered outfit's collage
  * stays inside its cell (#663); and Saved loads its next page as it is

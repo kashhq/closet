@@ -164,7 +164,9 @@ describe('weather', () => {
         /<a href="\/auth\/profile#weather" class="btn[^"]*" aria-label="Back"/,
       );
       expect(res.body).toContain('hx-get="/weather/places"');
-      expect(res.body).toContain("import { initLocate } from 'locate'");
+      expect(res.body).toMatch(
+        /<div id="weather-location"[^>]*data-page-module="locate"/,
+      );
     });
   });
 
