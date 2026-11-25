@@ -4,6 +4,7 @@ import {
   GarmentCategory,
   type Material,
   ozToGsm,
+  type Sleeve,
   type Warmth,
 } from '../../../wardrobe/properties';
 import type { GarmentColor } from '../../../wardrobe/properties';
@@ -84,13 +85,16 @@ interface KindRule {
   category: GarmentCategory;
   /** A type of GARMENT_TYPES[category], or null for the category alone. */
   type: string | null;
+  /** The sleeve the phrase itself states, over the type's preset. */
+  sleeve?: Sleeve;
 }
 
 const kind = (
   alternatives: string,
   category: GarmentCategory,
   type: string | null = null,
-): KindRule => ({ pattern: words(alternatives), category, type });
+  sleeve?: Sleeve,
+): KindRule => ({ pattern: words(alternatives), category, type, sleeve });
 
 const { TOPS, BOTTOMS, DRESSES, OUTERWEAR, FOOTWEAR, ACCESSORIES, BAGS } =
   GarmentCategory;
@@ -108,10 +112,18 @@ const KIND_RULES: readonly KindRule[] = [
   kind('cardigans?', TOPS, 'cardigan'),
   kind('sweaters?|jumpers?|pullovers?', TOPS, 'sweater'),
   kind('shirts?|overshirts?|button[- ]downs?', TOPS, 'shirt'),
+  // Sports tops stay one type (they keep their active purpose); the form
+  // names the sleeve, since the type's preset is the tee's short one.
   kind(
-    'sports? bras?|(?:running|training|gym|workout) (?:tees?|t[- ]?shirts?|tops?|tanks?)',
+    '(?:running|training|gym|workout) (?:tees?|t[- ]?shirts?|tops?)',
     TOPS,
     'sports-top',
+  ),
+  kind(
+    'sports? bras?|singlets?|(?:running|training|gym|workout) (?:tank(?: top)?s?)',
+    TOPS,
+    'sports-top',
+    'sleeveless',
   ),
   kind(
     '(?:pajama|pyjama|sleep) (?:shirts?|tops?)|pajamas|pyjamas',
@@ -190,6 +202,8 @@ const KIND_RULES: readonly KindRule[] = [
 export interface KindGuess {
   category: GarmentCategory;
   type: string | null;
+  /** Only where the phrase states it ("sports bra"); else the type's preset applies. */
+  sleeve?: Sleeve;
 }
 
 /**
@@ -214,7 +228,9 @@ export function guessKind(text: string): KindGuess | null {
       }
     }
   }
-  return best ? { category: best.rule.category, type: best.rule.type } : null;
+  if (!best) return null;
+  const { category, type, sleeve } = best.rule;
+  return sleeve ? { category, type, sleeve } : { category, type };
 }
 
 const MATERIAL_WORDS: readonly (readonly [Material, RegExp])[] = [

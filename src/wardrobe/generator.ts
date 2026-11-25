@@ -2,7 +2,7 @@ import { seededRandom } from '../random';
 import {
   assessOutfit,
   FIT_PROBLEMS,
-  legsTooColdForRun,
+  isActivewearFor,
   type MatchGarment,
   type WeatherNeeds,
 } from '../weather/match';
@@ -22,7 +22,6 @@ import {
   type GarmentColor,
   type GarmentRole,
   isDrawnType,
-  purposeOf,
 } from './properties';
 
 /**
@@ -566,7 +565,7 @@ function pageOf<G extends IdeaGarment>(
  * with (socks, swimwear: isDrawnType; one still rides along locked), never
  * an everyday garment in a role an active occasion keeps for activewear
  * (ActiveDemand; a locked one rides along: the person chose it; in a cold
- * snap, bottoms too light for it, legsTooColdForRun), and never
+ * snap, bottoms too light for it: isActivewearFor), and never
  * a locked garment twice.
  * Each role's garments in id order, whatever order the pool came in: the
  * draws pick by position, and a pool is a query's rows, whose order
@@ -582,18 +581,10 @@ function drawableByRole<G extends IdeaGarment>(
   needs: WeatherNeeds | null | undefined,
 ): Map<GarmentRole, G[]> {
   const lockedIds = new Set(locked.map((g) => g.id));
-  // A cold snap asks full-length bottoms, not running shorts.
-  const tooLightForRun = (garment: G) =>
-    needs != null &&
-    garment.role === 'bottom' &&
-    legsTooColdForRun(needs, garment.weather);
-  const notActivewear = (garment: G) =>
-    purposeOf(garment.category, garment.type) !== 'active' ||
-    tooLightForRun(garment);
   const everyday = (garment: G) =>
     active !== null &&
     active.roles.includes(garment.role) &&
-    notActivewear(garment);
+    !isActivewearFor(needs, garment);
   const byRole = new Map<GarmentRole, G[]>();
   for (const garment of [...pool].sort((a, b) => a.id - b.id)) {
     if (

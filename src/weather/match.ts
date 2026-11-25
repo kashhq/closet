@@ -3,6 +3,7 @@ import {
   categoryRole,
   type GarmentRole,
   presetsFor,
+  purposeOf,
   type Warmth,
 } from '../wardrobe/properties';
 import { type DayForecast, RAIN_CHANCE } from './forecast';
@@ -84,6 +85,27 @@ export function legsTooColdForRun(
   return (
     needs.feelsLike.min < COLD_SNAP &&
     needs.limbs - COLD_RUN_LEGS_BELOW - garment.warmth > 0
+  );
+}
+
+/**
+ * Whether `garment` is activewear for an active occasion in `needs` (#647,
+ * #768): an active type, and in a cold snap not bottoms too light for a run
+ * (legsTooColdForRun). The one rule behind the generator's pool and the gap
+ * it reports when nothing is drawn (activewearGap), so the two never
+ * disagree. No `needs` (no forecast) means no cold snap.
+ */
+export function isActivewearFor(
+  needs: WeatherNeeds | null | undefined,
+  garment: { category: string; type: string | null; weather: MatchGarment },
+): boolean {
+  return (
+    purposeOf(garment.category, garment.type) === 'active' &&
+    !(
+      needs != null &&
+      garment.weather.role === 'bottom' &&
+      legsTooColdForRun(needs, garment.weather)
+    )
   );
 }
 

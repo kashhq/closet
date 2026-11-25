@@ -306,3 +306,43 @@ describe('the temperature feedback', () => {
     expect(row.offset).toBe(0);
   });
 });
+
+describe('a cold-snap workout (#768)', () => {
+  it('names the missing activewear when the closet holds only running shorts', async () => {
+    const email = 'api-ideas-cold@example.com';
+    await t.register(email);
+    const { token: cold } = await deviceToken(t, { email });
+    const add = async (body: object) =>
+      expect((await api('POST', '/garments', body, cold)).statusCode).toBe(201);
+    await add({ name: 'Run Tee', category: 'tops' });
+    await add({
+      name: 'Running Shorts',
+      category: 'bottoms',
+      properties: { type: 'running-shorts' },
+    });
+    await add({
+      name: 'Road Shoes',
+      category: 'footwear',
+      properties: { type: 'running-shoes' },
+    });
+    // The forecast is read once per location and cached: chill it first.
+    stub.chill(60);
+    try {
+      const home = await api(
+        'PUT',
+        '/weather/home',
+        { name: 'Fort Greene', latitude: 40.68982, longitude: -73.97625 },
+        cold,
+      );
+      expect(home.statusCode, home.body).toBe(200);
+      const res = await api('GET', '/ideas?occasion=workout', undefined, cold);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.json()).toMatchObject({
+        data: [],
+        emptyReason: 'no-activewear',
+      });
+    } finally {
+      stub.chill(0);
+    }
+  });
+});
