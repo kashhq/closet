@@ -230,7 +230,7 @@ export const calendarTools = [
       await wardrobeFor(ctx, ownerId, 'own');
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
-      const washed = await washGarments(
+      const { washed } = await washGarments(
         { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         garmentIds,

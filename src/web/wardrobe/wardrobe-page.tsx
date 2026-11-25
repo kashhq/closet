@@ -183,13 +183,23 @@ const NO_SELECTION: Selection = { ids: new Set(), all: false };
 
 /** What a select-mode verb did, for its toast (the redirect's flags). */
 export type BulkOutcome =
-  | { verb: 'set' | 'wash'; count: number; skipped: number }
+  | { verb: 'set'; count: number; skipped: number }
+  | {
+      verb: 'wash';
+      count: number;
+      /** The archived (closetOnly); the rest by why, as markWashed counts them (#819). */
+      skipped: number;
+      wishlist: number;
+      unseen: number;
+    }
   | { verb: 'archive' | 'capsule'; count: number };
 
 /** The one-shot flags select mode's verbs' redirects carry (GridQuery). */
 const BULK_FLAGS = [
   'bulkUpdated',
   'bulkSkipped',
+  'bulkWishlist',
+  'bulkUnseen',
   'bulkArchived',
   'bulkWashed',
   'bulkAdded',
@@ -1833,7 +1843,16 @@ function bulkOutcomeText(outcome: BulkOutcome): string {
         ? (`${outcome.verb}Skipped` as const)
         : outcome.verb
     ];
-  return count === 1
-    ? t(keys.one, { skipped })
-    : t(keys.many, { count, skipped });
+  const text =
+    count === 1 ? t(keys.one, { skipped }) : t(keys.many, { count, skipped });
+  if (outcome.verb !== 'wash') return text;
+  // Not archived, so not "archived skipped" (#819): a wishlist item, and an
+  // id that is no garment of the owner's (another's or a deleted one, alike).
+  const also = [
+    outcome.wishlist > 0 &&
+      t('BULK_WASHED_SKIPPED_WISHLIST', { count: outcome.wishlist }),
+    outcome.unseen > 0 &&
+      t('BULK_WASHED_SKIPPED_UNSEEN', { count: outcome.unseen }),
+  ].filter((part) => part !== false);
+  return [text, ...also].join(' · ');
 }

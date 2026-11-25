@@ -798,6 +798,8 @@
   "BULK_WASHED_ONE": "1 garment marked washed",
   "BULK_WASHED_SKIPPED": "{count} garments marked washed · {skipped} archived skipped",
   "BULK_WASHED_ONE_SKIPPED": "1 garment marked washed · {skipped} archived skipped",
+  "BULK_WASHED_SKIPPED_WISHLIST": "{count} on the wishlist skipped",
+  "BULK_WASHED_SKIPPED_UNSEEN": "{count} not found skipped",
   "BULK_ADDED": "{count} garments added to the capsule",
   "BULK_ADDED_ONE": "1 garment added to the capsule",
   "SELECT_ALL": "Select all {count}",

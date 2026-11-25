@@ -311,6 +311,65 @@ describe('select mode verbs', () => {
     expect(archived.lastWashedOn).toBeNull();
   });
 
+  // #819: the skipped were every id not washed, so a garment deleted in
+  // another tab, or a hand-built post's foreign, wishlist or repeated id,
+  // read as "archived skipped".
+  it('Mark washed counts as skipped only the archived, never another id it did not wash', async () => {
+    await t.register('bulk-wash-stranger@example.com');
+    const strangerId = await userIdOf(t, 'bulk-wash-stranger@example.com');
+    const made = await asFixture(t.db, (tx) =>
+      tx
+        .insert(garment)
+        .values(
+          (
+            [
+              [ownerId, 'closet'],
+              [ownerId, 'archived'],
+              [ownerId, 'wishlist'],
+              [strangerId, 'closet'],
+              [ownerId, 'closet'],
+            ] as const
+          ).map(([owner, status]) => ({
+            shareableId: randomUUID(),
+            ownerId: owner,
+            name: `Skip ${status}`,
+            category: 'tops',
+            status,
+          })),
+        )
+        .returning({ id: garment.id }),
+    );
+    const [kept, shelved, wanted, foreign, deleted] = made.map((row) => row.id);
+    await asFixture(t.db, (tx) =>
+      tx.delete(garment).where(eq(garment.id, deleted)),
+    );
+    const res = await post('/wardrobe/bulk/washed', {
+      ids: [kept, kept, shelved, wanted, foreign, deleted],
+    });
+    const flags = new URL(res.headers.location!, 'http://x').searchParams;
+    expect(
+      ['bulkWashed', 'bulkSkipped', 'bulkWishlist', 'bulkUnseen'].map((flag) =>
+        flags.get(flag),
+      ),
+    ).toEqual(['1', '1', '1', '2']);
+    // Each skip by its reason; another's and a deleted id are one count,
+    // so nothing tells them apart.
+    const toast = unescapeHtml((await get(res.headers.location!)).body);
+    expect(toast).toContain(
+      '1 garment marked washed · 1 archived skipped · 1 on the wishlist skipped · 2 not found skipped',
+    );
+    expect(t.logs.ops('garments.washed').at(-1)).toMatchObject({
+      asked: 6,
+      washed: 1,
+      archived: 1,
+      wishlist: 1,
+      unseen: 2,
+    });
+    expect(
+      (await rows(made.map((row) => row.id))).map((r) => r.lastWashedOn),
+    ).toEqual([t.today(), null, null, null]);
+  });
+
   it('pluralizes every toast through i18n', async () => {
     const one = await get('/wardrobe?bulkUpdated=1&bulkSkipped=0');
     expectNoRawI18nKeys(one);

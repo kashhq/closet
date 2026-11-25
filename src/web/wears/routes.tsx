@@ -266,7 +266,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const ids = request.body?.ids ?? [];
       const day = today();
-      const washed = await washGarments(deps, actorOf(request), ids, {
+      const { washed } = await washGarments(deps, actorOf(request), ids, {
         day,
         at: postedInstant(request, undefined, day, config.timeZone),
       });
