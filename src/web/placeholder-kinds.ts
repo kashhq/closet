@@ -45,6 +45,7 @@ export const PLACEHOLDER_KINDS = {
   'changeEntry.FOR_DAY': { day: 'copy' },
   'changeEntry.WORN_NOTE': { name: 'data' },
   'changeEntry.REFUSED_ON_DAY': { occasion: 'copy' },
+  CALENDAR_ALREADY_PLANNED: { occasion: 'copy' },
   'validation.UNKNOWN_COLOR': { color: 'data' },
   'validation.FABRIC_WEIGHT_RANGE': { min: 'data', max: 'data', unit: 'copy' },
   'validation.QUANTITY_RANGE': { max: 'data' },
