@@ -91,10 +91,9 @@ for closet_doc in ${agents_files[@]+"${agents_files[@]}"}; do
 done
 
 # The original project's name never comes back (#1225): Closet is MIT since 2026-11-25, every
-# inherited line rewritten, and nothing in the tree names where it began; docs/decisions.md's
-# relicense entry is the one place allowed to. The patterns are spelled so that this file does not
-# match itself. git grep exits 1 for no match: only that is a pass.
-closet_old_name=$(git grep -n -I -i -E 'libre[ ._-]?closet|lazz[t]ech' -- ':!docs/decisions.md') && closet_old_status=0 || closet_old_status=$?
+# inherited line rewritten, and nothing in the tree names where it began, docs/decisions.md
+# included (owner, 2026-11-25). The patterns are spelled so that this file does not match itself. git grep exits 1 for no match: only that is a pass.
+closet_old_name=$(git grep -n -I -i -E 'libre[ ._-]?closet|lazz[t]ech' ) && closet_old_status=0 || closet_old_status=$?
 case "$closet_old_status" in
   0)
     while IFS= read -r closet_hit; do
