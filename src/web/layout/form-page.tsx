@@ -69,11 +69,11 @@ export function FormPage(props: {
         class="flex flex-col gap-4"
       >
         {props.children}
-        <div class="form-actions flex gap-2 mt-2">
-          <CancelLink href={back} class="flex-1" />
+        <div class="form-actions flex gap-2 mt-2 *:flex-1">
+          <CancelLink href={back} />
           <button
             type="submit"
-            class="btn btn-primary flex-1"
+            class="btn btn-primary"
             disabled={props.submitDisabled}
           >
             {props.submitLabel}
