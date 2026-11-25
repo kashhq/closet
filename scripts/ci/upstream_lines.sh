@@ -11,8 +11,9 @@
 # Rewrapped lines: blame matches whole lines, so a line a formatter split or joined, text kept
 # verbatim inside a new wrapper, or a line retyped from a deleted file is credited to the owner.
 # scripts/upstream-rewraps.ts, the second pass, catches those by text: an owner line of 40 or
-# more characters (or up to three consecutive ones, joined) found anywhere in the upstream commits' blobs, whitespace and line breaks
-# ignored, counts as upstream too (that file says why). No .git-blame-ignore-revs: the history is
+# more characters found anywhere in the upstream commits' blobs, whitespace and line breaks
+# ignored, or two or three adjacent owner lines that join into one whole upstream line, counts
+# as upstream too (that file says why). No .git-blame-ignore-revs: the history is
 # squash-merged, so no commit is format-only (every one that rewrapped also changed content), and
 # an ignored commit's new lines would go to its parents. If a format-only commit ever lands (a
 # formatter run over the tree, alone), list it in a .git-blame-ignore-revs and pass the file here
