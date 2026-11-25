@@ -185,15 +185,34 @@ function metaText(
 // security decision, and the person reviews the form.
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'ac', 'gov']);
 
-/** "Uniqlo" from `www.uniqlo.com` or `shop.uniqlo.co.uk`; null for an IP. */
+// Platforms that host many shops under one domain: the shop is the label
+// left of the platform ("acme.myshopify.com" is "Acme"), never the platform
+// itself. A shop on its own domain is not listed and reads as before. Small
+// on purpose, like SECOND_LEVEL: a miss gives the platform's name, which the
+// person corrects on the form (the page's og:site_name wins before either).
+const HOSTING_DOMAINS = new Set([
+  'myshopify.com',
+  'squarespace.com',
+  'wixsite.com',
+  'bigcartel.com',
+  'weebly.com',
+  'webflow.io',
+  'mybigcommerce.com',
+]);
+
+/**
+ * "Uniqlo" from `www.uniqlo.com` or `shop.uniqlo.co.uk`, "Acme" from
+ * `acme.myshopify.com`; null for an IP or a bare platform host.
+ */
 function registrableName(url: URL): string | null {
   const labels = url.hostname.split('.');
   if (labels.length < 2 || /^[\d.]+$|:/.test(url.hostname)) return null;
   const tld = labels.length - 1;
+  const hosted = HOSTING_DOMAINS.has(labels.slice(-2).join('.'));
+  const registry = hosted || SECOND_LEVEL.has(labels[tld - 1]);
   const name =
-    labels.length > 2 && SECOND_LEVEL.has(labels[tld - 1])
-      ? labels[tld - 2]
-      : labels[tld - 1];
+    registry && labels.length > 2 ? labels[tld - 2] : labels[tld - 1];
+  if (hosted && (labels.length === 2 || name === 'www')) return null;
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : null;
 }
 

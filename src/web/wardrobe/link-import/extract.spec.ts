@@ -250,6 +250,11 @@ describe('extractProduct', () => {
     ['https://www.uniqlo.com/p/1', 'Uniqlo'],
     ['https://shop.example.co.uk/p/1', 'Example'],
     ['http://127.0.0.2/p/1', null],
+    // A shop on a hosting platform is its subdomain, never the platform (#799).
+    ['https://acme.myshopify.com/products/tee', 'Acme'],
+    ['https://shop.acme.myshopify.com/products/tee', 'Acme'],
+    ['https://acme-goods.squarespace.com/shop/tee', 'Acme-goods'],
+    ['https://myshopify.com/', null],
   ])('falls back from a missing brand to the domain: %s', (url, brand) => {
     const html = page('<title>Tee | Shop</title>');
     expect(extractProduct(html, new URL(url)).brand).toBe(brand);

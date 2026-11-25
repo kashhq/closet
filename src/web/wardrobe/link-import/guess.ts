@@ -101,7 +101,9 @@ const KIND_RULES: readonly KindRule[] = [
   kind('(?:t[- ]?shirt|tee(?:[- ]shirt)?)s?', TOPS, 't-shirt'),
   kind('polo(?: shirt)?s?', TOPS, 'polo'),
   kind('blouses?', TOPS, 'blouse'),
-  kind('tank(?: top)?s?|camisoles?|cami', TOPS, 'tank'),
+  // Sleeveless sports tops are tanks too (the sleeveless preset), so the
+  // sports-top rule below names only the tee and top forms.
+  kind('tank(?: top)?s?|camisoles?|cami|singlets?|sports? bras?', TOPS, 'tank'),
   kind('turtlenecks?|mock ?necks?|roll ?necks?', TOPS, 'turtleneck'),
   kind('hoodies?|hoody|hooded sweatshirts?', TOPS, 'hoodie'),
   kind('(?:crew ?neck )?sweatshirts?', TOPS, 'sweatshirt'),
@@ -109,7 +111,7 @@ const KIND_RULES: readonly KindRule[] = [
   kind('sweaters?|jumpers?|pullovers?', TOPS, 'sweater'),
   kind('shirts?|overshirts?|button[- ]downs?', TOPS, 'shirt'),
   kind(
-    'sports? bras?|(?:running|training|gym|workout) (?:tees?|t[- ]?shirts?|tops?|tanks?)',
+    '(?:running|training|gym|workout) (?:tees?|t[- ]?shirts?|tops?)',
     TOPS,
     'sports-top',
   ),

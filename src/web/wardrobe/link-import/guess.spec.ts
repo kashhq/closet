@@ -73,6 +73,11 @@ describe('guessKind', () => {
     ['Flannel Pajama Pants', 'bottoms', 'sleepwear'],
     ['Running Shorts 5"', 'bottoms', 'running-shorts'],
     ['DRY-EX Running Tee', 'tops', 'sports-top'],
+    // Sleeveless sports tops are tanks, not short-sleeved sports tops (#765).
+    ['High-Support Sports Bra', 'tops', 'tank'],
+    ['Seamless Gym Tank', 'tops', 'tank'],
+    ['Running Tank Top', 'tops', 'tank'],
+    ['Race Singlet', 'tops', 'tank'],
   ])('%s is %s / %s', (text, category, type) => {
     expect(guessKind(text)).toEqual({ category, type });
   });

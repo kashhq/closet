@@ -15,6 +15,8 @@ import {
 import { FORECAST_DAYS, forecastDay } from '../../weather/forecast';
 import { type PickedLocation, zonedIn } from '../../weather/location';
 import {
+  isActivewearFor,
+  matchGarment,
   type WeatherNeeds,
   weatherNeeds,
   withRainGear,
@@ -283,7 +285,16 @@ export async function ideasFrom(
     capsules: row.capsules,
     emptyReason:
       page.ideas.length === 0
-        ? activewearGap(demands.active, row.closetKinds ?? [], pool)
+        ? activewearGap(
+            demands.active,
+            (row.closetKinds ?? []).map((kind) => ({
+              category: kind.category,
+              type: kind.type,
+              weather: matchGarment({ ...kind, waterResistant: false }),
+            })),
+            pool,
+            (garment) => isActivewearFor(weather?.needs, garment),
+          )
         : undefined,
   };
 }

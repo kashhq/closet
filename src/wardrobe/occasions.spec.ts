@@ -7,6 +7,8 @@ import {
   OCCASION_HINTS,
   OCCASIONS,
 } from './occasions';
+import type { DayForecast } from '../weather/forecast';
+import { isActivewearFor, matchGarment, weatherNeeds } from '../weather/match';
 import { FORMALITIES } from './properties';
 
 describe('occasions', () => {
@@ -93,6 +95,60 @@ describe('activewearGap (#647)', () => {
     expect(activewearGap(null, [], [])).toBeUndefined();
     expect(activewearGap(active, [shorts, shoes], [shorts, shoes])).toBe(
       undefined,
+    );
+  });
+});
+
+describe('activewear in a cold snap (#768)', () => {
+  const active = OCCASION_HINTS.workout.active!;
+  const hours = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    feelsLike: -20,
+    precipitationChance: 0,
+    code: 1,
+  }));
+  const frozen: DayForecast = {
+    day: '2026-01-10',
+    code: 1,
+    high: -18,
+    low: -22,
+    precipitationChance: 0,
+    hours,
+  };
+  const needs = weatherNeeds(frozen, 'workout', 0);
+  const kind = (category: string, type: string) => ({
+    category,
+    type,
+    weather: matchGarment({
+      category,
+      type,
+      fabricWeight: null,
+      warmth: null,
+      waterResistant: false,
+    }),
+  });
+  const shoes = kind('footwear', 'running-shoes');
+  const shorts = kind('bottoms', 'running-shorts');
+  const leggings = kind('bottoms', 'leggings');
+  const judge = (g: typeof shorts) => isActivewearFor(needs, g);
+
+  it('keeps running shorts out of the judgement, as the pool does', () => {
+    expect(judge(shorts)).toBe(false);
+    expect(judge(leggings)).toBe(true);
+    expect(isActivewearFor(null, shorts)).toBe(true);
+  });
+
+  it('says a closet with only running shorts has no activewear for the day', () => {
+    const closet = [shorts, shoes];
+    expect(activewearGap(active, closet, closet)).toBeUndefined();
+    expect(activewearGap(active, closet, closet, judge)).toBe('no-activewear');
+  });
+
+  it('is satisfied by warmer activewear, or not available when it is out', () => {
+    const closet = [shorts, leggings, shoes];
+    expect(activewearGap(active, closet, closet, judge)).toBeUndefined();
+    expect(activewearGap(active, closet, [shorts, shoes], judge)).toBe(
+      'none-available',
     );
   });
 });

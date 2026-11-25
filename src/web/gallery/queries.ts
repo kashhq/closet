@@ -22,7 +22,11 @@ import {
 import { washLimit } from '../../wardrobe/availability';
 import type { IdeaGarment, SavedOutfit } from '../../wardrobe/generator';
 import type { OutfitRule } from '../../wardrobe/outfit-rules';
-import { canProduceOutfit, categoryRole } from '../../wardrobe/properties';
+import {
+  canProduceOutfit,
+  categoryRole,
+  type Warmth,
+} from '../../wardrobe/properties';
 import type { PlannerGarment } from '../../wardrobe/week-planner';
 import { matchGarment } from '../../weather/match';
 import type { IsoDate } from '../../calendar-date';
@@ -153,7 +157,7 @@ export function ideaPoolSql(
 
 /**
  * The kinds (category, type) of the owner's whole closet (inCloset: dirty
- * and away garments too), each once, as a scalar subquery: what
+ * and away garments too), each once per warmth, as a scalar subquery: what
  * activewearGap and lacksActivewear (src/wardrobe/occasions.ts) read to tell
  * a closet without activewear from one whose activewear is out today.
  * Read for an active occasion (a workout), in the statement of the ideas
@@ -165,16 +169,20 @@ export function closetKindsSql(ownerId: number): SQL<ClosetKind[]> {
   return sql<ClosetKind[]>`(
     select coalesce(json_agg(kinds), '[]')
     from (
-      select distinct ${garment.category} as category, ${garment.type} as type
+      select distinct ${garment.category} as category, ${garment.type} as type,
+        ${garment.warmth} as warmth, ${garment.fabricWeight} as "fabricWeight"
       from ${garment}
       where ${and(eq(garment.ownerId, ownerId), inCloset())}
     ) kinds
   )`;
 }
 
+/** A kind with the columns that make its warmth (matchGarment), for the cold-snap judgement of activewear. */
 export interface ClosetKind {
   category: string;
   type: string | null;
+  warmth: Warmth | null;
+  fabricWeight: number | null;
 }
 
 /**
