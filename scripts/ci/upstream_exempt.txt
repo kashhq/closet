@@ -171,3 +171,66 @@ src/i18n/en/lang.json	"CALENDAR_DAY_SAT": "Saturday",
 # Commented-out examples in the committed defaults.
 .env	#PWA_ENABLED=true
 .env	#DISABLE_REGISTRATION=true
+
+# Lines written afresh that the second pass (scripts/upstream-rewraps.ts, #1232) finds verbatim in
+# upstream text, each the one way to write it: a platform or library call as its API spells it
+# (an event subscription, a Workbox handler's fetch and cache, the service worker's registration,
+# a JSON request header), an import of one name, a database constraint's generated name, a
+# vendored file's path, a tool's config key and flags, the meta tags of a captured product page,
+# daisyUI's modal backdrop, and a row of utilities and daisyUI classes in the class sorter's order.
+eslint.config.mjs	parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+lighthouserc.js	settings: { chromeFlags: '--no-sandbox --disable-dev-shm-usage' },
+public/js/autosave.js	document.addEventListener('htmx:beforeRequest', (event) => {
+public/js/vitals.js	document.addEventListener('htmx:beforeRequest', (event) => {
+src/cutout/model.ts	import { pipeline } from 'node:stream/promises';
+src/db/schema.ts	'wardrobe_share_grantor_id_grantee_id_unique';
+src/web/auth/tokens-page.tsx	<button type="submit" class="btn btn-ghost btn-xs text-error">
+src/web/calendar/calendar-page.tsx	class="flex items-center justify-between gap-2"
+src/web/files/photos.ts	import { pipeline } from 'node:stream/promises';
+src/web/files/storage.ts	import { pipeline } from 'node:stream/promises';
+src/web/gallery/avoided.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/gallery/ideas-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/gallery/ideas-page.tsx	<button type="submit" class="btn btn-primary w-full">
+src/web/insights/insights-page.tsx	<a href="/wardrobe/new" class="btn btn-primary btn-sm">
+src/web/insights/recap-page.tsx	class="flex items-center justify-between gap-2"
+src/web/inspiration/piece-form.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/inspiration/recreate-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/inspiration/share-target.spec.ts	headers: { 'Content-Type': 'application/json' },
+src/web/layout/parts.tsx	<form method="dialog" class="modal-backdrop">
+src/web/outfits/muse-cards.tsx	class="flex items-center justify-between gap-2"
+src/web/outfits/show-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/outfits/show-page.tsx	<span class="text-xs text-center line-clamp-2 leading-tight">
+src/web/share/share-page.tsx	<figure class="aspect-square overflow-hidden">
+src/web/sharing/pages.tsx	<button type="submit" class="btn btn-primary btn-sm">
+src/web/sizes/views.tsx	<button type="submit" class="btn btn-primary">
+src/web/sizes/views.tsx	<button type="submit" class="btn btn-primary btn-sm">
+src/web/style/style-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/styling/styling-page.tsx	<a href="/wardrobe/new" class="btn btn-primary btn-sm">
+src/web/today/today-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/today/today-page.tsx	<button type="submit" class="btn btn-primary w-full">
+src/web/wardrobe/draft-queue.tsx	<button type="submit" class="btn btn-ghost w-full">
+src/web/wardrobe/link-import/fixtures/shopify-product.html	<meta name="viewport" content="width=device-width,initial-scale=1">
+src/web/wardrobe/link-import/fixtures/shopify-product.html	<meta name="twitter:card" content="summary_large_image">
+src/web/wardrobe/link-import/link-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/wardrobe/repair-log.tsx	<button type="submit" class="btn btn-primary">
+src/web/weather/settings.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/week-plan/views.tsx	class="select select-bordered select-sm w-full"
+src/web/week-plan/views.tsx	<button type="submit" class="btn btn-primary">
+src/web/wishlist/group-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/wishlist/suggestion-section.tsx	<div class="flex flex-wrap items-center gap-2">
+test/integration/delivery.spec.ts	'/modules/onnxruntime-web/dist/ort.all.bundle.min.mjs',
+test/integration/migrations.spec.ts	'wardrobe_share_grantor_id_grantee_id_unique',
+test/sw-update.spec.ts	const registration = await navigator.serviceWorker.getRegistration();
+views/assets/page/push.ts	headers: { 'Content-Type': 'application/json' },
+views/assets/page/push.ts	const registration = await navigator.serviceWorker.getRegistration();
+views/assets/src-sw.ts	const response = await handler.fetch(request);
+views/assets/src-sw.ts	await handler.cachePut(request, response.clone());
+views/assets/src-sw.ts	const cache = await self.caches.open(cacheName);
+
+# Icon artwork, not anyone's prose: the path data of Heroicons and Hugeicons glyphs, which is the
+# drawing itself (redrawing it would be a different icon).
+src/web/layout/parts.tsx	'M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z',
+src/web/layout/parts.tsx	'M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5',
+src/web/layout/parts.tsx	'M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z',
+src/web/layout/parts.tsx	'M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z',
+src/web/wardrobe/wardrobe-header.tsx	'm16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10';

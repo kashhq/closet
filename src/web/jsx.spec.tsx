@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { escapeHtml, jsonForScript } from './html';
 import { t, tHtml } from './i18n';
@@ -22,7 +23,7 @@ function Card(props: { name: string }) {
 }
 
 async function Slow(props: { name: string }) {
-  await new Promise((resolve) => setTimeout(resolve, 1));
+  await sleep(1);
   return <span>{props.name}</span>;
 }
 

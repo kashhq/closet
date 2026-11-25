@@ -393,9 +393,9 @@ export class PhotoStorage {
    * returning, so a file deleted afterwards still streams whole and a
    * missing one is never a stream that fails later.
    */
-  async get(fileName: string): Promise<Readable | undefined> {
+  async get(storedName: string): Promise<Readable | undefined> {
     try {
-      const handle = await fs.promises.open(this.pathOf(fileName), 'r');
+      const handle = await fs.promises.open(this.pathOf(storedName), 'r');
       return handle.createReadStream();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -403,9 +403,9 @@ export class PhotoStorage {
     }
   }
 
-  async exists(fileName: string): Promise<boolean> {
+  async exists(storedName: string): Promise<boolean> {
     const stat = await fs.promises
-      .stat(this.pathOf(fileName))
+      .stat(this.pathOf(storedName))
       .catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT')
           return undefined;
@@ -415,16 +415,16 @@ export class PhotoStorage {
   }
 
   /**
-   * Atomic: until it resolves, readers see no file under `fileName` (or the
+   * Atomic: until it resolves, readers see no file under `storedName` (or the
    * previous one), never a partial write; a rejected store leaves nothing
    * behind. Photo and cutout are written concurrently and the thumb writer
    * reads whichever exists, which is why this matters (AGENTS.md Gotchas).
    */
-  async store(fileName: string, stream: Readable): Promise<void> {
-    const tempPath = path.join(this.incoming, `${randomUUID()}-${fileName}`);
+  async store(storedName: string, stream: Readable): Promise<void> {
+    const tempPath = path.join(this.incoming, `${randomUUID()}-${storedName}`);
     try {
       await pipeline(stream, fs.createWriteStream(tempPath));
-      await fs.promises.rename(tempPath, this.pathOf(fileName));
+      await fs.promises.rename(tempPath, this.pathOf(storedName));
     } catch (error) {
       // `force` covers a stream that failed before the file was opened.
       await fs.promises.rm(tempPath, { force: true });
@@ -436,10 +436,12 @@ export class PhotoStorage {
    * A missing file is not an error: most photos have no cutout, so
    * deleteVariants asks for files that were never written.
    */
-  async delete(fileName: string): Promise<void> {
-    await fs.promises.unlink(this.pathOf(fileName)).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    });
+  async delete(storedName: string): Promise<void> {
+    await fs.promises
+      .unlink(this.pathOf(storedName))
+      .catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      });
   }
 
   /** Every file in the directory but the markers; the caller filters. */
@@ -634,8 +636,8 @@ export class PhotoStorage {
   // Names come from our own code (variantFileName of a stored name, or a
   // route segment parseStoredName accepted); basename() is the last line
   // against a path ever leaving the directory.
-  private pathOf(fileName: string): string {
-    return path.join(this.directory, path.basename(fileName));
+  private pathOf(storedName: string): string {
+    return path.join(this.directory, path.basename(storedName));
   }
 }
 
