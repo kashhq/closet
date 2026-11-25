@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { type Browser, chromium, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -15,10 +14,24 @@ import { EDIT_MASK_ID, MASK_EDITOR_IDS } from '../../../src/web/page-contract';
 
 const ORIGIN = 'https://closet.test';
 const SAVE_URL = `${ORIGIN}/wardrobe/1/nobg`;
-const ONE_PIXEL_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64',
-);
+const ONE_PIXEL_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+/**
+ * Runs in the page: the stored photos are a one-pixel PNG and the save answers
+ * the new URLs, so no server is needed (a function, so the browser gets it
+ * serialised; it closes over nothing).
+ */
+function fakeServer(fake: { saveUrl: string; saved: unknown; png: string }) {
+  window.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === fake.saveUrl && init?.method === 'POST') {
+      return Response.json(fake.saved);
+    }
+    const bytes = Uint8Array.from(atob(fake.png), (c) => c.charCodeAt(0));
+    return new Response(bytes, { headers: { 'Content-Type': 'image/png' } });
+  };
+}
 
 const ids = MASK_EDITOR_IDS;
 const MARKUP = `
@@ -44,15 +57,14 @@ let browser: Browser;
 let bundle: string;
 
 beforeAll(async () => {
-  const root = path.resolve(__dirname, '../../..');
   const result = await build({
     stdin: {
       contents:
         "import { bindMaskEditor } from './views/assets/page/mask-editor.ts'; bindMaskEditor(document.getElementById('garment-photo-slot'));",
-      resolveDir: root,
+      resolveDir: '.',
       loader: 'ts',
     },
-    alias: { 'confirm-sheet': path.join(root, 'public/js/confirm-sheet.js') },
+    alias: { 'confirm-sheet': 'public/js/confirm-sheet.js' },
     bundle: true,
     format: 'iife',
     write: false,
@@ -71,25 +83,17 @@ async function mounted(): Promise<{ page: Page; warnings: string[] }> {
   page.on('console', (message) => {
     if (message.type() === 'warning') warnings.push(message.text());
   });
-  await page.route(`${ORIGIN}/**`, (route) => {
-    const url = route.request().url();
-    if (url === SAVE_URL) {
-      return route.fulfill({
-        json: {
-          originalUrl: `${ORIGIN}/file/original2`,
-          nobgUrl: `${ORIGIN}/file/nobg2`,
-        },
-      });
-    }
-    if (url === `${ORIGIN}/`) {
-      return route.fulfill({ contentType: 'text/html', body: '<html></html>' });
-    }
-    return route.fulfill({ contentType: 'image/png', body: ONE_PIXEL_PNG });
-  });
-  await page.goto(`${ORIGIN}/`);
   await page.setContent(
     `<!doctype html><html lang="en"><head><title>t</title></head><body>${MARKUP}</body></html>`,
   );
+  await page.evaluate(fakeServer, {
+    saveUrl: SAVE_URL,
+    saved: {
+      originalUrl: `${ORIGIN}/file/original2`,
+      nobgUrl: `${ORIGIN}/file/nobg2`,
+    },
+    png: ONE_PIXEL_PNG_BASE64,
+  });
   await page.addScriptTag({ content: bundle });
   return { page, warnings };
 }
