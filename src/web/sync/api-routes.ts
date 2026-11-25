@@ -120,7 +120,7 @@ const ChangesPage = Type.Object(
  */
 export const syncApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
-  { db, logger, cutouts },
+  { db, config, logger, cutouts },
   done,
 ) => {
   app.get(
@@ -146,7 +146,7 @@ ${coverageTable(READ_COVERAGE)}`,
         actor,
         request.query.cursor,
         request.query.limit ?? CHANGES_PAGE_SIZE,
-        cutouts.enabled,
+        { cutoutsEnabled: cutouts.enabled, siteUrl: config.siteUrl },
       );
       if (page.revokedWardrobes.length > 0) {
         logger.debug(

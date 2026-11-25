@@ -12,6 +12,7 @@ import { HttpError } from '../errors';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
 import { IsoDateSchema, RowId } from '../schemas';
+import { PublicShareUrl, publicShareUrl } from '../share/urls';
 import type { OutfitContext } from './page-context';
 import {
   OUTFIT_NAME_MAX,
@@ -126,6 +127,7 @@ export const Outfit = Type.Object(
     planned: Type.Array(PlannedDay),
     /** The days it was worn (marked, or with a selfie), newest first. */
     worn: Type.Array(WornDay),
+    publicShareUrl: Type.Optional(PublicShareUrl),
   },
   {
     title: 'Outfit',
@@ -186,11 +188,28 @@ export function toOutfitListItem(outfit: ToolOutfit): OutfitListItem {
   return asResource(OutfitListItem, outfitListRecord(outfit));
 }
 
-export function toOutfitResource({ outfit, entries }: OutfitContext): Outfit {
+/**
+ * An outfit's public link (#669): outfits are their owner's alone, so
+ * whoever reads one may stop it; null while not shared.
+ */
+function outfitShareUrl(
+  shareableId: string | null,
+  siteUrl: string,
+): string | null {
+  return shareableId === null
+    ? null
+    : publicShareUrl(siteUrl, 'outfit', shareableId);
+}
+
+export function toOutfitResource(
+  { outfit, entries }: OutfitContext,
+  siteUrl: string,
+): Outfit {
   return asResource(Outfit, {
     ...outfitFieldsRecord(outfit),
     planned: entries.planned,
     worn: entries.worn.map(({ entryId, day }) => ({ entryId, day })),
+    publicShareUrl: outfitShareUrl(outfit.shareableId, siteUrl),
   });
 }
 
@@ -236,6 +255,7 @@ export const SyncedOutfit = Type.Object(
       ),
     ),
     agent: Type.Optional(AgentResource),
+    publicShareUrl: Type.Optional(PublicShareUrl),
   },
   {
     title: 'SyncedOutfit',
@@ -246,7 +266,9 @@ export const SyncedOutfit = Type.Object(
 
 export function toSyncedOutfit(
   row: SyncedOutfitRow,
+  siteUrl: string,
 ): Static<typeof SyncedOutfit> {
+  const shareUrl = outfitShareUrl(row.shareableId, siteUrl);
   return {
     id: row.id,
     ...withoutNulls({ name: row.name, notes: row.notes }),
@@ -254,6 +276,7 @@ export function toSyncedOutfit(
     slots: row.slots.map((slot) => withoutNulls(slot)),
     ...(row.proposal && { proposal: withoutNulls(row.proposal) }),
     agent: toAgentResource(row.agent),
+    ...(shareUrl !== null && { publicShareUrl: shareUrl }),
   };
 }
 

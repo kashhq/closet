@@ -28,6 +28,7 @@ import { asResource, literals } from '../api/resource';
 import { shownPhoto } from './cutout-shown';
 import { imageUrl } from '../files/image-url';
 import { IsoDateSchema } from '../schemas';
+import { PublicShareUrl, publicShareUrl } from '../share/urls';
 import type { GarmentContext } from './garment-context';
 import type {
   GarmentDetail,
@@ -248,6 +249,21 @@ const Repair = Type.Object(
   { title: 'Repair' },
 );
 
+/**
+ * A garment's public link as a reader is shown it (#959): only to whoever
+ * may stop it, the owner and a MANAGE grantee, as its page's "Shared
+ * publicly" panel; null while not shared.
+ */
+export function garmentShareUrl(
+  shareableId: string | null,
+  canManage: boolean,
+  siteUrl: string,
+): string | null {
+  return shareableId !== null && canManage
+    ? publicShareUrl(siteUrl, 'garment', shareableId)
+    : null;
+}
+
 /** A garment's stored fields beyond its identity: the page's and the feed's. */
 const recordFields = {
   ...identity,
@@ -262,6 +278,7 @@ const recordFields = {
   /** The owner's repair and alteration log: only on their own wardrobe. */
   repairs: Type.Optional(Type.Array(Repair)),
   agent: Type.Optional(AgentResource),
+  publicShareUrl: Type.Optional(PublicShareUrl),
 };
 
 export const Garment = Type.Object(
@@ -310,6 +327,7 @@ function recordOf(
   repairs: RepairEntry[] | undefined,
   agent: AgentLabel | null,
   cutoutsEnabled: boolean,
+  shareUrl: string | null,
 ) {
   return {
     id: garment.id,
@@ -354,23 +372,32 @@ function recordOf(
     },
     repairs,
     agent: toAgentResource(agent),
+    publicShareUrl: shareUrl,
   };
 }
 
 /**
  * The garment in full, from its page's reads, nulls kept: the owner's
  * records only where garmentContext read them (`own`: the owner of an
- * owned garment), so a grantee's answer cannot hold them. The API's
+ * owned garment), so a grantee's answer cannot hold them. `shareUrl` is
+ * the public link as the reader is shown it (garmentShareUrl). The API's
  * Garment (toGarmentResource) and MCP's get_garment.
  */
 export function garmentRecord(
   garment: GarmentDetail,
   context: GarmentContext,
   cutoutsEnabled: boolean,
+  shareUrl: string | null,
 ) {
   const { own } = context;
   return {
-    ...recordOf(garment, own?.repairs.entries, context.agent, cutoutsEnabled),
+    ...recordOf(
+      garment,
+      own?.repairs.entries,
+      context.agent,
+      cutoutsEnabled,
+      shareUrl,
+    ),
     capsules: context.capsules
       .filter((capsule) => capsule.member)
       .map(({ id, name }) => ({ id, name })),
@@ -383,18 +410,23 @@ export function toGarmentResource(
   garment: GarmentDetail,
   context: GarmentContext,
   cutoutsEnabled: boolean,
+  shareUrl: string | null,
 ): Garment {
-  return asResource(Garment, garmentRecord(garment, context, cutoutsEnabled));
+  return asResource(
+    Garment,
+    garmentRecord(garment, context, cutoutsEnabled, shareUrl),
+  );
 }
 
 /**
  * The feed's garment (garmentsByIds): the owner's records only where the
  * reader read them (`repairs`, null for a grantee's), so a grantee's
- * answer cannot hold them.
+ * answer cannot hold them; the public link only where they may manage it.
  */
 export function toSyncedGarment(
   garment: SyncedGarmentRow,
   cutoutsEnabled: boolean,
+  siteUrl: string,
 ): Static<typeof SyncedGarment> {
   return asResource(SyncedGarment, {
     ...recordOf(
@@ -402,6 +434,7 @@ export function toSyncedGarment(
       garment.repairs ?? undefined,
       garment.agent,
       cutoutsEnabled,
+      garmentShareUrl(garment.shareableId, garment.viewerManages, siteUrl),
     ),
     care:
       garment.repairs === null

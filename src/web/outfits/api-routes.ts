@@ -15,6 +15,7 @@ import {
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { actorOf } from '../sharing/access';
+import { PublicShare, publicShareUrl } from '../share/urls';
 import { API_PREFIX } from '../surface';
 import {
   editOutfit,
@@ -22,6 +23,7 @@ import {
   reactToProposal,
   removeOutfit,
   requireOutfitPage,
+  setOutfitPublicShare,
 } from './outfit-actions';
 import {
   NewOutfit,
@@ -141,6 +143,7 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           request.params.id,
           todayIn(config.timeZone, new Date()),
         ),
+        config.siteUrl,
       ),
   );
 
@@ -235,6 +238,60 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { id } = request.params;
       const actor = actorOf(request);
       await removeOutfit({ db, logger }, actor, id);
+      return reply.status(204).send(null);
+    },
+  );
+
+  // The page's Share and Stop sharing (#669, #959): one writer,
+  // setOutfitPublicShare, so both are idempotent as there.
+  app.put(
+    `${OUTFIT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'shareOutfit',
+        tags: ['outfits'],
+        summary: "Makes an outfit's public link",
+        description:
+          "Another's outfit is a 404 like an unknown id. An outfit shared already keeps its link, answered again; one shared after a stop gets a new one, never the old.",
+        params: OutfitParams,
+        response: apiResponses({ 200: PublicShare }),
+      },
+    },
+    async (request) => {
+      const { shareableId } = await setOutfitPublicShare(
+        { db, logger },
+        actorOf(request),
+        request.params.id,
+        true,
+      );
+      return {
+        publicShareUrl: publicShareUrl(config.siteUrl, 'outfit', shareableId),
+      };
+    },
+  );
+
+  app.delete(
+    `${OUTFIT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'stopSharingOutfit',
+        tags: ['outfits'],
+        summary: "Ends an outfit's public link",
+        description:
+          'Its page and preview image are a 404 from then on. An outfit not shared is answered the same: nothing to end.',
+        params: OutfitParams,
+        response: apiResponses({
+          204: Type.Null({ description: 'Not shared' }),
+        }),
+      },
+    },
+    async (request, reply) => {
+      await setOutfitPublicShare(
+        { db, logger },
+        actorOf(request),
+        request.params.id,
+        false,
+      );
       return reply.status(204).send(null);
     },
   );

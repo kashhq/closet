@@ -548,6 +548,8 @@ export interface SyncedOutfitRow {
   proposal: Omit<OutfitProposal, 'agent'> | null;
   /** The agent that made it over MCP (#682), null for a person's. */
   agent: AgentLabel | null;
+  /** The public link's id (/share), null while not shared (#669). */
+  shareableId: string | null;
 }
 
 /**
@@ -579,6 +581,7 @@ export function outfitsByIds(
         SyncedOutfitRow['proposal']
       >`${proposalSql({ agent: false })}`,
       agent: outfitAgentSql,
+      shareableId: outfit.shareableId,
     })
     .from(outfit)
     .where(inArray(outfit.id, [...ids]));

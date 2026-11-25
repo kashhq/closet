@@ -10,7 +10,7 @@ import type { EditedCutout } from '../files/photos';
 import { t } from '../i18n';
 import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
-import { setPublicShare } from '../share/queries';
+import { type ShareableIdAfter, setPublicShare } from '../share/queries';
 import type { Actor, AuthorizedWardrobe } from '../sharing/access';
 import {
   type AuthorizedGarment,
@@ -332,14 +332,16 @@ export async function tagGarment(
  * Share (`shared`) or Stop sharing a garment's public link (#669,
  * setPublicShare): owner and MANAGE, as the ⋯ menu's Share always was, so
  * a link a grantee minted shows on the owner's page with Stop. Answers the
- * link's id after the write.
+ * link's id after the write. Pages and the API (PUT and DELETE
+ * /garments/{id}/share) alike: a Share of a shared garment keeps its id, a
+ * Stop of an unshared one writes null again, so both are idempotent.
  */
-export async function setGarmentPublicShare(
+export async function setGarmentPublicShare<Shared extends boolean>(
   { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
-  shared: boolean,
-): Promise<AuthorizedWardrobe & { shareableId: string | null }> {
+  shared: Shared,
+): Promise<AuthorizedWardrobe & { shareableId: ShareableIdAfter<Shared> }> {
   const wardrobe = await garmentWardrobe(db, actor, address, 'manage');
   const written = await setPublicShare(
     db,

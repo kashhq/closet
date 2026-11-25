@@ -1,6 +1,8 @@
 import { t } from '../i18n';
 import { Icon } from '../layout/icon';
 import { copyButton, selectsOnTap } from '../page-contract';
+import type { ShareableKind } from './queries';
+import { publicShareUrl } from './urls';
 
 /**
  * A button that copies `text` to the clipboard and flashes green for a
@@ -54,16 +56,10 @@ export function CopyableText(props: {
  * Share and Stop sharing post, and the link's id, null while not shared.
  */
 export interface PublicShare {
-  type: 'garment' | 'outfit';
+  type: ShareableKind;
   shareableId: string | null;
   shareUrl: string;
   stopUrl: string;
-}
-
-/** A shared item's /share page (src/web/share/routes.tsx), on SITE_URL. */
-function publicLink(siteUrl: string, type: string, shareableId: string) {
-  const params = new URLSearchParams({ shareableId, type });
-  return `${siteUrl}/share?${params}`;
 }
 
 /**
@@ -87,7 +83,7 @@ export function ShareLinkButton(props: {
           'hx-confirm': t('publicShare.CONFIRM_START'),
         }
       : copyAndFlash(
-          publicLink(props.siteUrl, share.type, share.shareableId),
+          publicShareUrl(props.siteUrl, share.type, share.shareableId),
           resting,
         );
   return (
@@ -137,7 +133,7 @@ export function PublicSharePanel(props: {
       </div>
       <p class="text-muted text-sm">{t('publicShare.HINT')}</p>
       <CopyableText
-        value={publicLink(props.siteUrl, share.type, share.shareableId)}
+        value={publicShareUrl(props.siteUrl, share.type, share.shareableId)}
         size="sm"
         name={t('publicShare.LINK')}
         label={t('publicShare.COPY')}

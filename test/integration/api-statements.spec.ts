@@ -216,6 +216,9 @@ describe('API statements per route', () => {
           page: 'POST /wardrobe/:id/condition',
           body: { condition: 'needs_repair' },
         },
+        // The public link (#959): both one write, setGarmentPublicShare's.
+        { page: 'POST /wardrobe/:id/share', status: 200 },
+        { page: 'POST /wardrobe/:id/share/stop', status: 200 },
         {
           page: 'POST /wardrobe/:id/clone',
           status: 302,
@@ -346,6 +349,8 @@ describe('API statements per route', () => {
           body: { name: 'Renamed' },
         },
         { page: 'DELETE /outfits/:id' },
+        { page: 'POST /outfits/:id/share', status: 200 },
+        { page: 'POST /outfits/:id/share/stop', status: 200 },
         {
           page: 'POST /outfits/:id/love',
           given: 'proposal',

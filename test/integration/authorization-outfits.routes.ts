@@ -494,7 +494,8 @@ export const ROUTES: Route[] = [
       },
     }),
   ),
-  // The public link (#669): outfits are the owner's alone. No API twin yet (#959).
+  // The public link (#669): outfits are the owner's alone; its API twin PUT
+  // or DELETE .../share (#959).
   ...(['share', 'share/stop'] as const).map(
     (verb): Route => ({
       name: `POST /outfits/:id/${verb}`,
@@ -511,6 +512,13 @@ export const ROUTES: Route[] = [
         manager: 'notFound',
         viewer: 'notFound',
         stranger: 'notFound',
+      },
+      api: {
+        ok: verb === 'share' ? 200 : 204,
+        request: (f, q) => ({
+          method: verb === 'share' ? 'PUT' : 'DELETE',
+          url: `/api/v1/outfits/${f.outfitId}/share${q}`,
+        }),
       },
     }),
   ),
