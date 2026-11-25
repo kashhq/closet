@@ -9,6 +9,7 @@ import {
   type Http2SecureServer,
   type Http2ServerRequest,
   type Http2ServerResponse,
+  type Http2Session,
 } from 'node:http2';
 import { createServer as createHttpsServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
@@ -138,12 +139,19 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
-/** An h2 server has no closeAllConnections: its open sessions end with it. */
+/**
+ * An h2 server has no closeAllConnections: its open sessions end with it,
+ * destroyed before their sockets. Destroying only the sockets leaves each
+ * session for the GC, and one collected undestroyed aborts the worker
+ * (Http2Session::~Http2Session, docs/decisions.md 2026-11-22).
+ */
 function closeSecureServer(
   server: Server | Http2SecureServer,
+  sessions: Set<Http2Session>,
   sockets: Set<TLSSocket>,
 ): Promise<void> {
   return new Promise((done) => {
+    for (const session of sessions) session.destroy();
     for (const socket of sockets) socket.destroy();
     server.close(() => done());
   });
@@ -203,6 +211,12 @@ export async function startLinkSites({
     secureSockets.add(socket);
     socket.once('close', () => secureSockets.delete(socket));
   });
+  // Only the h2 server emits 'session'.
+  const sessions = new Set<Http2Session>();
+  secureServer.on('session', (session: Http2Session) => {
+    sessions.add(session);
+    session.once('close', () => sessions.delete(session));
+  });
   const [port, securePort] = await Promise.all([
     listenOnPublicIp(server),
     listenOnPublicIp(secureServer),
@@ -222,7 +236,7 @@ export async function startLinkSites({
     close: async () => {
       await Promise.all([
         closeServer(server),
-        closeSecureServer(secureServer, secureSockets),
+        closeSecureServer(secureServer, sessions, secureSockets),
       ]);
     },
   };
