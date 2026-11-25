@@ -363,7 +363,7 @@ Commit `c2ae39c`, persona `demo`, 2026-11-19T22:57:55.390Z. 20 runs per step aft
 
 | Rule | Impact | Nodes | Pages |
 | --- | --- | --: | --- |
-| `target < 44 px` | measure | 71 | #159 Grid (2), #159 Search (1), #159 Filters: category, colour, warmth (5), #159 Care filters: needs a wash, attention (4), #159 Show archived (3), #159 Capsule filter (2), #159 Select mode (1), #159 Laundry tab (1), #159 Capsules tab (1), #161 Add form (1), #161 Edit form (1), #161 Clone form (1), #163 Styling (8), #163 Style this (?with=) (7), #163 Edit an outfit (?outfit=) (7), #163 For a planned evening (?for=) (8), #167 Wishlist (4), #167 Style profile (1), #170 Shared wardrobe (2), #170 Shared capsules (1), #170 Shared wishlist (1), #170 Styling a shared wardrobe (8), #171 Sizes (1) |
+| `target < 44 px` | measure | 173 | #158 Today (2), #159 Grid (3), #159 Search (2), #159 Filters: category, colour, warmth (6), #159 Care filters: needs a wash, attention (5), #159 Show archived (4), #159 Capsule filter (3), #159 Select mode (1), #159 Laundry tab (2), #159 Capsules tab (2), #159 A capsule (2), #160 Garment page (1), #161 Add form (2), #161 Edit form (11), #161 Clone form (11), #163 Styling (8), #163 Style this (?with=) (7), #163 Edit an outfit (?outfit=) (7), #163 For a planned evening (?for=) (8), #165 + Plan sheet (2), #166 Add-an-outfit page (3), #166 Ideas for the trip (1), #167 Wishlist (5), #167 Wishlist form (40), #167 Style profile (18), #168 Ideas for a planned evening (1), #170 Shared wardrobe (3), #170 Shared capsules (2), #170 Shared wishlist (2), #170 Styling a shared wardrobe (8), #171 Sizes (1) |
 
 ## Not walked
 
