@@ -125,6 +125,12 @@ export interface WeatherStub {
    * machine) finds the refresh already saved (#184).
    */
   hold(holding: boolean): void;
+  /**
+   * From now on, answer the forecast `degrees` °C colder at every hour (a
+   * cold snap, #768); 0 restores it. The app caches a location's answer, so
+   * set it before that location's first read.
+   */
+  chill(degrees: number): void;
   close(): Promise<void>;
 }
 
@@ -186,6 +192,7 @@ function archiveAnswer(first: string, last: string, timeZone: string) {
 export async function startWeatherStub(): Promise<WeatherStub> {
   const hits: string[] = [];
   let failing = false;
+  let chill = 0;
   // The answers hold(true) keeps back, sent by hold(false).
   let held: (() => void)[] | null = null;
   // Ten years of simulated days take a moment; a range is computed once.
@@ -196,9 +203,16 @@ export async function startWeatherStub(): Promise<WeatherStub> {
       const timeZone = params.get('timezone') ?? 'GMT';
       const count = Number(params.get('forecast_days') ?? 7);
       const today = todayIn(timeZone, new Date());
-      const days = weatherFor(WEATHER_KEY, today, count).map((w) =>
-        forecastDayOf(WEATHER_KEY, w),
-      );
+      const days = weatherFor(WEATHER_KEY, today, count).map((w) => {
+        const day = forecastDayOf(WEATHER_KEY, w);
+        return {
+          ...day,
+          hours: day.hours.map((h) => ({
+            ...h,
+            feelsLike: h.feelsLike - chill,
+          })),
+        };
+      });
       return forecastAnswer(days, timeZone);
     },
     '/v1/archive': (params) => {
@@ -256,6 +270,9 @@ export async function startWeatherStub(): Promise<WeatherStub> {
     hits,
     fail(value) {
       failing = value;
+    },
+    chill(degrees) {
+      chill = degrees;
     },
     hold(holding) {
       const waiting = held ?? [];

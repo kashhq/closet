@@ -4,12 +4,13 @@ import {
   compareOccasions,
   DEFAULT_OCCASION,
   isOccasion,
+  lacksActivewear,
   OCCASION_HINTS,
   OCCASIONS,
 } from './occasions';
 import type { DayForecast } from '../weather/forecast';
 import { isActivewearFor, matchGarment, weatherNeeds } from '../weather/match';
-import { FORMALITIES } from './properties';
+import { FORMALITIES, purposeOf } from './properties';
 
 describe('occasions', () => {
   it('are the six of the plan, all day first and the default', () => {
@@ -96,6 +97,15 @@ describe('activewearGap (#647)', () => {
     expect(activewearGap(active, [shorts, shoes], [shorts, shoes])).toBe(
       undefined,
     );
+  });
+});
+
+describe('a sports bra (#765)', () => {
+  const bra = { category: 'tops', type: 'sports-top' };
+
+  it('is activewear for a demand on tops', () => {
+    expect(purposeOf(bra.category, bra.type)).toBe('active');
+    expect(lacksActivewear({ roles: ['top'] }, [bra])).toBe(false);
   });
 });
 

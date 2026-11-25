@@ -73,13 +73,33 @@ describe('guessKind', () => {
     ['Flannel Pajama Pants', 'bottoms', 'sleepwear'],
     ['Running Shorts 5"', 'bottoms', 'running-shorts'],
     ['DRY-EX Running Tee', 'tops', 'sports-top'],
-    // Sleeveless sports tops are tanks, not short-sleeved sports tops (#765).
-    ['High-Support Sports Bra', 'tops', 'tank'],
-    ['Seamless Gym Tank', 'tops', 'tank'],
-    ['Running Tank Top', 'tops', 'tank'],
-    ['Race Singlet', 'tops', 'tank'],
   ])('%s is %s / %s', (text, category, type) => {
     expect(guessKind(text)).toEqual({ category, type });
+  });
+
+  // A sports top keeps its type (and its active purpose); the phrase names
+  // the sleeve where it states one (#765).
+  it.each([
+    [
+      'High-Support Sports Bra',
+      { category: 'tops', type: 'sports-top', sleeve: 'sleeveless' },
+    ],
+    [
+      'Seamless Gym Tank',
+      { category: 'tops', type: 'sports-top', sleeve: 'sleeveless' },
+    ],
+    [
+      'Running Tank Top',
+      { category: 'tops', type: 'sports-top', sleeve: 'sleeveless' },
+    ],
+    [
+      'Race Singlet',
+      { category: 'tops', type: 'sports-top', sleeve: 'sleeveless' },
+    ],
+    ['Running Tee', { category: 'tops', type: 'sports-top' }],
+    ['Ribbed Tank', { category: 'tops', type: 'tank' }],
+  ])('%s is %j', (text, guess) => {
+    expect(guessKind(text)).toEqual(guess);
   });
 
   it.each(['Gift Card', 'Acme Supply', ''])('finds nothing in %j', (text) => {

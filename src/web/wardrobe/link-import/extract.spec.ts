@@ -23,6 +23,7 @@ const NOTHING: ExtractedProduct = {
   materials: [],
   fabricWeight: null,
   warmth: null,
+  sleeve: null,
   images: [],
 };
 
@@ -48,6 +49,7 @@ describe('extractProduct', () => {
       fabricWeight: 240,
       // A stated weight leaves warmth to the form's presets.
       warmth: null,
+      sleeve: null,
       images: [
         'https://acme-supply.test/cdn/shop/files/pocket-tee-navy-front.jpg?v=1712345678&width=1920',
         'https://acme-supply.test/cdn/shop/files/pocket-tee-navy-back.jpg?v=1712345678&width=1920',
@@ -72,6 +74,7 @@ describe('extractProduct', () => {
       materials: ['cotton', 'denim'],
       fabricWeight: 475,
       warmth: null,
+      sleeve: null,
       images: [
         'https://irondenim.test/wp-content/uploads/2026/03/selvedge-jeans.jpg',
       ],
@@ -93,6 +96,7 @@ describe('extractProduct', () => {
       materials: ['merino'],
       fabricWeight: null,
       warmth: null,
+      sleeve: null,
       images: [
         'https://cdn.knitwear.test/assets/images/merino-crew-charcoal.jpg',
         'https://cdn.knitwear.test/assets/images/merino-crew-detail.jpg',

@@ -20,6 +20,7 @@ const product = (fields: Partial<ExtractedProduct>): ExtractedProduct => ({
   materials: [],
   fabricWeight: null,
   warmth: null,
+  sleeve: null,
   images: [],
   ...fields,
 });
@@ -106,6 +107,30 @@ describe('importedForm', () => {
       LINK,
     );
     expect(values.properties.warmth).toBe('1');
+  });
+
+  it.each([
+    [
+      'a named sleeve over the type preset',
+      'sleeveless' as const,
+      'sleeveless',
+    ],
+    ['the type preset when the page named none', null, 'short'],
+  ])('a sports top takes %s (#765)', (_label, sleeve, expected) => {
+    const { values } = importedForm(
+      {
+        kind: 'page',
+        product: product({
+          category: GarmentCategory.TOPS,
+          type: 'sports-top',
+          sleeve,
+        }),
+        photo: undefined,
+        choices: [],
+      },
+      LINK,
+    );
+    expect(values.properties.sleeve).toBe(expected);
   });
 
   it('takes a price without a currency as dollars and leaves any other currency', () => {
