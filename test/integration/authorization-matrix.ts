@@ -26,6 +26,7 @@ import {
 import { LOGIN_PATH } from '../../src/web/auth/login-path';
 import { addBrandSize } from '../../src/web/sizes/queries';
 import { createInvite } from '../../src/web/sharing/queries';
+import { setPublicShare } from '../../src/web/share/queries';
 import { addRepair } from '../../src/web/wardrobe/repairs';
 import { recordOrderEmail } from '../../src/web/wardrobe/order-mail/queries';
 import { addDays, type IsoDate } from '../../src/calendar-date';
@@ -152,6 +153,9 @@ export interface Fixture {
   capsuleName: string;
   outfitId: number;
   outfitName: string;
+  /** The garment's and the outfit's public share ids (#669), shared in the fixture. */
+  garmentShareId: string;
+  outfitShareId: string;
   /** An empty outfit of the owner's, on no day: what the entry's Change picks. */
   spareOutfitId: number;
   /** One of Muse's outfits (#335) waiting on the owner, and one set aside. */
@@ -162,7 +166,6 @@ export interface Fixture {
   /** The entry's outfit selfie (#19), and its photo's names. */
   selfieId: number;
   selfieFileName: string;
-  selfieShareableId: string;
   /** A saved look of the owner's (#22) with a photo, and its title and photo's name. */
   inspirationId: number;
   inspirationTitle: string;
@@ -839,6 +842,20 @@ export function describeMatrix(
           .returning({ id: weekPlan.id }),
       );
       const inviteToken = await createInviteLink('VIEW');
+      const garmentShare = await setPublicShare(
+        t.db,
+        'garment',
+        garmentId,
+        t.owner.id,
+        true,
+      );
+      const outfitShare = await setPublicShare(
+        t.db,
+        'outfit',
+        outfitId,
+        t.owner.id,
+        true,
+      );
       const [{ id: inviteShareId }] = await t.db
         .select({ id: wardrobeShare.id })
         .from(wardrobeShare)
@@ -855,13 +872,14 @@ export function describeMatrix(
         capsuleName,
         outfitId,
         outfitName,
+        garmentShareId: garmentShare!.shareableId!,
+        outfitShareId: outfitShare!.shareableId!,
         spareOutfitId,
         museOutfitId,
         museDeclinedId,
         entryId: entry.id,
         selfieId: ownSelfie.id,
         selfieFileName: ownSelfie.fileName,
-        selfieShareableId: ownSelfie.shareableId,
         inspirationId: look.id,
         inspirationTitle,
         inspirationFileName: look.fileName,

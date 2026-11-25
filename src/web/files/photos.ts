@@ -1441,7 +1441,6 @@ function squarePadding(width: number, height: number) {
 function newPhotoRow(fileName: string, userId: number): NewPhotoRow {
   return {
     fileName,
-    shareableId: randomUUID(),
     createdOn: new Date().toISOString(),
     createdById: userId,
   };

@@ -217,7 +217,6 @@ describe('the Wardrobe header and tabs', () => {
           .insert(file)
           .values({
             fileName: `${randomUUID()}.webp`,
-            shareableId: randomUUID(),
             createdOn: new Date().toISOString(),
             createdById: ownerId,
             cutoutStatus: status,

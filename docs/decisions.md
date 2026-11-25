@@ -1763,6 +1763,12 @@ Why: the boot found the owner by `ORDER_MAIL_OWNER`'s email every time, so after
 Decision: `order_mail_owner` (0071), one row, `user_id` nullable with ON DELETE SET NULL: a deleted owner leaves a null row, never "no row", so no boot re-adopts. With no row the boot adopts the email's account in one statement (`on conflict do nothing`, then a re-read), only when `order_email` is empty or `order_item` is that account's alone (a deletion keeps the emails, cascades the items). The address never decides identity after; a mismatch is one warning. The owner moves only by `npm run order-mail:bind-owner -- --confirm` and a restart; the poll checks the row still names its id. Rejected: a flag on `user` (deleted with the account) and rebinding on a changed `ORDER_MAIL_OWNER` (guesses intent).
 Consequence: a missing owner stays what 706 made it: the order mail off, the optional `order_mail_owner` check down with readiness 200 (as `cutout_queue` and `trusted_proxies`), plus an `order_mail_owner_missing` gauge (1 missing). Emails with no item are refused too: that is exactly what a deleted owner leaves, and nothing dates an account (`order_email` names no user, `user` has no `created_at`; adding one now would leave every pre-0071 account undated, the only ones that can lack a row), so such an install runs the CLI once.
 
+## 2026-11-25 — file.shareable_id is dropped: a photo has no public id (#960)
+
+Why: since #669 the share preview is keyed by the shared garment's or outfit's own `shareable_id`; the file column was minted on every upload and read by nothing.
+Decision: migration 0072 drops `file_shareable_id_unique` and the column; `NewPhotoRow` and `newPhotoRow` lose the field. `/file/watermark/:id` resolves only a shared item's id.
+Consequence: rolling back is the down steps in docs/operations.md (Rolling back past 0072): a nullable column is enough for the older image. Fixtures that insert into `file` take no share id.
+
 ## 2026-11-25 — The API's public link is absolute on SITE_URL and shown only to whoever may stop it (#959)
 
 Why: every other URL in a resource (photos, `Location`) is relative because the client fetches it from the server it talks to; a share link is sent on to someone else, and a device reaching the server on a tailnet or LAN address would resolve a relative one to a host the recipient cannot open. The page shows the link only in its "Shared publicly" panel, to the owner and a MANAGE grantee.

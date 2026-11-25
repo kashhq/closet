@@ -454,9 +454,6 @@ export const file = pgTable(
   'file',
   {
     id: serial('id').primaryKey(),
-    // A random UUID set by the app on insert. Nothing reads it since the
-    // share preview is addressed by the shared item's id (#669); #960 drops it.
-    shareableId: varchar('shareable_id', { length: 255 }).notNull(),
     fileName: varchar('file_name', { length: 255 }).notNull(),
     // An ISO timestamp as text, as MikroORM wrote it.
     createdOn: varchar('created_on', { length: 255 }).notNull(),
@@ -524,7 +521,6 @@ export const file = pgTable(
       'file_variant_key_check',
       sql`${table.variantKey} is null or (${table.cutoutStatus} in ('ready', 'edited') and ${table.variantKey} ~ '^[0-9a-f]{12}$')`,
     ),
-    uniqueIndex('file_shareable_id_unique').on(table.shareableId),
     // What the photo foreign keys of garment, selfie and inspiration point
     // at: a row shows only its owner's photo (#703).
     unique('file_id_created_by_id_unique').on(table.id, table.createdById),

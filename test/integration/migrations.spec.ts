@@ -56,7 +56,6 @@ describe('migrations', () => {
     expect(rows.map((row) => row.name)).toEqual(
       expect.arrayContaining([
         // Share links and the watermark route look rows up by these.
-        'file_shareable_id_unique',
         'garment_shareable_id_unique',
         'outfit_shareable_id_unique',
         'file_created_by_id_index',
@@ -482,7 +481,6 @@ describe('migrations', () => {
     const photoOf = (tx: Queryable) =>
       insertPhotoRow(tx, {
         fileName: `${randomUUID()}.webp`,
-        shareableId: randomUUID(),
         createdOn: new Date().toISOString(),
         createdById: grantee,
       });

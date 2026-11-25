@@ -7,7 +7,6 @@ import {
   createGarment,
   jpegPhoto,
   photoFileName,
-  photoRow,
   pngCutout,
   uploadPhoto,
 } from './garments';
@@ -91,9 +90,7 @@ describe('/file route and request logging', () => {
     );
   });
 
-  it("serves no share preview by a photo's own share id: only a shared garment's or outfit's is one (#669)", async () => {
-    const row = await photoRow(t, photoName);
-    expect(await status(`/file/watermark/${row!.shareableId}`)).toBe(404);
+  it("serves no share preview for an id that is no shared garment's or outfit's (#669)", async () => {
     expect(await status(`/file/watermark/${randomUUID()}`)).toBe(404);
   });
 
