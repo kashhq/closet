@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check install
+.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check upstream-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -93,6 +93,7 @@ help:
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
 	@echo "make secrets-staged   — the same scan over the staged paths only (the pre-commit hook's half)"
 	@echo "make ci-guards-staged — ci-guards with devkit-check reading the index (the pre-commit hook's half)"
+	@echo "make upstream-check   — fail while any substantive line in the tree was written by someone other than the owner (scripts/ci/upstream_lines.sh; minutes, in no tier)"
 	@echo "make hooks-check      — fail unless core.hooksPath is .githooks and both hooks are executable"
 
 ci-deps:
@@ -302,6 +303,11 @@ lg-check-staged:
 # drizzle/meta/_journal.json is not an edit. Stdlib only, like layer-check.
 migration-check:
 	python3 -I devkit/bin/migration_check.py --versions drizzle --kind drizzle
+
+# The MIT licence holds only while the owner wrote every line (#1225): blame over the whole tree,
+# which takes minutes, so it is in no tier. Run it on a change that brings in outside code.
+upstream-check:
+	scripts/ci/upstream_lines.sh
 
 # Committed credentials (scorecard T11): devkit's pattern scan over the tracked tree. Shell only,
 # so it runs before npm ci.
