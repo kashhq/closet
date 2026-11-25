@@ -277,16 +277,12 @@ describe('wardrobe', () => {
       // through its include), never its own request, whose hidden filters
       // are the no-script GET's and would go twice.
       const search = /<form\b[^>]*id="search-form"[^>]*>/.exec(html)![0];
-      expect(search).toContain(
-        `onsubmit="const filters = document.getElementById('filter-form'); if (window.htmx && filters) { event.preventDefault(); filters.requestSubmit(); }"`,
-      );
+      expect(search).toContain('data-submits-via="filter-form"');
       expect(search).toContain('hx-boost="false"');
       expect(search).not.toContain('hx-get');
       // Each chip leaves its own filter out of the form's; without the
       // form its href, every other filter in it, is followed natively.
-      expect(html).toContain(
-        `onclick="if (!document.getElementById('filter-form')) event.stopImmediatePropagation();"`,
-      );
+      expect(html).toContain('data-native-without="filter-form"');
       expect(html).toContain(
         `href="/wardrobe?keyword=shirt&color=blue" ${fromFilters} hx-params="not category"`,
       );

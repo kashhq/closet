@@ -239,7 +239,6 @@ describe('insights over the seed personas', () => {
       'recap-colours',
       'recap-pair',
       'recap-export',
-      'recap-card-data',
     ]) {
       expect(html, id).toContain(`id="${id}"`);
     }

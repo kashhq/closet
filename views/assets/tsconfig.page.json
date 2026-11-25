@@ -20,11 +20,17 @@
       "age-label": ["./page/age-label.ts"],
       "freshness": ["./page/freshness.ts"],
       "locate": ["./page/locate.ts"],
+      "mask-editor": ["./page/mask-editor.ts"],
       "push": ["./page/push.ts"],
       "search-shortcut": ["./page/search-shortcut.ts"],
       "share-saved": ["./page/share-saved.ts"],
       "single-flight": ["./page/single-flight.ts"],
       "toast": ["../../public/js/toast.js"],
+      "photo-input": ["../../public/js/photo-input.js"],
+      "recap-export": ["../../public/js/recap-export.js"],
+      "share-confirm": ["../../public/js/share-confirm.js"],
+      "snap-strip": ["../../public/js/snap-strip.js"],
+      "styling": ["../../public/js/styling.js"],
       "confirm-sheet": ["../../public/js/confirm-sheet.js"]
     }
   },

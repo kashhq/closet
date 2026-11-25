@@ -1,5 +1,4 @@
 import type { Child } from 'hono/jsx';
-import { jsonForScript } from '../html';
 import { BrandMark } from '../layout/brand-mark';
 import { PageShell } from '../layout/page-shell';
 import type { ViewContext } from '../view-context';
@@ -38,6 +37,7 @@ export function AccountShell(props: {
         preview && {
           ogTitle: preview.ogTitle,
           ogDescription: preview.description,
+          webPage: true,
         }
       }
       bar={{
@@ -46,38 +46,8 @@ export function AccountShell(props: {
         returnTo: props.returnTo,
       }}
     >
-      {preview && (
-        <WebPageData
-          ctx={props.ctx}
-          name={preview.ogTitle}
-          description={preview.description}
-        />
-      )}
       {!props.ctx.user && <BrandMark ctx={props.ctx} />}
       {props.children}
     </PageShell>
-  );
-}
-
-/** schema.org description of a public entry page, for link previews. */
-function WebPageData(props: {
-  ctx: ViewContext;
-  name: string;
-  description: string;
-}) {
-  const data = {
-    '@context': 'https://schema.org',
-    '@type': 'WebPage',
-    name: props.name,
-    description: props.description,
-    isPartOf: { '@id': `${props.ctx.siteUrl}/#website` },
-  };
-  return (
-    <script
-      type="application/ld+json"
-      // Structured data is JSON by definition; jsonForScript keeps it
-      // from closing the element.
-      dangerouslySetInnerHTML={{ __html: jsonForScript(data) }}
-    />
   );
 }

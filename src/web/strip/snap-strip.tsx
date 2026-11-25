@@ -1,6 +1,7 @@
 import type { Child } from 'hono/jsx';
 import { t } from '../i18n';
 import { IDEA_GRID } from '../layout/columns';
+import { pageModule } from '../page-contract';
 
 /**
  * The snap strip: a horizontal scroll-snap carousel whose centred item, with
@@ -246,21 +247,13 @@ export function SnapStrip(
 }
 
 /**
- * The inline module a page with strips renders once (Styling's is its own,
- * `initStyling`): a boosted navigation brings new
- * strips and a `<script src>` module runs only once, so the page asks for
- * the observer on every visit. A fixed string, nothing interpolated.
+ * The marker a page with strips renders once (Styling's is its own,
+ * `initStyling`): a boosted navigation brings new strips and a module runs
+ * only once a document, so page-mount.ts asks for the observer on every
+ * visit the marker arrives with.
  */
 export function SnapStripsInit() {
-  return (
-    <script
-      type="module"
-      dangerouslySetInnerHTML={{
-        __html: `import { initSnapStrips } from 'snap-strip';
-initSnapStrips(document);`,
-      }}
-    />
-  );
+  return <template {...pageModule('snap-strips')} />;
 }
 
 /**

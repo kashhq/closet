@@ -434,21 +434,18 @@ describe('POST /wardrobe/:id/photo/rotate', () => {
     expect(html).toMatch(/name="direction" value="right"[^>]*>.*Rotate right/s);
     expectNativePostForms(res);
     const reopen =
-      "openSheet(document.getElementById('garment-photo-sheet'), null);";
-    expect(res.body).not.toContain(reopen);
+      /<dialog id="garment-photo-sheet"[^>]*data-page-module="open-sheet"/;
+    expect(res.body).not.toMatch(reopen);
 
-    // Where a rotate lands: the sheet opens again for the next turn, after
-    // the dialog it opens, and the marker is stripped from the address.
+    // Where a rotate lands: the sheet opens again for the next turn
+    // (page-mount.ts), and the marker is stripped from the address.
     const landed = await t.inject({
       method: 'GET',
       url: `/wardrobe/${id}?photoRotated=1`,
     });
     const body = unescapeHtml(landed.body);
-    expect(body).toContain(reopen);
-    expect(body.indexOf(reopen)).toBeGreaterThan(
-      body.indexOf('id="garment-photo-sheet"'),
-    );
-    expect(body).toContain('"photoRotated"');
+    expect(body).toMatch(reopen);
+    expect(body).toMatch(/data-strip-flags="[^"]*\bphotoRotated\b/);
   });
 
   describe('wardrobe shares', () => {

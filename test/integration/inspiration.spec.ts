@@ -395,9 +395,7 @@ describe('inspiration', () => {
       url: String(saved.headers.location),
     });
     expect(page.body).toContain('href="https://shop.test/look?a=1"');
-    expect(page.body).toContain(
-      "import { forgetSavedShare } from 'share-saved';",
-    );
+    expect(page.body).toContain('<template data-page-module="share-saved">');
     const blank = await post({ url: '', title: '' });
     expect(await lookRow(lookIdOf(blank.headers.location))).toMatchObject({
       sourceUrl: null,
@@ -448,7 +446,7 @@ describe('inspiration', () => {
       body.indexOf('type="file"'),
     );
     expect(body).toContain('data-stash-cache="shares-v1"');
-    expect(body).toContain("import { confirmShare } from 'share-confirm';");
+    expect(body).toMatch(/id="share-confirm" data-page-module="share-confirm"/);
     expect(body).toContain(text('inspiration.SAVE_SHARED'));
   });
 

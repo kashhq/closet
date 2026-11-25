@@ -99,6 +99,10 @@ export const GridQuery = Type.Object({
   // One-shot flags from select mode's verbs' redirects (the toast).
   bulkUpdated: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkSkipped: Type.Optional(Type.Integer({ minimum: 0 })),
+  // Mark washed's other skips (#819): wishlist items, and ids that are no
+  // garment of the owner's.
+  bulkWishlist: Type.Optional(Type.Integer({ minimum: 0 })),
+  bulkUnseen: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkArchived: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkWashed: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkAdded: Type.Optional(Type.Integer({ minimum: 0 })),

@@ -5,12 +5,7 @@ import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
 import type { AppBarProps } from '../layout/app-bar';
 import type { LinkTabsProps } from '../layout/link-tabs';
 import { Sheet, sheetOpener } from '../layout/sheet';
-import {
-  CameraIcon,
-  PHOTO_ACCEPT,
-  PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
-} from '../layout/parts';
+import { CameraIcon, PHOTO_ACCEPT, PhotoLibraryIcon } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import { PermissionBadge } from '../sharing/pages';
 import { SHARING_PATH } from '../sharing/urls';
@@ -26,7 +21,7 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from './urls';
-import { needsNetwork } from '../page-contract';
+import { needsNetwork, photoPick } from '../page-contract';
 import { Icon } from '../layout/icon';
 
 /**
@@ -343,7 +338,7 @@ function AddGroup(props: { title: string; children: Child }) {
  * The sheet's camera or library row: its file input's label, joined to its
  * own form (PhotoForms) through the `form` attribute, since a form inside
  * a daisyUI menu item loses the item's styling. Choosing a photo prepares
- * it on the phone and submits (PREPARE_AND_SUBMIT_PHOTO). The camera has
+ * it on the phone and submits (`photoPick`). The camera has
  * an input of its own, as on the garment page's photo sheet: some
  * Chrome/Android versions drop the Camera option from a library input's
  * chooser. The library takes several photos at once (#200): each is
@@ -367,7 +362,7 @@ function PhotoItem(props: { source: 'camera' | 'library' }) {
           capture={camera ? 'environment' : undefined}
           multiple={!camera}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </li>

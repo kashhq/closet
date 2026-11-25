@@ -4,6 +4,7 @@ import { inspirationPhotoUrl } from '../files/image-url';
 import { FormField, inputAttributes } from '../form-field';
 import { t } from '../i18n';
 import { PageShell } from '../layout/page-shell';
+import { pageModule } from '../page-contract';
 import type { ViewContext } from '../view-context';
 import { REFUSALS } from '../wardrobe/link-import/import';
 import { linkHost, lookName } from './look-name';
@@ -24,13 +25,6 @@ import {
   recreateLookUrl,
 } from './urls';
 import type { UnreadReason } from './writes';
-
-// views/assets/page/share-saved.ts: a share confirmation's Save lands here, so the
-// shared photo it posted leaves the device now that it is saved. An inline
-// module, so it runs again on a page a boosted navigation brings. A fixed
-// string with nothing interpolated.
-const FORGET_SAVED_SHARE = `import { forgetSavedShare } from 'share-saved';
-forgetSavedShare();`;
 
 /**
  * GET /inspiration/:id, a saved look's page (#22): its photo (or the way to
@@ -155,10 +149,10 @@ export function InspirationPage(props: {
           {t('inspiration.DELETE')}
         </button>
       </PostForm>
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: FORGET_SAVED_SHARE }}
-      />
+      {/* views/assets/page/share-saved.ts, on every visit (page-mount.ts): a
+          share confirmation's Save lands here, so the shared photo it posted
+          leaves the device now that it is saved. */}
+      <template {...pageModule('share-saved')} />
     </PageShell>
   );
 }

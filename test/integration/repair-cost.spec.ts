@@ -233,9 +233,7 @@ describe('repair costs in cost per wear', () => {
       expect(best).toContain('$12.00 a wear · $120.00 over 10 days');
       expect(best).toContain('counting every wear and repair up to');
       const island =
-        /<script type="application\/json" id="recap-card-data">([^<]*)<\/script>/.exec(
-          html,
-        );
+        /data-card="(\{.*?\})" data-page-module="recap-export"/s.exec(html);
       const card = JSON.parse(island![1]) as {
         bestValue: { garment: { name: string; detail: string } } | null;
       };

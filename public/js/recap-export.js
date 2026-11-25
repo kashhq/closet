@@ -1,7 +1,7 @@
 /**
  * The year in review's "Save image" (#26, docs/plans/2026-09-28-yearly-recap.md,
  * src/web/insights/recap-page.tsx): draws the year's card on a canvas from
- * the page's data island (#recap-card-data, every string already in the
+ * the button's `data-card` (JSON, every string already in the
  * catalog's words) and hands the PNG to the share sheet where the browser
  * shares files (iOS Safari 15+, Android: "Save Image" puts it in Photos), or
  * downloads it.
@@ -19,10 +19,10 @@
  * button (aria-live, so it is read out) and leaves the button enabled: a tap
  * draws it again, and once it exists the next tap shares it.
  *
- * Evaluated once per document: the page's inline module calls
- * prepareRecapExport on every visit a boosted navigation brings, and
- * htmx:load covers a history restore, whose snapshot has the button but not
- * its listener. Preparing a button twice is harmless.
+ * Evaluated once per document: page-mount.ts calls prepareRecapExport on
+ * every visit a load, a boosted navigation or a history restore brings
+ * (a restored snapshot has the button but not its listener). Preparing a
+ * button twice is harmless.
  */
 
 const WIDTH = 1080;
@@ -37,10 +37,9 @@ const prepared = new WeakSet();
 /** @param {HTMLButtonElement | null} button */
 export function prepareRecapExport(button) {
   if (!button || prepared.has(button)) return;
-  const island = document.getElementById('recap-card-data');
-  if (!island) return;
+  if (!button.dataset.card) return;
   prepared.add(button);
-  const data = JSON.parse(island.textContent ?? '{}');
+  const data = JSON.parse(button.dataset.card);
   const note = document.getElementById('recap-export-note');
   const hint = note?.textContent ?? '';
 
@@ -364,13 +363,3 @@ function roundedRect(ctx, x, y, width, height, radius) {
   ctx.arcTo(x, y, x + width, y, radius);
   ctx.closePath();
 }
-
-document.addEventListener('htmx:load', (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  prepareRecapExport(
-    target.matches('#recap-export')
-      ? target
-      : target.querySelector('#recap-export'),
-  );
-});

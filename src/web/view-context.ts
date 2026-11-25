@@ -36,6 +36,11 @@ export interface ViewContext {
   release: string;
   /** `?v=` on every first-party static URL; see src/build-info.ts. */
   appVersion: string;
+  /**
+   * The importmap's script text, the layout's one inline script: the same
+   * string the CSP hashes (app.ts makes it once, `importMapScript`; #672).
+   */
+  importMap: string;
   /** APP_TIMEZONE: the outbox dates a queued tap in it (#178, AppStatus). */
   timeZone: string;
   canonicalUrl: string;
@@ -74,6 +79,8 @@ export interface ViewContextConfig {
   /** BuildInfo.release and BuildInfo.assetVersion. */
   release: string;
   assetVersion: string;
+  /** The importmap's text for `assetVersion`, made once by createApp (ViewContext.importMap). */
+  importMap: string;
   timeZone: string;
 }
 
@@ -107,6 +114,7 @@ export function createViewContextBuilder(config: ViewContextConfig) {
         auth?.user.id === config.orderMailOwnerId,
       release: config.release,
       appVersion: config.assetVersion,
+      importMap: config.importMap,
       timeZone: config.timeZone,
       canonicalUrl,
       ogUrl: canonicalUrl,

@@ -158,6 +158,8 @@ function bulkOutcome(query: GridQuery): BulkOutcome | undefined {
       verb: 'wash',
       count: query.bulkWashed,
       skipped: query.bulkSkipped ?? 0,
+      wishlist: query.bulkWishlist ?? 0,
+      unseen: query.bulkUnseen ?? 0,
     };
   }
   if (query.bulkAdded !== undefined) {
@@ -450,10 +452,9 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   // Mark washed: the owner's own record (wears and washes are never a
   // grantee's), today, as the laundry's batch (washGarments). The closet's
   // garments only: Select all on "Include archived" must not wash the archive
-  // (#816; a garment's own page still may), and the toast's skipped are those
-  // archived, never every id not washed (#819): one deleted in another tab,
-  // or a hand-built post's wishlist, foreign or repeated id, is not
-  // "archived". Not queued offline like the laundry's: "Select all" is
+  // (#816; a garment's own page still may), and the toast names each skip by
+  // its reason (#819): one deleted in another tab, or a hand-built post's
+  // wishlist or foreign id, is not "archived". Not queued offline like the laundry's: "Select all" is
   // resolved here, so the verbs need the server (data-needs-network on the
   // bar).
   app.post(
@@ -474,6 +475,9 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         backToSelection(viewOwner, selection.search, selection, {
           bulkWashed: washed.length,
           bulkSkipped: skipped.archived,
+          // Only when there are any: a hand-built post's, or a tab's stale selection.
+          ...(skipped.wishlist > 0 && { bulkWishlist: skipped.wishlist }),
+          ...(skipped.unseen > 0 && { bulkUnseen: skipped.unseen }),
         }),
         303,
       );

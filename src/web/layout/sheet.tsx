@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { t } from '../i18n';
+import { closesSheet, pageModule, resetsOnClose } from '../page-contract';
 import { SheetBackdrop } from './parts';
 
 /**
@@ -79,20 +80,21 @@ export interface SheetProps {
    * shows or offers, `cancel` on one that asks for a choice.
    */
   dismiss: 'close' | 'cancel';
+  /** Open as the page loads (page-mount.ts's `open-sheet`): the garment's photo sheet after a rotate. */
+  opensOnLoad?: boolean;
   children: Child;
 }
 
-/**
+/*
  * A `filters` sheet closed without Apply (its Close, the backdrop, Escape)
- * drops the ticks it was not asked to apply: `reset()` restores the
- * server-rendered state, the applied filters. The page's other requests
+ * drops the ticks it was not asked to apply (`resetsOnClose`, actions.ts):
+ * `reset()` restores the server-rendered state, the applied filters. The page's other requests
  * send the filter form's fields (the Wardrobe's search, chips and capsule
  * menu, #1144), so a tick left in a closed phone sheet would otherwise be
  * applied by them. Docked from lg the sheet is never opened, so never
  * closed: there the live ticks ride along. Apply's own request has read
  * the form before anything closes.
  */
-const DISCARD_UNAPPLIED = "this.querySelector('form')?.reset()";
 
 /**
  * Every app sheet's `<dialog>` and box (#1062): a page brings the content,
@@ -112,7 +114,8 @@ export function Sheet(props: SheetProps) {
       class={DIALOG_CLASS[props.kind]}
       data-sheet={props.kind}
       aria-labelledby={props.labelledBy}
-      onclose={props.kind === 'filters' ? DISCARD_UNAPPLIED : undefined}
+      {...resetsOnClose(props.kind === 'filters')}
+      {...(props.opensOnLoad ? pageModule('open-sheet') : {})}
     >
       <div class={boxClass(props.kind, props.gap, props.boxClass)}>
         {props.children}
@@ -127,7 +130,7 @@ export function Sheet(props: SheetProps) {
 /**
  * What a control that opens sheet `id` carries: confirm-sheet.js's click
  * listener opens it with the control as its trigger. Spread it on a
- * `<button type="button">`; an inline `onclick` beside it runs first (the
+ * `<button type="button">`; a `checksOnTap` beside it runs first (the
  * calendar's opener checks its occasion before the sheet shows).
  */
 export function sheetOpener(id: string) {
@@ -144,13 +147,21 @@ export function dockedFiltersOpener(id: string) {
   return { ...sheetOpener(id), 'data-filters-opener': '' } as const;
 }
 
-/** A sheet's own Cancel, beside its action: closes it, nothing posted. */
+/**
+ * A sheet's own Cancel, beside its action: closes it, nothing posted
+ * (`closesSheet`, actions.ts). A `type="button"`, never a dialog form or a
+ * submit, so it posts nothing wherever it sits: a sheet's action row is
+ * usually inside the sheet's form, and a form nested there would be dropped
+ * by the parser, its Cancel submitting the outer form (`nestedForms`,
+ * test/integration/pages.ts). A sheet opens only through `showModal()`, so
+ * without script there is no sheet to close.
+ */
 export function SheetCancel(props: { size?: 'sm' }) {
   return (
     <button
       type="button"
       class={props.size === 'sm' ? 'btn btn-ghost btn-sm' : 'btn btn-ghost'}
-      onclick="this.closest('dialog').close()"
+      {...closesSheet()}
     >
       {t('CANCEL')}
     </button>

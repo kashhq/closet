@@ -347,11 +347,17 @@ describe('select mode verbs', () => {
       ids: [kept, kept, shelved, wanted, foreign, deleted],
     });
     const flags = new URL(res.headers.location!, 'http://x').searchParams;
-    expect([flags.get('bulkWashed'), flags.get('bulkSkipped')]).toEqual([
-      '1',
-      '1',
-    ]);
-    // Another's and a deleted id are one count, so nothing tells them apart.
+    expect(
+      ['bulkWashed', 'bulkSkipped', 'bulkWishlist', 'bulkUnseen'].map((flag) =>
+        flags.get(flag),
+      ),
+    ).toEqual(['1', '1', '1', '2']);
+    // Each skip by its reason; another's and a deleted id are one count,
+    // so nothing tells them apart.
+    const toast = unescapeHtml((await get(res.headers.location!)).body);
+    expect(toast).toContain(
+      '1 garment marked washed · 1 archived skipped · 1 on the wishlist skipped · 2 not found skipped',
+    );
     expect(t.logs.ops('garments.washed').at(-1)).toMatchObject({
       asked: 6,
       washed: 1,

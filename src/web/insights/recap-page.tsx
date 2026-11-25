@@ -4,7 +4,7 @@ import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { dateParts, type IsoDate } from '../../calendar-date';
 import { dateLabel, shortDayLabel, weekRangeLabel } from '../date-labels';
 import { CALENDAR_PATH } from '../calendar/urls';
-import { jsonForScript } from '../html';
+import { pageModule } from '../page-contract';
 import { t } from '../i18n';
 import { PageShell } from '../layout/page-shell';
 import { EmptyState, GarmentThumb } from '../layout/parts';
@@ -281,15 +281,11 @@ function stats(recap: YearRecap<SignablePhotoRef>) {
   ];
 }
 
-// The image's drawing (public/js/recap-export.js, through the importmap):
-// an inline module, so it runs again after a boosted navigation brings the
-// page. A fixed string with nothing interpolated.
-const RECAP_EXPORT_INIT = `import { prepareRecapExport } from 'recap-export';
-prepareRecapExport(document.getElementById('recap-export'));`;
-
 /**
- * "Save image": public/js/recap-export.js draws the card from the data
- * island on a canvas as the page opens and enables the button once the PNG
+ * "Save image": public/js/recap-export.js (page-mount.ts, on every visit)
+ * draws the card from the button's `data-card` (JSON: an attribute, not a
+ * data island, since htmx drops every `<script>` a swap brings, #672) on a
+ * canvas as the page opens and enables the button once the PNG
  * is made, so the tap hands a ready file to the share sheet (WebKit's
  * share needs the tap's activation). The light theme's probe gives the
  * card its colours whatever the phone's scheme.
@@ -304,6 +300,8 @@ function Export(props: {
         type="button"
         class="btn btn-primary btn-sm self-start"
         id="recap-export"
+        data-card={JSON.stringify(cardData(props.recap, props.appName))}
+        {...pageModule('recap-export')}
         disabled
       >
         {t('recap.SAVE_IMAGE')}
@@ -312,18 +310,6 @@ function Export(props: {
         {t('recap.SAVE_IMAGE_NOTE')}
       </p>
       <div data-theme="closet-light" data-recap-theme="" hidden />
-      {/* Inline JSON through jsonForScript: it cannot close its <script>. */}
-      <script
-        type="application/json"
-        id="recap-card-data"
-        dangerouslySetInnerHTML={{
-          __html: jsonForScript(cardData(props.recap, props.appName)),
-        }}
-      />
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: RECAP_EXPORT_INIT }}
-      />
     </div>
   );
 }
