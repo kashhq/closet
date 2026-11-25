@@ -15987,8 +15987,15 @@
     "issue": 158,
     "name": "Today",
     "target": "GET /",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 2
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.link.link-hover /outfits/ideas in main.page-shell",
+      "button[type=button].btn.btn-ghost.btn-xs in main.page-shell"
+     ]
+    }
    },
    {
     "id": "159 Grid",
@@ -15996,10 +16003,11 @@
     "name": "Grid",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 2
+     "target < 44 px": 3
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16011,10 +16019,11 @@
     "name": "Search",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
@@ -16025,11 +16034,12 @@
     "name": "Filters: category, colour, warmth",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 5
+     "target < 44 px": 6
     },
     "kinds": {
      "target < 44 px": [
       "a.badge.badge-primary.badge-sm /wardrobe in main.page-shell",
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16041,12 +16051,13 @@
     "name": "Care filters: needs a wash, attention",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 4
+     "target < 44 px": 5
     },
     "kinds": {
      "target < 44 px": [
       "a.badge.badge-info.badge-sm /wardrobe in main.page-shell",
       "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16058,11 +16069,12 @@
     "name": "Show archived",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 3
+     "target < 44 px": 4
     },
     "kinds": {
      "target < 44 px": [
       "a.badge.badge-sm.badge-warning /wardrobe in main.page-shell",
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16074,10 +16086,11 @@
     "name": "Capsule filter",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 2
+     "target < 44 px": 3
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16119,10 +16132,11 @@
     "name": "Laundry tab",
     "target": "GET /laundry",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
@@ -16133,10 +16147,11 @@
     "name": "Capsules tab",
     "target": "GET /capsules",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
@@ -16146,8 +16161,15 @@
     "issue": 159,
     "name": "A capsule",
     "target": "GET /capsules/:id",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 2
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.btn.btn-outline.btn-sm /wardrobe in main.page-shell",
+      "a.btn.btn-primary.btn-sm /wardrobe in main.page-shell"
+     ]
+    }
    },
    {
     "id": "159 New capsule form",
@@ -16170,8 +16192,14 @@
     "issue": 160,
     "name": "Garment page",
     "target": "GET /wardrobe/:id",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 1
+    },
+    "kinds": {
+     "target < 44 px": [
+      "input[type=checkbox].btn.btn-sm in section#garment-capsules"
+     ]
+    }
    },
    {
     "id": "161 Add form",
@@ -16179,11 +16207,12 @@
     "name": "Add form",
     "target": "GET /wardrobe/new",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
-      "input[type=number].input in form /wardrobe"
+      "input[type=number].input in form /wardrobe",
+      "input[type=radio].btn.btn-sm in form /wardrobe"
      ]
     }
    },
@@ -16193,11 +16222,13 @@
     "name": "Edit form",
     "target": "GET /wardrobe/:id/edit",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 11
     },
     "kinds": {
      "target < 44 px": [
-      "input[type=number].input in form /wardrobe/*"
+      "input[type=number].input in form /wardrobe/*",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*",
+      "input[type=radio].btn.btn-sm in form /wardrobe/*"
      ]
     }
    },
@@ -16207,11 +16238,13 @@
     "name": "Clone form",
     "target": "GET /wardrobe/:id/clone",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 11
     },
     "kinds": {
      "target < 44 px": [
-      "input[type=number].input in form /wardrobe/*/clone"
+      "input[type=number].input in form /wardrobe/*/clone",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe/*/clone",
+      "input[type=radio].btn.btn-sm in form /wardrobe/*/clone"
      ]
     }
    },
@@ -16342,8 +16375,14 @@
     "issue": 165,
     "name": "+ Plan sheet",
     "target": "GET /calendar/plan",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 2
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.btn.btn-outline.btn-sm /calendar/plan in nav"
+     ]
+    }
    },
    {
     "id": "166 Trips",
@@ -16382,16 +16421,29 @@
     "issue": 166,
     "name": "Add-an-outfit page",
     "target": "GET /trips/:id/outfits/new",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 3
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.btn.btn-outline.btn-sm /trips/*/outfits/new in nav",
+      "a.btn.btn-primary.btn-sm /trips/*/outfits/new in nav"
+     ]
+    }
    },
    {
     "id": "166 Ideas for the trip",
     "issue": 166,
     "name": "Ideas for the trip",
     "target": "GET /outfits/ideas",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 1
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost.btn-sm /trips/* in main.page-shell"
+     ]
+    }
    },
    {
     "id": "167 Wishlist",
@@ -16399,10 +16451,11 @@
     "name": "Wishlist",
     "target": "GET /wardrobe/wishlist",
     "counts": {
-     "target < 44 px": 4
+     "target < 44 px": 5
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "a.link.link-hover * in section#inbox-own",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16421,8 +16474,16 @@
     "issue": 167,
     "name": "Wishlist form",
     "target": "GET /wardrobe/new",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 40
+    },
+    "kinds": {
+     "target < 44 px": [
+      "input[type=checkbox].btn.btn-sm in form /wardrobe",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /wardrobe",
+      "input[type=radio].btn.btn-sm in form /wardrobe"
+     ]
+    }
    },
    {
     "id": "167 Bought it form",
@@ -16438,11 +16499,13 @@
     "name": "Style profile",
     "target": "GET /auth/profile/style",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 18
     },
     "kinds": {
      "target < 44 px": [
-      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow"
+      "button[type=submit].btn.btn-ghost.btn-xs in form /outfits/ideas/allow",
+      "input[type=checkbox].btn.btn-sm in form /auth/profile/style",
+      "input[type=radio].btn.btn-ghost.btn-sm in form /auth/profile/style"
      ]
     }
    },
@@ -16467,8 +16530,14 @@
     "issue": 168,
     "name": "Ideas for a planned evening",
     "target": "GET /outfits/ideas",
-    "counts": {},
-    "kinds": {}
+    "counts": {
+     "target < 44 px": 1
+    },
+    "kinds": {
+     "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost.btn-sm /calendar/plan in main.page-shell"
+     ]
+    }
    },
    {
     "id": "168 Ideas with a garment",
@@ -16516,10 +16585,11 @@
     "name": "Shared wardrobe",
     "target": "GET /wardrobe",
     "counts": {
-     "target < 44 px": 2
+     "target < 44 px": 3
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "input[type=text] in form#search-form /wardrobe",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
@@ -16539,10 +16609,11 @@
     "name": "Shared capsules",
     "target": "GET /capsules",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }
@@ -16553,10 +16624,11 @@
     "name": "Shared wishlist",
     "target": "GET /wardrobe/wishlist",
     "counts": {
-     "target < 44 px": 1
+     "target < 44 px": 2
     },
     "kinds": {
      "target < 44 px": [
+      "a.btn.btn-circle.btn-ghost /auth/profile in header.app-bar",
       "summary.btn.btn-circle.btn-ghost.btn-sm in header.app-bar"
      ]
     }

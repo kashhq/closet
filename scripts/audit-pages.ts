@@ -5,11 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { Client } from 'pg';
 import sharp from 'sharp';
-import {
-  type A11yPass,
-  type A11yVisit,
-  auditAccessibility,
-} from './audit/a11y';
+import { type A11yPass, auditAccessibility, browserVisits } from './audit/a11y';
 import { a11yPageNotes, compareA11y } from './audit/a11y-report';
 import { Budgets } from './audit/budget';
 import {
@@ -37,7 +33,6 @@ import {
   type Outcome,
   type Phase,
   type Step,
-  stepId,
 } from './audit/walk';
 
 /**
@@ -246,16 +241,6 @@ async function record(
       plans: await explainSlowest(explainClient, last),
     });
   }
-}
-
-/** The page steps a browser opens: a plain GET, not an htmx fragment. */
-function browserVisits(fixture: Fixture, steps: readonly Step[]): A11yVisit[] {
-  return steps.flatMap((step) => {
-    const request = step.page?.(fixture);
-    if (!request || request.method !== 'GET' || request.htmx) return [];
-    const { issue, name, target } = step;
-    return [{ id: stepId(step), issue, name, target, request }];
-  });
 }
 
 /** Route templates and MCP tools no step reached. */

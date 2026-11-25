@@ -20,6 +20,7 @@ import {
 } from './a11y-report';
 import { tapMisses } from '../../test/support/tap-area';
 import type { Actor, AuditRequest, Fixture } from './fixture';
+import { type Step, stepId } from './walk';
 
 /**
  * The page audit's accessibility pass (#722): every page step a browser can
@@ -99,7 +100,7 @@ interface InPageViolation {
  * make a node stale or name another element (#1207). Runs in the browser (serialized by
  * page.evaluate, axe injected before it): no closures, no imports.
  */
-async function measureInPage(limits: {
+export async function measureInPage(limits: {
   fontMin: number;
   targetMin: number;
   attempts: number;
@@ -323,18 +324,32 @@ function cookieValue(actor: Actor): string {
   return actor.cookie.slice(actor.cookie.indexOf('=') + 1);
 }
 
+/**
+ * Puts what measureInPage reads into the page: axe, and the two functions
+ * that are self-contained by contract (their docs), so their source runs
+ * there. Its own spec (a11y.spec.ts) loads the same way.
+ */
+export async function injectMeasurers(
+  page: Page,
+  axeSource: string,
+): Promise<void> {
+  await page.evaluate(axeSource);
+  await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
+  await page.evaluate(`window.closetTapMisses = ${String(tapMisses)}`);
+}
+
+/** measureInPage's limits for the audit: its tolerances applied to the rules'. */
+export const MEASURE_LIMITS = {
+  fontMin: FIELD_FONT_MIN_PX,
+  targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
+  attempts: STILL_RUN_ATTEMPTS,
+} as const;
+
 async function measurePage(page: Page, found: Found): Promise<Measured> {
   // htmx's swaps in flight settle before the run reads the page.
   await page.waitForFunction(() => !document.querySelector('.htmx-request'));
-  await page.evaluate(found.axeSource);
-  // Self-contained by contract (its doc), so its source runs in the page.
-  await page.evaluate(`window.closetRunWhileStill = ${String(runWhileStill)}`);
-  await page.evaluate(`window.closetTapMisses = ${String(tapMisses)}`);
-  const measured = await page.evaluate(measureInPage, {
-    fontMin: FIELD_FONT_MIN_PX,
-    targetMin: TARGET_MIN_PX - TARGET_TOLERANCE_PX,
-    attempts: STILL_RUN_ATTEMPTS,
-  });
+  await injectMeasurers(page, found.axeSource);
+  const measured = await page.evaluate(measureInPage, MEASURE_LIMITS);
   found.axeVersion = measured.axeVersion;
   const { rules, design } = found;
   const offenders: Offender[] = [];
@@ -407,6 +422,19 @@ async function visit(
   } finally {
     await context.close();
   }
+}
+
+/** The page steps a browser opens: a plain GET, not an htmx fragment. */
+export function browserVisits(
+  fixture: Fixture,
+  steps: readonly Step[],
+): A11yVisit[] {
+  return steps.flatMap((step) => {
+    const request = step.page?.(fixture);
+    if (!request || request.method !== 'GET' || request.htmx) return [];
+    const { issue, name, target } = step;
+    return [{ id: stepId(step), issue, name, target, request }];
+  });
 }
 
 export interface A11yPass {
