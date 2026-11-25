@@ -34,7 +34,7 @@
   // unlisted dependency and fails the ratchet's knip_deps.
   "paths": {
     "toast": ["public/js/toast.js"],
-    "mask-editor": ["public/js/mask-editor.js"],
+    "mask-editor": ["views/assets/page/mask-editor.ts"],
     "photo-input": ["public/js/photo-input.js"],
     "snap-strip": ["public/js/snap-strip.js"],
     "styling": ["public/js/styling.js"],

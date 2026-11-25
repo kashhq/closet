@@ -164,7 +164,6 @@ export function Layout({
         {/* Libraries are served from node_modules (registerStaticAssets in
             app.ts), never a CDN. */}
         <script defer src={`/modules/htmx.min.js${v}`}></script>
-        <script defer src={`/js/color-multiselect.js${v}`}></script>
         <script
           type="importmap"
           dangerouslySetInnerHTML={{
@@ -176,6 +175,12 @@ export function Layout({
         <script
           type="module"
           src={`${pageModuleUrl('connectivity')}${v}`}
+        ></script>
+        {/* The garment form's colour field; delegated, so one load serves
+            every form a navigation brings. */}
+        <script
+          type="module"
+          src={`${pageModuleUrl('color-picker')}${v}`}
         ></script>
         {/* The confirmation sheet (ConfirmSheet): hx-confirm and a PostForm's
             confirm. Before submit-once, which skips a declined submit. */}

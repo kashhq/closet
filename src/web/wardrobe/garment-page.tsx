@@ -29,6 +29,7 @@ import {
   ShareLinkButton,
 } from '../share/share-button';
 import { StyleThisLink } from '../styling/style-this';
+import { MASK_EDITOR_IDS } from '../page-contract';
 import type { ViewContext } from '../view-context';
 import {
   type WearPanel,
@@ -131,12 +132,12 @@ const REOPEN_PHOTO_SHEET = `import { openSheet } from 'confirm-sheet';
 openSheet(document.getElementById('${PHOTO_SHEET_ID}'), null);`;
 
 /**
- * The mask editor's pencil (mask-editor.js), as an inline module so it runs
- * again after a boosted navigation back here (a fixed string): delegated on
- * #garment-photo-slot, because the cutout polling swaps the pencil.
+ * Binds the mask editor (views/assets/page/mask-editor.ts) from an inline
+ * module, a fixed string, so it binds again after a boosted navigation back
+ * here: on #garment-photo-slot, because the cutout polling swaps the pencil.
  */
-const MASK_SCRIPT = `import { wireUpEditMask } from 'mask-editor';
-wireUpEditMask(document.getElementById('garment-photo-slot'));`;
+const MASK_SCRIPT = `import { bindMaskEditor } from 'mask-editor';
+bindMaskEditor(document.getElementById('garment-photo-slot'));`;
 
 /** The one-shot flags the garment page's toasts read (GarmentPageQuery). */
 const GARMENT_PAGE_FLAGS = [
@@ -908,11 +909,17 @@ function RotateButtons(props: { action: string }) {
   );
 }
 
-/** The mask editor (public/js/mask-editor.js), opened by the pencil on the photo. */
+/**
+ * The mask editor (views/assets/page/mask-editor.ts), opened by the pencil
+ * on the photo. The brushes are toggles whose `aria-pressed` the module
+ * keeps; the canvas takes no touch gestures, so a stroke paints rather than
+ * scrolling the sheet.
+ */
 function MaskEditorDialog() {
+  const ids = MASK_EDITOR_IDS;
   return (
     <Sheet
-      id="maskEditorDialog"
+      id={ids.dialog}
       kind="dialog"
       labelledBy="mask-editor-title"
       gap={4}
@@ -924,38 +931,48 @@ function MaskEditorDialog() {
       </h3>
       <div class="flex flex-wrap items-center gap-3">
         <div class="join">
-          <button id="maskBrushErase" class="btn btn-sm join-item">
+          <button
+            id={ids.erase}
+            type="button"
+            class="btn btn-sm join-item btn-active"
+            aria-pressed="true"
+          >
             {t('MASK_BRUSH_ERASE')}
           </button>
-          <button id="maskBrushRestore" class="btn btn-sm join-item">
+          <button
+            id={ids.restore}
+            type="button"
+            class="btn btn-sm join-item"
+            aria-pressed="false"
+          >
             {t('MASK_BRUSH_RESTORE')}
           </button>
         </div>
-        <div class="flex items-center gap-2 flex-1 min-w-32">
+        <label class="flex items-center gap-2 flex-1 min-w-32">
           <span class="text-xs text-muted shrink-0">
             {t('MASK_BRUSH_SIZE')}
           </span>
           <input
-            id="maskBrushSize"
+            id={ids.size}
             type="range"
             min="4"
             max="80"
             value="20"
             class="range range-xs flex-1"
           />
-        </div>
+        </label>
       </div>
       <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
         <canvas
-          id="maskEditorCanvas"
-          class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
+          id={ids.canvas}
+          class="mask-checkerboard block max-w-full mx-auto cursor-crosshair touch-none"
         ></canvas>
       </div>
       <div class="modal-action mt-0">
-        <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
+        <button id={ids.skip} type="button" class="btn btn-ghost btn-sm">
           {t('MASK_EDITOR_SKIP')}
         </button>
-        <button id="maskEditorAccept" class="btn btn-primary btn-sm">
+        <button id={ids.accept} type="button" class="btn btn-primary btn-sm">
           {t('MASK_EDITOR_ACCEPT')}
         </button>
       </div>

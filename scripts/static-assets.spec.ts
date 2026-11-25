@@ -121,6 +121,18 @@ describe('buildPageModules', () => {
     ]);
   });
 
+  it('never builds a browser spec beside a module into the client', () => {
+    source('widget');
+    source('widget.browser.spec');
+
+    build();
+
+    expect(readdirSync(at('js', 'gen')).sort()).toEqual([
+      'outbox.js',
+      'widget.js',
+    ]);
+  });
+
   it('warns about an untracked copy from before public/js/gen/ and touches no file', () => {
     source('converted');
     source('plain');
