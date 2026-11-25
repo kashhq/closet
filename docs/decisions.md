@@ -1767,4 +1767,4 @@ Consequence: a missing owner stays what 706 made it: the order mail off, the opt
 
 Why: since #669 the share preview is keyed by the shared garment's or outfit's own `shareable_id`; the file column was minted on every upload and read by nothing.
 Decision: migration 0072 drops `file_shareable_id_unique` and the column; `NewPhotoRow` and `newPhotoRow` lose the field. `/file/watermark/:id` resolves only a shared item's id.
-Consequence: not reversible in place (the old ids were random and are gone; a rollback would need a new column with fresh ids, which nothing would read). Fixtures that insert into `file` take no share id.
+Consequence: rolling back is the down steps in docs/operations.md (Rolling back past 0072): a nullable column is enough for the older image. Fixtures that insert into `file` take no share id.
