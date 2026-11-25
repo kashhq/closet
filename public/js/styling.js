@@ -4,7 +4,7 @@
  * scrolled to the middle into the row's `garmentId` and centres a tapped
  * neighbour. This module is what is Styling's own: the row locks.
  *
- * - initStyling(root) is the page's inline module's one call: it loads these
+ * - initStyling(root) is page-mount.ts's one call, on #styling-rows: it loads these
  *   listeners and starts the strips under `root` (see initSnapStrips).
  * - A locked row is frozen (#106): CSS stops its strip scrolling under a
  *   finger (styling-row.tsx), its neighbours are inert (#146: out of the tab

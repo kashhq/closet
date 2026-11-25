@@ -37,7 +37,7 @@ import {
 import { ideaName, type IdeasWeather, shuffledSeed } from './ideas';
 import type { PoolGarment } from './queries';
 import { type GalleryState, ideasUrl } from './urls';
-import { needsNetwork } from '../page-contract';
+import { dismiss, dismissable, needsNetwork } from '../page-contract';
 
 /**
  * The Outfits page's Ideas tab (#9): generated outfits as full-width cards
@@ -333,6 +333,7 @@ function IdeaCard(props: {
         desktop: 'grid',
       })}
       data-idea={ideaKey}
+      {...dismissable()}
     >
       <OutfitCollage garments={idea.garments} eager={props.eager} />
       <h2 class="font-semibold text-sm line-clamp-2">{name}</h2>
@@ -378,7 +379,7 @@ function IdeaCard(props: {
               <button
                 type="button"
                 class="btn btn-outline btn-xs"
-                onclick="this.closest('[data-idea]').remove()"
+                {...dismiss()}
               >
                 {t('gallery.NOT_TODAY')}
               </button>

@@ -428,6 +428,8 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectInPlaceWritesKeepFocus(res);
   expectOneStatusRegion(res);
   expectNoScriptNavigation(res);
+  expect(inlineScripts(res.body)).toEqual([]);
+  expect(res.body.match(/<script type="importmap">/g)).toHaveLength(1);
   expectAppBar(res);
   expectPageShell(res);
   expectActionBar(res);
@@ -495,6 +497,29 @@ export function pageTitle(body: string): string | undefined {
  */
 export function expectNoScriptNavigation(res: LightMyRequestResponse): void {
   expect(res.body).not.toMatch(/\blocation(\.href)?\s*=/);
+}
+
+/**
+ * What the CSP would refuse in a page or a fragment (#672,
+ * src/web/security/csp.ts): an `on*` attribute, and a `<script>` with
+ * neither a `src` nor a data type (the layout's importmap, allowed by its
+ * hash, or a JSON island). ESLint refuses both in the source; this catches
+ * what it cannot see, a translated string's markup or props built
+ * elsewhere. Each offending tag, cut to 120 characters.
+ */
+export function inlineScripts(html: string): string[] {
+  const tags = html.match(/<[a-z][^>]*>/gi) ?? [];
+  return tags
+    .filter(
+      (tag) =>
+        /\son[a-z]+\s*=/i.test(tag) ||
+        (/^<script\b/i.test(tag) &&
+          !/\ssrc="/.test(tag) &&
+          !/\stype="(importmap|application\/json|application\/ld\+json)"/.test(
+            tag,
+          )),
+    )
+    .map((tag) => tag.slice(0, 120));
 }
 
 /**
@@ -654,6 +679,10 @@ export function expectFragment(res: LightMyRequestResponse): void {
   expect(res.body).not.toContain('id="toast-host"');
   expect(res.body.trim().length).toBeGreaterThan(0);
   expectNoRawI18nKeys(res);
+  // htmx drops every <script> a swap brings (allowScriptTags: false, #672):
+  // a fragment's setup is a data-page-module element (page-mount.ts).
+  expect(res.body).not.toMatch(/<script\b/i);
+  expect(inlineScripts(res.body)).toEqual([]);
 }
 
 /**

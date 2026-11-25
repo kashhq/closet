@@ -157,7 +157,7 @@ describe('adding a garment from a photo', () => {
           `<form id="add-photo-${source}" method="post" action="/wardrobe/new/photo" enctype="multipart/form-data" hx-boost="false" data-needs-network="" data-submit-once="">`,
         );
       }
-      expect(sheet).toContain("import('photo-input')");
+      expect(sheet).toContain('data-photo-pick=""');
       expect(sheet).toContain(text('garment.PHOTO_CAMERA'));
       expect(sheet).toContain(text('garment.PHOTO_LIBRARY'));
       // Link import and "Enter details" are still there.

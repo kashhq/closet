@@ -65,8 +65,8 @@ export function visibleFor(doc, delayMs) {
 export function gateClicks(form, button) {
   let openedAt = Infinity;
   let pointerDownAt = -Infinity;
-  // On the form, never the document: an inline module runs again on every
-  // boosted visit. A pointerdown a disabled button swallows is not seen, so
+  // On the form, never the document: its page's mount runs again on every
+  // boosted visit (page-mount.ts). A pointerdown a disabled button swallows is not seen, so
   // its click reads the older one and is refused: the safe side.
   form.addEventListener(
     'pointerdown',

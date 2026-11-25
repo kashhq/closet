@@ -70,7 +70,7 @@ Moved here verbatim from the root `AGENTS.md` by #723 (the root now keeps a one-
 
 In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 
-- **Server owns the HTML**: htmx attributes, then CSS, then a one-line inline handler reading `data-*`; bigger is a client module (`views/assets/page/<name>.ts`, never a new `public/js/` file: `make plain-js-check`) with a reason in the PR. No `_hyperscript` (`expectFullPage` fails an `_=` attribute). **Locality of behavior**: view logic beside its markup.
+- **Server owns the HTML**: htmx attributes, then CSS, then a delegated `data-*` action (`views/assets/page/actions.ts`; a page's own setup is `pageModule(name)`, `page-mount.ts`); no inline script or `on*` attribute (the CSP, #672); bigger is a client module (`views/assets/page/<name>.ts`, never a new `public/js/` file: `make plain-js-check`) with a reason in the PR. No `_hyperscript` (`expectFullPage` fails an `_=` attribute). **Locality of behavior**: view logic beside its markup.
 - **Every user-facing string goes through i18n** (`t`/`tHtml`, `src/i18n/en/lang.json`).
 - **daisyUI semantic tokens, no hardcoded colors** (ESLint: palette classes, `chip-N`, colours in `style`). Muted text is `text-muted`; `text-faint` never for text; ESLint refuses `text-base-content/0`–`/69`; no `opacity-*` on text.
 - **No runtime CDN imports**: client packages from `public/modules/` (`CLIENT_MODULES`) or `public/vendor/`; zero external requests (`delivery.spec.ts`).

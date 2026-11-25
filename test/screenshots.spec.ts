@@ -129,7 +129,7 @@ async function openTuesdayPlanSheet(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle');
   // The summary's placeholder is a div; its answer replaces it.
   await expect(page.locator('div#weather-line')).toHaveCount(0);
-  const plan = page.locator('[data-plan^="plan-2026-09-29-"]').first();
+  const plan = page.locator('[data-checks^="plan-2026-09-29-"]').first();
   await plan.evaluate(async (button) => {
     await document.fonts.ready;
     button.scrollIntoView({ block: 'center', behavior: 'instant' });

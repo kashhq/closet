@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,6 +29,17 @@ import {
 // What the image's build bakes in (Dockerfile ARG -> ENV): the heartbeat and
 // the asset keys name it.
 const RELEASE = '0123abc';
+
+/** A Content-Security-Policy header as directive name to its sources. */
+function cspDirectives(header: unknown): Map<string, string[]> {
+  return new Map(
+    String(header)
+      .split(';')
+      .map((directive) => directive.trim().split(/\s+/))
+      .filter(([name]) => name)
+      .map(([name, ...sources]) => [name, sources]),
+  );
+}
 
 describe('delivery (PWA_ENABLED=true)', () => {
   let t: TestApp;
@@ -329,6 +341,9 @@ describe('delivery (PWA_ENABLED=true)', () => {
       // No view transitions (they drop taps while they run), no attribute
       // settling and a short history cache (layout.tsx says why).
       expect(JSON.parse(unescapeHtml(content))).toEqual({
+        // No script from a swap and no eval (#672: the CSP refuses both).
+        allowEval: false,
+        allowScriptTags: false,
         attributesToSettle: [],
         disableInheritance: true,
         historyCacheSize: 3,
@@ -360,24 +375,56 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(csp).not.toMatch(/https?:/);
     });
 
-    it('allows no eval and no blob: scripts, workers or fetches', async () => {
+    it('allows no inline script but the importmap, no eval and no blob: scripts, workers or fetches', async () => {
       const res = await t.inject({ method: 'GET', url: '/wardrobe' });
-      const directives = new Map(
-        String(res.headers['content-security-policy'])
-          .split(';')
-          .map((directive) => directive.trim().split(/\s+/))
-          .filter(([name]) => name)
-          .map(([name, ...sources]) => [name, sources]),
+      const directives = cspDirectives(res.headers['content-security-policy']);
+      // #672: the one inline script is the importmap, by the hash of the
+      // text this page serves, recomputed here so a drift between the
+      // header and the layout fails.
+      const importmap = /<script type="importmap">([\s\S]*?)<\/script>/.exec(
+        res.body,
       );
+      expect(importmap).not.toBeNull();
+      const served = createHash('sha256')
+        .update(importmap![1])
+        .digest('base64');
       expect(directives.get('script-src')).toEqual([
         "'self'",
-        "'unsafe-inline'",
+        `'sha256-${served}'`,
       ]);
       expect(directives.get('worker-src')).toEqual(["'self'"]);
       expect(directives.get('connect-src')).toEqual(["'self'"]);
       // The mask editor draws from object URLs.
       expect(directives.get('img-src')).toContain('blob:');
+      // Byte-stable: no nonce, so a second answer names the same policy
+      // (the tab roots' revalidation and the worker's 304 rely on it).
+      const again = await t.inject({ method: 'GET', url: '/wardrobe' });
+      expect(again.headers['content-security-policy']).toBe(
+        res.headers['content-security-policy'],
+      );
     });
+
+    it.each([
+      ['a page', '/wardrobe', 200],
+      ['the 404 page', '/no-such-page', 404],
+      ['an error page', '/wardrobe?wash=boil', 400],
+      ['the offline page', '/offline.html', 200],
+      ['the login page, signed out', '/auth/login', 200, true],
+      ['a static file', '/js/gen/actions.js', 200],
+    ])(
+      'sets base-uri, form-action and object-src on %s',
+      async (_name, url, status, anonymous = false) => {
+        const res = await t.inject({ method: 'GET', url, anonymous });
+        expect(res.statusCode).toBe(status);
+        const directives = cspDirectives(
+          res.headers['content-security-policy'],
+        );
+        expect(directives.get('base-uri')).toEqual(["'self'"]);
+        expect(directives.get('form-action')).toEqual(["'self'"]);
+        expect(directives.get('object-src')).toEqual(["'none'"]);
+        expect(directives.get('script-src')).not.toContain("'unsafe-inline'");
+      },
+    );
 
     it('loads page-only libraries on their pages, not in the shell', () => {
       // pwa.js imports the install dialog and pull to refresh only where

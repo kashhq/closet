@@ -8,7 +8,7 @@
  * hidden htmx form of the section's location part, which answers that part
  * again. The server rounds again; nothing else is sent.
  *
- * Called by the location part's inline module each time it is rendered or
+ * Called by page-mount.ts each time the location part is rendered or
  * swapped in, with its element: every listener is on an element inside it,
  * never on the document.
  */

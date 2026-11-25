@@ -160,6 +160,94 @@ export const pushAction = (action: PushAction) => ({ [PUSH_ACTION]: action });
 /** The slot this device's reminders are loaded into once the state is on. */
 export const PUSH_REMINDERS_ID = 'push-reminders';
 
+// --- page-mount.ts: a page's own setup, on every visit --------------------
+
+/**
+ * The element a page-only module sets up on every visit a load, a boosted
+ * navigation, a fragment or a history restore brings (page-mount.ts, on
+ * `htmx:load`), once per element. The CSP allows no inline script (#672),
+ * so this is how a page asks for its module; a `<script src>` would run
+ * once per document. Where nothing on the page is the thing set up, the
+ * marker is a `<template>`.
+ */
+export const PAGE_MODULE = 'data-page-module';
+export type PageModule =
+  | 'strip-flags'
+  | 'snap-strips'
+  | 'styling'
+  | 'mask-editor'
+  | 'open-sheet'
+  | 'search-shortcut'
+  | 'select-count'
+  | 'recap-export'
+  | 'share-confirm'
+  | 'share-saved'
+  | 'locate';
+export const pageModule = (name: PageModule) => ({ [PAGE_MODULE]: name });
+/** strip-flags' marker: the one-shot query flags to drop from the address bar, space-separated. */
+export const STRIP_FLAGS = 'data-strip-flags';
+
+// --- actions.ts: the one-line behaviours, delegated on the document -------
+
+/**
+ * A file input that uploads as soon as a photo is chosen (the garment
+ * page's photo sheet, the Wardrobe's Add, outfit selfies, a look's photo):
+ * actions.ts prepares it on the phone first (photo-input.js: a 24 MP photo
+ * becomes a 1600 px JPEG of a few hundred KB, HEIC left for the server),
+ * then submits its form; an empty choice posts nothing. photo-input loads
+ * only when a photo is chosen.
+ */
+export const PHOTO_PICK = 'data-photo-pick';
+export const photoPick = () => ({ [PHOTO_PICK]: '' });
+/** A control in a `<details>` menu that closes the menu as it is tapped. */
+export const CLOSES_MENU = 'data-closes-menu';
+export const closesMenu = () => ({ [CLOSES_MENU]: '' });
+/** A dialog whose form is reset whenever it closes (the filters sheet). */
+export const RESETS_ON_CLOSE = 'data-resets-on-close';
+export const resetsOnClose = (when: boolean) => ({
+  [RESETS_ON_CLOSE]: flag(when),
+});
+/** A button that removes its closest `DISMISSABLE` ancestor, nothing posted. */
+export const DISMISS = 'data-dismiss';
+export const DISMISSABLE = 'data-dismissable';
+export const dismiss = () => ({ [DISMISS]: '' });
+export const dismissable = () => ({ [DISMISSABLE]: '' });
+/** A read-only field whose text is selected when tapped. */
+export const SELECTS_ON_TAP = 'data-selects-on-tap';
+export const selectsOnTap = () => ({ [SELECTS_ON_TAP]: '' });
+/**
+ * A button that copies `data-copy` to the clipboard and wears `flashed`
+ * instead of `resting` for a second.
+ */
+export const COPY_TEXT = 'data-copy';
+export const COPY_RESTING = 'data-copy-resting';
+export const COPY_FLASHED = 'data-copy-flashed';
+export const copyButton = (text: string, resting: string, flashed: string) => ({
+  [COPY_TEXT]: text,
+  [COPY_RESTING]: resting,
+  [COPY_FLASHED]: flashed,
+});
+/**
+ * A control that checks the input of this id as it is tapped, ahead of
+ * every other listener (the calendar's Plan opener picks its occasion
+ * before confirm-sheet.js opens the sheet).
+ */
+export const CHECKS_ON_TAP = 'data-checks';
+export const checksOnTap = (inputId: string) => ({ [CHECKS_ON_TAP]: inputId });
+/**
+ * A form whose submit, with htmx loaded and the form of this id on the
+ * page, submits that form instead; else it posts as it is (the Wardrobe's
+ * search sends the filter form's request, #1144).
+ */
+export const SUBMITS_VIA = 'data-submits-via';
+export const submitsVia = (formId: string) => ({ [SUBMITS_VIA]: formId });
+/**
+ * An htmx link that, without the element of this id on the page, is
+ * followed natively, its href, htmx's request stopped.
+ */
+export const NATIVE_WITHOUT = 'data-native-without';
+export const nativeWithout = (id: string) => ({ [NATIVE_WITHOUT]: id });
+
 // --- search-shortcut.ts --------------------------------------------------
 
 /** The field `/` focuses, one a page (the Wardrobe's search). */

@@ -45,6 +45,7 @@ import {
   type OutboundFetcher,
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
+import { contentSecurityPolicy } from './web/security/csp';
 import { registerRateLimit } from './web/security/rate-limit';
 import {
   assertStatelessRoute,
@@ -462,8 +463,9 @@ export async function createApp(
   );
 
   // Security headers on all responses
+  const everyResponse = securityHeaders(build.assetVersion);
   app.addHook('onSend', (_request, reply, payload, done) => {
-    reply.headers(SECURITY_HEADERS);
+    reply.headers(everyResponse);
     done(null, payload);
   });
   // Clear-Site-Data on a redirect is repeated on the page it lands on, which
@@ -687,19 +689,14 @@ function createWeather(
   });
 }
 
-// Inline script: the pages' one-line handlers and inline modules (AGENTS.md,
-// Conventions). blob: images: the mask editor draws the original and the
-// cutout from object URLs. No eval (htmx's filters, hx-on and js: values are
-// unused) and no blob: scripts or workers: those were the in-browser
-// background-removal model's, removed on 2026-09-26.
-const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none';";
-
-// Every response's, set by the root onSend hook.
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Content-Security-Policy': CONTENT_SECURITY_POLICY,
-} as const;
+// Every response's, set by the root onSend hook. The CSP is this build's
+// (src/web/security/csp.ts: the importmap's hash).
+function securityHeaders(assetVersion: string) {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Content-Security-Policy': contentSecurityPolicy(assetVersion),
+  } as const;
+}

@@ -11,6 +11,7 @@ import { SAVED_PATH } from '../outfits/urls';
 import { STYLING_PATH } from '../styling/urls';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
+import { checksOnTap } from '../page-contract';
 
 /**
  * A day's "+ Plan" sheet (R6; docs/plans/2026-09-26-redesign.md, Calendar):
@@ -23,12 +24,9 @@ import { dayLabel, occasionLabel } from '../date-labels';
  *
  * Opened by the day's open template slots (OpenSlotRow) or, on a day with
  * none, its "+ Plan" (all day): each carries `planSheetOpener`, whose
- * `data-plan` names the occasion's radio, which the one-line handler checks
- * before confirm-sheet.js opens the day's sheet.
+ * `checksOnTap` names the occasion's radio, checked (actions.ts) before
+ * confirm-sheet.js opens the day's sheet.
  */
-
-const CHOOSE_OCCASION =
-  'document.getElementById(this.dataset.plan).checked = true';
 
 /** `day`'s sheet's id. */
 export function planSheetId(day: IsoDate): string {
@@ -39,12 +37,11 @@ export function planSheetId(day: IsoDate): string {
 export function planSheetOpener(day: IsoDate, occasion: Occasion) {
   return {
     ...sheetOpener(planSheetId(day)),
-    'data-plan': planSheetChoice(day, occasion),
-    onclick: CHOOSE_OCCASION,
+    ...checksOnTap(planSheetChoice(day, occasion)),
   } as const;
 }
 
-/** The radio of `occasion` in `day`'s sheet: what an opener's `data-plan` names. */
+/** The radio of `occasion` in `day`'s sheet: what an opener's `checksOnTap` names. */
 function planSheetChoice(day: IsoDate, occasion: Occasion): string {
   return `plan-${day}-${occasion}`;
 }

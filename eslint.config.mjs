@@ -51,6 +51,41 @@ const COLUMN_CLASS = '/(?:^|[\\s:])(?:grid-cols|columns)-/';
 const NAMED_COLUMNS =
   "A grid's columns are named once in src/web/layout/columns.ts (#1064): use its step, or add a named one there.";
 
+// The CSP allows no inline script (#672, src/web/security/csp.ts), so the
+// views (src/web, specs aside: a fake IndexedDB request has an `onerror`,
+// and jsx.spec renders a <script> to prove the escaping) write no `on*`
+// attribute (written, or a key of the props spread onto an element; an
+// explicit list, since `once` and `online` are keys too) and no <script>
+// without `src` that is not data (a JSON island, the importmap, which
+// guards.conf `@importmap` keeps to the layout). A behaviour is a data-*
+// action (views/assets/page/actions.ts) or a page module
+// (`data-page-module`, page-mount.ts). expectFullPage checks the rendered
+// pages too.
+const DOM_HANDLER =
+  '/^on(click|dblclick|auxclick|contextmenu|change|input|beforeinput|invalid|submit|reset|close|cancel|toggle|load|error|abort|focus|blur|focusin|focusout|key(down|up|press)|pointer[a-z]+|mouse[a-z]+|touch[a-z]+|drag[a-z]*|drop|scroll|scrollend|wheel|select|copy|cut|paste|animation[a-z]+|transition[a-z]+)$/';
+const NO_INLINE_SCRIPT =
+  'The CSP allows no inline script (#672): use a data-* action (views/assets/page/actions.ts) or data-page-module (page-mount.ts).';
+
+const INLINE_SCRIPT = [
+  {
+    selector: 'JSXAttribute[name.name=/^on[a-z]/]',
+    message: NO_INLINE_SCRIPT,
+  },
+  {
+    selector: `Property[key.name=${DOM_HANDLER}]`,
+    message: NO_INLINE_SCRIPT,
+  },
+  {
+    selector: `Property[key.value=${DOM_HANDLER}]`,
+    message: NO_INLINE_SCRIPT,
+  },
+  {
+    selector:
+      "JSXOpeningElement[name.name='script']:not(:has(JSXAttribute[name.name='src'])):not(:has(JSXAttribute[name.name='type'][value.value=/^(importmap|application.json|application.ld.json)$/]))",
+    message: NO_INLINE_SCRIPT,
+  },
+];
+
 // no-restricted-syntax entries every file obeys.
 const RESTRICTED_SYNTAX = [
   {
@@ -166,7 +201,10 @@ export default typescriptEslint.config(
     languageOptions: {
       globals: knownGlobals.node,
       sourceType: 'commonjs', // what tsc emits for the server (tsconfig.json)
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
   },
   {
@@ -196,6 +234,18 @@ export default typescriptEslint.config(
         {
           paths: HONO_RAW_HTML_PATHS,
         },
+      ],
+    },
+  },
+  {
+    files: ['src/web/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...RESTRICTED_SYNTAX,
+        ...COLUMN_STEPS,
+        ...INLINE_SCRIPT,
       ],
     },
   },
@@ -300,7 +350,9 @@ export default typescriptEslint.config(
   },
   {
     files: ['src/web/layout/columns.ts'],
-    rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
+    rules: {
+      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...INLINE_SCRIPT],
+    },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.
   {

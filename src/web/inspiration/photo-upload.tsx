@@ -1,10 +1,7 @@
 import { PostForm } from '../form';
 import { t } from '../i18n';
-import {
-  CameraIcon,
-  PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
-} from '../layout/parts';
+import { CameraIcon, PhotoLibraryIcon } from '../layout/parts';
+import { photoPick } from '../page-contract';
 
 /**
  * A button that takes a photo of a look (the camera, `capture`) or picks
@@ -42,7 +39,7 @@ export function LookPhotoUpload(props: {
           accept="image/*"
           capture={source === 'camera' ? 'environment' : undefined}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </PostForm>

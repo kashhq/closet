@@ -119,7 +119,7 @@ describe('capsules', () => {
       expect(page.statusCode).toBe(200);
       expectFullPage(page);
       expect(page.body).toContain('Capsule created');
-      expect(page.body).toContain('"created","added","removed"');
+      expect(page.body).toContain('data-strip-flags="created added removed"');
       expect(t.logs.ops('capsule.created')).toContainEqual(
         expect.objectContaining({ capsuleId: id, ownerId, surface: 'page' }),
       );
@@ -299,8 +299,9 @@ describe('capsules', () => {
       // One member on screen, counted; later pages' are counted as they
       // arrive by the page's module (test/capsules.spec.ts (retired 2026-10-13)).
       expect(html).toMatch(/id="selected-count"[^>]*>1</);
-      expect(html).toContain('<div data-select-count');
-      expect(html).toContain(`import 'select-count';`);
+      expect(html).toContain(
+        '<div data-select-count="selected-count" data-page-module="select-count"',
+      );
     });
 
     it('asks for later pages as picker tiles', async () => {

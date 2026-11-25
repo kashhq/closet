@@ -5,8 +5,8 @@
  * the edited cutout replaces the stored one (POST /wardrobe/:id/nobg); no
  * model runs here.
  *
- * The garment page binds it from an inline module (MASK_SCRIPT,
- * garment-page.tsx), so a boosted navigation back to the page binds it
+ * page-mount.ts binds it from the garment page's `pageModule('mask-editor')`
+ * (garment-page.tsx), so a boosted navigation back to the page binds it
  * again: on #garment-photo-slot, never the document, since the cutout's
  * polling swaps the pencil and the photo under it.
  */
