@@ -64,6 +64,11 @@ package.json	"web-push": "^3.6.7",
 package.json	"@types/web-push": "^3.6.4",
 package.json	"ts-node": "^10.9.2",
 
+# Class names other code depends on: pulltorefreshjs draws .ptr--ptr, and the colour field's
+# markup and module share .color-ms.
+views/assets/main.css	.ptr--ptr {
+views/assets/main.css	.color-ms {
+
 # daisyUI's component class and a utility row in the mask editor's markup.
 src/web/wardrobe/garment-page.tsx	<div class="flex flex-wrap items-center gap-3">
 src/web/wardrobe/garment-page.tsx	<div class="join">

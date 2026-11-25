@@ -1057,14 +1057,13 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
   }
   /* Focused, it wears a daisyUI input's ring around the whole field. */
   &:focus-within {
-    --input-color: var(--color-base-content);
-    @apply outline-2 outline-offset-2 outline-(--input-color);
+    @apply outline-2 outline-offset-2 outline-base-content;
   }
   /* daisyUI's input lifts its focus with a hairline shadow at the theme's
      depth; a browser without color-mix keeps the ring alone. */
   @supports (color: color-mix(in oklab, red, red)) {
     &:focus-within {
-      box-shadow: 0 1px color-mix(in oklab, var(--input-color) calc(var(--depth) * 10%), transparent);
+      box-shadow: 0 1px color-mix(in oklab, var(--color-base-content) calc(var(--depth) * 10%), transparent);
     }
   }
 
@@ -1077,57 +1076,57 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
   &[open] .ms-chevron {
     @apply rotate-180;
   }
-}
 
-/* The summary's pills take the row beside the chevron and scroll past
-   about three lines of them. */
-.ms-pills {
-  @apply flex max-h-24 w-0 min-w-0 flex-1 flex-wrap gap-1 overflow-y-auto py-0.5;
-}
-.ms-placeholder {
-  @apply text-sm text-muted;
-}
-.ms-pill {
-  @apply inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-[var(--radius-selector,1.9rem)] border border-base-content/15 bg-base-200 px-2 py-0.5 text-xs/[1.4] text-base-content;
-}
-.ms-chevron {
-  @apply shrink-0 text-muted transition-[rotate] duration-150 ease-[ease];
-}
-
-/* The open list, under the summary with a small gap, squared off on top. */
-.ms-dropdown {
-  @apply absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-[260px] overflow-y-auto rounded-b-[var(--radius-field)] border border-base-content/20 bg-base-100 py-1;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-base-content) 10%, transparent);
-}
-.ms-search {
-  @apply mx-2 my-1.5 flex items-center gap-1.5 rounded-[var(--radius-field)] border border-base-content/20 bg-base-200 px-2 py-1 text-muted;
-}
-.ms-search-input {
-  @apply w-full border-0 bg-transparent p-0 text-[0.8125rem] text-base-content outline-0;
-}
-.ms-options {
-  @apply py-0.5;
-}
-.ms-option {
-  @apply flex cursor-pointer items-center gap-2.5 px-3 py-[0.4375rem] text-sm text-base-content hover:bg-base-200;
-
-  & input[type='checkbox'] {
-    @apply size-4 shrink-0 cursor-pointer accent-primary;
+  /* Its parts, which only ever appear inside it. The summary's pills take
+     the row beside the chevron and scroll past about three lines of them. */
+  & .ms-pills {
+    @apply flex max-h-24 w-0 min-w-0 flex-1 flex-wrap gap-1 overflow-y-auto py-0.5;
   }
-}
-.ms-empty {
-  @apply px-3 py-2.5 text-center text-[0.8125rem] text-muted;
-}
+  & .ms-placeholder {
+    @apply text-sm text-muted;
+  }
+  & .ms-pill {
+    @apply inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-[var(--radius-selector,1.9rem)] border border-base-content/15 bg-base-200 px-2 py-0.5 text-xs/[1.4] text-base-content;
+  }
+  & .ms-chevron {
+    @apply shrink-0 text-muted transition-[rotate] duration-150 ease-[ease];
+  }
 
-/* The count of ticked colours and Clear all, under the list. */
-.ms-footer {
-  @apply flex items-center justify-between border-t border-base-content/10 px-3 py-1.5;
-}
-.ms-count {
-  @apply text-xs text-muted;
-}
-.ms-clear {
-  @apply cursor-pointer rounded-[var(--radius-field)] border border-primary/30 bg-primary/10 px-2 py-1 text-xs/none font-semibold text-primary transition-colors duration-150 ease-[ease] hover:border-primary/45 hover:bg-primary/18 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  /* The open list, under the summary with a small gap, squared off on top. */
+  & .ms-dropdown {
+    @apply absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-[260px] overflow-y-auto rounded-b-[var(--radius-field)] border border-base-content/20 bg-base-100 py-1;
+    box-shadow: 0 4px 12px color-mix(in oklab, var(--color-base-content) 10%, transparent);
+  }
+  & .ms-search {
+    @apply mx-2 my-1.5 flex items-center gap-1.5 rounded-[var(--radius-field)] border border-base-content/20 bg-base-200 px-2 py-1 text-muted;
+  }
+  & .ms-search-input {
+    @apply w-full border-0 bg-transparent p-0 text-[0.8125rem] text-base-content outline-0;
+  }
+  & .ms-options {
+    @apply py-0.5;
+  }
+  & .ms-option {
+    @apply flex cursor-pointer items-center gap-2.5 px-3 py-[0.4375rem] text-sm text-base-content hover:bg-base-200;
+
+    & input[type='checkbox'] {
+      @apply size-4 shrink-0 cursor-pointer accent-primary;
+    }
+  }
+  & .ms-empty {
+    @apply px-3 py-2.5 text-center text-[0.8125rem] text-muted;
+  }
+
+  /* The count of ticked colours and Clear all, under the list. */
+  & .ms-footer {
+    @apply flex items-center justify-between border-t border-base-content/10 px-3 py-1.5;
+  }
+  & .ms-count {
+    @apply text-xs text-muted;
+  }
+  & .ms-clear {
+    @apply cursor-pointer rounded-[var(--radius-field)] border border-primary/30 bg-primary/10 px-2 py-1 text-xs/none font-semibold text-primary transition-colors duration-150 ease-[ease] hover:border-primary/45 hover:bg-primary/18 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
 }
 
 /* A garment colour as a dot or a bar's segment (insights and the year in
