@@ -176,7 +176,6 @@ src/i18n/en/lang.json	"CALENDAR_DAY_SAT": "Saturday",
 # a JSON request header), an import of one name, a database constraint's generated name, a
 # vendored file's path, a tool's config key and flags, the meta tags of a captured product page,
 # daisyUI's modal backdrop, and a row of utilities and daisyUI classes in the class sorter's order.
-eslint.config.mjs	parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
 lighthouserc.js	settings: { chromeFlags: '--no-sandbox --disable-dev-shm-usage' },
 public/js/autosave.js	document.addEventListener('htmx:beforeRequest', (event) => {
 public/js/vitals.js	document.addEventListener('htmx:beforeRequest', (event) => {

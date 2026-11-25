@@ -10,14 +10,15 @@
  * commit is format-only (each one that rewrapped also changed content), and ignoring one would
  * hand its new lines to its parents.
  *
- * So this compares text instead, against every text blob in the tree of every commit not
- * authored by the owner, normalized: all whitespace removed and a trailing comma before a closing
+ * So this compares text instead, against every text blob in the tree of the fork point and
+ * each of its ancestors (scripts/ci/upstream_base, #1234: ancestry, not authorship, so a bot's or
+ * contributor's later commit is never upstream), normalized: all whitespace removed and a trailing comma before a closing
  * bracket dropped (a formatter adds or removes it when it rewraps); a line's core is that, trimmed
- * of the punctuation at its ends (a quote, a comma, a wrapper's bracket). An owner line counts as
+ * of the punctuation at its ends (a quote, a comma, a wrapper's bracket). A post-fork line counts as
  * inherited when (scripts/upstream-match.ts, inheritedLines):
  * - its core is at least MIN_CHARS long and occurs anywhere in the blobs, matched with line
  *   breaks removed, so a line that joins inherited lines or wraps inherited text still matches; or
- * - it starts a run of two or three owner lines, adjacent in one file, whose joined core equals
+ * - it starts a run of two or three post-fork lines, adjacent in one file, whose joined core equals
  *   the core of one upstream line: a formatter split that line into pieces under MIN_CHARS
  *   (#1236). Equality with a whole upstream line, not a substring, because short boilerplate lines
  *   (`<button`, `type="button"`) sit next to each other in any codebase.
@@ -27,8 +28,8 @@
  * imports and two-class rows; a line that long and found verbatim in upstream text is either
  * inherited or a one-form fact, which scripts/ci/upstream_exempt.txt lists with its reason.
  *
- * Usage: upstream-rewraps.ts <owned-lines> <owner email>...; <owned-lines> holds
- * `<file>\t<line number>\t<trimmed text>` per substantive owner line, as upstream_lines.sh's awk
+ * Usage: upstream-rewraps.ts <post-fork-lines> <fork point sha>; <post-fork-lines> holds
+ * `<file>\t<line number>\t<trimmed text>` per substantive line blamed after the fork point, as upstream_lines.sh's awk
  * writes it. Prints the same three fields for each inherited one.
  */
 import { execFileSync } from 'node:child_process';
@@ -47,14 +48,11 @@ function git(args: string[], input?: string): Buffer {
   return execFileSync('git', args, { input, maxBuffer: 1 << 30 });
 }
 
-function upstreamCorpus(owners: Set<string>): UpstreamCorpus {
-  const upstreamCommits = git(['log', '--format=%H%x09%ae', 'HEAD'])
+function upstreamCorpus(base: string): UpstreamCorpus {
+  const upstreamCommits = git(['rev-list', base])
     .toString()
     .split('\n')
-    .filter(Boolean)
-    .map((line) => line.split('\t'))
-    .filter(([, email]) => !owners.has(email))
-    .map(([sha]) => sha);
+    .filter(Boolean);
 
   const blobs = new Set<string>();
   for (const sha of upstreamCommits) {
@@ -85,8 +83,8 @@ function upstreamCorpus(owners: Set<string>): UpstreamCorpus {
 }
 
 function main(): void {
-  const [ownedPath, ...ownerEmails] = process.argv.slice(2);
-  const corpus = upstreamCorpus(new Set(ownerEmails));
+  const [ownedPath, base] = process.argv.slice(2);
+  const corpus = upstreamCorpus(base);
   const owned: OwnedLine[] = readFileSync(ownedPath, 'utf8')
     .split('\n')
     .filter(Boolean)
