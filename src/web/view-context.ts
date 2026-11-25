@@ -25,7 +25,7 @@ export interface ViewContext {
   /** SENTRY_DSN: signed-in pages load the error beacon (public/js/errors.js). */
   errorTrackingEnabled: boolean;
   /**
-   * The signed-in user is ORDER_MAIL_OWNER, with the order mail on (#25):
+   * The signed-in user is the order mail's owner, with it on (#25):
    * the Wardrobe's ⋯ menu links "From your orders".
    */
   orderReview: boolean;
@@ -74,7 +74,7 @@ export interface ViewContextConfig {
   weatherEnabled: boolean;
   metricsEnabled: boolean;
   errorTrackingEnabled: boolean;
-  /** ORDER_MAIL_OWNER's account id, when the order mail is on (#706). */
+  /** The order mail's stored owner, when the order mail is on (#976). */
   orderMailOwnerId: number | undefined;
   /** BuildInfo.release and BuildInfo.assetVersion. */
   release: string;

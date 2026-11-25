@@ -42,7 +42,7 @@ import { judgeSender } from './trust';
  * page through the link import's reader (readProductPage: the user URL
  * fetcher, SSRF-safe, bounded, every redirect a product link), and the
  * products it names listed for
- * ORDER_MAIL_OWNER's account to review. Run by server.ts's timer through
+ * the stored owner's account to review. Run by server.ts's timer through
  * pollOrderMailWhole inside metrics.timeJob('order_mail'), so a failure
  * (JMAP unreachable or refusing, a failing email) counts
  * as the job's.
@@ -75,7 +75,7 @@ export interface OrderMailDeps {
   fetcher: OutboundFetcher;
   /** ORDER_MAIL_SENDERS, lower case. */
   senders: readonly string[];
-  /** ORDER_MAIL_OWNER's account, resolved once at boot (createApp, #706). */
+  /** The stored owner's account, read once at boot (resolveOrderMailOwner, #976). */
   ownerId: number;
   /** Set once that account is deleted: the poll then does nothing (#706). */
   ownerWatch: OrderMailOwnerWatch;
@@ -127,14 +127,15 @@ export async function pollOrderMail(deps: OrderMailDeps): Promise<PollSummary> {
   const started = performance.now();
   const mailbox = await deps.jmap.open();
   // The owner check and the watermark in one statement, so the JMAP session
-  // comes first (#173: the watermark needs its account id). A deleted owner
-  // ends the run before anything is read or written, and every later one
-  // before the session: one error, the degraded readiness check (#706).
+  // comes first (#173: the watermark needs its account id). An owner deleted
+  // or rebound since the boot ends the run before anything is read or
+  // written, and every later one before the session: one error, the
+  // degraded readiness check (#706, #976).
   const { ownerId } = deps;
   const start = await pollStart(db, ownerId, mailbox.accountId);
   const { watermark } = start;
-  if (!start.ownerExists) {
-    deps.ownerWatch.markMissing('poll');
+  if (!start.ownerBound) {
+    deps.ownerWatch.markMissing('unbound');
     return NOTHING_POLLED;
   }
   const ids = await mailbox.inboxIds(watermark);

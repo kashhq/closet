@@ -195,7 +195,7 @@ make ci-unit | ci-db | ci-e2e # the plan's jobs
 make review PR=<n>            # one local review round; make merge PR=<n> squash-merges
 ```
 
-The CLIs (`maintenance:reconcile`, `user:set-password`, `push:revoke-all`, `seed`, `cutout:fetch-model`) run from `dist/` and never migrate; Builds, test suites, and `npm ci` go through a `build:build-runner` subagent, never inline.
+The CLIs (`maintenance:reconcile`, `user:set-password`, `push:revoke-all`, `order-mail:bind-owner`, `seed`, `cutout:fetch-model`) run from `dist/` and never migrate; Builds, test suites, and `npm ci` go through a `build:build-runner` subagent, never inline.
 
 ## Deliberate exceptions
 
