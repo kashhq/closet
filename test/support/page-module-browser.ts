@@ -11,11 +11,15 @@ import { build } from 'esbuild';
 /**
  * Bundles `contents` (an entry importing a page module by its repo path) as
  * the page build does: from source, `confirm-sheet` resolved to its public file.
+ * `aliases` stands a file in for another bare import (the import map's names).
  */
-export async function bundlePageModule(contents: string): Promise<string> {
+export async function bundlePageModule(
+  contents: string,
+  aliases: Record<string, string> = {},
+): Promise<string> {
   const result = await build({
     stdin: { contents, resolveDir: '.', loader: 'ts' },
-    alias: { 'confirm-sheet': 'public/js/confirm-sheet.js' },
+    alias: { 'confirm-sheet': 'public/js/confirm-sheet.js', ...aliases },
     bundle: true,
     format: 'iife',
     write: false,
