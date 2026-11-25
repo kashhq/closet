@@ -13,9 +13,15 @@ import { addDays, type IsoDate } from '../../src/calendar-date';
 import {
   availableGarment,
   dirtyCopiesSql,
+  markWashed,
   wearsSinceWashSql,
 } from '../../src/web/wears/queries';
-import { WASH_CASES, washCaseRows } from '../support/wash-cases';
+import {
+  WASH_CASES,
+  WASH_MOVE_CASES,
+  washCaseRows,
+  washMoveRows,
+} from '../support/wash-cases';
 import { t as text } from '../../src/web/i18n';
 import { createGarment } from './garments';
 import {
@@ -912,6 +918,35 @@ describe('wears and washes', () => {
       const expected = WASH_CASES.map((c) => [c.name, c.count]);
       expect(sqlCounts).toEqual(expected);
       expect(pure).toEqual(expected);
+    });
+
+    // washMoves' SQL twin, markWashed's update, over the pure rule's table (#793).
+    it('moves a wash by the same rule in SQL as in TypeScript, on every case', async () => {
+      const instant = (ms: number | null) =>
+        ms === null ? null : new Date(ms);
+      const answers: [string, boolean][] = [];
+      for (const c of WASH_MOVE_CASES) {
+        const id = await createGarment(t, { name: c.name, category: 'tops' });
+        const { stored, next } = washMoveRows(c, daysAgo(2), t.timeZone);
+        await asFixture(t.db, (tx) =>
+          tx
+            .update(garment)
+            .set({
+              lastWashedOn: stored?.day ?? null,
+              washedAt: instant(stored?.washedAt ?? null),
+            })
+            .where(eq(garment.id, id)),
+        );
+        const { washed } = await markWashed(
+          t.db,
+          t.owner.id,
+          [id],
+          next.day,
+          instant(next.washedAt),
+        );
+        answers.push([c.name, washed[0].changed]);
+      }
+      expect(answers).toEqual(WASH_MOVE_CASES.map((c) => [c.name, c.moves]));
     });
   });
 

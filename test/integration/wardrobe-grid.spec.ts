@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -180,6 +180,35 @@ describe('wardrobe grid', () => {
       ]);
     } finally {
       await rename({ name, notes: null });
+    }
+  });
+
+  // The SQL split is WORD_SPACES, the keyword's own (#789): `[[:space:]]`
+  // kept a BOM inside a word and split on a NEL the keyword's `\s` keeps.
+  it('splits a stored name on the same spaces as the keyword', async () => {
+    const pasted = await asFixture(t.db, (tx) =>
+      tx
+        .insert(garment)
+        .values(
+          ['Navy\u00a0blazer', 'Navy\ufeffblazer', 'Navy\u0085blazer'].map(
+            (name) => ({
+              shareableId: randomUUID(),
+              ownerId: t.owner.id,
+              name,
+              category: 'outerwear',
+            }),
+          ),
+        )
+        .returning({ id: garment.id }),
+    );
+    const pastedIds = pasted.map((row) => row.id);
+    try {
+      const { html } = await get('/wardrobe?keyword=blazer');
+      expect(tileIds(html).sort()).toEqual([...pastedIds].sort());
+    } finally {
+      await asFixture(t.db, (tx) =>
+        tx.delete(garment).where(inArray(garment.id, pastedIds)),
+      );
     }
   });
 

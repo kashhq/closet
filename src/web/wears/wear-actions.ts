@@ -12,7 +12,7 @@ import {
   garmentWardrobe,
 } from '../wardrobe/garment-access';
 import { findGarment } from '../wardrobe/queries';
-import { markWashed, setAway, setWoreToday } from './queries';
+import { markWashed, setAway, setWoreToday, type WashOutcome } from './queries';
 
 /**
  * The wear path (#188, #193a): Wore today, Washed and away on one garment,
@@ -92,13 +92,9 @@ export async function washGarment(
   wash: { day: IsoDate; at: Date | null },
 ): Promise<WearWrite> {
   const { access } = await garmentWardrobe(db, actor, address, 'own');
-  const [washed] = await markWashed(
-    db,
-    access.ownerId,
-    [address.id],
-    wash.day,
-    wash.at,
-  );
+  const {
+    washed: [washed],
+  } = await markWashed(db, access.ownerId, [address.id], wash.day, wash.at);
   if (!washed) throw await refusalOf(db, address.id, access.ownerId);
   logOp(logger, actor, 'garment.washed', {
     garmentId: address.id,
@@ -109,29 +105,32 @@ export async function washGarment(
 }
 
 /**
- * Laundry's batch (the laundry page, `POST /laundry-washes`, mark_washed): the
- * actor's own garments named, others ignored like unknown ones. Answers the
- * garments washed.
+ * Laundry's batch (the laundry page, `POST /garments/washes`, mark_washed,
+ * select mode's Mark washed with `closetOnly`): the actor's own garments
+ * named, the rest left unwashed and counted by why (WashOutcome).
  */
 export async function washGarments(
   { db, logger }: ActionDeps,
   actor: Actor,
   garmentIds: number[],
   wash: { day: IsoDate; at: Date | null },
-): Promise<{ id: number; changed: boolean }[]> {
-  const washed = await markWashed(
+  options: { closetOnly?: boolean } = {},
+): Promise<WashOutcome> {
+  const outcome = await markWashed(
     db,
     actor.userId,
     garmentIds,
     wash.day,
     wash.at,
+    options,
   );
   logOp(logger, actor, 'garments.washed', {
     day: wash.day,
-    washed: washed.length,
+    washed: outcome.washed.length,
     asked: garmentIds.length,
+    ...outcome.skipped,
   });
-  return washed;
+  return outcome;
 }
 
 /** Away (lent, at the repair shop) with a note, or back in the closet (null): setAway. */

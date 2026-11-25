@@ -247,10 +247,15 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request) => {
       const { garmentIds } = request.body;
       const day = judgedDay(request.body.day);
-      const washed = await washGarments(deps, actorOf(request), garmentIds, {
-        day,
-        at: postedInstant(request, request.body.at, day, config.timeZone),
-      });
+      const { washed } = await washGarments(
+        deps,
+        actorOf(request),
+        garmentIds,
+        {
+          day,
+          at: postedInstant(request, request.body.at, day, config.timeZone),
+        },
+      );
       return { washed: washed.map((row) => row.id) };
     },
   );

@@ -27,7 +27,7 @@ import {
   taggedGarmentIn,
 } from './garment-access';
 import { bulkSetGarments, tagGarment } from './garment-actions';
-import { markWashed } from '../wears/queries';
+import { washGarments } from '../wears/wear-actions';
 import { type GridFilters, gridIds, gridPage, nextToTag } from './queries';
 import { type GridContextPart, gridContext } from './grid-context';
 import {
@@ -448,37 +448,32 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   );
 
   // Mark washed: the owner's own record (wears and washes are never a
-  // grantee's), today, as the laundry's batch (markWashed). The closet's
+  // grantee's), today, as the laundry's batch (washGarments). The closet's
   // garments only: Select all on "Include archived" must not wash the archive
-  // (#816; a garment's own page still may). Not queued
-  // offline like the laundry's: "Select all" is resolved here, so the
-  // verbs need the server (data-needs-network on the bar).
+  // (#816; a garment's own page still may), and the toast's skipped are those
+  // archived, never every id not washed (#819): one deleted in another tab,
+  // or a hand-built post's wishlist, foreign or repeated id, is not
+  // "archived". Not queued offline like the laundry's: "Select all" is
+  // resolved here, so the verbs need the server (data-needs-network on the
+  // bar).
   app.post(
     '/wardrobe/bulk/washed',
     { schema: { querystring: GridQuery, body: SelectionBody } },
     async (request, reply) => {
       const { access, viewOwner } = await authorize(request, 'own');
       const selection = await selected(access, request);
-      const { ids } = selection;
       const day = todayIn(config.timeZone, new Date());
-      const washed =
-        ids.length > 0
-          ? await markWashed(
-              db,
-              access.ownerId,
-              ids,
-              day,
-              postedInstant(request, undefined, day, config.timeZone),
-              { closetOnly: true },
-            )
-          : [];
-      logger.info(
-        `Bulk wash by user ${sessionUserId(request)} on ${day}: ${washed.length} washed, ${ids.length} selected${allNote(selection)}`,
+      const { washed, skipped } = await washGarments(
+        { db, logger },
+        actorOf(request),
+        selection.ids,
+        { day, at: postedInstant(request, undefined, day, config.timeZone) },
+        { closetOnly: true },
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
           bulkWashed: washed.length,
-          bulkSkipped: ids.length - washed.length,
+          bulkSkipped: skipped.archived,
         }),
         303,
       );

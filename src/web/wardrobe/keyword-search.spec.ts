@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keywordTokens } from './keyword-search';
+import { keywordTokens, WORD_SPACES } from './keyword-search';
 
 // The labels' side of the keyword (#673): which stored keys a word names.
 // The SQL side, and that the two agree, is wardrobe-grid's and mcp-seed's.
@@ -40,5 +40,22 @@ describe('keywordTokens', () => {
       { text: 'crèmes', folded: true },
       { text: 'naïve', folded: true },
     ]);
+  });
+
+  it('splits on WORD_SPACES: JS whitespace and Unicode White_Space, nothing else (#789)', () => {
+    const spaces: string[] = [];
+    for (let code = 0; code <= 0x10ffff; code++) {
+      const char = String.fromCodePoint(code);
+      if (/\s/u.test(char) || /\p{White_Space}/u.test(char)) spaces.push(char);
+    }
+    expect([...WORD_SPACES].sort()).toEqual(spaces.sort());
+    expect(keywordTokens('navy\u00a0blazer\ufeffwool\u0085coat')).toMatchObject(
+      [
+        { text: 'navy' },
+        { text: 'blazer' },
+        { text: 'wool' },
+        { text: 'coat' },
+      ],
+    );
   });
 });
