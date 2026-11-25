@@ -54,7 +54,7 @@ import { TODAY_PATH, todayIdeasUrl, WEAR_THIS_PATH, WORE_FLAG } from './urls';
  *
  * Until the closet can be dressed as an outfit (`model.firstRun`, #666)
  * the page is the first-run path instead: a welcome and one primary
- * action, "Add a garment to start", opening the add sheet (camera first);
+ * action, "Add your first garment", opening the add sheet (camera first);
  * the weather line (the city) once a garment is in; no plan controls and
  * no ideas until then, as they could plan nothing.
  */

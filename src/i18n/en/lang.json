@@ -535,7 +535,7 @@
   "SHARE_ERROR_NOT_FOUND": "Invite not found or has already been accepted.",
   "SHARE_ERROR_EXPIRED": "This invite has expired. Ask for a new link.",
   "SHARE_ERROR_OWN_INVITE": "You cannot accept your own invite.",
-  "SHARE_ERROR_WRONG_RECIPIENT": "This invite was sent to a different email address.",
+  "SHARE_ERROR_WRONG_RECIPIENT": "This invite is addressed to another email address.",
   "SHARE_ERROR_ALREADY_SHARED": "You already have access to this wardrobe.",
   "MY_WARDROBE": "My wardrobe",
   "ABOUT_TITLE": "About",

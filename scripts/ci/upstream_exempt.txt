@@ -73,6 +73,31 @@ views/assets/main.css	.color-ms {
 src/web/wardrobe/garment-page.tsx	<div class="flex flex-wrap items-center gap-3">
 src/web/wardrobe/garment-page.tsx	<div class="join">
 
+# Lines written afresh that `blame -C -C -C` matches to an identical line in another inherited
+# file (#1232). Each has one form: importing Fastify's two request types (the import's member
+# order is the linter's), the standard viewport, Open Graph and Twitter card tags, a form field's
+# `name`, and a row of utilities and daisyUI classes in the class sorter's order.
+src/web/auth/require-session.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/auth/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/auth/session.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/errors.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/render.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/wardrobe/link-import/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/weather/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/layout/layout.tsx	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+src/web/layout/layout.tsx	<meta property="og:image:width" content="1000" />
+src/web/layout/layout.tsx	<meta property="og:image:height" content="1000" />
+src/web/layout/layout.tsx	<meta name="twitter:card" content="summary_large_image" />
+src/web/push/settings.tsx	<div class="flex items-center justify-between gap-2">
+src/web/share/share-button.tsx	<div class="flex items-center justify-between gap-2">
+src/web/sizes/views.tsx	<div class="flex items-center justify-between gap-2">
+src/web/trips/trip-page.tsx	<div class="flex items-center justify-between gap-2">
+src/web/weather/settings.tsx	<div class="flex items-center justify-between gap-2">
+src/web/style/style-page.tsx	name="notes"
+src/web/style/style-page.tsx	class="textarea textarea-bordered w-full"
+src/web/trips/form-page.tsx	name="notes"
+src/web/trips/form-page.tsx	class="textarea textarea-bordered w-full"
+
 # One-word UI labels and the calendar's names of months and days: the English word is the string.
 src/i18n/en/lang.json	"validation": {
 src/i18n/en/lang.json	"PROFILE": "Profile",

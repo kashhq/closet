@@ -3,10 +3,11 @@
 # project's code and could be relicensed MIT only once none of its expression was left: only a
 # copyright holder can relicense. This script is the proof; `make upstream-check` runs it.
 #
-# Upstream, defined: a line whose `git blame -w -M -C` author email is not in OWNER_EMAILS. The
-# email, not the name: the owner commits under two names. -w ignores whitespace
-# edits and -M/-C follow lines moved within a file or copied across files, so reformatting or
-# moving an inherited line does not make it the owner's; only new expression does.
+# Upstream, defined: a line whose `git blame -w -M -C -C -C` author email is not in OWNER_EMAILS.
+# The email, not the name: the owner commits under two names. -w ignores whitespace edits, -M
+# follows lines moved within a file and -C -C -C lines copied from any file in any commit (one -C
+# looks only at files the same commit changed), so reformatting, moving or copying an inherited
+# line does not make it the owner's; only new expression does.
 # Substantive only: a line with no letter or digit (blank, a lone brace, `);`) carries no
 # expression and cannot be re-authored, so it is not counted.
 # Exempt: a line in scripts/ci/upstream_exempt.txt, which lists, per file, the inherited lines
@@ -14,7 +15,10 @@
 # a month's name) and so cannot be written another way; that file says why for each group. An
 # entry that no longer matches an inherited line fails the run, so the list only shrinks.
 #
-# Blames HEAD, so commit first. Text files only (grep -I skips binaries); the lockfile is skipped.
+# Blames HEAD, so commit first. Text files only (grep -I skips binaries). Generated files are
+# skipped, their source being blamed instead: the lockfile, and drizzle-kit's snapshots (written
+# from src/db/schema.ts, never edited, immutable once shipped; -C -C -C finds the column names
+# every later snapshot repeats from the first, which are the schema's, not anyone's expression).
 # Output: `<upstream>\t<total>\t<file>` per file with any, then the UPSTREAM summary; exit 1 while
 # any remain or an exemption is stale. Minutes over the whole tree, so it is in no tier.
 set -euo pipefail
@@ -27,14 +31,20 @@ OWNER_EMAILS='8147664+kashhq@users.noreply.github.com kashhq@users.noreply.githu
 EXEMPT=scripts/ci/upstream_exempt.txt
 
 matched=$(mktemp)
-trap 'rm -f "$matched"' EXIT
+blame=$(mktemp)
+trap 'rm -f "$matched" "$blame"' EXIT
 
 upstream_total=0
 upstream_files=0
 exempt_total=0
 while IFS= read -r -d '' file; do
   if [ ! -f "$file" ] || ! grep -Iq . "$file"; then continue; fi
-  read -r upstream exempt total < <(git blame --line-porcelain -w -M -C HEAD -- "$file" | awk \
+  # Blame to a file, not a pipe: a failed blame must stop the run, never read as a clean file.
+  if ! git blame --line-porcelain -w -M -C -C -C HEAD -- "$file" > "$blame"; then
+    echo "upstream-check: git blame failed for $file" >&2
+    exit 2
+  fi
+  read -r upstream exempt total < <(awk \
     -v owners="$OWNER_EMAILS" -v exempt_file="$EXEMPT" -v file="$file" -v matched="$matched" '
     function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
     BEGIN {
@@ -53,14 +63,14 @@ while IFS= read -r -d '' file; do
       if (text in allowed) { exempt++; print file "\t" text >> matched } else upstream++
     }
     END { printf "%d %d %d\n", upstream, exempt, total }
-  ')
+  ' "$blame")
   exempt_total=$((exempt_total + exempt))
   if [ "$upstream" -gt 0 ]; then
     printf '%d\t%d\t%s\n' "$upstream" "$total" "$file"
     upstream_total=$((upstream_total + upstream))
     upstream_files=$((upstream_files + 1))
   fi
-done < <(git ls-files -z -- ':!package-lock.json')
+done < <(git ls-files -z -- ':!package-lock.json' ':!drizzle/meta/*_snapshot.json')
 
 stale=$(comm -23 <(grep -v '^#' "$EXEMPT" | grep $'\t' | sort -u) <(sort -u "$matched"))
 if [ -n "$stale" ]; then
