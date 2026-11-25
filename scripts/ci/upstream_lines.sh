@@ -40,6 +40,20 @@ cd "$(git rev-parse --show-toplevel)"
 OWNER_EMAILS='8147664+kashhq@users.noreply.github.com kashhq@users.noreply.github.com'
 EXEMPT=scripts/ci/upstream_exempt.txt
 
+# A 0 proves something only over the whole history: a shallow clone blames every line to its
+# boundary commit (the owner's), and one with no inherited commit has nothing to compare against.
+if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+  echo "upstream-check: shallow clone; run git fetch --unshallow first" >&2
+  exit 2
+fi
+owner_re=$(tr ' ' '\n' <<<"$OWNER_EMAILS" | sed 's/[.+]/\\&/g' | paste -sd'|' -)
+# grep -c reads to the end: -q would stop early and SIGPIPE git log under pipefail.
+inherited=$(git log --format=%ae HEAD | grep -cvxE "$owner_re" || true)
+if [ "${inherited:-0}" -eq 0 ]; then
+  echo "upstream-check: no inherited commit in this history, so nothing to check against" >&2
+  exit 2
+fi
+
 matched=$(mktemp)
 blame=$(mktemp)
 owned=$(mktemp)
