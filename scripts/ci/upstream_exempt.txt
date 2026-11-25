@@ -52,8 +52,6 @@ views/assets/src-sw.ts	import { CacheableResponsePlugin } from 'workbox-cacheabl
 views/assets/src-sw.ts	import { registerRoute, setCatchHandler } from 'workbox-routing';
 
 # package.json's keys, and dependencies whose locked version is still the range's floor.
-# "version" is #637's to settle.
-package.json	"version": "0.5.1",
 package.json	"private": true,
 package.json	"engines": {
 package.json	"scripts": {

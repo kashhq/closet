@@ -17,7 +17,7 @@ Closet needs PostgreSQL 18, the version every test tier runs; the example below 
 ```yaml
 services:
   closet:
-    image: ghcr.io/kashhq/closet:latest
+    image: ghcr.io/kashhq/closet:0.1
     ports:
       - '3000:3000'
     volumes:
@@ -67,6 +67,8 @@ volumes:
   closet_pg:
 ```
 
+`0.1` is a release: a named, kept build of the first stable state, which a `0.1.x` patch release moves forward. `latest` follows every merge to `main`, so it upgrades you unannounced.
+
 **Behind HTTPS.** The installed app, its offline shell and push need a secure origin. With `PWA_ENABLED: 'true'` the server refuses to start unless `SITE_URL` is an `https://` URL and both VAPID keys are set, and it names the missing key. Set `TRUSTED_PROXIES` to your reverse proxy so the client address is read correctly.
 
 Open [http://localhost:3000](http://localhost:3000) and create an account: signing in is always required. Once everyone in the household has signed up, set `DISABLE_REGISTRATION=true`.
@@ -75,7 +77,7 @@ Open [http://localhost:3000](http://localhost:3000) and create an account: signi
 
 Closet applies its database migrations at boot, so starting a newer image is the upgrade. Migrations only go forward: there is no downgrade. To go back, stop Closet and restore the **pair** taken before the upgrade, the Postgres dump and the `DATA_PATH` backup together (the nightly storage reconciliation deletes photos no database row references, so a mismatched pair loses photos). An older image on a newer database is unsupported; the known cases are in [docs/operations.md](docs/operations.md).
 
-Pin an immutable image tag, not `latest`, so a pull never upgrades you unannounced: `ghcr.io/kashhq/closet:sha-<7>`, the 7-character commit shown as `version` by `/health/ready` and the About page. Only the 10 newest `sha-*` tags are kept, so move the pin forward from time to time. Before changing the pin, take a database dump and a `DATA_PATH` backup.
+Pin a release tag, not `latest`, so a pull never upgrades you unannounced: `0.1` follows that release line's patches, `0.1.0` stays on one release; both are kept for good. For an exact build, `sha-<7>` is the 7-character commit shown as `version` by `/health/ready` and the About page, but only the 10 newest `sha-*` tags are kept, so move that pin forward from time to time. Before changing the pin, take a database dump and a `DATA_PATH` backup.
 
 One-off steps after an upgrade, each needed once, by the release that introduced it:
 

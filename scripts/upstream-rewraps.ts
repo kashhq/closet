@@ -15,9 +15,11 @@
  * a joined line still matches) and a trailing comma before a closing bracket dropped (a
  * formatter adds or removes it when it rewraps). An owner line counts as inherited when its own
  * text, normalized the same way and trimmed of the punctuation at its ends (a quote, a comma, a
- * wrapper's bracket), is at least MIN_CHARS long and occurs anywhere in that corpus.
+ * wrapper's bracket), is at least MIN_CHARS long and occurs anywhere in that corpus. So does a run
+ * of up to three consecutive owner lines of one file, joined (a formatter split an inherited line
+ * into pieces under MIN_CHARS: #1236); the hit is reported at the run's first line.
  *
- * MIN_CHARS keeps out the fragments every codebase shares: below 40 characters the matches are
+ * MIN_CHARS (scripts/upstream-match.ts) keeps out the fragments every codebase shares: below 40 characters the matches are
  * one-name imports and two-class rows; a line that long and found verbatim in upstream text is
  * either inherited or a one-form fact, which scripts/ci/upstream_exempt.txt lists with its
  * reason.
@@ -28,16 +30,12 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { inheritedLines, normalize, type OwnedLine } from './upstream-match';
 
-const MIN_CHARS = 40;
 const BINARY_PROBE_BYTES = 8000;
 
 function git(args: string[], input?: string): Buffer {
   return execFileSync('git', args, { input, maxBuffer: 1 << 30 });
-}
-
-function normalize(text: string): string {
-  return text.replace(/\s+/g, '').replace(/,([)\]}])/g, '$1');
 }
 
 function upstreamCorpus(owners: Set<string>): string {
@@ -80,19 +78,15 @@ function upstreamCorpus(owners: Set<string>): string {
 function main(): void {
   const [ownedPath, ...ownerEmails] = process.argv.slice(2);
   const corpus = upstreamCorpus(new Set(ownerEmails));
-  const verdicts = new Map<string, boolean>();
-  for (const line of readFileSync(ownedPath, 'utf8').split('\n')) {
-    if (!line) continue;
-    const [file, lineNumber, ...rest] = line.split('\t');
-    const text = rest.join('\t');
-    const core = normalize(text).replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
-    if (core.length < MIN_CHARS) continue;
-    let inherited = verdicts.get(core);
-    if (inherited === undefined) {
-      inherited = corpus.includes(core);
-      verdicts.set(core, inherited);
-    }
-    if (inherited) console.log(`${file}\t${lineNumber}\t${text}`);
+  const owned: OwnedLine[] = readFileSync(ownedPath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [file, lineNumber, ...rest] = line.split('\t');
+      return { file, lineNumber, text: rest.join('\t') };
+    });
+  for (const { file, lineNumber, text } of inheritedLines(owned, corpus)) {
+    console.log(`${file}\t${lineNumber}\t${text}`);
   }
 }
 

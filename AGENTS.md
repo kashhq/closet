@@ -163,7 +163,7 @@ In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 
 Merging to `main` deploys: the publisher host's `make publish` (never the Mac: arm64) pushes the image and the hourly autoupdater pulls it. Env, recovery, publishing: `docs/operations.md`.
 
-- **`APP_VERSION` is the bare 7-char sha** (`docs/decisions.md` 2026-10-13), passed once by the publisher; only the image _tag_ says `sha-<7>`. Compose and `.env` never set it (`make release-check`). **Only the publisher moves `latest`**, then tags `ship-<YYYY-MM-DD>-<sha7>`. No semver or date tags.
+- **`APP_VERSION` is the bare 7-char sha** (`docs/decisions.md` 2026-10-13), passed once by the publisher; only the image _tag_ says `sha-<7>`. Compose and `.env` never set it (`make release-check`). **Only the publisher moves `latest`**, then tags `ship-<YYYY-MM-DD>-<sha7>`. No semver or date image _builds_; a release only names a shipped commit (`make release VERSION=x.y.z`: tag `v<x.y.z>`, GHCR `<x.y.z>` and `<x.y>`, kept by the prune; 2026-11-25, #637). `package.json` `version` is `0.0.0`; nothing reads it (`make release-check`).
 
 ## Convention deltas
 
