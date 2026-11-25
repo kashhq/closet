@@ -261,11 +261,13 @@ const recordClientSession = (message: unknown) => {
 
 /**
  * Every fetch, whatever its outcome, has destroyed the client session it
- * built by the time it settles: one left to the GC aborts the process. Run
- * before a test's servers close, whose hang-up would destroy a leaked one.
+ * built by the time it settles: one left to the GC aborts the process.
+ * Collect before a test's servers close, whose hang-up would destroy a
+ * leaked one, but assert only after they closed (in a `finally`): a throw
+ * first would leave them open in the shared fork.
  */
-function expectClientSessionsDestroyed(): void {
-  expect(clientSessions.splice(0).filter((s) => !s.destroyed)).toEqual([]);
+function undestroyedClientSessions(): ClientHttp2Session[] {
+  return clientSessions.splice(0).filter((s) => !s.destroyed);
 }
 
 /** A resolver answering from a table; `calls` records every lookup. */
@@ -344,9 +346,13 @@ describe('outbound fetch (SSRF guard)', () => {
   });
 
   afterEach(async () => {
-    expectClientSessionsDestroyed();
-    await Promise.all(servers.splice(0).map((server) => server.close()));
-    expect(privateServer.hits).toEqual([]);
+    const leaked = undestroyedClientSessions();
+    try {
+      await Promise.all(servers.splice(0).map((server) => server.close()));
+      expect(privateServer.hits).toEqual([]);
+    } finally {
+      expect(leaked).toEqual([]);
+    }
   });
 
   describe('a page on the public internet', () => {
@@ -1255,8 +1261,12 @@ describe('outbound fetch (SSRF guard)', () => {
     ]);
     const h2Servers: { close(): Promise<void> }[] = [];
     afterEach(async () => {
-      expectClientSessionsDestroyed();
-      await Promise.all(h2Servers.splice(0).map((server) => server.close()));
+      const leaked = undestroyedClientSessions();
+      try {
+        await Promise.all(h2Servers.splice(0).map((server) => server.close()));
+      } finally {
+        expect(leaked).toEqual([]);
+      }
     });
 
     /** An h2 server (HTTP/1.1 to a client offering only that) on `host`. */
