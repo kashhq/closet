@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { escapeHtml, jsonForScript } from './html';
 import { t, tHtml } from './i18n';
@@ -22,7 +23,7 @@ function Card(props: { name: string }) {
 }
 
 async function Slow(props: { name: string }) {
-  await new Promise((resolve) => setTimeout(resolve, 1));
+  await sleep(1);
   return <span>{props.name}</span>;
 }
 
@@ -73,7 +74,7 @@ describe('t', () => {
 
   it('reads nested keys', () => {
     expect(t('validation.IS_EMAIL')).toBe(
-      'Please provide a valid email address',
+      'Enter an email address, like name@example.com',
     );
   });
 
@@ -85,10 +86,9 @@ describe('t', () => {
 
 describe('tHtml', () => {
   it('keeps the trusted markup and escapes the parameters', () => {
-    const html = tHtml('ABOUT_INTRO', { appName: EVIL });
-    expect(html.startsWith(`${ESCAPED} is a private fork of <a href=`)).toBe(
-      true,
-    );
+    const html = tHtml('ABOUT_OPEN_SOURCE_DESC', { appName: EVIL });
+    expect(html.startsWith(`${ESCAPED} is free software`)).toBe(true);
+    expect(html).toContain('<a href="https://github.com/kashhq/closet"');
     expect(html).not.toContain('<script>');
   });
 });

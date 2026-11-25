@@ -82,7 +82,7 @@ describe('cutouts: upload, page and polling', () => {
         `<div id="garment-photo" hx-get="/wardrobe/${id}/cutout\\?poll=1" hx-trigger="every 2s" hx-swap="outerHTML" hx-indicator="#garment-photo-status">`,
       ),
     );
-    expect(html).toContain('Removing background…');
+    expect(html).toContain('Cutting out the background…');
     // Nothing to edit yet; the photo sheet posts the photo alone, prepared
     // on the phone first.
     expect(html).not.toContain('id="editMaskBtn"');
@@ -109,7 +109,7 @@ describe('cutouts: upload, page and polling', () => {
     expect(html).toContain(
       `<div id="garment-photo" hx-get="/wardrobe/${id}/cutout?poll=1&place=form" hx-trigger="every 2s"`,
     );
-    expect(html).toContain('Removing background…');
+    expect(html).toContain('Cutting out the background…');
     expect(html).toMatch(
       /<img src="\/file\/[^"]+" alt="Form shirt" class="object-contain w-full h-full" loading="lazy"\/?>/,
     );
@@ -217,7 +217,7 @@ describe('cutouts: upload, page and polling', () => {
       ] as const) {
         const html = await poll(n);
         expect(html).toContain(polls(id, n, every));
-        expect(html).toContain('Removing background…');
+        expect(html).toContain('Cutting out the background…');
       }
       const capped = await poll(24);
       expect(capped).toContain('<div id="garment-photo">');
@@ -225,7 +225,7 @@ describe('cutouts: upload, page and polling', () => {
       expect(capped).toContain(
         'Background removal is queued and will finish later.',
       );
-      expect(capped).not.toContain('Removing background…');
+      expect(capped).not.toContain('Cutting out the background…');
       // URL state is a fallback, never a 400: a count past the clamp (a page
       // left open for hours) or one no fragment writes still answers.
       // A count past the clamp is still capped (no further poll while the
@@ -270,7 +270,7 @@ describe('cutouts: upload, page and polling', () => {
       for (const n of [24, 40]) {
         const html = await pollOf(id)(n);
         expect(html).toContain(polls(id, n, '10s'));
-        expect(html).toContain('Removing background…');
+        expect(html).toContain('Cutting out the background…');
         expect(html).not.toContain('will finish later');
       }
       release();

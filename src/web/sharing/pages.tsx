@@ -70,7 +70,7 @@ export function PermissionBadge(props: {
 /** The answer to the create-invite form (htmx swaps it into #invite-link-result). */
 export function InviteLinkResult(props: { url: string }) {
   return (
-    <div class="flex flex-col gap-3" id="invite-link-result">
+    <div id="invite-link-result" class="grid gap-3">
       <CopyableText
         value={props.url}
         size="sm"
@@ -387,10 +387,8 @@ function InviteDetails(props: {
       <p class="text-muted mb-4">
         {t('INVITE_FROM')} <strong>{from}</strong>
       </p>
-      <div class="mb-4">
-        <div class="flex items-center gap-2 mb-2">
-          <PermissionBadge permission={invite.permission} />
-        </div>
+      <div class="mb-4 space-y-2">
+        <PermissionBadge permission={invite.permission} />
         <p class="text-sm text-muted">
           {inviteeAccess(invite.permission, name)}
         </p>

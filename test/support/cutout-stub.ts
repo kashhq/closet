@@ -17,7 +17,7 @@ import type { Logger } from '../../src/logger';
  * A spec that shows the pending state holds its owner's cutouts instead
  * (`cutouts.hold(email)`, cutout-hold.ts): the stub keeps any job for a
  * photo that owner uploaded inside mask() until the spec releases it, so
- * "Removing background…" is on the page for as long as the spec looks. The
+ * "Cutting out the background…" is on the page for as long as the spec looks. The
  * queue waits meanwhile, so a spec releases as soon as it has seen the
  * pending page; the fixture releases what a failed spec left held, and
  * HOLD_LIMIT_MS bounds a hold whose worker died.

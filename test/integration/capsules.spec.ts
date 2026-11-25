@@ -380,7 +380,7 @@ describe('capsules', () => {
       // The picker does not show it either, so saving keeps it.
       const picker = await get(`/wardrobe?pick=${office}`);
       expect(picker.body).not.toContain(`name="shown" value="${ids.old}"`);
-      // "Show archived" brings it back, still a member.
+      // "Include archived" brings it back, still a member.
       const archived = await get(`/wardrobe?capsule=${office}&archived=true`);
       expect(tileNames(archived.body)).toContain('Old tee');
     });

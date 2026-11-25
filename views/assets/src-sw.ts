@@ -1,10 +1,9 @@
 import { cacheNames, clientsClaim, copyResponse } from 'workbox-core';
-import type { WorkboxPlugin } from 'workbox-core/types';
+import type { RouteMatchCallback, WorkboxPlugin } from 'workbox-core/types';
 import * as navigationPreload from 'workbox-navigation-preload';
 import { PrecacheController, PrecacheRoute } from 'workbox-precaching';
-import { warmStrategyCache } from 'workbox-recipes';
-import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheExpiration, ExpirationPlugin } from 'workbox-expiration';
 import {
   CacheFirst,
@@ -150,10 +149,12 @@ import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
  * the worker's only logs.
  */
 
-declare const self: ServiceWorkerGlobalScope;
+// The worker global, typed as the service worker it is (the WebWorker lib
+// types `self` as a plain worker).
+declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
-// https://developer.chrome.com/docs/workbox/modules/workbox-core#clients_claim
-// Top level on purpose: once the user accepts an update (SKIP_WAITING below)
+// clientsClaim (workbox-core) at the top level, on purpose.
+// Once the user accepts an update (SKIP_WAITING below)
 // the new worker must take the open pages so `controlling` fires and
 // pwa.js can reload. It claims only pages already running: one whose
 // navigation started while the first worker installed commits after this
@@ -205,7 +206,7 @@ async function answerShare(request: Request): Promise<Response> {
   return response;
 }
 
-const FALLBACK_HTML_URL = '/offline.html';
+const OFFLINE_PAGE_URL = '/offline.html';
 // v2 since 2026-09-28 (#226): dropped with the session. images-v1 outlived
 // every sign-out, so it may hold a previous account's photos; it is retired
 // on activate.
@@ -341,24 +342,22 @@ self.addEventListener('install', (event) => {
 // only that one (answerVersionedAsset); without it, the network, stored
 // nowhere. Above the precache's route, which would answer with this build's
 // bytes whatever `v` named.
-registerRoute(
-  ({ url, request }) =>
-    request.method === 'GET' &&
-    assetBuildOf(url, self.location.origin) !== undefined,
-  ({ url, request }) =>
-    answerVersionedAsset(url, self.location.origin, self.caches, () =>
-      fetch(request),
-    ),
+const isVersionedAsset: RouteMatchCallback = ({ url, request }) =>
+  request.method === 'GET' &&
+  assetBuildOf(url, self.location.origin) !== undefined;
+registerRoute(isVersionedAsset, ({ url, request }) =>
+  answerVersionedAsset(url, self.location.origin, self.caches, () =>
+    fetch(request),
+  ),
 );
 
 // The fonts bundle.css names by content hash, no `?v=`: this build's copy,
 // else a kept older build's (answerContentHashed, #780), whose page offline
 // names fonts this build may have dropped.
-registerRoute(
-  ({ url, request }) =>
-    request.method === 'GET' && isContentHashed(url, self.location.origin),
-  ({ url, request }) =>
-    answerContentHashed(url, self.caches, PRECACHE, () => fetch(request)),
+const isHashedFont: RouteMatchCallback = ({ url, request }) =>
+  request.method === 'GET' && isContentHashed(url, self.location.origin);
+registerRoute(isHashedFont, ({ url, request }) =>
+  answerContentHashed(url, self.caches, PRECACHE, () => fetch(request)),
 );
 
 // Every other precached public/ file is this build's. One a page names with
@@ -397,7 +396,7 @@ const REFRESH_BACKOFF_PREFIX =
  */
 function outsideExpiration(url: string): boolean {
   const { origin, pathname } = new URL(url);
-  return origin !== self.location.origin || pathname === FALLBACK_HTML_URL;
+  return origin !== self.location.origin || pathname === OFFLINE_PAGE_URL;
 }
 
 async function readRecord(key: string): Promise<string | undefined> {
@@ -525,7 +524,7 @@ function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
       await Promise.all(
         offlinePage.handleAll({
           event,
-          request: new Request(FALLBACK_HTML_URL),
+          request: new Request(OFFLINE_PAGE_URL),
         }),
       );
     } catch (error) {
@@ -552,7 +551,7 @@ function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
 async function ensureOfflinePage(event: ExtendableEvent): Promise<void> {
   if (offlineWarm?.generation === generation) return offlineWarm.done;
   const cache = await self.caches.open(PAGES_CACHE);
-  if (await cache.match(FALLBACK_HTML_URL)) return;
+  if (await cache.match(OFFLINE_PAGE_URL)) return;
   console.info('[sw] the offline page is missing: warming it again');
   await rewarmOfflinePage(event);
 }
@@ -584,7 +583,7 @@ function claimPageCache(
     // No owner on record: a fresh install, a drop, or a quota purge, which
     // took the offline page too. Not awaited under the lock: its own store
     // claims the cache through here.
-    if (owner === undefined && path !== FALLBACK_HTML_URL) {
+    if (owner === undefined && path !== OFFLINE_PAGE_URL) {
       event.waitUntil(ensureOfflinePage(event));
     }
     // A new owner, whether the cache held another account's pages or none
@@ -749,6 +748,10 @@ async function isOwned(copy: Response, path: string): Promise<boolean> {
   return false;
 }
 
+// Only a 200 is ever stored: a redirect, an error page or an opaque answer
+// would be served back as if it were the page.
+const okResponsesOnly = new CacheableResponsePlugin({ statuses: [200] });
+
 // Every page the cache holds follows these: the key rule (a fragment `|hx`
 // never answers a page and the other way round), the store and read rules.
 const pageRules: WorkboxPlugin[] = [
@@ -756,7 +759,7 @@ const pageRules: WorkboxPlugin[] = [
     cacheKeyWillBeUsed: async ({ request }) =>
       pageCacheKey(request.url, request.headers),
   },
-  new CacheableResponsePlugin({ statuses: [200] }),
+  okResponsesOnly,
   pageStore,
   servedCopies,
 ];
@@ -797,9 +800,12 @@ class ServerFirstPages extends NetworkFirst {
   }
 }
 
+// How long a page waits on the server before the cached copy answers.
+const PAGE_NETWORK_WAIT_SECONDS = 3;
+
 const pages = new ServerFirstPages({
   cacheName: PAGES_CACHE,
-  networkTimeoutSeconds: 3,
+  networkTimeoutSeconds: PAGE_NETWORK_WAIT_SECONDS,
   plugins: pagePlugins,
 });
 
@@ -1102,26 +1108,19 @@ const cutoutStandIn: WorkboxPlugin = {
 // routed here, so a watermark preview fetched by a share scraper never
 // fills the quota; a warm's thumbs go through images.handleAll. Outfit selfies (/selfies/**,
 // their owner's alone) match no route: the worker never stores one.
+const imageExpiry = new ExpirationPlugin({ maxEntries: IMAGE_ENTRIES, purgeOnQuotaError: true });
 const images = new CacheFirst({
   cacheName: IMAGES_CACHE,
-  plugins: [
-    new CacheableResponsePlugin({ statuses: [200] }),
-    imageStore,
-    cutoutStandIn,
-    new ExpirationPlugin({
-      maxEntries: IMAGE_ENTRIES,
-      purgeOnQuotaError: true,
-    }),
-  ],
+  // Over the quota the browser may empty this cache first: every image in
+  // it can be fetched again.
+  plugins: [okResponsesOnly, imageStore, cutoutStandIn, imageExpiry],
 });
 
-registerRoute(
-  ({ url, request }) =>
-    url.origin === self.location.origin &&
-    url.pathname.startsWith('/file/') &&
-    request.destination === 'image',
-  images,
-);
+const isStoredImage: RouteMatchCallback = ({ url, request }) =>
+  request.destination === 'image' &&
+  url.origin === self.location.origin &&
+  url.pathname.startsWith('/file/');
+registerRoute(isStoredImage, images);
 
 // Caches nothing reads any more: the in-browser background-removal model's
 // (its runtime and ~42 MB of model and WASM, filled by workers before
@@ -1177,25 +1176,31 @@ self.addEventListener('activate', (event) => {
 
 // The offline page is a rendered view, not a public/ file, so it cannot be
 // precached; warm it into the pages cache at install instead.
-warmStrategyCache({ urls: [FALLBACK_HTML_URL], strategy: offlinePage });
+self.addEventListener('install', (event) => {
+  const [, stored] = offlinePage.handleAll({
+    event,
+    request: new Request(OFFLINE_PAGE_URL),
+  });
+  event.waitUntil(stored);
+});
 
-// https://developer.chrome.com/docs/workbox/managing-fallback-responses
-// Runs when a matched route's handler fails: for a page (navigation or a
+// Workbox's catch handler: runs when a matched route's handler fails: for a page (navigation or a
 // boosted link, which swaps the whole body) serve the offline page; a
 // fragment request fails instead, which htmx reports as htmx:sendError and
 // views/assets/page/connectivity.ts turns into the offline banner.
 setCatchHandler(async ({ request }) => {
   const wantsPage =
     request.mode === 'navigate' || request.headers.get('HX-Boosted') === 'true';
-  if (wantsPage) {
-    const cache = await self.caches.open(PAGES_CACHE);
-    const fallback = await cache.match(FALLBACK_HTML_URL);
-    if (fallback && (await isOwned(fallback, FALLBACK_HTML_URL))) {
-      return fallback;
-    }
-  }
-  return Response.error();
+  const offline = wantsPage ? await ownOfflinePage() : undefined;
+  return offline ?? Response.error();
 });
+
+// The cached offline page, if it is this session's to show.
+async function ownOfflinePage(): Promise<Response | undefined> {
+  const cache = await self.caches.open(PAGES_CACHE);
+  const page = await cache.match(OFFLINE_PAGE_URL);
+  return page && (await isOwned(page, OFFLINE_PAGE_URL)) ? page : undefined;
+}
 
 // URL.canParse is Safari 17+; the installed app still meets iOS 16.
 function isOwnUrl(value: string): boolean {
@@ -1316,7 +1321,7 @@ async function refetchCachedPage(
   const request = new Request(url, { headers });
   runOf.set(request, run);
   const strategy =
-    new URL(url).pathname === FALLBACK_HTML_URL
+    new URL(url).pathname === OFFLINE_PAGE_URL
       ? offlinePageRefresh
       : pageWarmer;
   let answer: Response;
@@ -2045,21 +2050,20 @@ self.addEventListener('message', (event) => {
 // Web Push. The payload is PushPayload (src/web/push/payload.ts), the shape
 // the server's sender writes; anything else is dropped with a warning (a
 // browser may then show its own "updated in the background" notice).
-// https://web.dev/articles/push-notifications-handling-messages
 self.addEventListener('push', (event) => {
   const payload = readPushPayload(event.data);
-  if (!payload) {
-    console.warn('[sw] push message without a readable payload, ignored');
-    return;
-  }
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      tag: payload.tag,
-      data: { url: payload.url },
-    }),
-  );
+  if (payload) event.waitUntil(showPush(payload));
+  else console.warn('[sw] push message without a readable payload, ignored');
 });
+
+// The notification's tap opens payload.url (the notificationclick below).
+function showPush(payload: PushPayload): Promise<void> {
+  return self.registration.showNotification(payload.title, {
+    body: payload.body,
+    tag: payload.tag,
+    data: { url: payload.url },
+  });
+}
 
 function readPushPayload(
   data: PushMessageData | null,

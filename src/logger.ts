@@ -257,10 +257,11 @@ function fileSink(
 
 // Exported for the unit spec of the text console.
 export const PRETTY = {
-  singleLine: true,
-  colorize: true,
-  levelFirst: false,
+  // One line per entry, the level after the local time, in colour.
   translateTime: 'yyyy-mm-dd HH:MM:ss',
+  levelFirst: false,
+  colorize: true,
+  singleLine: true,
   timestampKey: 'ts',
   // The release is the same on every line; the boot log names it.
   ignore: 'pid,hostname,version',

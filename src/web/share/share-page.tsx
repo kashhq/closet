@@ -77,11 +77,9 @@ function SharedItem({ shared }: { shared: Shared }) {
       )}
       {owner && (
         <div class="fixed bottom-dock left-rail right-0 p-4 bg-gradient-to-t from-base-100 via-base-100/50 to-transparent">
-          <div class="flex flex-row gap-2 items-center justify-center">
-            <p>
-              {t('SHARED_BY')} {owner}
-            </p>
-          </div>
+          <p class="text-center">
+            {t('SHARED_BY')} {owner}
+          </p>
         </div>
       )}
     </>

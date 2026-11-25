@@ -65,7 +65,7 @@ describe('wardrobe share lifecycle', () => {
   /**
    * An invite with its grantee already set. The UI only makes open links
    * (grantee null); this is the row shape acceptInvite/declineInvite guard
-   * with "sent to a different email address", so it is written directly.
+   * with "addressed to another email address", so it is written directly.
    */
   const createAddressedInvite = async (addressee: Account) => {
     const inviteToken = randomUUID();
@@ -215,7 +215,7 @@ describe('wardrobe share lifecycle', () => {
     // Plain boosted links, whole pages: the title and the tabs change too.
     expect(menu).toContain(`href="/wardrobe?ownerId=${owner.id}"`);
     expect(menu).not.toContain('hx-target');
-    expect(menu).toContain('View only');
+    expect(menu).toContain('Can view');
     expect(menu).toContain('href="/auth/profile/sharing"');
 
     const shared = await t.inject({
@@ -583,7 +583,7 @@ describe('wardrobe share lifecycle', () => {
       await expectAcceptRefused(
         await accept(token, other),
         'wrong-recipient',
-        'This invite was sent to a different email address.',
+        'This invite is addressed to another email address.',
         other,
       );
       expect(await shareBetween(other)).toBeNull();

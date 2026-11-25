@@ -832,7 +832,7 @@ describe('calendar', () => {
         ),
       ).toMatch(
         new RegExp(
-          `hx-post="/calendar/${entry}/delete"[^>]*hx-confirm="Remove this scheduled outfit\\?"`,
+          `hx-post="/calendar/${entry}/delete"[^>]*hx-confirm="Take this outfit off the calendar\\?"`,
         ),
       );
       // A page rendered before the wear still posts without `confirmed`: the
@@ -847,7 +847,7 @@ describe('calendar', () => {
       expect(
         JSON.parse(String(stale.headers['hx-trigger']))['closet:confirm'],
       ).toEqual({
-        question: 'Remove this scheduled outfit?',
+        question: 'Take this outfit off the calendar?',
         label: 'Remove from calendar',
         action: `/calendar/${entry}/delete`,
         fields: { week: '2020-10-07', confirmed: '1' },

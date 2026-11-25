@@ -270,20 +270,17 @@ function manualInstallPlatform() {
   return /iPhone|iPad|iPod|Android/.test(ua) || touchMac || macSafari;
 }
 
-// https://stackoverflow.com/questions/75972895/ios-pwa-how-to-re-enable-pull-to-refresh
-// pulltorefresh binds to the page's <main> and inserts its indicator into
+// An installed iOS app has no pull-to-refresh of its own, so pulltorefreshjs
+// draws one that reloads the page. It binds to the page's <main> and inserts its indicator into
 // the body, so a navigation (a swap of the whole body) needs it bound again;
 // a fragment swap (a filter, an outfit row) leaves both in place.
+const reloadPage = () => location.reload();
+
 async function installPullToRefresh() {
   const { default: PullToRefresh } = await import('pulltorefreshjs');
   const bind = () => {
     PullToRefresh.destroyAll();
-    PullToRefresh.init({
-      mainElement: 'main',
-      onRefresh() {
-        location.reload();
-      },
-    });
+    PullToRefresh.init({ mainElement: 'main', onRefresh: reloadPage });
   };
   bind();
   document.addEventListener('htmx:afterSettle', (event) => {

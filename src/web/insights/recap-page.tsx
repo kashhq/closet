@@ -216,7 +216,7 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
             {recap.colours.map((colour) => (
               <li class="flex items-center gap-1">
                 <span
-                  class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 ms-swatch--${colour.colour}`}
+                  class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 swatch--${colour.colour}`}
                 />
                 <span class="capitalize">{colour.colour}</span>
                 <span class="text-muted">{colour.worn}%</span>

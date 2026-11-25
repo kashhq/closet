@@ -1,6 +1,6 @@
 # Closet
 
-Self-hosted digital wardrobe for the household: catalog garments (photo with background removal, category, brand, size, color), compose outfits, plan them on a calendar, and share a wardrobe with another user. Hard fork of Libre Closet (AGPL-3.0; no upstream remote or merges). Deployed on the homelab. Stack and file detail: `docs/architecture.md`.
+Self-hosted digital wardrobe for the household: catalog garments (photo with background removal, category, brand, size, color), compose outfits, plan them on a calendar, and share a wardrobe with another user. MIT-licensed; every line is the owner's (`make upstream-check`, #1225). Deployed on the homelab. Stack and file detail: `docs/architecture.md`.
 
 **The primary interface is the installed PWA on phones.** Every feature must work as an installed, offline-tolerant app first and as a desktop web page second.
 
@@ -25,7 +25,7 @@ Capabilities: pwa, push, scheduled-jobs
 In full: `docs/conventions.md#tooling-gotchas`. The web layer's are rules under Web layer.
 
 - **Never `prettier --write` a directory**: it re-pads the persona bibles (`src/seed/personas/*.md`) and the seed breaks (`persona.spec.ts`). Use `npm run format`.
-- **Upstream references are attribution only** (About, README, comments); anything else is a rebrand regression: grep before a PR. Hard fork, no upstream sync.
+- **Every line is ours** (MIT, #1225): outside code or text comes in only under an MIT-compatible licence, credited in `scripts/third-party-notices.ts`; `make upstream-check` (minutes, no tier) must stay at 0, and `make docs-check` refuses the original project's name.
 - **`npm install <package>` skips our `postinstall`**, so `patches/` are unapplied and the drift test fails; run `npx patch-package` or `npm ci`.
 - **Regenerate `package-lock.json` only with Node 22 / npm 10**: npm 11 prunes entries the Docker build's `npm ci` needs.
 - **macOS needs `sudo ifconfig lo0 alias 127.0.0.2`** before the integration tier or `npm run check`, or about 22 specs fail with EADDRNOTAVAIL.
@@ -49,7 +49,7 @@ views/assets/     main.css, src-sw.ts, fonts.css
 public/           sw.js, bundle.css, vendor/, modules/, js/, assets/ (generated from icon.svg)
 test/             Playwright specs; support/, integration/: test/AGENTS.md
 drizzle/          generated migrations + meta/ (journal, snapshots)
-docs/             README's Documentation section lists it; DESIGN.md is the feature-scope reference
+docs/             README's Documentation section lists it; feature scope is the roadmap (#27) and the area docs
 ```
 
 ### Area index

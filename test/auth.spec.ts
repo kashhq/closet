@@ -30,7 +30,10 @@ test('register through the form, sign out from Profile, sign back in', async ({
   // Signed out, "/" is a 302 to the login page.
   await page.goto('/');
   await expect(page).toHaveURL(/\/auth\/login$/);
-  await expect(page.locator('body')).toContainText(APP_NAME);
+  await expect(
+    page.locator('body'),
+    'the login page names the app',
+  ).toContainText(APP_NAME);
 
   // The signed-out shell at phone width (#662): the mark, no dead dock, the
   // one primary button, nothing wider than the screen.

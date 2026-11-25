@@ -107,7 +107,7 @@ export interface GridFilters {
   wash?: CareWash;
   /**
    * Which garments: the closet, the closet and the archive (the modal's
-   * "Show archived"), or the wishlist.
+   * "Include archived"), or the wishlist.
    */
   scope: GarmentScope;
   /** Members of this capsule only (inCapsule). */

@@ -312,7 +312,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     const confirmSheet = page.locator('#confirm-sheet');
     await page.getByRole('button', { name: 'Delete account' }).click();
     await expect(confirmSheet).toContainText(
-      'Are you sure you want to delete your account?',
+      'Delete your account and everything in it?',
     );
     await confirmSheet.getByRole('button', { name: 'Cancel' }).first().click();
     await expect(page).toHaveURL(/\/auth\/delete-account$/);

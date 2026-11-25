@@ -77,8 +77,8 @@ export function perWearLine(entry: CostPerWear<SignablePhotoRef>): string {
 
 /**
  * A colour strip: each segment as wide as its share (flex-grow over a zero
- * basis, so rounding never overflows the strip), coloured by the garment
- * form's swatch classes (main.css, `.ms-swatch--<colour>`), and the
+ * basis, so rounding never overflows the strip), coloured by the colour
+ * swatch classes (main.css, `.swatch--<colour>`), and the
  * garments without a colour as a plain segment at the end. The recap's
  * image (public/js/recap-export.js) reads its colours from these segments.
  */
@@ -103,7 +103,7 @@ export function Strip(props: {
           .filter((colour) => share(colour) > 0)
           .map((colour) => (
             <span
-              class={`basis-0 ms-swatch--${colour.colour}`}
+              class={`basis-0 swatch--${colour.colour}`}
               style={`flex-grow:${share(colour)}`}
               title={`${colour.colour} ${share(colour)}%`}
               data-colour={colour.colour}

@@ -279,7 +279,7 @@ test('the camera row takes a photo, the form opens with it, and saving lands on 
   await expect(page).toHaveURL(/\/wardrobe\/\d+(\?created=1)?$/);
   await expect(page.getByText('Camera shirt').first()).toBeVisible();
   await expect(page.locator('#garment-photo-status')).toHaveText(
-    /Removing background/,
+    /Cutting out the background/,
   );
   await cutouts.release(email);
   await expect(page.locator('#garment-photo img')).toHaveAttribute(

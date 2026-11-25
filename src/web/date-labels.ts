@@ -15,69 +15,48 @@ import {
  * (`todayIn(APP_TIMEZONE, now)`), never the server's.
  */
 
-/** Indexed by weekday, 0 = Sunday. */
-export const DAY_NAMES: CopyKey[] = [
-  'CALENDAR_DAY_SUN',
-  'CALENDAR_DAY_MON',
-  'CALENDAR_DAY_TUE',
-  'CALENDAR_DAY_WED',
-  'CALENDAR_DAY_THU',
-  'CALENDAR_DAY_FRI',
-  'CALENDAR_DAY_SAT',
+/**
+ * Each weekday's strings, Sunday first (a weekday's index, 0 = Sunday): its
+ * name ("Tuesday"), its abbreviation ("Tue") and the calendar's column
+ * letter ("T"). Every key is a literal, so a missing catalog entry is a type
+ * error and src/i18n/unused-keys.spec.ts finds each one used.
+ */
+const WEEKDAY_KEYS: readonly (readonly [CopyKey, CopyKey, CopyKey])[] = [
+  ['CALENDAR_DAY_SUN', 'calendar.weekday.SUN', 'CALENDAR_CAL_SUN_LETTER'],
+  ['CALENDAR_DAY_MON', 'calendar.weekday.MON', 'CALENDAR_CAL_MON_LETTER'],
+  ['CALENDAR_DAY_TUE', 'calendar.weekday.TUE', 'CALENDAR_CAL_TUE_LETTER'],
+  ['CALENDAR_DAY_WED', 'calendar.weekday.WED', 'CALENDAR_CAL_WED_LETTER'],
+  ['CALENDAR_DAY_THU', 'calendar.weekday.THU', 'CALENDAR_CAL_THU_LETTER'],
+  ['CALENDAR_DAY_FRI', 'calendar.weekday.FRI', 'CALENDAR_CAL_FRI_LETTER'],
+  ['CALENDAR_DAY_SAT', 'calendar.weekday.SAT', 'CALENDAR_CAL_SAT_LETTER'],
 ];
 
-export const DAY_LETTERS: CopyKey[] = [
-  'CALENDAR_CAL_SUN_LETTER',
-  'CALENDAR_CAL_MON_LETTER',
-  'CALENDAR_CAL_TUE_LETTER',
-  'CALENDAR_CAL_WED_LETTER',
-  'CALENDAR_CAL_THU_LETTER',
-  'CALENDAR_CAL_FRI_LETTER',
-  'CALENDAR_CAL_SAT_LETTER',
+/** Each month's strings, January first (index month - 1): "Sep" and "September". */
+const MONTH_KEYS: readonly (readonly [CopyKey, CopyKey])[] = [
+  ['MONTH_JAN', 'calendar.month.JAN'],
+  ['MONTH_FEB', 'calendar.month.FEB'],
+  ['MONTH_MAR', 'calendar.month.MAR'],
+  ['MONTH_APR', 'calendar.month.APR'],
+  ['MONTH_MAY', 'calendar.month.MAY'],
+  ['MONTH_JUN', 'calendar.month.JUN'],
+  ['MONTH_JUL', 'calendar.month.JUL'],
+  ['MONTH_AUG', 'calendar.month.AUG'],
+  ['MONTH_SEP', 'calendar.month.SEP'],
+  ['MONTH_OCT', 'calendar.month.OCT'],
+  ['MONTH_NOV', 'calendar.month.NOV'],
+  ['MONTH_DEC', 'calendar.month.DEC'],
 ];
 
-/** Indexed by weekday, 0 = Sunday: "Tue". */
-const DAY_SHORT_NAMES: CopyKey[] = [
-  'calendar.weekday.SUN',
-  'calendar.weekday.MON',
-  'calendar.weekday.TUE',
-  'calendar.weekday.WED',
-  'calendar.weekday.THU',
-  'calendar.weekday.FRI',
-  'calendar.weekday.SAT',
-];
-
-/** Indexed by month - 1. */
-const MONTH_NAMES: CopyKey[] = [
-  'MONTH_JAN',
-  'MONTH_FEB',
-  'MONTH_MAR',
-  'MONTH_APR',
-  'MONTH_MAY',
-  'MONTH_JUN',
-  'MONTH_JUL',
-  'MONTH_AUG',
-  'MONTH_SEP',
-  'MONTH_OCT',
-  'MONTH_NOV',
-  'MONTH_DEC',
-];
-
-/** Indexed by month - 1: the month page's title. */
-const MONTH_LONG_NAMES: CopyKey[] = [
-  'calendar.month.JAN',
-  'calendar.month.FEB',
-  'calendar.month.MAR',
-  'calendar.month.APR',
-  'calendar.month.MAY',
-  'calendar.month.JUN',
-  'calendar.month.JUL',
-  'calendar.month.AUG',
-  'calendar.month.SEP',
-  'calendar.month.OCT',
-  'calendar.month.NOV',
-  'calendar.month.DEC',
-];
+export const DAY_NAMES: readonly CopyKey[] = WEEKDAY_KEYS.map(([name]) => name);
+export const DAY_LETTERS: readonly CopyKey[] = WEEKDAY_KEYS.map(
+  ([, , letter]) => letter,
+);
+const DAY_SHORT_NAMES: readonly CopyKey[] = WEEKDAY_KEYS.map(
+  ([, short]) => short,
+);
+const MONTH_NAMES: readonly CopyKey[] = MONTH_KEYS.map(([short]) => short);
+/** The month page's title. */
+const MONTH_LONG_NAMES: readonly CopyKey[] = MONTH_KEYS.map(([, long]) => long);
 
 /** "Tuesday, Sep 29". */
 export function dayLabel(date: IsoDate): Translated {

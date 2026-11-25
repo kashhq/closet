@@ -1,0 +1,236 @@
+# Inherited lines that are facts, not expression (#1225), read by scripts/ci/upstream_lines.sh.
+# Each is <path><TAB><the line, trimmed>, and exempts every occurrence of that text in that file.
+# A line belongs here only when no other wording is possible without changing what it does or
+# says: a syntax keyword or directive, a schema's key, a package's name and range, a command, a
+# one-word label, the name of a month or day. Anything with a choice of words is rewritten instead.
+# An entry that stops matching fails make upstream-check: delete it then.
+
+# Dockerfile instructions with one possible form.
+Dockerfile	WORKDIR /app
+Dockerfile	RUN npm run build
+
+# The Compose schema's keys and values in README's quick start (scripts/smoke-image.sh runs the
+# block as written), Markdown code fences, and the commands the README tells a reader to run.
+README.md	```yaml
+README.md	services:
+README.md	ports:
+README.md	- '3000:3000'
+README.md	volumes:
+README.md	environment:
+README.md	DATA_PATH: /app/data
+README.md	restart: unless-stopped
+README.md	```bash
+README.md	npx web-push generate-vapid-keys
+README.md	npm run start:dev
+public/llms-full.txt	```bash
+
+# The robots.txt directive (the file shuts every crawler out).
+public/robots.txt	User-agent: *
+
+# Config schema keys and settings whose only form is the tool's own.
+eslint.config.mjs	// @ts-check
+eslint.config.mjs	languageOptions: {
+eslint.config.mjs	rules: {
+eslint.config.mjs	'@typescript-eslint/no-explicit-any': 'off',
+eslint.config.mjs	'@typescript-eslint/no-floating-promises': 'warn',
+lighthouserc.js	numberOfRuns: 1,
+lighthouserc.js	preset: 'lighthouse:recommended',
+lighthouserc.js	assertions: {
+playwright.config.ts	export default defineConfig({
+playwright.config.ts	fullyParallel: true,
+playwright.config.ts	use: {
+playwright.config.ts	trace: 'on-first-retry',
+tsconfig.json	"compilerOptions": {
+tsconfig.json	"module": "commonjs",
+tsconfig.json	"esModuleInterop": true,
+tsconfig.json	"isolatedModules": true,
+tsconfig.json	"sourceMap": true,
+tsconfig.json	"incremental": true,
+tsconfig.build.json	"extends": "./tsconfig.json",
+src/types/fastify.d.ts	declare module 'fastify' {
+views/assets/src-sw.ts	import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+views/assets/src-sw.ts	import { registerRoute, setCatchHandler } from 'workbox-routing';
+
+# package.json's keys, and dependencies whose locked version is still the range's floor.
+# "version" is #637's to settle.
+package.json	"version": "0.5.1",
+package.json	"private": true,
+package.json	"engines": {
+package.json	"scripts": {
+package.json	"dependencies": {
+package.json	"devDependencies": {
+package.json	"pulltorefreshjs": "^0.1.22",
+package.json	"web-push": "^3.6.7",
+package.json	"@types/web-push": "^3.6.4",
+package.json	"ts-node": "^10.9.2",
+
+# Class names other code depends on: pulltorefreshjs draws .ptr--ptr, and the colour field's
+# markup and module share .color-ms.
+views/assets/main.css	.ptr--ptr {
+views/assets/main.css	.color-ms {
+
+# daisyUI's component class and a utility row in the mask editor's markup.
+src/web/wardrobe/garment-page.tsx	<div class="flex flex-wrap items-center gap-3">
+src/web/wardrobe/garment-page.tsx	<div class="join">
+
+# Lines written afresh that `blame -C -C -C` matches to an identical line in another inherited
+# file (#1232). Each has one form: importing Fastify's two request types (the import's member
+# order is the linter's), the standard viewport, Open Graph and Twitter card tags, a form field's
+# `name`, and a row of utilities and daisyUI classes in the class sorter's order.
+src/web/auth/require-session.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/auth/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/auth/session.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/errors.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/render.ts	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/wardrobe/link-import/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/weather/routes.tsx	import type { FastifyReply, FastifyRequest } from 'fastify';
+src/web/layout/layout.tsx	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+src/web/layout/layout.tsx	<meta property="og:image:width" content="1000" />
+src/web/layout/layout.tsx	<meta property="og:image:height" content="1000" />
+src/web/layout/layout.tsx	<meta name="twitter:card" content="summary_large_image" />
+src/web/push/settings.tsx	<div class="flex items-center justify-between gap-2">
+src/web/share/share-button.tsx	<div class="flex items-center justify-between gap-2">
+src/web/sizes/views.tsx	<div class="flex items-center justify-between gap-2">
+src/web/trips/trip-page.tsx	<div class="flex items-center justify-between gap-2">
+src/web/weather/settings.tsx	<div class="flex items-center justify-between gap-2">
+src/web/style/style-page.tsx	name="notes"
+src/web/style/style-page.tsx	class="textarea textarea-bordered w-full"
+src/web/trips/form-page.tsx	name="notes"
+src/web/trips/form-page.tsx	class="textarea textarea-bordered w-full"
+
+# One-word UI labels and the calendar's names of months and days: the English word is the string.
+src/i18n/en/lang.json	"validation": {
+src/i18n/en/lang.json	"PROFILE": "Profile",
+src/i18n/en/lang.json	"WARDROBE": "Wardrobe",
+src/i18n/en/lang.json	"OUTFITS": "Outfits",
+src/i18n/en/lang.json	"EMAIL": "Email",
+src/i18n/en/lang.json	"PASSWORD": "Password",
+src/i18n/en/lang.json	"UPDATE": "Update",
+src/i18n/en/lang.json	"SHARE": "Share",
+src/i18n/en/lang.json	"NAME": "Name",
+src/i18n/en/lang.json	"CATEGORY": "Category",
+src/i18n/en/lang.json	"BRAND": "Brand",
+src/i18n/en/lang.json	"COLOR": "Color",
+src/i18n/en/lang.json	"SIZE": "Size",
+src/i18n/en/lang.json	"NOTES": "Notes",
+src/i18n/en/lang.json	"SAVE": "Save",
+src/i18n/en/lang.json	"DELETE": "Delete",
+src/i18n/en/lang.json	"CANCEL": "Cancel",
+src/i18n/en/lang.json	"MASK_BRUSH_ERASE": "Erase",
+src/i18n/en/lang.json	"MASK_BRUSH_RESTORE": "Restore",
+src/i18n/en/lang.json	"ARCHIVE": "Archive",
+src/i18n/en/lang.json	"ARCHIVED": "Archived",
+src/i18n/en/lang.json	"SEARCH": "Search",
+src/i18n/en/lang.json	"RESULTS": "results",
+src/i18n/en/lang.json	"FILTERS": "Filters",
+src/i18n/en/lang.json	"SELECTED": "selected",
+src/i18n/en/lang.json	"CATEGORY_ACCESSORIES": "Accessories",
+src/i18n/en/lang.json	"CATEGORY_BAGS": "Bags",
+src/i18n/en/lang.json	"CATEGORY_OUTERWEAR": "Outerwear",
+src/i18n/en/lang.json	"CATEGORY_DRESSES": "Dresses",
+src/i18n/en/lang.json	"CATEGORY_TOPS": "Tops",
+src/i18n/en/lang.json	"CATEGORY_BOTTOMS": "Bottoms",
+src/i18n/en/lang.json	"CATEGORY_FOOTWEAR": "Footwear",
+src/i18n/en/lang.json	"CATEGORY_OTHER": "Other",
+src/i18n/en/lang.json	"SHARED_BY": "Shared by",
+src/i18n/en/lang.json	"CALENDAR": "Calendar",
+src/i18n/en/lang.json	"PERMISSION_MANAGE": "Can edit",
+src/i18n/en/lang.json	"PENDING": "Pending",
+src/i18n/en/lang.json	"REVOKE": "Revoke",
+src/i18n/en/lang.json	"ACCEPT": "Accept",
+src/i18n/en/lang.json	"DECLINE": "Decline",
+src/i18n/en/lang.json	"LEAVE": "Leave",
+src/i18n/en/lang.json	"ABOUT_TITLE": "About",
+src/i18n/en/lang.json	"MONTH_JAN": "Jan",
+src/i18n/en/lang.json	"MONTH_FEB": "Feb",
+src/i18n/en/lang.json	"MONTH_MAR": "Mar",
+src/i18n/en/lang.json	"MONTH_APR": "Apr",
+src/i18n/en/lang.json	"MONTH_MAY": "May",
+src/i18n/en/lang.json	"MONTH_JUN": "Jun",
+src/i18n/en/lang.json	"MONTH_JUL": "Jul",
+src/i18n/en/lang.json	"MONTH_AUG": "Aug",
+src/i18n/en/lang.json	"MONTH_SEP": "Sep",
+src/i18n/en/lang.json	"MONTH_OCT": "Oct",
+src/i18n/en/lang.json	"MONTH_NOV": "Nov",
+src/i18n/en/lang.json	"MONTH_DEC": "Dec",
+src/i18n/en/lang.json	"CALENDAR_CAL_SUN_LETTER": "S",
+src/i18n/en/lang.json	"CALENDAR_CAL_MON_LETTER": "M",
+src/i18n/en/lang.json	"CALENDAR_CAL_TUE_LETTER": "T",
+src/i18n/en/lang.json	"CALENDAR_CAL_WED_LETTER": "W",
+src/i18n/en/lang.json	"CALENDAR_CAL_THU_LETTER": "T",
+src/i18n/en/lang.json	"CALENDAR_CAL_FRI_LETTER": "F",
+src/i18n/en/lang.json	"CALENDAR_CAL_SAT_LETTER": "S",
+src/i18n/en/lang.json	"CALENDAR_DAY_SUN": "Sunday",
+src/i18n/en/lang.json	"CALENDAR_DAY_MON": "Monday",
+src/i18n/en/lang.json	"CALENDAR_DAY_TUE": "Tuesday",
+src/i18n/en/lang.json	"CALENDAR_DAY_WED": "Wednesday",
+src/i18n/en/lang.json	"CALENDAR_DAY_THU": "Thursday",
+src/i18n/en/lang.json	"CALENDAR_DAY_FRI": "Friday",
+src/i18n/en/lang.json	"CALENDAR_DAY_SAT": "Saturday",
+
+# Commented-out examples in the committed defaults.
+.env	#PWA_ENABLED=true
+.env	#DISABLE_REGISTRATION=true
+
+# Lines written afresh that the second pass (scripts/upstream-rewraps.ts, #1232) finds verbatim in
+# upstream text, each the one way to write it: a platform or library call as its API spells it
+# (an event subscription, a Workbox handler's fetch and cache, the service worker's registration,
+# a JSON request header), an import of one name, a database constraint's generated name, a
+# vendored file's path, a tool's config key and flags, the meta tags of a captured product page,
+# daisyUI's modal backdrop, and a row of utilities and daisyUI classes in the class sorter's order.
+eslint.config.mjs	parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+lighthouserc.js	settings: { chromeFlags: '--no-sandbox --disable-dev-shm-usage' },
+public/js/autosave.js	document.addEventListener('htmx:beforeRequest', (event) => {
+public/js/vitals.js	document.addEventListener('htmx:beforeRequest', (event) => {
+src/cutout/model.ts	import { pipeline } from 'node:stream/promises';
+src/db/schema.ts	'wardrobe_share_grantor_id_grantee_id_unique';
+src/web/auth/tokens-page.tsx	<button type="submit" class="btn btn-ghost btn-xs text-error">
+src/web/calendar/calendar-page.tsx	class="flex items-center justify-between gap-2"
+src/web/files/photos.ts	import { pipeline } from 'node:stream/promises';
+src/web/files/storage.ts	import { pipeline } from 'node:stream/promises';
+src/web/gallery/avoided.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/gallery/ideas-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/gallery/ideas-page.tsx	<button type="submit" class="btn btn-primary w-full">
+src/web/insights/insights-page.tsx	<a href="/wardrobe/new" class="btn btn-primary btn-sm">
+src/web/insights/recap-page.tsx	class="flex items-center justify-between gap-2"
+src/web/inspiration/piece-form.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/inspiration/recreate-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/inspiration/share-target.spec.ts	headers: { 'Content-Type': 'application/json' },
+src/web/layout/parts.tsx	<form method="dialog" class="modal-backdrop">
+src/web/outfits/muse-cards.tsx	class="flex items-center justify-between gap-2"
+src/web/outfits/show-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/outfits/show-page.tsx	<span class="text-xs text-center line-clamp-2 leading-tight">
+src/web/share/share-page.tsx	<figure class="aspect-square overflow-hidden">
+src/web/sharing/pages.tsx	<button type="submit" class="btn btn-primary btn-sm">
+src/web/sizes/views.tsx	<button type="submit" class="btn btn-primary">
+src/web/sizes/views.tsx	<button type="submit" class="btn btn-primary btn-sm">
+src/web/style/style-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/styling/styling-page.tsx	<a href="/wardrobe/new" class="btn btn-primary btn-sm">
+src/web/today/today-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/today/today-page.tsx	<button type="submit" class="btn btn-primary w-full">
+src/web/wardrobe/draft-queue.tsx	<button type="submit" class="btn btn-ghost w-full">
+src/web/wardrobe/link-import/fixtures/shopify-product.html	<meta name="viewport" content="width=device-width,initial-scale=1">
+src/web/wardrobe/link-import/fixtures/shopify-product.html	<meta name="twitter:card" content="summary_large_image">
+src/web/wardrobe/link-import/link-page.tsx	<button type="submit" class="btn btn-primary">
+src/web/wardrobe/repair-log.tsx	<button type="submit" class="btn btn-primary">
+src/web/weather/settings.tsx	<button type="submit" class="btn btn-ghost btn-xs">
+src/web/week-plan/views.tsx	class="select select-bordered select-sm w-full"
+src/web/week-plan/views.tsx	<button type="submit" class="btn btn-primary">
+src/web/wishlist/group-page.tsx	<div class="flex flex-wrap items-center gap-2">
+src/web/wishlist/suggestion-section.tsx	<div class="flex flex-wrap items-center gap-2">
+test/integration/delivery.spec.ts	'/modules/onnxruntime-web/dist/ort.all.bundle.min.mjs',
+test/integration/migrations.spec.ts	'wardrobe_share_grantor_id_grantee_id_unique',
+test/sw-update.spec.ts	const registration = await navigator.serviceWorker.getRegistration();
+views/assets/page/push.ts	headers: { 'Content-Type': 'application/json' },
+views/assets/page/push.ts	const registration = await navigator.serviceWorker.getRegistration();
+views/assets/src-sw.ts	const response = await handler.fetch(request);
+views/assets/src-sw.ts	await handler.cachePut(request, response.clone());
+views/assets/src-sw.ts	const cache = await self.caches.open(cacheName);
+
+# Icon artwork, not anyone's prose: the path data of Heroicons and Hugeicons glyphs, which is the
+# drawing itself (redrawing it would be a different icon).
+src/web/layout/parts.tsx	'M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z',
+src/web/layout/parts.tsx	'M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5',
+src/web/layout/parts.tsx	'M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z',
+src/web/layout/parts.tsx	'M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z',
+src/web/wardrobe/wardrobe-header.tsx	'm16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10';

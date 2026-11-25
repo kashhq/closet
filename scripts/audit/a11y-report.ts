@@ -120,7 +120,7 @@ export function designClassesOf(css: string): Set<string> {
 
 /**
  * Classes kept in a kind: the design system's, less BEM modifiers
- * (`ms-swatch--blue`), whose value is the garment's data.
+ * (`swatch--blue`), whose value is the garment's data.
  */
 function designOf(
   classes: readonly string[],

@@ -66,6 +66,7 @@ import {
   WardrobeMenu,
 } from './wardrobe-header';
 import { needsNetwork, searchShortcut } from '../page-contract';
+import { Icon } from '../layout/icon';
 
 /**
  * The grid's filters as the page echoes them into its links and forms. The
@@ -961,21 +962,11 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
         class="btn btn-ghost btn-sm btn-square shrink-0"
         aria-label={t('FILTERS')}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
+        <Icon
+          paths="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
           class="size-5"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
-          />
-        </svg>
+          weight="1.5"
+        />
       </button>
       {/* The number alone on screen; "64 results" to a screen reader. */}
       <span class="shrink-0 text-sm tabular-nums text-muted">
@@ -1162,21 +1153,11 @@ function SearchForm(props: {
         <input type="hidden" name="ownerId" value={viewOwner} />
       )}
       <label class="input input-sm w-9 gap-1 px-2 transition-[width] duration-150 focus-within:w-full has-[input:not(:placeholder-shown)]:w-32 motion-reduce:transition-none">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
+        <Icon
+          paths="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
           class="size-4 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-          />
-        </svg>
+          weight="1.5"
+        />
         <input
           type="text"
           name="keyword"
@@ -1455,7 +1436,7 @@ function Toggle(props: {
   label: string;
 }) {
   return (
-    <label class="cursor-pointer flex items-center gap-2">
+    <label class="flex gap-2 items-center cursor-pointer">
       <input
         type="checkbox"
         name={props.name}

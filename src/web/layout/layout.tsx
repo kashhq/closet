@@ -229,12 +229,13 @@ export function Layout({
           request lights the app bar's spinner (#loading) and marks the tapped
           link htmx-request (pressed styling in main.css), so a slow network
           never looks like a dead tap; an element with its own hx-indicator
-          (the photo form) keeps it. */}
+          (the photo form) keeps it. `min-h-dvh` follows iOS's toolbars, so the
+          viewport never collapses under a scroll. */}
       <body
         hx-boost="true"
         hx-indicator="#loading, closest a"
         hx-inherit="hx-boost hx-indicator"
-        class="h-screen flex flex-col"
+        class="h-screen min-h-dvh flex flex-col"
       >
         {children}
         <AppStatus ctx={ctx} />

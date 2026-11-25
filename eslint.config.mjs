@@ -1,9 +1,9 @@
 // @ts-check
-import eslint from '@eslint/js';
+import js from '@eslint/js';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import globals from 'globals';
+import knownGlobals from 'globals';
 import sonarjs from 'eslint-plugin-sonarjs';
-import tseslint from 'typescript-eslint';
+import typescriptEslint from 'typescript-eslint';
 import base, {
   sonarjsRules,
   sonarjsTestRules,
@@ -141,7 +141,7 @@ const NODE_BUILTINS = [
 const NO_IO =
   'The pure layers do no I/O and read no clock, environment or crypto: the caller passes it in (docs/web-layer.md).';
 
-export default tseslint.config(
+export default typescriptEslint.config(
   {
     // The cutout-children are stand-in model processes (plain .mjs, outside
     // the TypeScript project): lint:check never covered them, and devkit's
@@ -151,35 +151,31 @@ export default tseslint.config(
       'scripts/lint/web-imports.mjs',
       'scripts/lint/forged-copy.mjs',
       'scripts/lint/hidden-control.mjs',
-      './test/support/legacy-migrations/**/*',
       './test/fixtures/cutout-children/*.mjs',
     ],
   },
   // devkit's base first (devkit/lint/README.md): no-console, no-eval, no-implied-eval and the
   // innerHTML / outerHTML / insertAdjacentHTML sinks. Later layers relax it per glob.
   ...base,
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+  js.configs.recommended,
+  ...typescriptEslint.configs.recommendedTypeChecked,
   // Turns off the stylistic rules prettier owns; prettier itself runs as format:check (Makefile ci-lint).
   eslintConfigPrettier,
   {
+    // The type-aware rules find each file's tsconfig through the project service.
     languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-      sourceType: 'commonjs',
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
+      globals: knownGlobals.node,
+      sourceType: 'commonjs', // what tsc emits for the server (tsconfig.json)
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
   },
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      complexity: ['warn', { max: 10 }],
-      'max-depth': ['warn', { max: 3 }],
+      // Warnings, not errors: the metrics report counts them (make ci-metrics).
+      complexity: ['warn', 10],
+      'max-depth': ['warn', 3],
       // One assertion style: `<T>value` does not parse in .tsx files, so
       // `as` everywhere.
       '@typescript-eslint/consistent-type-assertions': [
@@ -331,10 +327,12 @@ export default tseslint.config(
     rules: {
       // Off here only (#710): response bodies are parsed JSON asserted by
       // value; a typed JSON helper for them is what would turn these on.
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
+      ...Object.fromEntries(
+        ['assignment', 'member-access', 'return', 'call'].map((use) => [
+          `@typescript-eslint/no-unsafe-${use}`,
+          'off',
+        ]),
+      ),
       'no-restricted-properties': [
         ...base[0].rules['no-restricted-properties'],
         ...['mock', 'doMock', 'unmock', 'doUnmock', 'resetModules'].map(

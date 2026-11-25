@@ -1,6 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import { AWAY_REASONS } from '../../wardrobe/availability';
 import { sessionUserId } from '../auth/require-session';
 import { announce } from '../announce';

@@ -1,5 +1,6 @@
 import { t } from '../i18n';
 import { imageUrl, type SignablePhotoRef } from './image-url';
+import { Icon } from '../layout/icon';
 
 /**
  * The shared photo viewer (#313, epic #308): tap a photo, see it large,
@@ -70,22 +71,6 @@ export function enlargeLabel(name: string | null | undefined): string {
     : t('photoViewer.ENLARGE');
 }
 
-function Icon(props: { path: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="2"
-      stroke="currentColor"
-      class="size-6"
-      aria-hidden="true"
-    >
-      <path stroke-linecap="round" stroke-linejoin="round" d={props.path} />
-    </svg>
-  );
-}
-
 /**
  * The viewer's shell, once per page (Layout). The strings travel as data
  * attributes, as AppStatus's do, so the script stays free of i18n.
@@ -112,7 +97,7 @@ export function PhotoViewer() {
             autofocus
             aria-label={t('CLOSE')}
           >
-            <Icon path="M6 18 18 6M6 6l12 12" />
+            <Icon paths="M6 18 18 6M6 6l12 12" class="size-6" weight="2" />
           </button>
           <button
             type="button"
@@ -121,7 +106,11 @@ export function PhotoViewer() {
             aria-label={t('photoViewer.ZOOM')}
             aria-pressed="false"
           >
-            <Icon path="m21 21-5.2-5.2M10.5 7.5v6M7.5 10.5h6M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+            <Icon
+              paths="m21 21-5.2-5.2M10.5 7.5v6M7.5 10.5h6M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"
+              class="size-6"
+              weight="2"
+            />
           </button>
         </div>
         <button
@@ -130,7 +119,7 @@ export function PhotoViewer() {
           data-photo-step="-1"
           aria-label={t('photoViewer.PREVIOUS')}
         >
-          <Icon path="m15 19-7-7 7-7" />
+          <Icon paths="m15 19-7-7 7-7" class="size-6" weight="2" />
         </button>
         <button
           type="button"
@@ -138,7 +127,7 @@ export function PhotoViewer() {
           data-photo-step="1"
           aria-label={t('photoViewer.NEXT')}
         >
-          <Icon path="m9 5 7 7-7 7" />
+          <Icon paths="m9 5 7 7-7 7" class="size-6" weight="2" />
         </button>
         <div
           class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-0.5 p-4 text-center text-sm"

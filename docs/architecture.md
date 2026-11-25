@@ -81,7 +81,6 @@ public/                Static: sw.js, bundle.css, vendor/, modules/, *.br/*.gz (
 test/                  Playwright specs (check_tree runs them in Chromium, the nightly in WebKit too; PWA on)
   support/, integration/  the harness and its helpers: test/AGENTS.md
 drizzle/               Generated migrations (NNNN_name.sql) + meta/ (journal, snapshots). Shipped in the image
-docs/DESIGN.md         Upstream MVP design doc and entity model. Assess feature work against it.
 ```
 
 `src/web/` is effectively the application layer: `app.ts` builds services there that the CLIs reuse.

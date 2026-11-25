@@ -67,33 +67,24 @@ export function categorySuggestions(stored: string[]): string[] {
   return orderCategories([...new Set([...ENUM_ORDER, ...stored])]);
 }
 
-const CANONICAL_SIZES = [
-  'XX-Small',
-  'X-Small',
-  'Small',
-  'Medium',
-  'Large',
-  'X-Large',
-  'XX-Large',
-  '3X-Large',
-  '4X-Large',
-  '5X-Large',
-] as const;
-
-// Spellings of each letter size, compared lower case without spaces or
-// dashes ("x-large", "XL" and "x large" are all X-Large).
-const SIZE_SPELLINGS: [string[], (typeof CANONICAL_SIZES)[number]][] = [
-  [['xxxxxl', '5xl', '5xlarge', 'xxxxxlarge'], '5X-Large'],
-  [['xxxxl', '4xl', '4xlarge', 'xxxxlarge'], '4X-Large'],
-  [['xxxl', '3xl', '3xlarge', 'xxxlarge'], '3X-Large'],
-  [['xxl', '2xl', '2xlarge', 'xxlarge'], 'XX-Large'],
-  [['xl', 'xlarge'], 'X-Large'],
-  [['l', 'large'], 'Large'],
-  [['m', 'medium'], 'Medium'],
-  [['s', 'small'], 'Small'],
-  [['xs', 'xsmall'], 'X-Small'],
-  [['xxs', '2xs', '2xsmall', 'xxsmall'], 'XX-Small'],
+/**
+ * The letter sizes in wearing order, each with the spellings typed for it,
+ * compared lower case without spaces or dashes ("x-large", "XL" and
+ * "x large" are all X-Large).
+ */
+const LETTER_SIZES: readonly (readonly [string, readonly string[]])[] = [
+  ['XX-Small', ['xxs', '2xs', '2xsmall', 'xxsmall']],
+  ['X-Small', ['xs', 'xsmall']],
+  ['Small', ['s', 'small']],
+  ['Medium', ['m', 'medium']],
+  ['Large', ['l', 'large']],
+  ['X-Large', ['xl', 'xlarge']],
+  ['XX-Large', ['xxl', '2xl', '2xlarge', 'xxlarge']],
+  ['3X-Large', ['xxxl', '3xl', '3xlarge', 'xxxlarge']],
+  ['4X-Large', ['xxxxl', '4xl', '4xlarge', 'xxxxlarge']],
+  ['5X-Large', ['xxxxxl', '5xl', '5xlarge', 'xxxxxlarge']],
 ];
+const LETTER_SIZE_ORDER = LETTER_SIZES.map(([size]) => size);
 
 /**
  * A size as stored: a letter size in its canonical spelling, anything else
@@ -102,20 +93,18 @@ const SIZE_SPELLINGS: [string[], (typeof CANONICAL_SIZES)[number]][] = [
 export function normalizeSize(input: string): string | undefined {
   const trimmed = input.trim();
   if (!trimmed) return undefined;
-  const key = trimmed.toLowerCase().replace(/[\s-]+/g, '');
-  const canonical = SIZE_SPELLINGS.find(([spellings]) =>
-    spellings.includes(key),
+  const typed = trimmed.toLowerCase().replace(/[\s-]+/g, '');
+  const letter = LETTER_SIZES.find(([, spellings]) =>
+    spellings.includes(typed),
   );
-  return canonical ? canonical[1] : trimmed;
+  return letter?.[0] ?? trimmed;
 }
 
 /** Canonical sizes in wearing order first, anything custom alphabetically after. */
 export function compareSizes(a: string, b: string): number {
-  const sizes: readonly string[] = CANONICAL_SIZES;
-  const ai = sizes.indexOf(a);
-  const bi = sizes.indexOf(b);
-  if (ai === -1 && bi === -1) return a.localeCompare(b);
-  if (ai === -1) return 1;
-  if (bi === -1) return -1;
-  return ai - bi;
+  const rankA = LETTER_SIZE_ORDER.indexOf(a);
+  const rankB = LETTER_SIZE_ORDER.indexOf(b);
+  if (rankA >= 0 && rankB >= 0) return rankA - rankB;
+  if (rankA >= 0 || rankB >= 0) return rankA >= 0 ? -1 : 1;
+  return a.localeCompare(b);
 }

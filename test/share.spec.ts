@@ -74,7 +74,7 @@ test('an invite opened signed out is accepted in one pass, the shared wardrobe i
   await grantee.locator('#title-menu summary').click();
   await grantee
     .locator('#title-menu')
-    .getByRole('link', { name: /Can edit|View only/ })
+    .getByRole('link', { name: /Can edit|Can view/ })
     .click();
 
   await expect(grantee).toHaveURL(/\/wardrobe\?ownerId=\d+$/);

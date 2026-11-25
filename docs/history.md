@@ -2,9 +2,9 @@
 
 Read on demand (not auto-loaded). What the stack used to be and when it changed, so a leftover name in a comment or an old PR makes sense. None of it is a rule: the rules are in the root `CLAUDE.md`. Moved out of the root in #259.
 
-## The fork
+## Where it began
 
-Hard fork of Libre Closet (Lazztech, AGPL-3.0). The repo (now `kashhq/closet`) was detached from the fork network on 2026-09-28: no upstream remote, no merges. The upstream MVP design doc and entity model are kept in `docs/DESIGN.md`.
+The project began in 2026 from an open-source starting point, and the repo (now `kashhq/closet`) has had no upstream remote and no merges since 2026-09-28. On 2026-11-25 it was relicensed MIT, after every inherited line had been rewritten (#1225; `make upstream-check` proves the tree). The history before that commit keeps its original licence. The inherited design doc went with the rewrite: the area docs and the roadmap (#27) hold the feature scope.
 
 ## The platform migration (finished 2026-09-26)
 

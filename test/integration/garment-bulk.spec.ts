@@ -122,7 +122,7 @@ describe('property filters, select mode and bulk edit', () => {
     it('says nothing matches, not that the wardrobe is empty', async () => {
       const res = await get('/wardrobe?warmth=5&material=silk');
       expect(res.body).toContain('No garments match these filters.');
-      expect(res.body).not.toContain('Add your first garment');
+      expect(res.body).not.toContain('Add a garment to start');
     });
 
     it('refuses a warmth or material outside its set', async () => {

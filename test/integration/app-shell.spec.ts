@@ -210,7 +210,7 @@ describe('app shell', () => {
       );
       expect(his).not.toContain(token);
       expect(his).not.toContain(alice.email);
-      expect(his).toContain('No wardrobe shares yet.');
+      expect(his).toContain('No shared wardrobes yet.');
       const hisProfile = unescapeHtml(
         (await get('/auth/profile', bob.cookie)).body,
       );

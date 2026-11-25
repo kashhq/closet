@@ -173,6 +173,16 @@ grep -q 'SIL OPEN FONT LICENSE' "$notices" || fail "THIRD-PARTY-NOTICES.txt carr
 grep -q '^htmx.org  (' "$notices" || fail "THIRD-PARTY-NOTICES.txt has no entry for htmx.org"
 log "ok: /THIRD-PARTY-NOTICES.txt served with the OFL text"
 
+# The licence ships with the code (#1225): the MIT text at /app/LICENSE, and the image's labels say
+# the same, point at the source and name the build that /health/ready reports.
+docker exec "$NAME" grep -q '^MIT License$' /app/LICENSE || fail "/app/LICENSE is missing or not the MIT licence"
+label() { docker image inspect -f "{{ index .Config.Labels \"org.opencontainers.image.$1\" }}" "$IMAGE"; }
+[ "$(label licenses)" = MIT ] || fail "the image's licenses label is '$(label licenses)', not MIT"
+[ "$(label source)" = https://github.com/kashhq/closet ] || fail "the image's source label is '$(label source)'"
+[ "$(label revision)" = "$(label version)" ] && [ -n "$(label revision)" ] \
+  || fail "the image's revision label '$(label revision)' is not its version '$(label version)'"
+log "ok: /app/LICENSE is MIT; labels licenses=MIT, source and revision=$(label revision)"
+
 # The observability contract (observability.md; src/logger.ts, src/request-context.ts,
 # src/metrics/, src/web/health/), asserted by devkit's probe the way every app's smoke asserts
 # it: /health/live answers 200; /health/ready is the contract's up|down body with every check

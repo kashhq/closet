@@ -219,7 +219,7 @@ describe('planned outfits: unavailable pieces', () => {
   });
 
   it('marks the outfit page, without the wash', async () => {
-    // Once on the collage, once on the "Garments in this outfit" strip.
+    // Once on the collage, once on the "In this outfit" strip.
     const lentPage = await page(`/outfits/${lentOutfit}`);
     expect(marksIn(lentPage)).toEqual(['away:lent', 'away:lent']);
     const strip = lentPage.slice(lentPage.indexOf('outfit-garments-title'));

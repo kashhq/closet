@@ -158,7 +158,8 @@ export async function findInvite(
 }
 
 /**
- * Makes an open invite, or undefined, storing nothing, when the session
+ * Makes an open invite to `ownerId`'s wardrobe with `role` (the grantor is
+ * the wardrobe's owner), or undefined, storing nothing, when the session
  * that asked has ended: one insert-select from the grantor's own row,
  * locked, only while it still opens `session` (the session's stamp,
  * sessionStamp: its fingerprint and session version), as upsertDevice does
@@ -182,35 +183,35 @@ export interface NewInvite {
 }
 export function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
+  ownerId: number,
+  role: SharePermission,
   options: { session: SessionStamp; now?: Date },
 ): Promise<NewInvite | undefined>;
 export function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
+  ownerId: number,
+  role: SharePermission,
   options?: { now?: Date },
 ): Promise<NewInvite>;
 export async function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
+  ownerId: number,
+  role: SharePermission,
   { session, now = new Date() }: { session?: SessionStamp; now?: Date } = {},
 ): Promise<NewInvite | undefined> {
   const stillOpen =
     session === undefined ? sql`` : sql` and ${sessionStillOpenSql(session)}`;
   const { rows } = await db.execute<{ id: number; invite_token: string }>(sql`
     insert into ${wardrobeShare} (grantor_id, permission, invite_token, created_at)
-    select ${user.id}, ${permission}, ${randomUUID()}, ${now}
+    select ${user.id}, ${role}, ${randomUUID()}, ${now}
     from ${user}
-    where ${user.id} = ${grantorId}${stillOpen}
+    where ${user.id} = ${ownerId}${stillOpen}
     for no key update
     returning id, invite_token`);
   const [row] = rows;
   if (row) return { id: row.id, inviteToken: row.invite_token };
   if (session !== undefined) return undefined;
-  throw new NotFound('account', { logDetail: `user ${grantorId}` });
+  throw new NotFound('account', { logDetail: `user ${ownerId}` });
 }
 
 /**

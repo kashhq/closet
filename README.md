@@ -1,12 +1,12 @@
 # Closet
 
-A private, self-hosted household wardrobe PWA. Catalog garments with photos (backgrounds removed automatically), compose outfits, plan them on a calendar, and share a wardrobe between users.
+A household's wardrobe as an app you host yourself and install on your phone. Photograph a garment and the server cuts it out of its background; put garments together into outfits, plan the outfits onto days, and share a wardrobe with someone else in the house.
 
-A fork of [Libre Closet](https://github.com/lazztech/libre-closet) by Lazztech LLC, licensed under the AGPL-3.0.
+Closet is free software under the [MIT licence](LICENSE).
 
 ---
 
-## Quick start
+## Running Closet
 
 Closet needs PostgreSQL 18, the version every test tier runs; the example below brings its own. Give the container about 5 GB of memory: the background-removal model (940 MB, downloaded on first boot into `closet_models`) runs in a child process outside Node's heap.
 
@@ -117,18 +117,18 @@ An agent connected this way (Claude, or a styling agent such as Muse) suggests w
 
 ---
 
-## Configuration
+## Settings
 
-`.env` contains committed defaults. Override any value via a `.env.local` file (gitignored) or by passing real environment variables to Docker.
+The committed `.env` holds the defaults. A setting is changed by an environment variable on the container, or in development by a `.env.local` beside it (never committed).
 
-| Variable                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Default                                 | Example                          |
+| Variable                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Default                                 | For example                      |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------- |
 | `APP_NAME`                | Display name shown in the UI and navbar                                                                                                                                                                                                                                                                                                                                                                                                                                 | `Closet`                                | `My awesome Closet manager`      |
 | `APP_TIMEZONE`            | The household's IANA time zone: what "today" is on the calendar and which week opens by default                                                                                                                                                                                                                                                                                                                                                                         | `America/New_York`                      | `Europe/Berlin`                  |
 | `ICON_NAME`               | Icon file under `public/assets/` used for share previews and the photo watermark; the manifest, the install dialog and the home-screen icon use its `<name>-192.png` and `<name>-512.png` siblings, which must be there too                                                                                                                                                                                                                                             | `icon.png`                              | `my-icon.png`                    |
 | `SITE_URL`                | Public origin, used for absolute links in share previews and as the Web Push (VAPID) contact, which must be `https:` when `PWA_ENABLED=true`                                                                                                                                                                                                                                                                                                                            | `http://localhost:3000`                 | `https://closet.example.com`     |
 | `DATA_PATH`               | Directory for uploaded files                                                                                                                                                                                                                                                                                                                                                                                                                                            | `./data`                                | `./closet-data`                  |
-| `DISABLE_REGISTRATION`    | Disallows user sign ups when true                                                                                                                                                                                                                                                                                                                                                                                                                                       | `false`                                 | `true`                           |
+| `DISABLE_REGISTRATION`    | `true` closes registration: only existing accounts sign in                                                                                                                                                                                                                                                                                                                                                                                                              | `false`                                 | `true`                           |
 | `PASSWORD_HASH_ROUNDS`    | bcrypt cost of every password hash and sign-in comparison; below 12 only outside `APP_ENV=production` (the test tiers run at 4)                                                                                                                                                                                                                                                                                                                                         | `12`                                    | `4`                              |
 | `PWA_ENABLED`             | Enable service worker, PWA install prompt and Web Push notifications                                                                                                                                                                                                                                                                                                                                                                                                    | `false`                                 | `true`                           |
 | `WATERMARK_ENABLED`       | Composite the app icon onto share-link preview images                                                                                                                                                                                                                                                                                                                                                                                                                   | `false`                                 | `true`                           |
@@ -139,7 +139,7 @@ An agent connected this way (Claude, or a styling agent such as Muse) suggests w
 | `LOG_FORMAT`              | The shape of those lines: `json`, one object per line with `ts`, `level`, `version`, `logger` and a request's `request_id` (a job's `job_id`) (production; Loki reads it), or `text`, pino-pretty for a terminal (`npm run start:dev` sets it)                                                                                                                                                                                                                          | `json`                                  | `text`                           |
 | `APP_ENV`                 | Where this process runs, as the error tracker's `environment`: `production`, `dev` (`npm run start:dev` sets it) or `gate` (the image smoke test). Never derived from `NODE_ENV`                                                                                                                                                                                                                                                                                        | `production`                            | `dev`                            |
 | `DATABASE_HOST`           | Postgres host (required)                                                                                                                                                                                                                                                                                                                                                                                                                                                | -                                       | `192.0.2.10`                     |
-| `DATABASE_PORT`           | Postgres port                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `5432`                                  | `9867`                           |
+| `DATABASE_PORT`           | The port Postgres listens on                                                                                                                                                                                                                                                                                                                                                                                                                                            | `5432`                                  | `9867`                           |
 | `DATABASE_USER`           | Postgres user (required)                                                                                                                                                                                                                                                                                                                                                                                                                                                | -                                       | `postgres`                       |
 | `DATABASE_PASS`           | Postgres password (required; may be empty for trust auth)                                                                                                                                                                                                                                                                                                                                                                                                               | -                                       | `7yfhcn2349cr32f`                |
 | `DATABASE_NAME`           | Postgres database name (required; `DATABASE_SCHEMA`, its deprecated alias, is read when this is unset)                                                                                                                                                                                                                                                                                                                                                                  | -                                       | `closet`                         |
@@ -169,7 +169,7 @@ Generate the session signing secret (anyone who knows it can sign in as any user
 openssl rand -hex 32
 ```
 
-Generate VAPID keys:
+Make the VAPID key pair for Web Push:
 
 ```bash
 npx web-push generate-vapid-keys
@@ -177,9 +177,9 @@ npx web-push generate-vapid-keys
 
 ---
 
-## Development
+## Working on Closet
 
-### Prerequisites
+### What you need
 
 - Node (see `.nvmrc`, Node 22, an exact version: devkit's toolchain-check holds the
   Dockerfile and workflows to it) - install via [nvm](https://github.com/nvm-sh/nvm)
@@ -188,8 +188,8 @@ npx web-push generate-vapid-keys
   `localhost:5432`, superuser `postgres`, trust auth).
 
 ```bash
-nvm install && nvm use
-npm install
+nvm install                                       # reads .nvmrc and switches to it
+npm ci                                            # the lockfile as committed; postinstall applies patches/
 make install                                      # git hooks, once per checkout or worktree
 (cd ../pgvault-dev && docker compose up -d --wait)
 docker compose -f ../pgvault-dev/docker-compose.yml exec postgres \
@@ -209,7 +209,7 @@ creates scratch databases on the server named by `TEST_DATABASE_URL`
 (default `postgres://postgres@localhost:5432/postgres`, pgvault-dev) and drops
 them afterwards.
 
-### Scripts
+### npm scripts
 
 ```bash
 npm run start:dev       # tsc --watch + node --watch + tailwind --watch
@@ -356,7 +356,7 @@ SQL statements and rows per request, response bytes. It writes
 prints what changed against the committed baseline. How a page PR uses it:
 [docs/perf/README.md](docs/perf/README.md).
 
-### Migrations
+### Changing the schema
 
 The schema is `src/db/schema.ts` (Drizzle). The app applies the migrations in
 `drizzle/` on every boot, so a deploy is the migration.
@@ -385,13 +385,13 @@ SELECT count(*) FROM garment
     OR btrim(category) = '';                                       -- 0
 ```
 
-### Docker build
+### Building the image
 
 ```bash
 docker build --platform linux/amd64 --build-arg APP_VERSION=$(git rev-parse --short=7 HEAD) -t closet .
 ```
 
-`--platform linux/amd64` because the Dockerfile drops the arm64 onnxruntime binding: an arm64 image boots and reports healthy, but every photo stays at "Removing background". `APP_VERSION` is what `/health/ready` and About report; without it the image says `dev`. How the published image is built and shipped: [docs/operations.md](docs/operations.md).
+`--platform linux/amd64` because the Dockerfile drops the arm64 onnxruntime binding: an arm64 image boots and reports healthy, but every photo stays at "Cutting out the background". `APP_VERSION` is what `/health/ready` and About report; without it the image says `dev`. How the published image is built and shipped: [docs/operations.md](docs/operations.md).
 
 ---
 
@@ -417,19 +417,18 @@ For other self-hosters: deploy to a VPS via [Coolify](https://coolify.io/) or Po
 - [docs/decisions.md](docs/decisions.md): dated decisions, newest last. [docs/history.md](docs/history.md) and [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md) hold the older record.
 - [docs/workflow.md](docs/workflow.md): the flow per issue slice.
 - Testing: [integration](docs/testing-integration.md), [cutouts](docs/testing-cutouts.md), [service worker](docs/testing-service-worker.md), [WebKit](docs/testing-webkit.md), and page performance in [docs/perf/](docs/perf/README.md) ([baseline](docs/perf/baseline.md)).
-- [docs/DESIGN.md](docs/DESIGN.md): the upstream entity model, still the reference for feature scope (its stack is stale).
 - Feature designs cited from the code: [redesign](docs/plans/2026-09-26-redesign.md), [wardrobe features](docs/plans/2026-09-26-wardrobe-features.md), [caching and offline](docs/plans/2026-09-28-caching-and-offline.md), [multi-add and export](docs/plans/2026-09-28-multi-add-and-export.md), [order email import](docs/plans/2026-09-28-order-email-import.md), [yearly recap](docs/plans/2026-09-28-yearly-recap.md), [Muse suggestions](docs/plans/2026-10-05-muse-suggestions.md), [structural refactors](docs/plans/2026-10-09-structural-refactors.md), [outfit rules](docs/plans/2026-11-12-generator-rules.md), [inspiration library](docs/plans/2026-11-13-inspiration-library.md), [desktop Styling and Calendar](docs/plans/2026-11-12-desktop-styling-and-calendar.md), [desktop layout](docs/plans/2026-11-16-desktop-layout.md) (proposed), [the JSON API](docs/plans/2026-11-12-json-api.md), [offline queued writes](docs/plans/2026-11-12-offline-queued-writes.md), [HTTP/2 outbound](docs/plans/2026-11-13-http2-outbound.md), and the [background-removal benchmark](docs/audits/2026-09-25-program2/bg-removal-benchmark.md).
 - One-off audits and superseded plans: [docs/reports/](docs/reports/), never linked from an AGENTS.md.
 - Contributors and agents: see [AGENTS.md](AGENTS.md).
 
 ---
 
-## Contributing
+## Contributing changes
 
-Closet is a hard fork and does not track upstream. This project is licensed under AGPL-3.0 - contributions must be compatible with that license.
+Changes arrive as pull requests; [docs/workflow.md](docs/workflow.md) is how one goes from an issue to a merge. A contribution is offered under the MIT licence, like the rest of the code.
 
 ---
 
-## License
+## Licence
 
-[GNU AGPL-3.0](LICENSE)
+[MIT](LICENSE). Copyright 2026 kashhq.

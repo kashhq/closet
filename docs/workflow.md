@@ -78,4 +78,4 @@ Builds, test suites, and `npm ci` go through a `build:build-runner` subagent, ne
 - pre-commit runs guards, staged secrets and lint; pre-push typecheck and unit; never bypass either with `--no-verify`. If a hook fails, fix and create a new commit, never amend.
 - Commit messages: concise, why over what.
 - When a new pattern or gotcha lands, write it in its area's `AGENTS.md` (the area index; this file only for what every change needs) in the same commit, and add a dated `docs/decisions.md` entry for the decision behind it in the same change.
-- No upstream sync: closet is a hard fork and never merges from Libre Closet. Restructure freely; offering a fix back upstream is optional, not part of the workflow.
+- No upstream: closet merges from nowhere else and every line in it is its own (#1225). Restructure freely.
