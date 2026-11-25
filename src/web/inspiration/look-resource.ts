@@ -22,6 +22,7 @@ import { IdeaGarment, toIdeaGarment } from '../gallery/idea-resource';
 import { RowId } from '../schemas';
 import { REFUSALS } from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX } from '../wardrobe/link-import/link-text';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { typesOfRole } from './piece-input';
 import {
   INSPIRATION_MAX_PIECES,
@@ -41,9 +42,6 @@ import type { UnreadReason } from './writes';
  * from what the Inspiration tab, a look's page and the match view read.
  * The token's user's own, like the style profile: a share never reaches one.
  */
-
-/** A page of GET /looks unless asked: more than the tab shows above the fold. */
-export const LOOK_PAGE_SIZE = 50;
 
 export const LookParams = Type.Object({ id: RowId });
 

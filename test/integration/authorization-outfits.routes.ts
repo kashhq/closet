@@ -928,12 +928,14 @@ export const ROUTES: Route[] = [
   // Saved looks (#22) are the owner's like the style profile: the list is
   // anyone's own, every refusal of a look a 404 that stores nothing (an
   // upload is refused before its body is read), and `?ownerId=` is ignored.
+  // The tab is paged (#528) and the matrix's own writes add looks beside the
+  // fixture's, which can fall past the first page: only /tiles, below the
+  // fixture look's id + 1, is asked to show it.
   {
     name: 'GET /inspiration',
     kind: 'read',
     ok: 200,
     secret: inspirationTitle,
-    shows: true,
     vias: BOTH,
     request: (_, q) => ({ method: 'GET', url: `/inspiration${q}` }),
     expect: {
@@ -945,6 +947,24 @@ export const ROUTES: Route[] = [
     api: {
       ok: 200,
       request: (_, q) => ({ method: 'GET', url: `/api/v1/looks${q}` }),
+    },
+  },
+  {
+    name: 'GET /inspiration/tiles',
+    kind: 'read',
+    ok: 200,
+    secret: inspirationTitle,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/inspiration/tiles${q ? `${q}&` : '?'}before=${f.inspirationId + 1}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
     },
   },
   {

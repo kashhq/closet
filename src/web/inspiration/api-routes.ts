@@ -36,7 +36,6 @@ import {
   LookRecreationResource,
   LookTextInput,
   LookUpload,
-  LOOK_PAGE_SIZE,
   PhotoReplaced,
   PieceFound,
   PieceParams,
@@ -63,6 +62,7 @@ import {
   isOwnInspirationPhoto,
   listInspirations,
 } from './queries';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { recreateOwnLook } from './recreation';
 import { SHARE_PHOTO_MAX_BYTES } from './share-target';
 import {
@@ -122,17 +122,18 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     },
     async (request) => {
       const { cursor, limit = LOOK_PAGE_SIZE } = request.query;
-      // One more than the page: whether another follows.
-      const looks = await listInspirations(db, actorOf(request).userId, {
-        before: cursor === undefined ? undefined : readIdCursor(cursor),
-        limit: limit + 1,
-      });
-      const page = looks.slice(0, limit);
-      const more = looks.length > limit;
+      const { looks, next } = await listInspirations(
+        db,
+        actorOf(request).userId,
+        {
+          before: cursor === undefined ? undefined : readIdCursor(cursor),
+          limit,
+        },
+      );
       return {
-        data: page.map(toLookListItem),
+        data: looks.map(toLookListItem),
         pagination: {
-          ...(more && { nextCursor: idCursor(page[page.length - 1].id) }),
+          ...(next !== null && { nextCursor: idCursor(next) }),
           limit,
         },
       };

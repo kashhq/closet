@@ -10,6 +10,7 @@ import { INSPIRATION_PHOTO_ROOT } from '../files/image-url';
 import { sendPrivatePhoto } from '../files/private-photo';
 import { t } from '../i18n';
 import { alreadySavedParam } from '../gallery/urls';
+import { OutfitCursor } from '../outfits/schemas';
 import { outfitUrl } from '../outfits/urls';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
@@ -22,7 +23,8 @@ import {
   REFUSALS,
 } from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX, linkIn } from '../wardrobe/link-import/link-text';
-import { InspirationListPage } from './list-page';
+import { InspirationListPage, LookTiles } from './list-page';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { NewInspirationPage } from './new-page';
 import {
   addLookPiece,
@@ -56,6 +58,7 @@ import { InspirationPage } from './show-page';
 import {
   INSPIRATION_LINK_PATH,
   INSPIRATION_PATH,
+  INSPIRATION_TILES_PATH,
   inspirationPiecesUrl,
   inspirationUrl,
   NEW_INSPIRATION_PATH,
@@ -74,6 +77,10 @@ import {
 const LOOK_ROUTE = `${INSPIRATION_PATH}/:id`;
 
 const LookParams = Type.Object({ id: RowId });
+
+// The tab's next page: the last id of the page before (a keyset bound, no
+// resource mark: it addresses no look).
+const TilesQuery = Type.Object({ before: OutfitCursor });
 /** A piece's place in its look (inspiration_piece.position, a smallint). */
 const PIECE_POSITION = Type.Integer({
   minimum: 0,
@@ -146,12 +153,41 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
   }
 
   app.get(INSPIRATION_PATH, async (request, reply) => {
-    const looks = await listInspirations(db, sessionUserId(request));
+    const { looks, next } = await listInspirations(db, sessionUserId(request), {
+      limit: LOOK_PAGE_SIZE,
+    });
     return renderPage(
       reply,
-      <InspirationListPage ctx={viewContext(reply)} looks={looks} />,
+      <InspirationListPage
+        ctx={viewContext(reply)}
+        looks={looks}
+        next={next}
+      />,
     );
   });
+
+  // The tab's sentinel (hx-trigger="revealed", #528): the page below
+  // `before`, always a fragment. The cursor only bounds the owner's own
+  // list; a malformed one is a 400 (only our sentinel builds it).
+  app.get(
+    INSPIRATION_TILES_PATH,
+    { schema: { querystring: TilesQuery } },
+    async (request, reply) => {
+      const ownerId = sessionUserId(request);
+      const { before } = request.query;
+      const { looks, next } = await listInspirations(db, ownerId, {
+        before,
+        limit: LOOK_PAGE_SIZE,
+      });
+      logger.debug(
+        `GET ${INSPIRATION_TILES_PATH}: ${looks.length} looks of user ${ownerId} below ${before}${next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(
+        reply,
+        <LookTiles looks={looks} next={next} firstPage={false} />,
+      );
+    },
+  );
 
   app.get(NEW_INSPIRATION_PATH, async (_request, reply) =>
     renderPage(
