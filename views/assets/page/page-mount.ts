@@ -15,7 +15,7 @@
  */
 
 import { STRIP_FLAGS } from '../../../src/web/page-contract';
-import { type MountTable, watchMounts } from '../mounts';
+import { type MountTable, once, watchMounts } from '../mounts';
 
 /**
  * Drops one-shot flags from the address bar once the page has read them
@@ -33,17 +33,20 @@ function stripFlags(marker: HTMLElement) {
   window.history.replaceState({}, '', url);
 }
 
+// `once`: an effect of the visit the server rendered, never re-run by a
+// history restore (mounts.ts). Back to the garment page must not reopen its
+// photo sheet; back to a saved look must not delete a share saved since.
 const MOUNTS: MountTable = {
-  'strip-flags': stripFlags,
+  'strip-flags': once(stripFlags),
   'snap-strips': async () =>
     (await import('snap-strip')).initSnapStrips(document),
   styling: async (rows) => (await import('styling')).initStyling(rows),
   'mask-editor': async (slot) =>
     (await import('mask-editor')).bindMaskEditor(slot),
-  'open-sheet': async (dialog) => {
+  'open-sheet': once(async (dialog) => {
     if (!(dialog instanceof HTMLDialogElement)) return;
     (await import('confirm-sheet')).openSheet(dialog, null);
-  },
+  }),
   'search-shortcut': () => import('search-shortcut'),
   'select-count': () => import('select-count'),
   'recap-export': async (button) => {
@@ -52,7 +55,9 @@ const MOUNTS: MountTable = {
   },
   'share-confirm': async (root) =>
     (await import('share-confirm')).confirmShare(root),
-  'share-saved': async () => (await import('share-saved')).forgetSavedShare(),
+  'share-saved': once(async () =>
+    (await import('share-saved')).forgetSavedShare(),
+  ),
   locate: async (part) => (await import('locate')).initLocate(part),
 };
 

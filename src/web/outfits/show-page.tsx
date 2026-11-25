@@ -41,7 +41,6 @@ import { ToBuySection } from './to-buy';
 import { outfitUrl } from './urls';
 
 const PLAN_SHEET_ID = 'outfit-plan-sheet';
-const PLAN_FORM_ID = 'outfit-plan-form';
 
 /** A garment of the outfit with the marks its collage and list show. */
 type OutfitPiece = OutfitSummary['garments'][number] & {
@@ -412,11 +411,7 @@ function PlanSheet(props: { outfitId: number }) {
       <h2 id="outfit-plan-sheet-title" class="font-semibold text-lg">
         {t('outfits.PLAN_TITLE')}
       </h2>
-      <PostForm
-        id={PLAN_FORM_ID}
-        action="/calendar"
-        class="flex flex-col gap-4"
-      >
+      <PostForm action="/calendar" class="flex flex-col gap-4">
         <input type="hidden" name="outfitId" value={String(props.outfitId)} />
         <label class="flex flex-col gap-1">
           <span class="text-sm text-muted">{t('outfits.PLAN_DAY')}</span>
@@ -443,14 +438,13 @@ function PlanSheet(props: { outfitId: number }) {
             ))}
           </div>
         </fieldset>
+        <div class="modal-action mt-0">
+          <SheetCancel />
+          <button type="submit" class="btn btn-primary">
+            {t('outfits.PLAN_SUBMIT')}
+          </button>
+        </div>
       </PostForm>
-      {/* Outside the form: SheetCancel is a dialog form of its own. */}
-      <div class="modal-action mt-0">
-        <SheetCancel />
-        <button type="submit" form={PLAN_FORM_ID} class="btn btn-primary">
-          {t('outfits.PLAN_SUBMIT')}
-        </button>
-      </div>
     </Sheet>
   );
 }

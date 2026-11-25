@@ -17,11 +17,12 @@ import {
  *
  * The rule (#672): an element mounts at most once, however often a load
  * reaches it (the body's, an ancestor's, the same subtree twice), and an
- * element put in an old one's place mounts afresh.
+ * element put in an old one's place mounts afresh, except a `once` mount's,
+ * which a history restore never runs again.
  */
 
 const ENTRY = `
-import { watchMounts } from './views/assets/mounts.ts';
+import { once, watchMounts } from './views/assets/mounts.ts';
 window.mounted = [];
 window.fire = (selector) =>
   document
@@ -32,6 +33,7 @@ watchMounts({
   styling: record,
   locate: async (element) => { await Promise.resolve(); record(element); },
   'snap-strips': () => { throw new Error('broken on purpose'); },
+  'open-sheet': once(async (element) => { await Promise.resolve(); record(element); }),
 });
 `;
 
@@ -41,7 +43,8 @@ const MARKUP = `
     <section id="part" data-page-module="locate"><p>inside</p></section>
   </div>
   <template id="broken" data-page-module="snap-strips"></template>
-  <div id="slot"></div>`;
+  <div id="slot"></div>
+  <dialog id="sheet" data-page-module="open-sheet"></dialog>`;
 
 declare global {
   interface Window {
@@ -84,7 +87,7 @@ function mountedSoFar(page: Page): Promise<string[]> {
 describe('page-mount', () => {
   it('mounts each marked element of the loaded page once', async () => {
     await withPage(async ({ page }) => {
-      expect(await mountedSoFar(page)).toEqual(['rows', 'part']);
+      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'sheet']);
     });
   });
 
@@ -96,7 +99,7 @@ describe('page-mount', () => {
           window.fire(selector);
         }
       });
-      expect(await mountedSoFar(page)).toEqual(['rows', 'part']);
+      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'sheet']);
     });
   });
 
@@ -109,7 +112,12 @@ describe('page-mount', () => {
         window.fire('#rows');
         window.fire('#outer');
       });
-      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'rows']);
+      expect(await mountedSoFar(page)).toEqual([
+        'rows',
+        'part',
+        'sheet',
+        'rows',
+      ]);
     });
   });
 
@@ -120,7 +128,35 @@ describe('page-mount', () => {
           '<div id="fresh"><span id="deep" data-page-module="locate"></span></div>';
         window.fire('#fresh');
       });
-      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'deep']);
+      expect(await mountedSoFar(page)).toEqual([
+        'rows',
+        'part',
+        'sheet',
+        'deep',
+      ]);
+    });
+  });
+
+  it('runs a once mount on its first visit and never on a history restore', async () => {
+    await withPage(async ({ page }) => {
+      const restored = await page.evaluate(async () => {
+        await new Promise((settled) => setTimeout(settled));
+        // What htmx does going Back: the body's markup as it was left,
+        // put back, then htmx:load on the body.
+        const snapshot = document.body.innerHTML;
+        document.body.innerHTML = snapshot;
+        window.fire('body');
+        return snapshot;
+      });
+      expect(restored).not.toContain('data-page-module="open-sheet"');
+      // The bindings mount afresh on the restored elements; the sheet does not.
+      expect(await mountedSoFar(page)).toEqual([
+        'rows',
+        'part',
+        'sheet',
+        'rows',
+        'part',
+      ]);
     });
   });
 
@@ -137,7 +173,7 @@ describe('page-mount', () => {
           '<b id="ok" data-page-module="styling"></b>';
         window.fire('#slot');
       });
-      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'ok']);
+      expect(await mountedSoFar(page)).toEqual(['rows', 'part', 'sheet', 'ok']);
       expect(warnings).toEqual([
         '[page-mount] no module named "no-such-module"',
       ]);

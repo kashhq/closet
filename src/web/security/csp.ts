@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
-import { importMapScript } from '../layout/import-map';
 
 /**
  * Every response's Content-Security-Policy (#672), built once per process
- * (createApp's root onSend hook) from the build's asset version, so it
- * costs a request nothing, the bearer surfaces included.
+ * (createApp's root onSend hook), so it costs a request nothing, the bearer
+ * surfaces included. `importMap` is the very string every page renders:
+ * createApp makes it once (`importMapScript`) and hands the same value to
+ * this and to the page context (`ViewContext.importMap`, which the layout
+ * writes as is), so the hash and the page cannot name different texts.
  *
  * No inline script runs: the importmap is the page's one inline script
  * (external import maps are not a thing), allowed by its exact text's
@@ -24,13 +26,11 @@ import { importMapScript } from '../layout/import-map';
  *    filters are unused).
  *  - base-uri, form-action and object-src do not fall back to default-src.
  */
-export function contentSecurityPolicy(assetVersion: string): string {
-  const importMap = createHash('sha256')
-    .update(importMapScript(assetVersion))
-    .digest('base64');
+export function contentSecurityPolicy(importMap: string): string {
+  const hash = createHash('sha256').update(importMap).digest('base64');
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'sha256-${importMap}'`,
+    `script-src 'self' 'sha256-${hash}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",

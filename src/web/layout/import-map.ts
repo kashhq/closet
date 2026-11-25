@@ -53,9 +53,11 @@ const IMPORTS = {
 export const IMPORT_MAP_NAMES = Object.keys(IMPORTS);
 
 /**
- * The importmap's script text, exactly as the layout renders it: the page's
- * one inline script, which the CSP allows by this text's sha256
- * (src/web/security/csp.ts, #672). Fixed per build, so the header and every
+ * The importmap's script text: the page's one inline script, which the CSP
+ * allows by its sha256 (src/web/security/csp.ts, #672). createApp calls it
+ * once and hands the one string to the CSP and to every page
+ * (`ViewContext.importMap`); nothing else may call it, or the hash and the
+ * page could name different texts. Fixed per build, so the header and every
  * page stay byte-stable.
  */
 export function importMapScript(version: string): string {

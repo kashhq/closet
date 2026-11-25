@@ -19,6 +19,7 @@
 import {
   CHECKS_ON_TAP,
   CLOSES_MENU,
+  CLOSES_SHEET,
   COPY_FLASHED,
   COPY_RESTING,
   COPY_TEXT,
@@ -77,6 +78,7 @@ document.addEventListener(
       if (input instanceof HTMLInputElement) input.checked = true;
     }
     marked(event, CLOSES_MENU)?.closest('details')?.removeAttribute('open');
+    marked(event, CLOSES_SHEET)?.closest('dialog')?.close();
     const dismiss = marked(event, DISMISS);
     if (dismiss) dismiss.closest(`[${DISMISSABLE}]`)?.remove();
     const field = marked(event, SELECTS_ON_TAP);

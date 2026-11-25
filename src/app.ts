@@ -46,6 +46,7 @@ import {
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
 import { contentSecurityPolicy } from './web/security/csp';
+import { importMapScript } from './web/layout/import-map';
 import { registerRateLimit } from './web/security/rate-limit';
 import {
   assertStatelessRoute,
@@ -411,6 +412,10 @@ export async function createApp(
     tokens,
     logger: sessionLogger,
   });
+  // The page's one inline script, made once: every page renders this string
+  // (ViewContext.importMap) and the CSP allows it by its hash (csp.ts), so
+  // the two cannot differ (#672).
+  const importMap = importMapScript(build.assetVersion);
   const buildViewContext = createViewContextBuilder({
     appName: config.APP_NAME,
     iconName: config.ICON_NAME,
@@ -423,6 +428,7 @@ export async function createApp(
     orderMailOwnerId: orderMail?.ownerId,
     release: build.release,
     assetVersion: build.assetVersion,
+    importMap,
     timeZone: config.APP_TIMEZONE,
   });
   // Declared up front so every request object has the same shape; the hook
@@ -463,7 +469,7 @@ export async function createApp(
   );
 
   // Security headers on all responses
-  const everyResponse = securityHeaders(build.assetVersion);
+  const everyResponse = securityHeaders(importMap);
   app.addHook('onSend', (_request, reply, payload, done) => {
     reply.headers(everyResponse);
     done(null, payload);
@@ -690,13 +696,13 @@ function createWeather(
 }
 
 // Every response's, set by the root onSend hook. The CSP is this build's
-// (src/web/security/csp.ts: the importmap's hash).
-function securityHeaders(assetVersion: string) {
+// (src/web/security/csp.ts: the hash of the importmap every page renders).
+function securityHeaders(importMap: string) {
   return {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Content-Security-Policy': contentSecurityPolicy(assetVersion),
+    'Content-Security-Policy': contentSecurityPolicy(importMap),
   } as const;
 }

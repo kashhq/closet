@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { t } from '../i18n';
-import { pageModule, resetsOnClose } from '../page-contract';
+import { closesSheet, pageModule, resetsOnClose } from '../page-contract';
 import { SheetBackdrop } from './parts';
 
 /**
@@ -148,19 +148,22 @@ export function dockedFiltersOpener(id: string) {
 }
 
 /**
- * A sheet's own Cancel, beside its action: closes it, nothing posted. A
- * dialog form, so it needs no script, which means it must never sit inside
- * the sheet's form: a form cannot nest, so a sheet's action posts its form
- * through `form=` (the outfit page's Plan sheet).
+ * A sheet's own Cancel, beside its action: closes it, nothing posted
+ * (`closesSheet`, actions.ts). A `type="button"`, never a dialog form or a
+ * submit, so it posts nothing wherever it sits: a sheet's action row is
+ * usually inside the sheet's form, and a form nested there would be dropped
+ * by the parser, its Cancel submitting the outer form (`nestedForms`,
+ * test/integration/pages.ts). A sheet opens only through `showModal()`, so
+ * without script there is no sheet to close.
  */
 export function SheetCancel(props: { size?: 'sm' }) {
   return (
-    <form method="dialog" class="contents">
-      <button
-        class={props.size === 'sm' ? 'btn btn-ghost btn-sm' : 'btn btn-ghost'}
-      >
-        {t('CANCEL')}
-      </button>
-    </form>
+    <button
+      type="button"
+      class={props.size === 'sm' ? 'btn btn-ghost btn-sm' : 'btn btn-ghost'}
+      {...closesSheet()}
+    >
+      {t('CANCEL')}
+    </button>
   );
 }

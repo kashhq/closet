@@ -202,6 +202,9 @@ export const photoPick = () => ({ [PHOTO_PICK]: '' });
 /** A control in a `<details>` menu that closes the menu as it is tapped. */
 export const CLOSES_MENU = 'data-closes-menu';
 export const closesMenu = () => ({ [CLOSES_MENU]: '' });
+/** A button that closes the `<dialog>` it sits in, nothing posted (SheetCancel). */
+export const CLOSES_SHEET = 'data-closes-sheet';
+export const closesSheet = () => ({ [CLOSES_SHEET]: '' });
 /** A dialog whose form is reset whenever it closes (the filters sheet). */
 export const RESETS_ON_CLOSE = 'data-resets-on-close';
 export const resetsOnClose = (when: boolean) => ({

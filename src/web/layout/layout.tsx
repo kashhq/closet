@@ -1,12 +1,13 @@
 import type { Child } from 'hono/jsx';
 import { REPLAY_TIMEOUT_MS } from '../../offline-writes';
 import { appIconFile } from '../app-icon';
+import { jsonForScript } from '../html';
 import { t } from '../i18n';
 import { THEME_BASE_100 } from '../theme-colors';
 import type { ViewContext } from '../view-context';
 import { PhotoViewer } from '../files/photo-viewer';
 import { AppStatus } from './app-status';
-import { importMapScript, pageModuleUrl } from './import-map';
+import { pageModuleUrl } from './import-map';
 import { ConfirmSheet } from './confirm-sheet';
 import { pageIdentity } from '../page-contract';
 
@@ -62,6 +63,36 @@ export interface PageMeta {
   ogDescription?: string;
   ogUrl?: string;
   ogImage?: string;
+  /** Also describe the page as a schema.org WebPage, by its og title and description (sign in, register). */
+  webPage?: boolean;
+}
+
+/**
+ * The schema.org WebPage of a public entry page, for link previews. In the
+ * head, like every <script> (#672): htmx drops each one a swap brings,
+ * data included (`allowScriptTags: false`), and `expectFullPage` refuses
+ * one in the body.
+ */
+function WebPageData(props: {
+  ctx: ViewContext;
+  name: string;
+  description: string;
+}) {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: props.name,
+    description: props.description,
+    isPartOf: { '@id': `${props.ctx.siteUrl}/#website` },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // Structured data is JSON by definition; jsonForScript keeps it
+      // from closing the element.
+      dangerouslySetInnerHTML={{ __html: jsonForScript(data) }}
+    />
+  );
 }
 
 export interface LayoutProps extends PageMeta {
@@ -104,6 +135,7 @@ export function Layout({
   ogDescription = t('APP_DESCRIPTION'),
   ogUrl = ctx.ogUrl,
   ogImage = ctx.ogImage,
+  webPage,
   children,
 }: LayoutProps) {
   // Every first-party static URL carries ?v=appVersion (src/build-info.ts):
@@ -151,6 +183,9 @@ export function Layout({
         <meta name="twitter:description" content={ogDescription} />
         <meta name="twitter:image" content={ogImage} />
         <meta property="og:site_name" content={ctx.appName} />
+        {webPage && (
+          <WebPageData ctx={ctx} name={ogTitle} description={ogDescription} />
+        )}
 
         <link rel="icon" href={`/favicon.ico${v}`} sizes="48x48" />
         {/* iOS scales it to 180 px; Firefox also reads it as the site icon
@@ -170,10 +205,11 @@ export function Layout({
         {/* Libraries are served from node_modules (registerStaticAssets in
             app.ts), never a CDN. */}
         <script defer src={`/modules/htmx.min.js${v}`}></script>
-        {/* The page's one inline script, allowed by its hash (csp.ts). */}
+        {/* The page's one inline script, allowed by its hash (csp.ts):
+            written as is, the string the header was hashed from. */}
         <script
           type="importmap"
-          dangerouslySetInnerHTML={{ __html: importMapScript(ctx.appVersion) }}
+          dangerouslySetInnerHTML={{ __html: ctx.importMap }}
         />
         {/* Heartbeat-driven online/offline state and the banner in
             AppStatus; runs everywhere, service worker or not. */}
