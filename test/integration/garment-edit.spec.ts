@@ -2,6 +2,7 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { garment } from '../../src/db/schema';
+import { GARMENT_COLORS } from '../../src/wardrobe/properties';
 import { variantFileName } from '../../src/web/files/image-variant';
 import { garmentRow, jpegPhoto, uploadPhoto } from './garments';
 import {
@@ -137,6 +138,19 @@ describe('garment edit, clone and archive', () => {
         );
       }
       expect(html).not.toMatch(/name="color" value="red"\s+checked/);
+    });
+
+    // color-picker.ts only shows and hides the pills the server rendered.
+    it('renders every colour pill, shown only for the ticked colours', async () => {
+      const res = await get(`/wardrobe/${garmentId}/edit`, alice.cookie);
+      const tag = (attribute: string) =>
+        res.body.match(new RegExp(`<span[^>]*${attribute}[^>]*>`))?.[0];
+      for (const color of GARMENT_COLORS) {
+        const pill = tag(`data-color-pill="${color}"`);
+        expect(pill, color).toBeDefined();
+        expect(/\shidden/.test(pill!), color).toBe(!FORM.color.includes(color));
+      }
+      expect(tag('data-color-picker-part="placeholder"')).toMatch(/\shidden/);
     });
 
     // Not in any wardrobe carol can see: as unknown as a missing id.

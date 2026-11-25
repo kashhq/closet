@@ -70,7 +70,8 @@ function byId<T extends HTMLElement>(id: string, type: new () => T): T {
 /**
  * One opening of the editor over `cutout`. Resolves with the edited cutout
  * on Accept, or null when the editor is left any other way (Skip, Close,
- * the backdrop, Escape): nothing is saved then.
+ * the backdrop, Escape): nothing is saved then. Rejects when Accept cannot
+ * encode the canvas, so a lost edit is a failure, never a silent close.
  */
 function editCutout(
   cutout: ImageBitmap,
@@ -166,7 +167,7 @@ function editCutout(
     signal,
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let accepted = false;
     acceptButton.addEventListener(
       'click',
@@ -186,7 +187,14 @@ function editCutout(
           resolve(null);
           return;
         }
-        canvas.toBlob((edited) => resolve(edited), 'image/webp', 0.92);
+        canvas.toBlob(
+          (edited) =>
+            edited
+              ? resolve(edited)
+              : reject(new Error('the canvas has no image')),
+          'image/webp',
+          0.92,
+        );
       },
       { signal },
     );
@@ -216,10 +224,20 @@ async function editFrom(pencil: HTMLButtonElement) {
   if (!originalUrl || !cutoutUrl || !saveUrl) {
     throw new Error('the pencil names no photo');
   }
-  const [original, cutout] = await Promise.all([
+  const fetched = await Promise.allSettled([
     fetchBitmap(originalUrl),
     fetchBitmap(cutoutUrl),
   ]);
+  if (fetched[0].status === 'rejected' || fetched[1].status === 'rejected') {
+    for (const result of fetched) {
+      if (result.status === 'fulfilled') result.value.close();
+    }
+    throw fetched[0].status === 'rejected'
+      ? fetched[0].reason
+      : fetched[1].reason;
+  }
+  const original = fetched[0].value;
+  const cutout = fetched[1].value;
   let edited: Blob | null;
   try {
     edited = await editCutout(cutout, original);
