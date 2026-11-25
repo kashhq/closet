@@ -1130,6 +1130,59 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
   @apply cursor-pointer rounded-[var(--radius-field)] border border-primary/30 bg-primary/10 px-2 py-1 text-xs/none font-semibold text-primary transition-colors duration-150 ease-[ease] hover:border-primary/45 hover:bg-primary/18 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
 }
 
+/* A garment colour as a dot or a bar's segment (insights and the year in
+   review: `swatch--<colour>`, GARMENT_COLORS' names). A named colour is
+   its CSS keyword; `pattern` is a fine grey stripe and `other` a tint of
+   the text. A modifier class, so the page audit reads it as data. */
+.swatch--red {
+  background-color: red;
+}
+.swatch--pink {
+  background-color: pink;
+}
+.swatch--orange {
+  background-color: orange;
+}
+.swatch--yellow {
+  background-color: yellow;
+}
+.swatch--green {
+  background-color: green;
+}
+.swatch--blue {
+  background-color: blue;
+}
+.swatch--purple {
+  background-color: purple;
+}
+.swatch--black {
+  background-color: black;
+}
+.swatch--white {
+  background-color: white;
+}
+.swatch--grey {
+  background-color: grey;
+}
+.swatch--beige {
+  background-color: beige;
+}
+.swatch--brown {
+  background-color: brown;
+}
+.swatch--gold {
+  background-color: gold;
+}
+.swatch--silver {
+  background-color: silver;
+}
+.swatch--pattern {
+  background-image: repeating-linear-gradient(45deg, #ccc 0 2px, #fff 2px 6px);
+}
+.swatch--other {
+  @apply bg-base-content/20;
+}
+
 /* The snap strip's previous/next buttons (src/web/strip/snap-strip.tsx, #311)
    show only where the primary input hovers and is precise: a mouse, not a
    phone. One markup for every device. */

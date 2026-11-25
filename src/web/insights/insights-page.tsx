@@ -415,8 +415,8 @@ function Pairs({ insights }: { insights: WardrobeInsights<SignablePhotoRef> }) {
 /**
  * The palette: the closet's colours and the worn ones as strips, each
  * segment as wide as its share (flex-grow over a zero basis, so rounding
- * never overflows the strip), coloured by the garment form's swatch
- * classes (main.css, `.ms-swatch--<colour>`), and the garments without a
+ * never overflows the strip), coloured by the colour swatch
+ * classes (main.css, `.swatch--<colour>`), and the garments without a
  * colour as a plain segment at the end, so each colour takes its share of
  * the whole closet; the legend says it in words.
  */
@@ -449,7 +449,7 @@ function Colours({
         {insights.colours.map((colour) => (
           <li class="flex items-center gap-2">
             <span
-              class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 ms-swatch--${colour.colour}`}
+              class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 swatch--${colour.colour}`}
             />
             <span>
               <span class="capitalize font-medium">{colour.colour}</span>{' '}

@@ -186,7 +186,7 @@ export type Condition = (typeof CONDITIONS)[number];
  * The only colours a garment may carry, in the order a colour set is stored
  * and shown. A garment's and a style profile's colours are
  * all text[] sets checked against this list (src/db/schema.ts), so adding
- * one is a migration.
+ * one is a migration, and a `.swatch--<name>` rule in views/assets/main.css.
  */
 export const GARMENT_COLORS = [
   'red',

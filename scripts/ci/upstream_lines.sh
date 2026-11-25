@@ -4,7 +4,7 @@
 # copyright holder can relicense. This script is the proof; `make upstream-check` runs it.
 #
 # Upstream, defined: a line whose `git blame -w -M -C` author email is not in OWNER_EMAILS. The
-# email, not the name: the owner commits under two names with one email. -w ignores whitespace
+# email, not the name: the owner commits under two names. -w ignores whitespace
 # edits and -M/-C follow lines moved within a file or copied across files, so reformatting or
 # moving an inherited line does not make it the owner's; only new expression does.
 # Substantive only: a line with no letter or digit (blank, a lone brace, `);`) carries no
@@ -20,8 +20,10 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# Space-separated; the one place the owner is named.
-OWNER_EMAILS='8147664+kashhq@users.noreply.github.com'
+# Space-separated; the one place the owner is named. Both are the owner's GitHub account's
+# no-reply addresses: the id-prefixed one GitHub stamps on squash merges, and the plain one a
+# local checkout's commits may carry before the merge.
+OWNER_EMAILS='8147664+kashhq@users.noreply.github.com kashhq@users.noreply.github.com'
 EXEMPT=scripts/ci/upstream_exempt.txt
 
 matched=$(mktemp)
