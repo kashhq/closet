@@ -1341,7 +1341,7 @@ describe('trips', () => {
       expect(t.logs.ops('trip.created').at(-1)).toMatchObject({
         tripId: pageTrip,
         located: false,
-        placeDeferred: true,
+        placeUnlocated: 'budget',
       });
       expect(t.logs.messages('warn', 'Web')).toContainEqual(
         expect.stringMatching(
@@ -1364,8 +1364,8 @@ describe('trips', () => {
         },
       });
       expect(api.statusCode, api.body).toBe(201);
-      const made = api.json<{ id: number; placeDeferred: boolean }>();
-      expect(made.placeDeferred).toBe(true);
+      const made = api.json<{ id: number; placeUnlocated?: string }>();
+      expect(made.placeUnlocated).toBe('budget');
 
       const rows = await t.db
         .select({ destination: trip.destination, latitude: trip.latitude })
@@ -1376,6 +1376,52 @@ describe('trips', () => {
         { destination: fields.destination, latitude: null },
         { destination: fields.destination, latitude: null },
       ]);
+    });
+
+    // A slot pays for a located trip, so only a create that writes one is
+    // charged: a clientId retry answers the first trip and spends nothing.
+    it('charges the destination budget only for a trip created, never for a clientId retry', async () => {
+      const email = 'trip-retry@example.com';
+      await t.register(email);
+      const bearer = (await deviceToken(t, { email })).token;
+      const today = t.today();
+      const create = (name: string, clientId: string) =>
+        t.api(bearer, {
+          method: 'POST',
+          url: '/api/v1/trips',
+          payload: {
+            name,
+            startsOn: addDays(today, 3),
+            endsOn: addDays(today, 5),
+            clientId,
+            place: {
+              name: 'Austin, Texas, United States',
+              latitude: 30.27,
+              longitude: -97.74,
+            },
+          },
+        });
+      const clientId = '6d1f2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c';
+      const first = await create('Retried', clientId);
+      expect(first.statusCode, first.body).toBe(201);
+      t.logs.clear();
+      // As many retries as the budget's 10 a minute.
+      for (let i = 0; i < 10; i++) {
+        const retry = await create('Retried', clientId);
+        expect(retry.statusCode, retry.body).toBe(200);
+        expect(retry.json()).toEqual({ id: first.json<{ id: number }>().id });
+      }
+      const next = await create('Next', '7e2a3d4c-5b6f-4a71-9c8d-0e1f2a3b4c5d');
+      expect(next.statusCode, next.body).toBe(201);
+      expect(next.json()).not.toHaveProperty('placeUnlocated');
+      const [row] = await t.db
+        .select({ latitude: trip.latitude })
+        .from(trip)
+        .where(eq(trip.id, next.json<{ id: number }>().id));
+      expect(row.latitude).not.toBeNull();
+      expect(t.logs.messages('warn', 'Web')).not.toContainEqual(
+        expect.stringMatching(/^Rate limit reached/),
+      );
     });
 
     it('gives the gallery the destination’s forecast for a trip day', async () => {

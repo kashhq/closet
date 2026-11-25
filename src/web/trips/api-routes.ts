@@ -216,7 +216,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['trips'],
         summary: 'Creates a trip',
         description:
-          "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once; past the destination budget (10 a minute per user, shared with PUT /trips/{id}/destination) it is created unlocated, `placeDeferred` true, and the place can be set later. Without weather on this instance `place` is ignored. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
+          "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once; otherwise it is created unlocated, still named after the place, and `placeUnlocated` says why: `budget` past the destination budget (10 a minute per user, shared with PUT /trips/{id}/destination), so the place can be set later; `no-weather` on an instance without weather, whose coordinates are never stored. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         body: NewTrip,
         response: apiResponses({ 200: TripCreated, 201: TripCreated }),
       },
@@ -226,7 +226,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { clientId, place, ...fields } = request.body;
       const form = readTripForm(fields);
       if (!form.ok) throw refusedBody(form.errors, POINTER_OF_TRIP_FIELD);
-      const { id, created, placeDeferred } = await addTrip(deps, actor, {
+      const { id, created, placeUnlocated } = await addTrip(deps, actor, {
         fields: form.fields,
         place: newTripPlace(place ? pickedPlace(place) : null, {
           weatherEnabled: Boolean(weather),
@@ -241,7 +241,7 @@ export const tripApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       return reply
         .status(created ? 201 : 200)
         .header('Location', `${API_PREFIX}/trips/${id}`)
-        .send({ id, placeDeferred });
+        .send({ id, placeUnlocated });
     },
   );
 

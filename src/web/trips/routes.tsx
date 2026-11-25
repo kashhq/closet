@@ -194,7 +194,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
       const place = formPlace(request.body);
       const form = readTripForm(request.body);
       if (!form.ok) return refuseForm(reply, form, { picker: picker(place) });
-      const { id, placeDeferred } = await addTrip(deps, actor, {
+      const { id, placeUnlocated } = await addTrip(deps, actor, {
         fields: form.fields,
         place: newTripPlace(place, {
           weatherEnabled: Boolean(weather),
@@ -205,7 +205,9 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
         }),
         today: today(),
       });
-      const created: CreatedFlag = placeDeferred ? 'later' : '1';
+      // The page offers no picker without weather: a posted place there is a
+      // stale form, its label kept and nothing to tell.
+      const created: CreatedFlag = placeUnlocated === 'budget' ? 'later' : '1';
       return reply.redirect(tripUrl(id, `?created=${created}`), 303);
     },
   );

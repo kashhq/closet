@@ -84,8 +84,9 @@ const tripOutfitsOf = (tripId: number) =>
 
 describe('trips', () => {
   // #861: without WEATHER_ENABLED no search offers a place, so posted
-  // coordinates are neither kept nor counted against the destination budget.
-  it('ignores a place without weather, on the API and the page, charging nothing', async () => {
+  // coordinates are neither kept nor counted against the destination budget;
+  // the place's label still names the destination, as past the budget.
+  it('keeps only a place’s name without weather, on the API and the page, charging nothing', async () => {
     const today = t.today();
     const dates = { startsOn: today, endsOn: addDays(today, 1) };
     const place = { name: 'Austin', latitude: 30.27, longitude: -97.74 };
@@ -98,8 +99,8 @@ describe('trips', () => {
         place,
       });
       expect(made.statusCode, made.body).toBe(201);
-      const body = made.json<{ id: number; placeDeferred: boolean }>();
-      expect(body.placeDeferred).toBe(false);
+      const body = made.json<{ id: number; placeUnlocated?: string }>();
+      expect(body.placeUnlocated).toBe('no-weather');
       ids.push(body.id);
     }
     const page = await t.inject({
@@ -118,11 +119,13 @@ describe('trips', () => {
     expect(page.statusCode, page.body).toBe(303);
     expect(String(page.headers.location)).toMatch(/^\/trips\/\d+\?created=1$/);
     ids.push(Number(/^\/trips\/(\d+)/.exec(String(page.headers.location))![1]));
-    const located = await t.db.$count(
-      trip,
-      and(inArray(trip.id, ids), isNotNull(trip.latitude)),
+    const rows = await t.db
+      .select({ destination: trip.destination, latitude: trip.latitude })
+      .from(trip)
+      .where(inArray(trip.id, ids));
+    expect(rows).toEqual(
+      ids.map(() => ({ destination: 'Austin', latitude: null })),
     );
-    expect(located).toBe(0);
     expect(
       t.logs
         .ops('trip.created')

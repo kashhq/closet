@@ -4484,16 +4484,19 @@
         "title": "TripCreated",
         "type": "object",
         "required": [
-          "id",
-          "placeDeferred"
+          "id"
         ],
         "properties": {
           "id": {
             "type": "integer"
           },
-          "placeDeferred": {
-            "description": "The `place` sent was not stored: the destination budget was spent, so the trip is unlocated until PUT /trips/{id}/destination. False on a retry, which answers the first trip as saved",
-            "type": "boolean"
+          "placeUnlocated": {
+            "description": "Why the `place` sent was not located (the trip is unlocated, its destination the place's label): `budget`, the destination budget was spent, so set it later with PUT /trips/{id}/destination; `no-weather`, this instance has no weather. Absent when it was located, none was sent, or on a retry, which answers the first trip as saved",
+            "type": "string",
+            "enum": [
+              "budget",
+              "no-weather"
+            ]
           }
         }
       },
@@ -13481,7 +13484,7 @@
         "tags": [
           "trips"
         ],
-        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once; past the destination budget (10 a minute per user, shared with PUT /trips/{id}/destination) it is created unlocated, `placeDeferred` true, and the place can be set later. Without weather on this instance `place` is ignored. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
+        "description": "Judged as the trip form is: a blank name, an end before the start or more than 60 days is a 400 naming the field. With `place` (from GET /weather/places) the trip is created located, the place's label its destination, so its weather answers at once; otherwise it is created unlocated, still named after the place, and `placeUnlocated` says why: `budget` past the destination budget (10 a minute per user, shared with PUT /trips/{id}/destination), so the place can be set later; `no-weather` on an instance without weather, whose coordinates are never stored. 201 with its `Location`. With a `clientId`, a retry answers the first trip of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.",
         "requestBody": {
           "required": true,
           "content": {
