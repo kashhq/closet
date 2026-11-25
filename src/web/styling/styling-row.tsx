@@ -88,8 +88,10 @@ export function StylingRowView(props: {
   const label = roleLabel(row.role);
   const size = sizing(row.role);
   return (
+    // The lock is a btn-xs over the strip, which paints later: on a phone
+    // the gap leaves its 44 px area room (main.css, Touch hit areas; #1210).
     <section
-      class="group/row flex flex-col gap-1"
+      class="group/row flex flex-col gap-1 pointer-coarse:gap-2.5"
       data-styling-row={row.role}
       aria-label={label}
     >

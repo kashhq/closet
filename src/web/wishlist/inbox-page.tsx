@@ -204,11 +204,12 @@ function ProductCard(props: {
         {props.children}
         {item.sourceUrl && (
           // http(s) only (the column's check); a new tab, as on the garment page.
+          // Its margin keeps its 44 px area clear of Bought it's on a phone (#1210).
           <a
             href={item.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="link link-hover text-base-content self-start py-1"
+            class="link link-hover text-base-content self-start py-1 pointer-coarse:mb-3"
           >
             {t('VIEW_PRODUCT')} ↗
           </a>

@@ -404,7 +404,7 @@ function Prompts({ model }: { model: WardrobeModel }) {
   const { toTag, toWash, drafts } = model;
   if (!drafts && toTag === 0 && toWash === 0) return null;
   return (
-    <div id="wardrobe-prompts" class="mb-3 flex flex-wrap gap-2">
+    <div id="wardrobe-prompts" class="mb-3 chip-row">
       {drafts && (
         <Prompt
           text={
@@ -949,7 +949,9 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
           capsules={model.capsules}
         />
       )}
-      <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto group-has-[#search-form:focus-within]/scope:hidden">
+      {/* Stretched to the row: the scroller clips, so a chip's 44 px area
+          (main.css, Touch hit areas) needs the row's height, not its own. */}
+      <div class="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-x-auto group-has-[#search-form:focus-within]/scope:hidden">
         <FilterChips search={search} viewOwner={viewOwner} />
       </div>
       <SearchForm search={search} viewOwner={viewOwner} />
@@ -1441,7 +1443,7 @@ function FilterGroup(props: {
       >
         {props.title}
       </h4>
-      <div class="flex flex-wrap gap-2">{props.children}</div>
+      <div class="chip-row">{props.children}</div>
     </div>
   );
 }
@@ -1573,7 +1575,7 @@ function BulkForm(props: { model: WardrobeModel; children: Child }) {
  */
 function SelectAll(props: { count: number; checked: boolean }) {
   return (
-    <label class="flex items-center gap-2 text-sm mb-3 cursor-pointer w-fit">
+    <label class="tap-row flex items-center gap-2 text-sm mb-3 cursor-pointer w-fit">
       <input
         type="checkbox"
         name="all"
@@ -1784,7 +1786,7 @@ function BulkDialog() {
                     {t('BULK_MATERIALS_ADD')}
                   </p>
                 )}
-                <div class="flex flex-wrap gap-2">
+                <div class="chip-row">
                   {choice.clearable && (
                     <input
                       type="radio"

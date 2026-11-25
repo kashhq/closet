@@ -68,7 +68,7 @@ export function AppBar(props: AppBarProps) {
   const { ctx } = props;
   return (
     <header
-      class="app-bar flex items-center gap-1 px-2 bg-base-100 border-b border-base-300"
+      class="app-bar flex items-center gap-1 pointer-coarse:gap-1.5 px-2 bg-base-100 border-b border-base-300"
       {...formPage(props.formPage === true)}
     >
       {props.back && <BackLink href={props.back} historyBack />}
@@ -108,8 +108,13 @@ export function AppBar(props: AppBarProps) {
       {props.scope && (
         <div class="flex items-center shrink-0">{props.scope}</div>
       )}
+      {/* Two btn-sm side by side (⋯ and ＋) need 9 px between them on a
+          phone for their 44 px areas, a btn-sm beside the 44 px Account 5
+          px (the header's gap; main.css, Touch hit areas; #1210). */}
       {props.actions && (
-        <div class="flex items-center gap-1 shrink-0">{props.actions}</div>
+        <div class="flex items-center gap-1 pointer-coarse:gap-2.5 shrink-0">
+          {props.actions}
+        </div>
       )}
       <Account ctx={ctx} returnTo={props.returnTo} />
     </header>

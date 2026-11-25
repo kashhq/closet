@@ -425,7 +425,7 @@ function PlanSheet(props: { outfitId: number }) {
         </label>
         <fieldset>
           <legend class="text-sm text-muted mb-2">{t('OCCASION')}</legend>
-          <div class="flex flex-wrap gap-2">
+          <div class="chip-row">
             {OCCASIONS.map((occasion) => (
               <input
                 type="radio"

@@ -125,7 +125,7 @@ function pickerUrl({ capsule, viewOwner }: CapsulePageModel): string {
 function CapsuleActions({ model }: { model: CapsulePageModel }) {
   const { capsule, viewOwner } = model;
   return (
-    <div class="flex flex-wrap gap-2 mb-6 px-2">
+    <div class="chip-row mb-6 px-2">
       {model.canEdit && (
         <a href={pickerUrl(model)} class="btn btn-primary btn-sm">
           {t('CHOOSE_GARMENTS')}

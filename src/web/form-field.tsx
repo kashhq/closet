@@ -113,7 +113,7 @@ export function ChipGroup(props: {
         <span class="label-text">{props.label}</span>
       </span>
       {props.hint && <p class="text-xs text-muted mb-1">{props.hint}</p>}
-      <div class="flex flex-wrap gap-2">{props.children}</div>
+      <div class="chip-row">{props.children}</div>
     </div>
   );
 }

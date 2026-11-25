@@ -159,10 +159,13 @@ describe('kindOf and tally', () => {
     const { a11y } = JSON.parse(readFileSync(BASELINE, 'utf8')) as {
       a11y: A11yReport;
     };
+    // The pages, not the kinds, prove the report was read: a clean baseline
+    // has no kinds (#1210 took the demo's to zero), and the checks below
+    // hold whichever a later one records.
+    expect(a11y.pages.length).toBeGreaterThan(0);
     const kinds = a11y.pages.flatMap((page) =>
       Object.values(page.kinds).flat(),
     );
-    expect(kinds.length).toBeGreaterThan(0);
     // A kind holding a digit held data (a date, an id, an index): changing
     // its digits would change it. A heading's tag is the one digit allowed.
     const otherDigits = (text: string) =>

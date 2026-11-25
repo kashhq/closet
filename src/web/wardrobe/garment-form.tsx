@@ -582,10 +582,13 @@ function TextField(props: {
 /** Identical copies (three white tees): a number stepper, 1 to QUANTITY_MAX. */
 function QuantityField(props: { value: string; errors?: string[] }) {
   return (
+    // items-start: the label hugs its text instead of stretching over the
+    // row, so the narrow field, not a 24 px label strip, is the tap (#1210).
     <FormField
       id="garment-quantity"
       label={t('QUANTITY')}
       messages={props.errors}
+      class="items-start"
     >
       <input
         {...inputAttributes('garment-quantity', 'w-28', props.errors)}
@@ -642,7 +645,7 @@ function ConditionFields({ care }: { care: CareFormValues }) {
       <span class="label">
         <span class="label-text">{t('CONDITION')}</span>
       </span>
-      <div class="flex flex-wrap gap-2">
+      <div class="chip-row">
         {CONDITIONS.map((condition) => (
           <input
             type="radio"

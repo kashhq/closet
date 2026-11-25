@@ -176,6 +176,12 @@
   :is(.input, .select):is(.input-sm, .input-xs, .select-sm, .select-xs) {
     --size: calc(var(--size-field) * 10);
   }
+  /* ...and as wide as it is tall: the wardrobe's search, collapsed to its
+     icon (`w-9`), is still a finger's target (#1210). min-width outranks
+     the call site's width. */
+  :is(.input, .select, .textarea) {
+    min-inline-size: 2.75rem;
+  }
   /* A menu's rows (Profile's account links, a ⋯ menu) are a list a finger
      runs down: each row 44 px, its text centred, as an iOS list's. */
   .menu :where(li:not(.menu-title) > :not(ul, details, .menu-title, .btn)),
@@ -244,6 +250,41 @@
       inset-block: min(0px, calc((100% - 2.75rem) / 2));
       inset-inline: min(0px, calc((100% - 2.75rem) / 2));
     }
+    /* A joined segment (the sizes unit switch) has no room beside it for
+       its area: it is 44 px wide itself, plus the border its next segment
+       overlaps (daisyUI's join pulls each one back by --border, and the
+       later segment wins that strip), counted on both sides of its centre
+       since the disc is centred on the segment's whole box. */
+    .join-item:is(.btn-sm, .btn-xs) {
+      min-inline-size: calc(2.75rem + 2 * var(--border));
+    }
+  }
+}
+
+/* A row a finger taps, or one holding a small control whose 44 px area has
+   to fit inside it (#1210): at least 44 px tall where the pointer is
+   coarse, a fine pointer's row as drawn. For a label that wraps its small
+   checkbox ("Select all"), a summary that is the row (Styling's preview)
+   and a list whose rows each end in a btn-xs (avoided pairs). Never
+   `min-h-11` at a call site; spacing between two small controls is a
+   `pointer-coarse:` gap at theirs. */
+@utility tap-row {
+  @media (pointer: coarse) {
+    min-block-size: 2.75rem;
+  }
+}
+
+/* A wrapping row of small controls: chips (ChipGroup, the occasion and day
+   pickers) and a row of btn-sm actions (#1210). Where the pointer is coarse
+   a btn-sm is 35.2 px tall (--size-field * 8), so a wrapped row 8 px below
+   puts its 44 px areas over the row above; 10 px clears them. Columns keep
+   8 px: a chip is wider than 44 px, so its area adds nothing beside it. */
+@utility chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: --spacing(2);
+  @media (pointer: coarse) {
+    row-gap: --spacing(2.5);
   }
 }
 

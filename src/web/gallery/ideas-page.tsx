@@ -148,7 +148,9 @@ function Scope({ model }: { model: IdeasPageModel }) {
   const { state, planning, trip, capsule, capsules, styled } = model;
   const { destination } = state;
   return (
-    <div class="flex flex-col gap-2 px-2">
+    // The trip line's Back (btn-sm) sits over the capsule chip's row: a
+    // phone's gap leaves both 44 px areas room (main.css, chip-row; #1210).
+    <div class="flex flex-col gap-2 pointer-coarse:gap-2.5 px-2">
       {destination.kind === 'trip' && trip && (
         <div class="flex items-center gap-2" data-ideas-trip={trip.id}>
           <BackLink href={tripUrl(trip.id)} />

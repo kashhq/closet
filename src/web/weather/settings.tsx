@@ -261,7 +261,7 @@ export function OffsetControls(props: {
       hx-swap-oob={props.oob ? 'true' : undefined}
     >
       <p class="text-sm">{offsetLabel(settings)}</p>
-      <div class="flex flex-wrap gap-2">
+      <div class="chip-row">
         {(['too-warm', 'too-cold'] as const).map((feeling) => (
           <form hx-post="/weather/feedback" {...OFFSET_SWAP}>
             <input type="hidden" name="feeling" value={feeling} />

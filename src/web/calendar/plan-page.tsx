@@ -180,7 +180,7 @@ function OccasionChips(props: { day: IsoDate; chosen: Occasion }) {
       <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
         {t('CALENDAR_PLAN_OCCASION')}
       </p>
-      <ul class="flex flex-wrap gap-2">
+      <ul class="chip-row">
         {OCCASIONS.map((occasion) => {
           const chosen = occasion === props.chosen;
           return (
