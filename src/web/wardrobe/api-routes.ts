@@ -25,6 +25,7 @@ import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { GarmentParams, RowId } from '../schemas';
 import { enforceLimit, LINK_IMPORT_LIMIT } from '../security/rate-limit';
+import { PublicShare, publicShareUrl } from '../share/urls';
 import { actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
 import { destinationValues, postedDestination } from './destination';
@@ -45,6 +46,7 @@ import {
   retryGarmentCutout,
   saveEditedGarmentCutout,
   setGarmentCondition,
+  setGarmentPublicShare,
   tagGarment,
   turnGarmentPhoto,
 } from './garment-actions';
@@ -98,6 +100,7 @@ import {
   GarmentStatusAnswer,
   GarmentTagged,
   GarmentUpdated,
+  garmentShareUrl,
   RepairRef,
   toGarmentListItem,
   toGarmentPhoto,
@@ -258,7 +261,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['garments'],
         summary: 'One garment in full, with its photo',
         description:
-          'Any garment of a wardrobe you can see, a wishlist item included. A garment outside it is a 404 like an unknown id. `care` and `repairs` only on your own wardrobe.',
+          'Any garment of a wardrobe you can see, a wishlist item included. A garment outside it is a 404 like an unknown id. `care` and `repairs` only on your own wardrobe; `publicShareUrl` only where you may stop it (your own wardrobe or a MANAGE share).',
         params: GarmentParams,
         querystring: GarmentQuery,
         response: apiResponses({ 200: Garment }),
@@ -272,7 +275,12 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         { ...access, viewerId: actorOf(request).userId },
         todayIn(config.timeZone, new Date()),
       );
-      return toGarmentResource(garment, context, options.cutouts.enabled);
+      return toGarmentResource(
+        garment,
+        context,
+        options.cutouts.enabled,
+        garmentShareUrl(garment.shareableId, access.canManage, config.siteUrl),
+      );
     },
   );
 
@@ -470,6 +478,62 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         fields,
       );
       return withoutNulls(fields);
+    },
+  );
+
+  // The page's Share and Stop sharing (#669, #959): one writer,
+  // setGarmentPublicShare, so both are idempotent as there.
+  app.put(
+    `${GARMENT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'shareGarment',
+        tags: ['garments'],
+        summary: "Makes a garment's public link",
+        description:
+          'Your own wardrobe or a MANAGE share (a VIEW share is a 403). A garment shared already keeps its link, answered again; one shared after a stop gets a new one, never the old.',
+        params: GarmentParams,
+        querystring: GarmentQuery,
+        response: apiResponses({ 200: PublicShare }),
+      },
+    },
+    async (request) => {
+      const { shareableId } = await setGarmentPublicShare(
+        deps,
+        actorOf(request),
+        garmentAddress(request),
+        true,
+      );
+      return {
+        publicShareUrl: publicShareUrl(config.siteUrl, 'garment', shareableId),
+      };
+    },
+  );
+
+  app.delete(
+    `${GARMENT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'stopSharingGarment',
+        tags: ['garments'],
+        summary: "Ends a garment's public link",
+        description:
+          'Your own wardrobe or a MANAGE share, whoever made the link. Its page and preview image are a 404 from then on. A garment not shared is answered the same: nothing to end.',
+        params: GarmentParams,
+        querystring: GarmentQuery,
+        response: apiResponses({
+          204: Type.Null({ description: 'Not shared' }),
+        }),
+      },
+    },
+    async (request, reply) => {
+      await setGarmentPublicShare(
+        deps,
+        actorOf(request),
+        garmentAddress(request),
+        false,
+      );
+      return reply.status(204).send(null);
     },
   );
 

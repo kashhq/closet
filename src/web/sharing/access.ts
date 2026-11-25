@@ -28,10 +28,13 @@ export interface WardrobeAccess {
 
 /**
  * The one definition of a share that opens `ownerId`'s wardrobe to `userId`:
- * an id, or the user column of a statement that has not read it yet (the
- * device token's, authenticateToken).
+ * each an id, or a column of the statement asking (the device token's user,
+ * authenticateToken; a garment's owner, managesWardrobeSql).
  */
-function acceptedShare(ownerId: number, userId: number | AnyPgColumn) {
+function acceptedShare(
+  ownerId: number | AnyPgColumn,
+  userId: number | AnyPgColumn,
+) {
   return and(
     eq(wardrobeShare.grantorId, ownerId),
     eq(wardrobeShare.granteeId, userId),
@@ -82,6 +85,23 @@ export function sharePermissionSql(
     select ${wardrobeShare.permission} from ${wardrobeShare}
     where ${acceptedShare(ownerId, userId)}
   )`;
+}
+
+/**
+ * Whether `viewerId` may manage the wardrobe of `ownerId` (a row's owner
+ * column), as the resolver's `canManage` answers it: their own, or an
+ * accepted MANAGE share. For a batched read across the wardrobes the
+ * viewer sees (the changes feed's garments, garmentsByIds), where no
+ * resolver runs per row.
+ */
+export function managesWardrobeSql(
+  ownerId: AnyPgColumn,
+  viewerId: number,
+): SQL<boolean> {
+  return sql<boolean>`(${ownerId} = ${viewerId} or exists (
+    select from ${wardrobeShare}
+    where ${and(acceptedShare(ownerId, viewerId), eq(wardrobeShare.permission, 'MANAGE'))}
+  ))`;
 }
 
 /**

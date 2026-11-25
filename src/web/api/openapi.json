@@ -1649,6 +1649,11 @@
           "agent": {
             "$ref": "#/components/schemas/Agent"
           },
+          "publicShareUrl": {
+            "format": "uri",
+            "description": "Its public link (#669): anyone with it sees the item, signed out. Absolute, on the server's public address (SITE_URL), to be sent on as it is; absent while not shared",
+            "type": "string"
+          },
           "capsules": {
             "type": "array",
             "items": {
@@ -1911,6 +1916,21 @@
             ]
           },
           "conditionNote": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicShare": {
+        "title": "PublicShare",
+        "description": "Shared publicly: the link to send. Sharing what is shared already answers the same link",
+        "type": "object",
+        "required": [
+          "publicShareUrl"
+        ],
+        "properties": {
+          "publicShareUrl": {
+            "format": "uri",
+            "description": "Its public link (#669): anyone with it sees the item, signed out. Absolute, on the server's public address (SITE_URL), to be sent on as it is; absent while not shared",
             "type": "string"
           }
         }
@@ -2923,6 +2943,11 @@
             "items": {
               "$ref": "#/components/schemas/OutfitWornDay"
             }
+          },
+          "publicShareUrl": {
+            "format": "uri",
+            "description": "Its public link (#669): anyone with it sees the item, signed out. Absolute, on the server's public address (SITE_URL), to be sent on as it is; absent while not shared",
+            "type": "string"
           }
         }
       },
@@ -9091,6 +9116,11 @@
           "agent": {
             "$ref": "#/components/schemas/Agent"
           },
+          "publicShareUrl": {
+            "format": "uri",
+            "description": "Its public link (#669): anyone with it sees the item, signed out. Absolute, on the server's public address (SITE_URL), to be sent on as it is; absent while not shared",
+            "type": "string"
+          },
           "care": {
             "$ref": "#/components/schemas/SyncedGarmentCare"
           }
@@ -9360,6 +9390,11 @@
           },
           "agent": {
             "$ref": "#/components/schemas/Agent"
+          },
+          "publicShareUrl": {
+            "format": "uri",
+            "description": "Its public link (#669): anyone with it sees the item, signed out. Absolute, on the server's public address (SITE_URL), to be sent on as it is; absent while not shared",
+            "type": "string"
           }
         }
       },
@@ -10989,7 +11024,7 @@
         "tags": [
           "garments"
         ],
-        "description": "Any garment of a wardrobe you can see, a wishlist item included. A garment outside it is a 404 like an unknown id. `care` and `repairs` only on your own wardrobe.",
+        "description": "Any garment of a wardrobe you can see, a wishlist item included. A garment outside it is a 404 like an unknown id. `care` and `repairs` only on your own wardrobe; `publicShareUrl` only where you may stop it (your own wardrobe or a MANAGE share).",
         "parameters": [
           {
             "schema": {
@@ -11303,6 +11338,127 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garments/{id}/share": {
+      "put": {
+        "operationId": "shareGarment",
+        "summary": "Makes a garment's public link",
+        "tags": [
+          "garments"
+        ],
+        "description": "Your own wardrobe or a MANAGE share (a VIEW share is a 403). A garment shared already keeps its link, answered again; one shared after a stop gets a new one, never the old.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "description": "A wardrobe shared with you (its owner's id); absent, your own"
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared publicly: the link to send. Sharing what is shared already answers the same link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShare"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "stopSharingGarment",
+        "summary": "Ends a garment's public link",
+        "tags": [
+          "garments"
+        ],
+        "description": "Your own wardrobe or a MANAGE share, whoever made the link. Its page and preview image are a 404 from then on. A garment not shared is answered the same: nothing to end.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "description": "A wardrobe shared with you (its owner's id); absent, your own"
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Not shared"
           },
           "4XX": {
             "description": "A problem (RFC 9457): switch on `code`",
@@ -12737,6 +12893,105 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outfits/{id}/share": {
+      "put": {
+        "operationId": "shareOutfit",
+        "summary": "Makes an outfit's public link",
+        "tags": [
+          "outfits"
+        ],
+        "description": "Another's outfit is a 404 like an unknown id. An outfit shared already keeps its link, answered again; one shared after a stop gets a new one, never the old.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared publicly: the link to send. Sharing what is shared already answers the same link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShare"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "stopSharingOutfit",
+        "summary": "Ends an outfit's public link",
+        "tags": [
+          "outfits"
+        ],
+        "description": "Its page and preview image are a 404 from then on. An outfit not shared is answered the same: nothing to end.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Not shared"
           },
           "4XX": {
             "description": "A problem (RFC 9457): switch on `code`",

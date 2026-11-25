@@ -1044,7 +1044,7 @@ export const ROUTES: Route[] = [
     },
   },
   // The public link (#669): the owner and a MANAGE grantee, as the ⋯
-  // menu's Share always was. No API twin yet (#959).
+  // menu's Share always was; its API twin PUT or DELETE .../share (#959).
   ...(['share', 'share/stop'] as const).map(
     (verb): Route => ({
       name: `POST /wardrobe/:id/${verb}`,
@@ -1061,6 +1061,13 @@ export const ROUTES: Route[] = [
         manager: ['notFound', 'ok'],
         viewer: ['notFound', 'forbidden'],
         stranger: 'notFound',
+      },
+      api: {
+        ok: verb === 'share' ? 200 : 204,
+        request: (f, q) => ({
+          method: verb === 'share' ? 'PUT' : 'DELETE',
+          url: `/api/v1/garments/${f.garmentId}/share${q}`,
+        }),
       },
     }),
   ),

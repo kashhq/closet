@@ -24,6 +24,11 @@ const PHOTO_COLUMNS = PHOTO_REF_RELATION;
 const SHAREABLE = { garment, outfit } as const;
 export type ShareableKind = keyof typeof SHAREABLE;
 
+/** The link's id after a Share (`true`: always one) or a Stop (`false`: none). */
+export type ShareableIdAfter<Shared extends boolean> = Shared extends true
+  ? string
+  : null;
+
 /**
  * The one writer of a garment's or outfit's public link (#669): Share
  * (`shared`) mints its id, Stop sharing nulls it, after which /share and
@@ -36,18 +41,20 @@ export type ShareableKind = keyof typeof SHAREABLE;
  * so two taps racing answer one id, and only a Share after a Stop mints a
  * new one; an old link never comes back.
  */
-export async function setPublicShare(
+export async function setPublicShare<Shared extends boolean>(
   db: Queryable,
   kind: ShareableKind,
   id: number,
   ownerId: number,
-  shared: boolean,
-): Promise<{ shareableId: string | null } | undefined> {
+  shared: Shared,
+): Promise<{ shareableId: ShareableIdAfter<Shared> } | undefined> {
   const table = SHAREABLE[kind];
   const value = shared
     ? sql`coalesce(${table.shareableId}, ${randomUUID()}::varchar)`
     : sql`null`;
-  const { rows } = await db.execute<{ shareableId: string | null }>(sql`
+  const { rows } = await db.execute<{
+    shareableId: ShareableIdAfter<Shared>;
+  }>(sql`
     with ${ownerLockSql(db, ownerId)}
     update ${table} set ${sql.identifier(table.shareableId.name)} = ${value}
     where ${table.id} = ${id} and ${table.ownerId} = ${ownerId} and ${OWNER_LOCKED}

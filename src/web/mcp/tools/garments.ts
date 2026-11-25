@@ -120,6 +120,8 @@ export const GARMENT_FOR_MCP = {
   agent: 'own',
   capsules: 'keep',
   care: 'keep',
+  // Sharing publicly is the person's to do, never an agent's (#959).
+  publicShareUrl: 'omit',
 } as const satisfies Projection<GarmentRecord>;
 
 /** A search or capsule hit, as the tools answer it. */
@@ -152,7 +154,8 @@ async function garmentForAgent(
     { ...access, viewerId: ctx.userId },
     todayIn(ctx.timeZone, new Date()),
   );
-  const record = garmentRecord(garment, context, ctx.cutouts.enabled);
+  // No public link: GARMENT_FOR_MCP omits it.
+  const record = garmentRecord(garment, context, ctx.cutouts.enabled, null);
   return project(record, Garment, GARMENT_FOR_MCP, {
     agent: record.agent?.name ?? null,
     hasPhoto: record.photo !== null,
