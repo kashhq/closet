@@ -224,20 +224,20 @@ async function editFrom(pencil: HTMLButtonElement) {
   if (!originalUrl || !cutoutUrl || !saveUrl) {
     throw new Error('the pencil names no photo');
   }
-  const fetched = await Promise.allSettled([
+  const [originalResult, cutoutResult] = await Promise.allSettled([
     fetchBitmap(originalUrl),
     fetchBitmap(cutoutUrl),
   ]);
-  if (fetched[0].status === 'rejected' || fetched[1].status === 'rejected') {
-    for (const result of fetched) {
-      if (result.status === 'fulfilled') result.value.close();
-    }
-    throw fetched[0].status === 'rejected'
-      ? fetched[0].reason
-      : fetched[1].reason;
+  if (originalResult.status === 'rejected') {
+    if (cutoutResult.status === 'fulfilled') cutoutResult.value.close();
+    throw originalResult.reason;
   }
-  const original = fetched[0].value;
-  const cutout = fetched[1].value;
+  if (cutoutResult.status === 'rejected') {
+    originalResult.value.close();
+    throw cutoutResult.reason;
+  }
+  const original = originalResult.value;
+  const cutout = cutoutResult.value;
   let edited: Blob | null;
   try {
     edited = await editCutout(cutout, original);
