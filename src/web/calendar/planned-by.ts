@@ -47,7 +47,7 @@ export const PERSONS_CHOICE: EntryChoice = Object.freeze({
 /** PERSONS_CHOICE as an UPDATE's SET list, for the hand-written statements. */
 export const PERSONS_CHOICE_SET = sql`planned_by = 'user', planned_by_token_id = null`;
 
-/** The choice as an UPDATE's SET list (setEntryOutfit). */
+/** The choice as an UPDATE's SET list (setEntryOutfit, takeOverEntry). */
 export function choiceSet(choice: EntryChoice): SQL {
   return sql`planned_by = ${choice.plannedBy}::text, planned_by_token_id = ${choice.plannedByTokenId}::int`;
 }

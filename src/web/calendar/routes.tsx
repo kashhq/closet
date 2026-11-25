@@ -70,7 +70,7 @@ import {
   weekUrl,
 } from './urls';
 import { weekContext } from './week-context';
-import { createUndoStore, restorable } from './restore';
+import { createUndoStore, restorable, restoredMessage } from './restore';
 import { BY_PERSON } from '../write-origin';
 
 /**
@@ -435,10 +435,10 @@ export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const actor = actorOf(request);
       const removed = undo.take(actor.userId, request.body.token);
       if (!removed) throw calendarEntryNotFound();
-      await restoreEntry(deps, actor, removed);
+      const restored = await restoreEntry(deps, actor, removed);
       const target = weekUrl(removed.day);
       if (request.headers['hx-request']) {
-        announce(reply, t('CALENDAR_RESTORED'));
+        announce(reply, restoredMessage(restored));
         return navigateTo(reply, target);
       }
       return reply.redirect(target, 303);

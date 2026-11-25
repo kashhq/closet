@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import type { IsoDate } from '../../calendar-date';
 import type { Occasion } from '../../wardrobe/occasions';
-import type { DeletedEntry } from './queries';
+import { occasionLabel } from '../date-labels';
+import { t, type Translated } from '../i18n';
+import type { DeletedEntry, ScheduledEntry } from './queries';
 
 /**
  * Removing a calendar entry is reversible (#686) when putting it back
@@ -36,6 +38,20 @@ export function restorable(removed: DeletedEntry): RemovedEntry | undefined {
     occasion: entry.occasion,
     plannedBy: entry.plannedBy,
   };
+}
+
+/**
+ * What Undo's toast says (#892): put back, or, when the outfit was planned
+ * on that day again since the delete, that it is there already under the
+ * occasion it kept (an outfit is on a day once, so the restore inserted
+ * nothing, and the day may show it under another occasion).
+ */
+export function restoredMessage(restored: ScheduledEntry): Translated {
+  return restored.outcome === 'scheduled'
+    ? t('CALENDAR_RESTORED')
+    : t('CALENDAR_ALREADY_PLANNED', {
+        occasion: occasionLabel(restored.occasion),
+      });
 }
 
 /** Longer than the toast shows Undo (toast.js UNDO_TOAST_MS), so a tap in time always finds it. */

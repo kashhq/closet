@@ -80,13 +80,31 @@ export async function enforceLimit(
   { logger, who }: { logger: Logger; who: string },
 ): Promise<void> {
   const exceeded = await countAgainst(checker, request);
-  if (exceeded) throw limitReached(request, exceeded, { logger, who });
+  if (!exceeded) return;
+  logLimitReached(request, { logger, who });
+  throw tooManyAttempts(exceeded.ttlInSeconds);
+}
+
+/**
+ * Counts `request` against `checker`: false past its limit, logged as
+ * enforceLimit's refusal is. For a write that goes ahead without what the
+ * budget pays for (a trip created unlocated, #863) rather than refusing.
+ */
+export async function withinLimit(
+  checker: RateLimitChecker,
+  request: FastifyRequest,
+  { logger, who }: { logger: Logger; who: string },
+): Promise<boolean> {
+  const exceeded = await countAgainst(checker, request);
+  if (exceeded) logLimitReached(request, { logger, who });
+  return exceeded === undefined;
 }
 
 /**
  * Counts `request` against `checker`: undefined while there is room, else
  * the seconds until there is. For a caller that decides itself whether an
- * exhausted budget refuses (the bearer gate); everyone else enforceLimit.
+ * exhausted budget refuses (the bearer gate); everyone else enforceLimit
+ * or withinLimit.
  */
 export async function countAgainst(
   checker: RateLimitChecker,
@@ -98,16 +116,14 @@ export async function countAgainst(
   return { ttlInSeconds: verdict.ttlInSeconds, ttlMs: verdict.ttl };
 }
 
-/** enforceLimit's refusal, logged naming `who`. */
-function limitReached(
+/** A shared budget spent, named by `who`: enforceLimit's and withinLimit's line. */
+function logLimitReached(
   request: FastifyRequest,
-  { ttlInSeconds }: { ttlInSeconds: number },
   { logger, who }: { logger: Logger; who: string },
-): HttpError {
+): void {
   logger.warn(
     `Rate limit reached: ${request.method} ${loggableUrl(request)} for ${who}`,
   );
-  return tooManyAttempts(ttlInSeconds);
 }
 
 /**
