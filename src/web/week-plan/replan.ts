@@ -21,7 +21,6 @@ import { DAY_NAMES, occasionLabel } from '../date-labels';
 import { ideaName } from '../gallery/ideas';
 import type { WeekPoolGarment } from '../gallery/queries';
 import { t, type CopyKey, type Translated } from '../i18n';
-import { awayTripsSql, tripsOn } from '../trips/away';
 import type { PushPayload } from '../push/payload';
 import type { PushSender, SendReport } from '../push/sender';
 import {
@@ -513,9 +512,10 @@ async function jobForecast(
  * removed instead, with the outfit the planner made for it once unheld
  * (removeAutoEntries, Undo's rule; #684). Its forecast is read first,
  * outside the lock. Under the lock, two statements read everything: the
- * auto entries with the claim (claimAutoEntries), then the week, the pool,
- * the generator's memory, the auto outfits' garment states (#173) and the
- * trips over those days. `signal` is checked after the forecast, after the
+ * auto entries with the claim, each marked whether a trip covers its day
+ * (claimAutoEntries), then, after removing those (#862), the week, the
+ * pool, the generator's memory and the kept auto outfits' garment states
+ * (#173). `signal` is checked after the forecast, after the
  * lock and before the commit: an abort throws, rolling it all back.
  */
 async function replanUser(
@@ -558,22 +558,21 @@ async function judgeAndWrite(
   const today = todayIn(deps.timeZone, now);
   const claimed = await claimAutoEntries(tx, userId, today, now);
   if (!claimed) return undefined;
-  const last = claimed[claimed.length - 1].day;
-  const row = await selectScalars(tx, {
-    ...weekSql(userId, today, last),
-    states: outfitGarmentStatesSql(
-      claimed.map((a) => a.outfitId),
-      today,
-    ),
-    trips: awayTripsSql(userId, today, last),
-  });
-  const onTrip = (a: AutoEntryRow) => tripsOn(row.trips, a.day).length > 0;
   const removed = await removeAutoEntries(tx, userId, {
-    entryIds: claimed.filter(onTrip).map((a) => a.entryId),
+    entryIds: claimed.filter((a) => a.away).map((a) => a.entryId),
   });
-  const auto = claimed.filter((a) => !onTrip(a));
+  const auto = claimed.filter((a) => !a.away);
   const away = removed.entries;
   if (auto.length === 0) return { swaps: [], kept: 0, away };
+  // Read after the removals (#862): an entry just taken off a day away must
+  // not count its wears toward a garment's wash limit in a swap below.
+  const row = await selectScalars(tx, {
+    ...weekSql(userId, today, claimed[claimed.length - 1].day),
+    states: outfitGarmentStatesSql(
+      auto.map((a) => a.outfitId),
+      today,
+    ),
+  });
   const week = readWeekColumns(today, row);
   const outfits = readOutfitGarmentStates(row.states);
   const judged = auto.map((a) => {

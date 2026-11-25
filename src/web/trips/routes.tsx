@@ -47,6 +47,7 @@ import {
   copyTripExtras,
   editTrip,
   locateTrip,
+  newTripPlace,
   packTrip,
   packTripItems,
   planTripOutfit,
@@ -61,7 +62,13 @@ import {
 import { parseOutfitList } from '../outfits/outfit-list';
 import { OUTFIT_PAGE_SIZE } from '../outfits/page-size';
 import { FIRST_OUTFIT_PAGE, type OutfitPageAsk } from '../outfits/queries';
-import { ItemsSummary, PackedSummary, TripPage } from './trip-page';
+import {
+  type CreatedFlag,
+  createdNotice,
+  ItemsSummary,
+  PackedSummary,
+  TripPage,
+} from './trip-page';
 import { dayAnchor, TRIPS_PATH, tripUrl } from './urls';
 import {
   AddOutfitBody,
@@ -187,19 +194,19 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
       const place = formPlace(request.body);
       const form = readTripForm(request.body);
       if (!form.ok) return refuseForm(reply, form, { picker: picker(place) });
-      // A located trip costs what a set destination does (its forecast's fetch and cached row).
-      if (place) {
-        await enforceLimit(weatherLimits.destination, request, {
+      const { id, placeDeferred } = await addTrip(deps, actor, {
+        fields: form.fields,
+        place: newTripPlace(place, {
+          weatherEnabled: Boolean(weather),
+          budget: weatherLimits.destination,
+          request,
           logger,
           who: `user ${actor.userId}`,
-        });
-      }
-      const { id } = await addTrip(deps, actor, {
-        fields: form.fields,
-        place,
+        }),
         today: today(),
       });
-      return reply.redirect(tripUrl(id, '?created=1'), 303);
+      const created: CreatedFlag = placeDeferred ? 'later' : '1';
+      return reply.redirect(tripUrl(id, `?created=${created}`), 303);
     },
   );
 
@@ -220,7 +227,7 @@ export const tripRoutes: FastifyPluginCallbackTypebox<
           ctx={viewContext(reply)}
           model={{
             ...model,
-            created: request.query.created === '1',
+            created: createdNotice(request.query.created),
             picked: request.query.picked === '1',
             copied: request.query.copied,
           }}

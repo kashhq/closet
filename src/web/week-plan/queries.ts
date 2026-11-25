@@ -35,6 +35,7 @@ import type { IsoDate } from '../../calendar-date';
 import { type OutfitGarment, outfitGarmentsSql } from '../outfits/queries';
 import { ONE_OFF_ORIGINS } from '../../wardrobe/outfit-origin';
 import { outfitIsHeld } from '../outfits/references';
+import { awayOnSql } from '../trips/away';
 import { wearsSinceWashSql } from '../wears/queries';
 
 /**
@@ -119,6 +120,8 @@ export interface AutoEntryRow {
   weekPlanId: number;
   outfitCreated: boolean;
   plannedFor: PlannedNeeds | null;
+  /** A trip covers its day (awayOnSql): the re-plan removes it, never judges it (#684). */
+  away: boolean;
 }
 
 // A type, not an interface: execute's row type needs its implicit index signature.
@@ -140,6 +143,7 @@ function autoEntryOf(row: EntryRow): AutoEntryRow {
     outfitId: row.outfitId,
     weekPlanId: row.weekPlanId,
     outfitCreated: row.outfitCreated,
+    away: row.away,
     // The check constraint keeps the four together.
     plannedFor:
       torso === null || limbs === null || layer === null || rain === null
@@ -159,7 +163,8 @@ function autoEntryOf(row: EntryRow): AutoEntryRow {
  * which the caller treats alike: nothing to do. Called inside the
  * re-plan's transaction under lockOwner, so the claim commits with the
  * work (claimAutoEntries' rule). Entries the person has since edited or worn
- * are 'user' and never come back here.
+ * are 'user' and never come back here. Each says whether a trip covers its
+ * day (`away`), so the re-plan removes those before it reads the week.
  */
 export async function claimAutoEntries(
   tx: Queryable,
@@ -193,7 +198,8 @@ export async function claimAutoEntries(
       on conflict (user_id, day) do nothing
       returning user_id
     )
-    select auto.*, exists (select 1 from claimed) as claimed
+    select auto.*, ${awayOnSql(ownerId, sql`auto."day"`)} as "away",
+      exists (select 1 from claimed) as claimed
     from auto
     order by auto.day, auto."entryId"`);
   if (rows.length === 0 || !rows[0].claimed) return undefined;

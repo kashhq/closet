@@ -483,39 +483,56 @@ export async function lockEntryToReplace(
 }
 
 /**
- * Puts an outfit on an entry, keeping its day and occasion. Only
+ * Puts another outfit on an entry, keeping its day and occasion. Only
  * replaceEntryOutfit (src/web/calendar/replace.ts) calls it, under the
  * owner lock, having locked the entry, refused a worn one and checked the
  * outfit is not on the day already (the unique key). The choice is the
  * chooser's from now on (the person's, or the agent's with its token over
  * MCP, #682; planned-by.ts), so the week's re-plan and Undo leave it alone
- * (#16), also when the outfit is the one the entry had (choosing what the
- * planner chose takes it over). An outfit that
- * may not be held is refused (refuseUnholdable), the entry unchanged.
+ * (#16). `outfitCreated` is required (#883): the flag describes the outfit
+ * the entry holds, and kept from the old one it would let a later removal
+ * prune an outfit this entry never made. An outfit that may not be held is
+ * refused (refuseUnholdable), the entry unchanged. The same outfit chosen
+ * again is takeOverEntry.
  */
 export async function setEntryOutfit(
   tx: Queryable,
   entryId: number,
   outfitId: number,
   origin: WriteOrigin,
-  /** Whether the pick created `outfitId` (#748); absent when the entry keeps its outfit. */
-  outfitCreated?: boolean,
+  /** Whether the pick created `outfitId` (#748). */
+  outfitCreated: boolean,
 ): Promise<void> {
   const outfit = sql`${outfitId}::int`;
-  const created =
-    outfitCreated === undefined
-      ? sql``
-      : sql`, outfit_created = ${outfitCreated}::boolean`;
   const { rows } = await tx.execute<{
     toBuy: PieceToBuy[];
     pending: boolean;
   }>(sql`
     with written as (
-      update ${outfitCalendar} set outfit_id = ${outfit}, ${choiceSet(chooserOf(origin))}${created}
+      update ${outfitCalendar}
+      set outfit_id = ${outfit}, ${choiceSet(chooserOf(origin))},
+        outfit_created = ${outfitCreated}::boolean
       where ${outfitCalendar.id} = ${entryId} and ${outfitMayBeHeld(outfit)}
     )
     select ${holdRefusalColumns(outfit)}`);
   refuseUnholdable(outfitId, rows[0]);
+}
+
+/**
+ * The outfit an entry already holds chosen again (replaceEntryOutfit, under
+ * the owner lock, the entry locked): the choice becomes the chooser's
+ * (choosing what the planner chose takes it over, #16) and nothing else
+ * changes, its outfit's `outfit_created` included. The caller asks
+ * `takesOver` first: an agent never takes a person's entry.
+ */
+export async function takeOverEntry(
+  tx: Queryable,
+  entryId: number,
+  origin: WriteOrigin,
+): Promise<void> {
+  await tx.execute(sql`
+    update ${outfitCalendar} set ${choiceSet(chooserOf(origin))}
+    where ${outfitCalendar.id} = ${entryId}`);
 }
 
 /** What wearOutfitOn did: the entry, whether it was new, and its worn change. */

@@ -405,7 +405,13 @@ export const POINTER_OF_TRIP_FIELD: Record<TripField, string> = {
 };
 
 export const TripCreated = Type.Object(
-  { id: Type.Integer() },
+  {
+    id: Type.Integer(),
+    placeDeferred: Type.Boolean({
+      description:
+        'The `place` sent was not stored: the destination budget was spent, so the trip is unlocated until PUT /trips/{id}/destination. False on a retry, which answers the first trip as saved',
+    }),
+  },
   { title: 'TripCreated' },
 );
 

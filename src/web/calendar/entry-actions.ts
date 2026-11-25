@@ -86,7 +86,9 @@ export async function planOutfit(
 
 /**
  * Undo of a delete (POST /calendar/restore): the entry the server held
- * planned again as it was, the planner's `auto` or the person's.
+ * planned again as it was, the planner's `auto` or the person's. The
+ * outfit planned on that day again meanwhile keeps that entry and its
+ * occasion: 'already-scheduled', which the toast says (restoredMessage).
  */
 export async function restoreEntry(
   { db, logger }: ActionDeps,
@@ -106,6 +108,7 @@ export async function restoreEntry(
     day,
     occasion: scheduled.occasion,
     plannedBy,
+    changed: scheduled.outcome === 'scheduled',
   });
   return scheduled;
 }

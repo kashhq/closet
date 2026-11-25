@@ -521,6 +521,51 @@ describe('changing a planned outfit in place', () => {
       expect(await outfitExists(auto.outfitId)).toBe(false);
     });
 
+    // #883: the flag describes the outfit the entry holds, so a later remove
+    // prunes only an outfit this entry made.
+    it('sets the entry’s created flag for the outfit it now holds, and keeps it when the same outfit is chosen again', async () => {
+      const day = addDays(t.today(), 1);
+      const createdFlag = async (entryId: number) =>
+        (
+          await t.db
+            .select({ outfitCreated: outfitCalendar.outfitCreated })
+            .from(outfitCalendar)
+            .where(eq(outfitCalendar.id, entryId))
+        )[0].outfitCreated;
+      const taken = await planAuto(
+        [tops[0], bottoms[0], shoes[0]],
+        day,
+        'work',
+      );
+      expect(await createdFlag(taken.entryId)).toBe(true);
+      // The person chooses the planner's outfit again: taken over, nothing else.
+      expect(
+        (
+          await post('/calendar', {
+            date: day,
+            outfitId: String(taken.outfitId),
+            occasion: 'work',
+            replace: String(taken.entryId),
+          })
+        ).statusCode,
+      ).toBe(302);
+      expect(await entriesFor(day, 'work')).toMatchObject([
+        { id: taken.entryId, outfitId: taken.outfitId, plannedBy: 'user' },
+      ]);
+      expect(await createdFlag(taken.entryId)).toBe(true);
+
+      // A saved outfit in its place was not made by the entry.
+      const saved = await outfitOf([tops[1], bottoms[1], shoes[1]]);
+      const replaced = await post('/calendar', {
+        date: day,
+        outfitId: String(saved),
+        occasion: 'work',
+        replace: String(taken.entryId),
+      });
+      expect(replaced.statusCode).toBe(302);
+      expect(await createdFlag(taken.entryId)).toBe(false);
+    });
+
     it('keeps a planner-made outfit another entry still holds, and one the person took over', async () => {
       const day = addDays(t.today(), 2);
       const held = await planAuto([tops[0], bottoms[0], shoes[0]], day, 'work');

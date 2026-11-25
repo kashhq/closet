@@ -734,6 +734,9 @@ describe('calendar', () => {
         headers: hx,
       });
       expect(restored.statusCode).toBe(200);
+      expect(
+        JSON.parse(String(restored.headers['hx-trigger']))['closet:status'],
+      ).toMatchObject({ message: 'Put back on the calendar' });
       expect(hxLocationPath(restored)).toBe('/calendar?week=2030-10-14');
       expect(await entriesOf(outfit)).toMatchObject([
         { day: '2030-10-14', occasion: 'all-day', plannedBy: 'user' },
@@ -747,6 +750,54 @@ describe('calendar', () => {
         headers: hx,
       });
       expect(await entriesOf(outfit)).toHaveLength(1);
+    });
+
+    // #892: an outfit is on a day once, so Undo after it was planned there
+    // again inserts nothing, and the toast says what the day shows.
+    it('says Undo found the outfit planned on the day again, under the occasion it kept', async () => {
+      const outfit = await createOutfit('Planned again');
+      const entry = await schedule(outfit, '2030-10-16');
+      const hx = { ...form({}).headers, 'hx-request': 'true' };
+      const removed = await t.inject({
+        method: 'POST',
+        url: `/calendar/${entry}/delete`,
+        ...form({ week: '2030-10-16' }),
+        headers: hx,
+      });
+      const { token } = JSON.parse(String(removed.headers['hx-trigger']))[
+        'closet:status'
+      ].undo.fields as { token: string };
+      const again = await t.inject({
+        method: 'POST',
+        url: '/calendar',
+        ...form({
+          outfitId: String(outfit),
+          date: '2030-10-16',
+          occasion: 'evening',
+        }),
+      });
+      expect(again.statusCode).toBe(302);
+
+      t.logs.clear();
+      const undone = await t.inject({
+        method: 'POST',
+        url: '/calendar/restore',
+        ...form({ token }),
+        headers: hx,
+      });
+      expect(undone.statusCode).toBe(200);
+      expect(
+        JSON.parse(String(undone.headers['hx-trigger']))['closet:status'],
+      ).toMatchObject({
+        message: 'Already planned on this day (Evening)',
+      });
+      expect(await entriesOf(outfit)).toMatchObject([
+        { day: '2030-10-16', occasion: 'evening' },
+      ]);
+      expect(t.logs.ops('calendar.entry.restored').at(-1)).toMatchObject({
+        changed: false,
+        occasion: 'evening',
+      });
     });
 
     it('restores only what the server held: a forged entry, another account’s token and a reused token are refused', async () => {

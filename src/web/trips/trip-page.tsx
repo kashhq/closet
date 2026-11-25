@@ -60,11 +60,25 @@ import { needsNetwork } from '../page-contract';
 export interface TripPageModel extends TripModel {
   /** The owner's other trips with extras, for "Copy extras from". */
   copyFrom: { id: number; name: string; extras: number }[];
-  created: boolean;
+  /** Just created (`?created=`). */
+  created: CreatedFlag | undefined;
   /** An idea from the gallery was just added (`?picked=1`). */
   picked: boolean;
   /** Extras copied just now (`?copied=N`). */
   copied: number | undefined;
+}
+
+/**
+ * `?created=` after a create: `1`, or `later` when its picked place was
+ * dropped because the destination budget was spent (#863), so the toast
+ * says why the trip has no forecast yet. Anything else is none.
+ */
+export type CreatedFlag = '1' | 'later';
+
+export function createdNotice(
+  flag: string | undefined,
+): CreatedFlag | undefined {
+  return flag === '1' || flag === 'later' ? flag : undefined;
 }
 
 const PACKED_SUMMARY_ID = 'trip-packed-summary';
@@ -112,7 +126,14 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
       overlays={
         <>
           {model.created && (
-            <SavedToast id="trip-created" text={t('trips.CREATED')} />
+            <SavedToast
+              id="trip-created"
+              text={t(
+                model.created === 'later'
+                  ? 'trips.CREATED_PLACE_LATER'
+                  : 'trips.CREATED',
+              )}
+            />
           )}
           {model.picked && (
             <SavedToast id="trip-picked" text={t('trips.PICKED')} />

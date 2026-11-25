@@ -24,6 +24,7 @@ import {
   lockEntryToReplace,
   ownsOutfit,
   setEntryOutfit,
+  takeOverEntry,
 } from './queries';
 
 /**
@@ -42,7 +43,8 @@ import {
  *   photo shows the old outfit, so it must not move to the new one, and
  *   deleting it would lose a record, the #19 rule for a deleted outfit. An
  *   unworn entry has one only when it was unmarked after the photo.
- * - **The choice becomes the person's** (planned_by 'user', setEntryOutfit):
+ * - **The choice becomes the person's** (planned_by 'user', setEntryOutfit,
+ *   or takeOverEntry for the outfit it already holds):
  *   the re-plan and Undo leave it alone (#16). Also when it is the outfit
  *   the entry already had: choosing what the planner chose takes the entry
  *   over (`adopted`), as planning it does (insertEntry).
@@ -194,7 +196,7 @@ function replaceInTransaction(
       // The same outfit chosen again takes the entry over only from a
       // lower rank (the agent never takes a person's, planned-by.ts).
       if (takesOver(chooserOf(madeBy).plannedBy, entry.plannedBy)) {
-        await setEntryOutfit(tx, entry.id, chosen.id, madeBy);
+        await takeOverEntry(tx, entry.id, madeBy);
       }
       return { outcome: 'unchanged', ...result, outfitsRemoved: 0 };
     }

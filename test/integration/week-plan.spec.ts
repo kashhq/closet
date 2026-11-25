@@ -1466,6 +1466,54 @@ describe('the weekly auto-plan', () => {
       expect(sends).toEqual([]);
     });
 
+    // #862: the week is read after the removal, so the removed entry's wear
+    // no longer uses up the coat's one clean wear.
+    it('swaps in a garment the entry it removed from a day away had planned, its wash limit free again', async () => {
+      const coatWash = (washAfterWears: number | null) =>
+        asFixture(t.db, (tx) =>
+          tx
+            .update(garment)
+            .set({ washAfterWears })
+            .where(eq(garment.id, coat)),
+        );
+      await coatWash(1);
+      try {
+        await planMyWeek(t.db, t.owner.id, {
+          today: TODAY,
+          hour: 8,
+          days: WEEK,
+          forecast: {
+            days: new Map(
+              weekAt((day) => (day === WEEK[3] ? -2 : 24)).map((d) => [
+                d.day,
+                d,
+              ]),
+            ),
+            offset: 0,
+          },
+        });
+        const thursday = (await weekEntries()).find((e) => e.day === WEEK[3])!;
+        expect(await garmentsOf(thursday.outfitId)).toContain(coat);
+        await createTrip(t.db, t.owner.id, {
+          name: 'Thursday away',
+          destination: null,
+          startsOn: WEEK[3],
+          endsOn: WEEK[3],
+          notes: null,
+        });
+        forecastDays = weekAt((day) => (day === WEEK[4] ? -2 : 24));
+        const run = await replanWeeks(deps, at(TODAY, 7));
+        expect(run).toMatchObject({ claimed: 1, swapped: 1, failed: 0 });
+        const after = await weekEntries();
+        expect(after.filter((e) => e.day === WEEK[3])).toEqual([]);
+        const friday = after.filter((e) => e.day === WEEK[4]);
+        expect(friday).toHaveLength(1);
+        expect(await garmentsOf(friday[0].outfitId)).toContain(coat);
+      } finally {
+        await coatWash(null);
+      }
+    });
+
     it("a trip created or moved over planned days takes the planner's entries off them from today on, and leaves the person's and the past's (#684)", async () => {
       await planWarm();
       const before = await weekEntries();
