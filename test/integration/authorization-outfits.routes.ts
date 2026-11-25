@@ -1291,8 +1291,30 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
+  // The share preview is a capability URL: a shared garment's or outfit's
+  // own id opens it for everyone, whoever they are (#669).
+  ...(['garment', 'outfit'] as const).map(
+    (kind): Route => ({
+      name: `GET /file/watermark/:shareableId of a shared ${kind}`,
+      kind: 'read',
+      ok: 200,
+      secret: kind === 'garment' ? garmentName : outfitName,
+      vias: ['own'],
+      request: (f) => ({
+        method: 'GET',
+        url: `/file/watermark/${kind === 'garment' ? f.garmentShareId : f.outfitShareId}`,
+      }),
+      expect: {
+        owner: 'ok',
+        manager: 'ok',
+        viewer: 'ok',
+        stranger: 'ok',
+      },
+      anonymous: 'ok',
+    }),
+  ),
   // The public image routes serve garment photos by unguessable name to
-  // anyone; a selfie's name or share id is a 404 to everyone, its owner
+  // anyone; a selfie's name is a 404 to everyone, its owner
   // included (their pages use /selfies/).
   ...(['', 'thumb/', 'nobg/'] as const).map(
     (variant): Route => ({

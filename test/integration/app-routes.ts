@@ -97,6 +97,8 @@ export const ADDRESS: Fixture = {
   capsuleId: 104,
   capsuleName: 'Capsule',
   outfitId: 105,
+  garmentShareId: '00000000-0000-4000-8000-000000000105',
+  outfitShareId: '00000000-0000-4000-8000-000000000106',
   spareOutfitId: 143,
   museOutfitId: 141,
   museDeclinedId: 142,
