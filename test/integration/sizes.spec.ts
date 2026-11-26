@@ -454,18 +454,20 @@ describe('sizes', () => {
       const [uniqlo] = await brandsOf(ownerId);
       const before = await measurementsOf(ownerId);
       for (const cookie of [viewer, manager]) {
-        // Their own editor, whatever ?ownerId= says.
+        // Naming the owner is a 404, never their own editor under the
+        // owner's address (#680).
         const editor = await get(
           `/auth/profile/sizes?ownerId=${ownerId}`,
           cookie,
         );
-        expect(editor.statusCode).toBe(200);
+        expect(editor.statusCode).toBe(404);
         expect(editor.body).not.toContain('Runs big');
         expect(editor.body).not.toMatch(/name="waist" value="32"/);
         const hint = await get(
           `/auth/profile/sizes/hint?brand=Uniqlo&ownerId=${ownerId}`,
           cookie,
         );
+        expect(hint.statusCode).toBe(404);
         expect(hint.body).not.toContain('Runs big');
         expect(
           (

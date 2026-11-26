@@ -2,7 +2,18 @@ import Fastify, { type FastifyRequest } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FULL_SCOPE } from '../auth/personal-tokens';
 import { actorOf as toolActorOf } from '../mcp/tool';
-import { type Actor, actorOf, rememberShareReadAhead } from './access';
+import { Type } from '@sinclair/typebox';
+import type { RouteOptions } from 'fastify';
+import { OwnerQuery } from '../schemas';
+import {
+  type Actor,
+  actorOf,
+  can,
+  type Capability,
+  rememberShareReadAhead,
+  type WardrobeRole,
+} from './access';
+import { markShareAware } from './share-aware';
 
 /**
  * actorOf on real Fastify requests (no session hook here: each route sets
@@ -91,5 +102,61 @@ describe('actorOf', () => {
         scope: { readOnly: true, ownWardrobeOnly: false },
       }),
     ).toEqual({ userId: 7, surface: 'mcp' });
+  });
+});
+
+// What a share covers (#680, owner decision 2026-11-25): the table read as
+// one grid, so a change to it is a change to this line-up.
+describe('can', () => {
+  const capabilities: Capability[] = [
+    'view',
+    'manage',
+    'launder',
+    'private',
+    'own',
+  ];
+  const granted = (role: WardrobeRole) =>
+    capabilities.filter((capability) => can(role, capability));
+
+  it('gives the owner everything, MANAGE all but the own records, VIEW a view', () => {
+    expect(granted('OWN')).toEqual(capabilities);
+    expect(granted('MANAGE')).toEqual(['view', 'manage', 'launder', 'private']);
+    expect(granted('VIEW')).toEqual(['view']);
+  });
+});
+
+describe('markShareAware', () => {
+  const route = (options: Partial<RouteOptions>) =>
+    ({
+      method: 'GET',
+      url: '/x',
+      handler: () => '',
+      ...options,
+    }) as RouteOptions;
+
+  it('is share-aware exactly when the querystring takes ownerId', () => {
+    const owned = route({ schema: { querystring: OwnerQuery } });
+    const spread = route({
+      schema: {
+        querystring: Type.Object({
+          ...OwnerQuery.properties,
+          q: Type.String(),
+        }),
+      },
+    });
+    const other = route({
+      schema: { querystring: Type.Object({ week: Type.String() }) },
+    });
+    const none = route({});
+    for (const r of [owned, spread, other, none]) markShareAware(r);
+    expect(
+      [owned, spread, other, none].map((r) => r.config?.shareAware),
+    ).toEqual([true, true, false, false]);
+  });
+
+  it('stops the boot for a route that spells the flag itself', () => {
+    expect(() =>
+      markShareAware(route({ config: { shareAware: true } })),
+    ).toThrow(/declare ownerId/);
   });
 });

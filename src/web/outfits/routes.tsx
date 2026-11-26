@@ -237,7 +237,7 @@ function afterSave(
 /**
  * /outfits: the list, the detail page, the writes, and the builder's old
  * addresses, now redirects into Styling (src/web/styling). Outfits are the signed-in user's own:
- * wardrobe shares never reach them, `?ownerId=` is ignored, and anyone
+ * wardrobe shares never reach them, a foreign `?ownerId=` is a 404, and anyone
  * else's outfit id is a 404 like an unknown one.
  */
 export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (

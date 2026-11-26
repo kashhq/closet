@@ -3,8 +3,8 @@ import { type Route, BOTH, outfitName, tripName } from './authorization-matrix';
 
 // The authorization matrix (authorization-matrix.ts): trips.
 export const ROUTES: Route[] = [
-  // Trips (#10) are the owner's own, like outfits: never shared, ?ownerId=
-  // ignored, another user's trip, trip outfit or extra a 404 with nothing
+  // Trips (#10) are the owner's own, like outfits: never shared, a foreign
+  // ?ownerId= a 404, another user's trip, trip outfit or extra a 404 with nothing
   // written. The fixture's trip is on today, with the outfit on today,
   // the garment packed and an extra; a second trip holds an extra to copy.
   // Every case replays on its /api/v1 twin (#194a, `api`) but the
@@ -19,9 +19,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/trips${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,

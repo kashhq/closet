@@ -718,19 +718,20 @@ describe('wardrobe share lifecycle', () => {
       ]);
     });
 
-    it('a grantee naming the owner’s wardrobe mints a link to their own, never the owner’s', async () => {
+    // Invites are owner-only: naming another's wardrobe is a 404 (#680).
+    it('a grantee naming the owner’s wardrobe mints no link, theirs or the owner’s', async () => {
       const manager = await signUpAs('stepup-grantee');
       await acceptOk(await createInvite(owner, 'MANAGE'), manager);
+      const before = await invitesOf(owner);
       const res = await t.inject({
         method: 'POST',
         url: `/wardrobe-share/create-invite-link?ownerId=${owner.id}`,
         payload: { permission: 'MANAGE', currentPassword: TEST_PASSWORD },
         headers: { cookie: manager.cookie },
       });
-      expect(res.statusCode).toBe(302);
-      expect(await invitesOf(manager)).toEqual([
-        { permission: 'MANAGE', granteeId: null, acceptedAt: null },
-      ]);
+      expect(res.statusCode).toBe(404);
+      expect(await invitesOf(manager)).toEqual([]);
+      expect(await invitesOf(owner)).toEqual(before);
     });
 
     it('the step-up page is a native post form no cache keeps', async () => {

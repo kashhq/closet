@@ -463,19 +463,19 @@ describe('insights', () => {
     expect(unworn.rows).toBe(1 + 8 + 3);
   });
 
-  it('is the signed-in user’s own: ?ownerId= is ignored', async () => {
+  // #680: an owner-only page naming another's wardrobe is a 404, reading
+  // nothing past the session (no share, no insights statement).
+  it('is the signed-in user’s own: a foreign ?ownerId= is a 404', async () => {
     const cookie = await t.login('stranger@example.com');
-    // No share is looked up: the same three statements as one's own page.
     const request = () =>
       t.inject({
         method: 'GET',
         url: `/wardrobe/insights?ownerId=${ownerId}`,
         headers: { cookie },
       });
-    expect((await recordQueries(request)).statements).toBe(3);
+    expect((await recordQueries(request)).statements).toBe(1);
     const other = await request();
-    expect(other.statusCode).toBe(200);
-    expect(other.body).toContain('1 garments in your closet');
+    expect(other.statusCode).toBe(404);
     expect(other.body).not.toContain('White tee');
   });
 
