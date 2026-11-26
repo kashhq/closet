@@ -415,7 +415,7 @@ function InviteDetails(props: {
           <a href={loginUrl(path)} class="btn btn-primary">
             {t('LOGIN')}
           </a>
-          {!ctx.signupsDisabled && (
+          {ctx.signupsOpen && (
             <a href={registerUrl(path)} class="btn btn-outline">
               {t('REGISTER')}
             </a>

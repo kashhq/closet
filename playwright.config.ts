@@ -22,6 +22,9 @@ process.env.ACCESS_TOKEN_SECRET ??= randomBytes(32).toString('hex');
 // bcrypt run at its floor, which every spec's own accounts are hashed at.
 process.env.APP_ENV ??= 'dev';
 process.env.PASSWORD_HASH_ROUNDS ??= '4';
+// Every scenario signs its own people up (test/support/e2e-session.ts), on
+// one server: not the default first-user, which closes after the first.
+process.env.REGISTRATION ??= 'open';
 // Production runs with the metrics on: the pages load the timing beacon
 // (public/js/vitals.js); the scenarios run with it in the page, as users do.
 process.env.METRICS_ENABLED ??= 'true';

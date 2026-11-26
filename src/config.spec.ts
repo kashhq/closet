@@ -45,7 +45,7 @@ describe('loadConfig', () => {
       TRUSTED_PROXIES: '127.0.0.1,::1',
       APP_NAME: 'Closet',
       APP_TIMEZONE: 'America/New_York',
-      DISABLE_REGISTRATION: false,
+      REGISTRATION: 'first-user',
       PWA_ENABLED: false,
       SITE_URL: 'http://localhost:3000',
       ICON_NAME: 'icon.png',
@@ -66,12 +66,12 @@ describe('loadConfig', () => {
   it('converts booleans and numbers spelled exactly', () => {
     const config = load({
       PORT: '8080',
-      DISABLE_REGISTRATION: 'TRUE',
+      WATERMARK_ENABLED: 'TRUE',
       CUTOUT_ENABLED: 'false',
       MAX_HEIC_BYTES: '1024',
     });
     expect(config.PORT).toBe(8080);
-    expect(config.DISABLE_REGISTRATION).toBe(true);
+    expect(config.WATERMARK_ENABLED).toBe(true);
     expect(config.CUTOUT_ENABLED).toBe(false);
     expect(config.MAX_HEIC_BYTES).toBe(1024);
   });
@@ -103,6 +103,11 @@ describe('loadConfig', () => {
     ],
     ['DISABLE_REGISTRATION', 'yes', 'DISABLE_REGISTRATION: expected boolean'],
     [
+      'REGISTRATION',
+      'invite',
+      'REGISTRATION: must be one of first-user, open, closed',
+    ],
+    [
       'LOG_LEVEL',
       'verbose',
       'LOG_LEVEL: must be one of trace, debug, info, warn, error, fatal, silent',
@@ -127,6 +132,76 @@ describe('loadConfig', () => {
     ],
   ])('refuses %s=%j, naming it', (key, value, problem) => {
     expect(problemsOf({ ...REQUIRED, [key]: value })).toEqual([problem]);
+  });
+
+  describe('DISABLE_REGISTRATION, the alias of REGISTRATION for one release (#670)', () => {
+    const loadWarned = (env: Env) => {
+      const warnings: string[] = [];
+      const config = loadConfig({
+        env: { ...REQUIRED, ...env },
+        envFiles: [],
+        onDeprecated: (message) => warnings.push(message),
+      });
+      return { mode: config.REGISTRATION, warnings };
+    };
+
+    it.each([
+      ['true', 'closed'],
+      [' FALSE ', 'open'],
+    ])(
+      'reads DISABLE_REGISTRATION=%j alone as %s, with one warning',
+      (raw, mode) => {
+        expect(loadWarned({ DISABLE_REGISTRATION: raw })).toEqual({
+          mode,
+          warnings: [
+            `DISABLE_REGISTRATION is deprecated: set REGISTRATION=${mode}`,
+          ],
+        });
+      },
+    );
+
+    it.each([
+      ['closed', 'true'],
+      ['open', 'false'],
+    ])(
+      'lets REGISTRATION=%s win over an agreeing DISABLE_REGISTRATION=%s',
+      (mode, raw) => {
+        expect(
+          loadWarned({ REGISTRATION: mode, DISABLE_REGISTRATION: raw }),
+        ).toEqual({
+          mode,
+          warnings: [
+            'DISABLE_REGISTRATION is ignored: REGISTRATION is set; remove DISABLE_REGISTRATION',
+          ],
+        });
+      },
+    );
+
+    it.each([
+      ['open', 'true'],
+      ['first-user', 'true'],
+      ['closed', 'false'],
+      ['first-user', 'false'],
+    ])(
+      'refuses REGISTRATION=%s beside DISABLE_REGISTRATION=%s, naming both',
+      (mode, raw) => {
+        expect(
+          problemsOf({
+            ...REQUIRED,
+            REGISTRATION: mode,
+            DISABLE_REGISTRATION: raw,
+          }),
+        ).toEqual([
+          'REGISTRATION: disagrees with DISABLE_REGISTRATION; set REGISTRATION alone and remove DISABLE_REGISTRATION',
+        ]);
+      },
+    );
+
+    it('is not a key of the config', () => {
+      expect(load({ DISABLE_REGISTRATION: 'true' })).not.toHaveProperty(
+        'DISABLE_REGISTRATION',
+      );
+    });
   });
 
   describe('the database settings renamed before 0.1 (#694)', () => {

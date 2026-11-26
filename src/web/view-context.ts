@@ -16,7 +16,12 @@ export interface ViewContext {
   siteUrl: string;
   /** The request path, without the query: the dock's active tab (layout/sections.ts). */
   path: string;
-  signupsDisabled: boolean;
+  /**
+   * Whether a page may link to registration: false here, set from the
+   * registration gate by the only pages that link to it, the login page
+   * (its app bar) and an invite's (src/web/auth/registration.ts).
+   */
+  signupsOpen: boolean;
   pwaEnabled: boolean;
   /** WEATHER_ENABLED: pages render the weather's slots (src/web/weather/views.tsx). */
   weatherEnabled: boolean;
@@ -69,7 +74,6 @@ export interface ViewContextConfig {
   appName: string;
   iconName: string;
   siteUrl: string;
-  registrationDisabled: boolean;
   pwaEnabled: boolean;
   weatherEnabled: boolean;
   metricsEnabled: boolean;
@@ -104,7 +108,7 @@ export function createViewContextBuilder(config: ViewContextConfig) {
       iconName: config.iconName,
       siteUrl: config.siteUrl,
       path,
-      signupsDisabled: config.registrationDisabled,
+      signupsOpen: false,
       pwaEnabled: config.pwaEnabled,
       weatherEnabled: config.weatherEnabled,
       metricsEnabled: config.metricsEnabled,

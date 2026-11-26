@@ -396,7 +396,7 @@ export async function createFixture(options: {
       DATA_PATH: dataPath,
       ACCESS_TOKEN_SECRET: 'page-audit-secret-0123456789abcdef0123',
       TRUSTED_PROXIES: '127.0.0.1,::1',
-      DISABLE_REGISTRATION: 'false',
+      REGISTRATION: 'open',
       WEATHER_ENABLED: 'true',
       METRICS_ENABLED: 'true',
       SENTRY_DSN: bugsink.dsn,

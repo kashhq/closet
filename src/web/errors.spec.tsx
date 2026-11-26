@@ -32,7 +32,7 @@ const ctx: ViewContext = {
   iconName: 'icon.png',
   siteUrl: 'http://localhost:3000',
   path: '/boom',
-  signupsDisabled: false,
+  signupsOpen: false,
   pwaEnabled: false,
   weatherEnabled: false,
   metricsEnabled: false,

@@ -304,7 +304,7 @@ export function confirmedHeaders(
  * from this device (a password changed elsewhere, the account deleted, a
  * rotated secret, expiry), which no sign-out POST announced. The landing
  * page's account is what tells it apart from a redirect that keeps the
- * session: DISABLE_REGISTRATION sends a signed-in user from /auth/register to
+ * session: a closed registration sends a signed-in user from /auth/register to
  * the login page too, rendered for that user.
  */
 export function sentToLogin(response: {

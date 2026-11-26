@@ -20,7 +20,12 @@ import {
   signInGuards,
 } from './sign-in';
 import { PROFILE_PATH, SIGN_OUT_EVERYWHERE_PATH } from './urls';
-import { loginUrl, REGISTER_PATH, signInReturnTo } from './return-to';
+import {
+  REGISTER_PATH,
+  REGISTRATION_CLOSED_PARAM,
+  registrationClosedUrl,
+  signInReturnTo,
+} from './return-to';
 import {
   ChangePasswordPage,
   DeleteAccountPage,
@@ -35,12 +40,7 @@ import {
 } from './pages';
 import { hashPassword, setPassword, verifyPassword } from './passwords';
 import { listTokens } from './personal-tokens';
-import {
-  endOtherSessions,
-  insertUser,
-  normalizeEmail,
-  updateEmail,
-} from './queries';
+import { endOtherSessions, normalizeEmail, updateEmail } from './queries';
 import { sessionUserId } from './require-session';
 import { findWeekTemplate } from '../week-plan/template';
 import {
@@ -73,9 +73,13 @@ const ProfileQuery = Type.Object({
 });
 
 // The login and registration pages' URL state: the page to return to after
-// signing in (return-to.ts). Unknown, so a repeated parameter is the `/`
+// signing in (return-to.ts), and the login page's closed-registration
+// notice, shown for any value. Unknown, so a repeated parameter is the `/`
 // fallback, never a 400.
-const SignInQuery = Type.Object({ returnTo: Type.Optional(Type.Unknown()) });
+const SignInQuery = Type.Object({
+  returnTo: Type.Optional(Type.Unknown()),
+  [REGISTRATION_CLOSED_PARAM]: Type.Optional(Type.Unknown()),
+});
 
 /**
  * The sign-in pages carry their returnTo, which may hold an invite token:
@@ -110,21 +114,29 @@ export const authRoutes: FastifyPluginCallbackTypebox<
   WebOptions & SignInLimits
 > = (
   app,
-  { config, db, tokens, photos, logger, weather, signInLimits },
+  { db, tokens, photos, logger, weather, registration, signInLimits },
   done,
 ) => {
-  // DISABLE_REGISTRATION: every registration route sends the visitor to the
-  // login page. onRequest, so a closed registration never reads a body.
-  // A returnTo in the query goes along (the invite's register link); a
-  // post's is in its body, unread at onRequest.
+  // A closed registration (REGISTRATION, registration.ts): every
+  // registration route sends the visitor to the login page, which says so.
+  // onRequest, so a closed registration never reads a body. A returnTo in
+  // the query goes along (the invite's register link); a post's is in its
+  // body, unread at onRequest.
   const registrationOpen = async (
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    if (!config.registrationDisabled) return;
+    if (await registration.open()) return;
     const query = request.query as Record<string, unknown> | undefined;
-    return reply.redirect(loginUrl(query?.returnTo), 302);
+    return reply.redirect(registrationClosedUrl(query?.returnTo), 302);
   };
+
+  // The login page's context: its app bar links to registration only while
+  // it is open (the one page that asks, besides the invite's).
+  const loginContext = async (reply: FastifyReply) => ({
+    ...viewContext(reply),
+    signupsOpen: await registration.open(),
+  });
 
   app.get(
     LOGIN_PATH,
@@ -133,8 +145,11 @@ export const authRoutes: FastifyPluginCallbackTypebox<
       renderSignInPage(
         reply,
         <LoginPage
-          ctx={viewContext(reply)}
+          ctx={await loginContext(reply)}
           returnTo={signInReturnTo(request.query.returnTo)}
+          registrationClosed={
+            request.query[REGISTRATION_CLOSED_PARAM] !== undefined
+          }
         />,
       ),
   );
@@ -158,7 +173,7 @@ export const authRoutes: FastifyPluginCallbackTypebox<
         return renderSignInPage(
           reply,
           <LoginPage
-            ctx={viewContext(reply)}
+            ctx={await loginContext(reply)}
             failed={{ email }}
             returnTo={returnTo}
           />,
@@ -240,18 +255,22 @@ export const authRoutes: FastifyPluginCallbackTypebox<
       const errors = validateRegistration(body);
       if (hasErrors(errors)) return refuse(errors);
 
-      // The insert is the check: no row back means the address is taken,
-      // however recently (insertUser). The hash comes first, so a taken
-      // address costs what a free one does.
-      const account = await insertUser(
-        db,
+      // The insert is the check: an address taken however recently, or under
+      // first-user an account registered a moment ago, is no row back
+      // (registration.ts). The hash comes first, so a taken address costs
+      // what a free one does.
+      const outcome = await registration.register(
         email,
         await hashPassword(body.password),
       );
-      if (!account) {
+      if (!outcome.ok && outcome.refused === 'closed') {
+        return reply.redirect(registrationClosedUrl(returnTo), 302);
+      }
+      if (!outcome.ok) {
         logger.info('Registration refused: the email is taken');
         return refuse({ email: [t('EMAIL_IN_USE')] });
       }
+      const { account } = outcome;
       const replaced = startSession(
         request,
         reply,

@@ -181,11 +181,11 @@ function Account({ ctx, returnTo }: { ctx: ViewContext; returnTo?: string }) {
     );
   }
   if (ctx.path === LOGIN_PATH) {
-    return ctx.signupsDisabled ? null : (
+    return ctx.signupsOpen ? (
       <a href={registerUrl(returnTo)} class="btn btn-ghost btn-sm shrink-0">
         {t('REGISTER')}
       </a>
-    );
+    ) : null;
   }
   return (
     <a href={loginUrl(returnTo)} class="btn btn-ghost btn-sm shrink-0">
