@@ -333,10 +333,15 @@ describe('repair costs in cost per wear', () => {
     });
 
     it('sees their own insights and stats, never the owner’s costs', async () => {
-      const cost = await get(
-        `/wardrobe/insights?ownerId=${t.owner.id}`,
-        viewerCookie,
-      );
+      // Insights are owner-only: naming the owner is a 404 (#680).
+      const named = await t.inject({
+        method: 'GET',
+        url: `/wardrobe/insights?ownerId=${t.owner.id}`,
+        headers: { cookie: viewerCookie },
+      });
+      expect(named.statusCode).toBe(404);
+      expect(named.body).not.toContain('350.00');
+      const cost = await get('/wardrobe/insights', viewerCookie);
       expect(cost).not.toContain('350.00');
       expect(cost).not.toContain('$15.00');
       const token = await createAccessToken(t, { cookie: viewerCookie });

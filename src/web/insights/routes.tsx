@@ -38,13 +38,12 @@ function unwornDays(value: string | undefined): UnwornDays {
 /**
  * Insights (#17, plan section 10): how the closet is actually used, from
  * the owner's own wears, so the signed-in user's only, like /laundry:
- * `?ownerId=` is ignored and a share never reaches it. Two statements
+ * a foreign `?ownerId=` is a 404 (refuseForeignOwner) and a share never reaches it. Two statements
  * (src/web/insights/queries.ts), computed on request, nothing stored.
  *
  * The year in review (#26, docs/plans/2026-09-28-yearly-recap.md): the
  * same two statements over a calendar year, and owner-only for the same
- * reason: it is the wear log. `?ownerId=` is ignored; a grantee who passes
- * one sees their own recap.
+ * reason: it is the wear log, so a foreign `?ownerId=` is a 404.
  */
 export const insightsRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,

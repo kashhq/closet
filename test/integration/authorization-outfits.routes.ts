@@ -14,8 +14,9 @@ import {
 
 // The authorization matrix (authorization-matrix.ts): outfits, Styling, the calendar and its weekly auto-plan, laundry, insights, selfies, saved looks and images.
 export const ROUTES: Route[] = [
-  // Outfits and calendar are not shared and ignore ?ownerId; the ownerId
-  // via proves a grantee cannot reach them by naming the owner.
+  // Outfits and calendar are not shared: a foreign ?ownerId is a 404
+  // (refuseForeignOwner, #680), so the ownerId via proves a grantee cannot
+  // reach them by naming the owner, nor see their own under that address.
   {
     name: 'GET /outfits',
     kind: 'read',
@@ -26,9 +27,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/outfits${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -51,9 +52,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {
@@ -372,9 +373,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'ignored',
-      viewer: 'ignored',
-      stranger: 'ignored',
+      manager: ['ignored', 'notFound'],
+      viewer: ['ignored', 'notFound'],
+      stranger: ['ignored', 'notFound'],
     },
   },
   {
@@ -556,9 +557,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/calendar${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -580,9 +581,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/calendar/month${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {
@@ -601,9 +602,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {
@@ -621,9 +622,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {
@@ -746,7 +747,7 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    // The requester's own hamper whatever `?ownerId=` says. Not `shows`:
+    // The requester's own hamper; a foreign `?ownerId=` is a 404. Not `shows`:
     // the fixture's garment is not worn (the owner's page lists nothing).
     name: 'GET /laundry',
     kind: 'read',
@@ -756,14 +757,14 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/laundry${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {
-    // Insights (#17) read the wear log: the requester's own whatever
-    // `?ownerId=` says. The owner's never-worn garment is in their
+    // Insights (#17) read the wear log: the requester's own; a foreign
+    // `?ownerId=` is a 404. The owner's never-worn garment is in their
     // unworn list; nobody else's page names it.
     name: 'GET /wardrobe/insights',
     kind: 'read',
@@ -774,9 +775,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/wardrobe/insights${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -785,9 +786,8 @@ export const ROUTES: Route[] = [
   },
   {
     // The year in review (#26) reads the wear log like insights: the
-    // requester's own whatever `?ownerId=` says. (The fixture's garment is
-    // never worn, so no year is recapped; recap.spec.ts proves a grantee
-    // with `?ownerId=` sees their own figures, never the owner's.)
+    // requester's own; a foreign `?ownerId=` is a 404. (The fixture's
+    // garment is never worn, so no year is recapped.)
     name: 'GET /wardrobe/recap',
     kind: 'read',
     ok: 200,
@@ -796,9 +796,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/wardrobe/recap${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -818,9 +818,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'ignored',
-      viewer: 'ignored',
-      stranger: 'ignored',
+      manager: ['ignored', 'notFound'],
+      viewer: ['ignored', 'notFound'],
+      stranger: ['ignored', 'notFound'],
     },
     api: {
       ok: 200,
@@ -935,7 +935,8 @@ export const ROUTES: Route[] = [
   ),
   // Saved looks (#22) are the owner's like the style profile: the list is
   // anyone's own, every refusal of a look a 404 that stores nothing (an
-  // upload is refused before its body is read), and `?ownerId=` is ignored.
+  // upload is refused before its body is read), and a foreign `?ownerId=`
+  // is a 404.
   // The tab is paged (#528) and the matrix's own writes add looks beside the
   // fixture's, which can fall past the first page: only /tiles, below the
   // fixture look's id + 1, is asked to show it.
@@ -948,9 +949,9 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/inspiration${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -970,9 +971,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
   },
   {

@@ -752,7 +752,7 @@ describe('the Muse inbox', () => {
       const { withGarment } = await postedDestination(
         t.db,
         { to: 'closet', forNeed: id },
-        { ownerId, isOwner: true, canView: true, canManage: true },
+        { ownerId, role: 'OWN', isOwner: true, canView: true, canManage: true },
       );
       // Settled on another phone after the check.
       expect(

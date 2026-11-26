@@ -24,12 +24,12 @@ export const ROUTES: Route[] = [
     request: (_f, q) => ({ method: 'GET', url: `/auth/profile/style${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     // The API's twin reads the same profile and rules; `?ownerId=` is a
-    // 400 there (its querystring is closed, #577), ignored on the page.
+    // 400 there (its querystring is closed, #577), a 404 on the page (#680).
     api: {
       ok: 200,
       request: (_f, q) => ({
@@ -51,9 +51,9 @@ export const ROUTES: Route[] = [
     request: (_f, q) => ({ method: 'GET', url: `/auth/profile/style${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -129,9 +129,9 @@ export const ROUTES: Route[] = [
     request: (_f, q) => ({ method: 'GET', url: `/auth/profile/sizes${q}` }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,
@@ -151,9 +151,9 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: 'hidden',
-      viewer: 'hidden',
-      stranger: 'hidden',
+      manager: ['hidden', 'notFound'],
+      viewer: ['hidden', 'notFound'],
+      stranger: ['hidden', 'notFound'],
     },
     api: {
       ok: 200,

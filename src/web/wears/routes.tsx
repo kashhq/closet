@@ -86,7 +86,7 @@ const LaundryQuery = Type.Object({
  * garment in a shared wardrobe is refused to a grantee (403 with
  * `?ownerId=`, where they can see it; 404 without, where it is not in
  * their wardrobe), and /laundry is always the signed-in user's own
- * (`?ownerId=` ignored). The calendar's worn pill is POST /calendar/:id/worn
+ * (a foreign `?ownerId=` is a 404). The calendar's worn pill is POST /calendar/:id/worn
  * (setEntryWorn, the same query layer).
  */
 export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
