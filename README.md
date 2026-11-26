@@ -229,7 +229,7 @@ npm run test:int        # Vitest integration tests (real app in-process, scratch
                         # file, cloned from the migrated template; no build): the default place for
                         # behavior assertions
 npm run test:all        # both Vitest tiers in one run
-npm run test:e2e        # build, then Playwright end-to-end (all browsers, ten critical-path scenarios;
+npm run test:e2e        # build, then Playwright end-to-end (all browsers, the critical-path scenarios;
                         # make screenshots for the shots); starts start:test on :3000 unless one is
                         # running, and the PWA scenarios skip unless PWA_ENABLED (test/AGENTS.md)
 npm run test:cov        # both Vitest tiers with v8 coverage (coverage/); the plan's metrics ratchet holds lines and branches

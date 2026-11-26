@@ -188,7 +188,7 @@ npm run build                 # clean, tsc (type-checks), generate
 npm run lint | format         # eslint --fix | prettier --write (never a directory); lint:check, format:check gate
 npm test                      # Vitest unit projects
 npm run test:int              # integration: the real app in-process, scratch Postgres
-npm run test:e2e              # build, then Playwright (ten scenarios): test/AGENTS.md
+npm run test:e2e              # build, then Playwright: test/AGENTS.md
 npm run check                 # check:static + test:all (~80 s)
 make install                  # git hooks, once per checkout or worktree
 make ci-quick                 # guards (docs-check among them), secrets, lint, types
@@ -212,7 +212,7 @@ Planned contract items still missing (`docs/decisions.md` 2026-10-16, Convention
 
 - **Backlog: GitHub issues, ordered by the pinned Roadmap (#27).** Pull the first unchecked item whose dependencies are done; new ideas go in the **Later** milestone.
 - Before implementing, read `docs/PROJECT_LOG.md`, this file and the area's doc. Plan in plain text and get approval before writing code or spawning implementers; approval of a goal is not approval of an implementation.
-- **Tests are budgeted and lean** (owner directive 2026-10-13; `test/AGENTS.md`): `make ci-unit` ≤ 60 s, `ci-db` ≤ 110 s, `ci-e2e` ≤ 180 s, each with a collected-count floor. A test earns its place (`test/AGENTS.md`): behavior goes in `test/integration/`; Playwright holds ten critical-path scenarios and a new one replaces one.
+- **Tests are budgeted and lean** (owner directive 2026-10-13; `test/AGENTS.md`): `make ci-unit` ≤ 60 s, `ci-db` ≤ 110 s, `ci-e2e` ≤ 180 s, each with a collected-count floor. A test earns its place (`test/AGENTS.md`): behavior goes in `test/integration/`; Playwright is held by the `ci-e2e` time budget, not a scenario count: a scenario earns its place by what only a real browser shows.
 - **Metrics are an on-demand report for cleanup rounds** (`make ci-metrics`, `make metrics-tighten`), not a per-PR gate (devkit 2026-11-13).
 - **Before a feature is called done** it is verified in a browser as an installed PWA at phone width (Playwright at 390 px).
 - **Changes land through pull requests** (owner decision 2026-09-26): a branch `<issue>-<slug>` (own worktree when agents run in parallel), a PR linking its issue, a review round (`@codex review`, or `make review PR=<n>`; docs-only PRs owe none) with its P0/P1 findings answered once. `make merge PR=<n>` squash-merges once the rounds allow: no pre-merge gate (devkit 2026-11-02), at most `DEVKIT_REVIEW_ROUNDS` (3) rounds; below the cap P0/P1 block, at it only P0 and the rest is filed as issues. Parallel branches that clash show on main and are fixed forward. Merging publishes, then deploys.
