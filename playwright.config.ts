@@ -78,7 +78,7 @@ export default defineConfig({
   testDir: 'test',
   /* test/integration/ holds the Vitest in-process tier (npm run test:int).
    * screenshots.spec.ts is a generator, not a test: only `make screenshots`
-   * (SEED_SCREENSHOTS) runs it, so the gate's e2e tier stays the ten
+   * (SEED_SCREENSHOTS) runs it, so the gate's e2e tier stays the
    * critical-path scenarios the floor counts. */
   testIgnore: [
     '**/integration/**',

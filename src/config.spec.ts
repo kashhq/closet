@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  allowedHosts,
   ConfigError,
   type Env,
   loadConfig,
@@ -420,6 +421,43 @@ describe('loadConfig', () => {
     it('skips a file that does not exist', () => {
       expect(load({}, [join(dir, 'missing')]).APP_NAME).toBe('Closet');
     });
+  });
+});
+
+describe('allowedHosts (#702)', () => {
+  it("is SITE_URL's host by default, its port kept unless a default one", () => {
+    expect(allowedHosts(load({}))).toEqual(['localhost:3000']);
+    expect(
+      allowedHosts(load({ SITE_URL: 'https://Closet.Example.com:443/app' })),
+    ).toEqual(['closet.example.com']);
+  });
+
+  it('adds each ALLOWED_HOSTS entry as a host key', () => {
+    const config = load({
+      SITE_URL: 'https://closet.example.com',
+      ALLOWED_HOSTS: ' Closet.Test , closet:3000,closet.example.com:443,',
+    });
+    expect(allowedHosts(config)).toEqual([
+      'closet.example.com',
+      'closet.test',
+      'closet:3000',
+    ]);
+  });
+
+  it.each([
+    'https://closet.test',
+    'closet.test/path',
+    'user@closet.test',
+    'closet.test:port',
+    'closet box',
+  ])('refuses %s, naming the key without the value', (bad) => {
+    const problems = problemsOf({
+      ...REQUIRED,
+      ALLOWED_HOSTS: `ok.test,${bad}`,
+    });
+    expect(problems).toEqual([
+      'ALLOWED_HOSTS: must be host names or host:port, comma-separated (no scheme or path)',
+    ]);
   });
 });
 

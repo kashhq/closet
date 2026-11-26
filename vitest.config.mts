@@ -79,6 +79,7 @@ export default defineConfig({
           name: 'audit-browser',
           include: [
             'scripts/**/*.browser.spec.ts',
+            'views/assets/*.browser.spec.ts',
             'views/assets/page/**/*.browser.spec.ts',
           ],
         },

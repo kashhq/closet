@@ -8,8 +8,14 @@ import Fastify, {
   LogController,
   type RouteOptions,
 } from 'fastify';
+import { onlyLoopback } from './allowed-hosts';
 import { type BuildInfo, loadBuildInfo } from './build-info';
-import { type Config, orderMailSenders, trustedProxies } from './config';
+import {
+  allowedHosts,
+  type Config,
+  orderMailSenders,
+  trustedProxies,
+} from './config';
 import { settlesWithin } from './cutout/deadline';
 import { countPendingCutouts } from './cutout/queries';
 import { CutoutQueue } from './cutout/queue';
@@ -46,6 +52,7 @@ import {
   type OutboundFetcher,
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
+import { createAllowedHostHook } from './web/security/allowed-host';
 import { contentSecurityPolicy } from './web/security/csp';
 import { importMapScript } from './web/layout/import-map';
 import { registerRateLimit } from './web/security/rate-limit';
@@ -222,6 +229,15 @@ export async function createApp(
   boot.info(`NODE_ENV: ${config.NODE_ENV}, APP_ENV: ${config.APP_ENV}`);
   boot.info(`DATA_PATH: ${config.DATA_PATH}`);
   boot.info(`Trusted proxies: ${trustProxy.join(', ')}`);
+  const hosts = allowedHosts(config);
+  boot.info(`Allowed hosts: ${[...hosts, 'loopback'].join(', ')}`);
+  // An install from before #702 on the default SITE_URL, opened by a LAN
+  // address or .local name, now answers every browser 421.
+  if (config.NODE_ENV === 'production' && onlyLoopback(hosts)) {
+    boot.warn(
+      'SITE_URL is a localhost URL and ALLOWED_HOSTS is empty: every request not addressed to localhost is refused with 421. Set SITE_URL to the address the household opens, or list each other name in ALLOWED_HOSTS',
+    );
+  }
   const build = buildInfoFor(config);
   boot.info(`Release ${build.release}, static cache key ${build.assetVersion}`);
 
@@ -383,6 +399,15 @@ export async function createApp(
   registerRequestContext(app);
   registerHttpMetrics(app, metrics);
 
+  // DNS rebinding: a Host that is not this site's is a 421, before the
+  // same-origin check, which trusts the Host (src/web/security/allowed-host.ts).
+  app.addHook(
+    'onRequest',
+    createAllowedHostHook({
+      allowedHosts: hosts,
+      logger: logger.child({ logger: 'Security' }),
+    }),
+  );
   // CSRF: every POST/PUT/PATCH/DELETE must come from this site's own pages.
   // onRequest, so it precedes every route and the body is never read; see
   // src/web/security/same-origin.ts.
