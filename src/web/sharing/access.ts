@@ -25,7 +25,8 @@ export type WardrobeRole = 'OWN' | SharePermission;
  *  - `own`: the owner's own records and acts (wear history and cost,
  *    outfits, the calendar, trips, away, archive and delete, the export).
  * managesWardrobeSql is the SQL form of `manage`, `launder` and `private`
- * for a batched read; access.spec.ts holds the two to the same answers.
+ * for a batched read; test/integration/share.spec.ts holds the two to the
+ * same answers.
  */
 export type Capability = 'view' | 'manage' | 'launder' | 'private' | 'own';
 

@@ -13,6 +13,7 @@ import { RESOURCE_ID, RowId } from '../../src/web/schemas';
 import { takesOwnerId } from '../../src/web/sharing/share-aware';
 import { isStaticPath } from '../../src/static-prefixes';
 import { deviceToken } from './api';
+import { ownerLinkChecker } from './owner-links';
 import { recordQueries, userIdOf } from './harness';
 import type { MatrixGroup, Via } from './authorization-matrix';
 
@@ -421,6 +422,31 @@ describe('?ownerId= on an owner-only route', () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  // The matrix runs ownerLinkChecker over every grantee page it opens;
+  // this holds the checker to what each kind of request sends.
+  it('finds a page request that sends ownerId to an owner-only route', async () => {
+    const links = await ownerLinkChecker(app.registered);
+    const page = [
+      '<a href="/outfits?ownerId=7">outfits</a>',
+      '<a href="/wardrobe?ownerId=7">shared, fine</a>',
+      '<form method="get" action="/calendar"><input type="hidden" name="ownerId" value="7"></form>',
+      '<form method="post" action="/styling"><input type="hidden" name="ownerId" value="7"></form>',
+      '<input type="hidden" id="owner-field" name="ownerId" value="7">',
+      '<div hx-get="/auth/profile/sizes/hint" hx-include="#owner-field"></div>',
+      '<div data-load="/trips?ownerId=7"></div>',
+    ].join('');
+    try {
+      expect(await links.offenders(page, '/wardrobe?ownerId=7')).toEqual([
+        expect.stringMatching(/^GET \/outfits\?ownerId=7: <a /),
+        expect.stringMatching(/^GET \/calendar: <form /),
+        expect.stringMatching(/^GET \/auth\/profile\/sizes\/hint: <div /),
+        expect.stringMatching(/^script \/trips\?ownerId=7: <div /),
+      ]);
+    } finally {
+      await links.close();
+    }
   });
 
   it("lets the owner's own id and an empty one through", async () => {
