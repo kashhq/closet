@@ -1,4 +1,8 @@
-import type { InjectOptions, LightMyRequestResponse } from 'fastify';
+import type {
+  InjectOptions,
+  LightMyRequestResponse,
+  RouteOptions,
+} from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { eq, sql } from 'drizzle-orm';
@@ -57,6 +61,7 @@ import { mintToken } from './mcp';
 import { addLook } from './inspiration';
 import { planEntry, takeSelfie } from './selfies';
 import { startJmapStub } from '../support/jmap-stub';
+import { ownerLinkChecker } from './owner-links';
 import { startWeatherStub } from '../support/weather-stub';
 
 /**
@@ -400,6 +405,17 @@ interface Case {
   outcome: Outcome;
 }
 
+/** A grantee's page answered through `?ownerId=`: a share-aware page of the owner's wardrobe. */
+const servesGrantee = ({ surface, actor, via, outcome }: Case): boolean =>
+  surface === 'page' &&
+  via === 'ownerId' &&
+  outcome === 'ok' &&
+  (actor === 'manager' || actor === 'viewer');
+
+const isHtml = (res: LightMyRequestResponse): boolean =>
+  res.statusCode === 200 &&
+  String(res.headers['content-type']).startsWith('text/html');
+
 const casesOf = (routes: Route[]): Case[] =>
   routes.flatMap((route) =>
     (route.api ? (['page', 'api'] as const) : (['page'] as const)).flatMap(
@@ -486,6 +502,9 @@ export function describeMatrix(
     let sites: LinkSites;
     /** The stand-ins of the features the group's routes need. */
     let features: Awaited<ReturnType<typeof featureApp>> | undefined;
+    /** The app's routes as registered, for ownerLinkChecker. */
+    const registered: RouteOptions[] = [];
+    let ownerLinks: Awaited<ReturnType<typeof ownerLinkChecker>>;
 
     const signUp = async (email: string) => {
       const cookie = await t.register(email);
@@ -1106,6 +1125,19 @@ export function describeMatrix(
     };
 
     /**
+     * A grantee's share-aware page never sends ownerId to a route that is
+     * not share-aware, which would answer them a 404 (#680, owner-links.ts).
+     */
+    const expectOwnerLinksShareAware = async (
+      matrixCase: Case,
+      res: LightMyRequestResponse,
+      request: InjectOptions,
+    ) => {
+      if (!servesGrantee(matrixCase) || !isHtml(res)) return;
+      expect(await ownerLinks.offenders(res.body, request.url)).toEqual([]);
+    };
+
+    /**
      * A clone lands in the requester's wardrobe and only adds rows: the page
      * redirects to the new garment, the twin answers it with its `id`.
      */
@@ -1141,7 +1173,9 @@ export function describeMatrix(
         // Each case's fixture uploads its photos and selfies as the owner:
         // hundreds a minute, past PHOTO_UPLOAD_LIMIT (photo-upload-limit.spec.ts).
         photoUploadMax: Number.MAX_SAFE_INTEGER,
+        onRoute: (route) => registered.push(route),
       });
+      ownerLinks = await ownerLinkChecker(registered);
       [photo, cutout] = await Promise.all([
         jpegPhoto(320, 240),
         pngCutout(320, 240),
@@ -1175,6 +1209,7 @@ export function describeMatrix(
       await t?.cleanup();
       await sites?.close();
       await features?.close();
+      await ownerLinks?.close();
     });
 
     it.each(casesOf(routes))('$title', async (matrixCase) => {
@@ -1200,6 +1235,7 @@ export function describeMatrix(
       const changed = changedTables(before, await snapshot());
 
       expectAnswer(matrixCase, ok, res, secret);
+      await expectOwnerLinksShareAware(matrixCase, res, request);
       // A successful write changed something; nothing else changes a row.
       if (mutates) {
         expect(changed).not.toEqual([]);

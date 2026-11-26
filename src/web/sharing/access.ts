@@ -7,11 +7,45 @@ import { sessionUserId } from '../auth/require-session';
 import { Forbidden, NotFound, type Resource } from '../refusals';
 import { ROW_ID_MAX } from '../schemas';
 import { type Surface, surfaceOf } from '../surface';
+import { isShareAware } from './share-aware';
+
+/**
+ * Who the actor is to the wardrobe a call addresses: its owner, or a
+ * grantee by their share's permission.
+ */
+export type WardrobeRole = 'OWN' | SharePermission;
+
+/**
+ * What a share covers (#680, owner decision 2026-11-25), named once here so
+ * no surface infers it from which pages happen to read `?ownerId=`:
+ *  - `view`: the closet, the wishlist and capsules;
+ *  - `manage`: change them (garments, capsules, tags, photos, conditions);
+ *  - `launder`: mark day-level wears and washes, see the wash state;
+ *  - `private`: a garment's price and notes;
+ *  - `own`: the owner's own records and acts (wear history and cost,
+ *    outfits, the calendar, trips, away, archive and delete, the export).
+ * managesWardrobeSql is the SQL form of `manage`, `launder` and `private`
+ * for a batched read; test/integration/share.spec.ts holds the two to the
+ * same answers.
+ */
+export type Capability = 'view' | 'manage' | 'launder' | 'private' | 'own';
+
+const CAPABILITIES: Record<WardrobeRole, ReadonlySet<Capability>> = {
+  OWN: new Set(['view', 'manage', 'launder', 'private', 'own']),
+  MANAGE: new Set(['view', 'manage', 'launder', 'private']),
+  VIEW: new Set(['view']),
+};
+
+/** Whether `role` grants `capability` (CAPABILITIES). */
+export function can(role: WardrobeRole, capability: Capability): boolean {
+  return CAPABILITIES[role].has(capability);
+}
 
 /**
  * What the actor may do with the wardrobe a call addresses. `ownerId` is
  * the wardrobe actually being read or written (the actor's own unless a
- * share is in play), so callers pass it straight on.
+ * share is in play), so callers pass it straight on. `role` is undefined
+ * for a wardrobe the actor cannot see; the flags are `can(role, ...)`.
  *
  * Refusal policy (authorizeWardrobe throws it): without `canView` the
  * wardrobe does not exist for the actor, a 404, so ids never reveal whose
@@ -20,10 +54,26 @@ import { type Surface, surfaceOf } from '../surface';
  */
 export interface WardrobeAccess {
   ownerId: number;
+  role: WardrobeRole | undefined;
   isOwner: boolean;
   canView: boolean;
   canManage: boolean;
-  permission?: SharePermission;
+}
+
+/** The access of `role` (undefined: no share) to `ownerId`'s wardrobe. */
+function accessOf(
+  ownerId: number,
+  role: WardrobeRole | undefined,
+): WardrobeAccess {
+  const has = (capability: Capability) =>
+    role !== undefined && can(role, capability);
+  return {
+    ownerId,
+    role,
+    isOwner: role === 'OWN',
+    canView: has('view'),
+    canManage: has('manage'),
+  };
 }
 
 /**
@@ -58,15 +108,17 @@ const sharesReadAhead = new WeakMap<FastifyRequest, ShareReadAhead>();
  * (authenticateToken), so a grantee's request pays no statement of its own
  * for the access check (#170). Undefined for one's own wardrobe (`userId`,
  * when the caller knows it: a token's user is known only once its row is
- * read) and for anything but a plain row id: the route's schema judges
+ * read), for anything but a plain row id: the route's schema judges
  * those, and resolveWardrobeAccess then reads the share itself (a body's
- * `ownerId` too). Both hooks run before validation, so this reads the raw
- * query string.
+ * `ownerId` too), and on a route that is not share-aware, which reads no
+ * share (an owner-only page refuses the id unread: refuseForeignOwner).
+ * Both hooks run before validation, so this reads the raw query string.
  */
 export function shareToReadAhead(
   request: FastifyRequest,
   userId?: number,
 ): number | undefined {
+  if (!isShareAware(request)) return undefined;
   const raw = (request.query as Record<string, unknown> | undefined)?.ownerId;
   if (typeof raw !== 'string' || !/^[1-9]\d{0,9}$/.test(raw)) return undefined;
   const ownerId = Number(raw);
@@ -193,29 +245,18 @@ async function resolveWardrobeAccess(
   ownerId: number | undefined,
 ): Promise<WardrobeAccess> {
   if (ownerId == null || ownerId === actor.userId) {
-    return {
-      ownerId: actor.userId,
-      isOwner: true,
-      canView: true,
-      canManage: true,
-    };
+    return accessOf(actor.userId, 'OWN');
   }
   // No share read: the scope refuses before any row is asked, so the answer
   // and its cost are an unknown id's whatever the user was granted.
   const permission = actor.ownWardrobeOnly
     ? null
     : await sharePermission(db, actor, ownerId);
-  return {
-    ownerId,
-    isOwner: false,
-    canView: permission !== null,
-    canManage: permission === 'MANAGE',
-    permission: permission ?? undefined,
-  };
+  return accessOf(ownerId, permission ?? undefined);
 }
 
 /** What a call needs of the wardrobe it addresses. */
-export type WardrobeNeed = 'view' | 'manage' | 'own';
+export type WardrobeNeed = Capability;
 
 export interface AuthorizedWardrobe {
   access: WardrobeAccess;
@@ -227,8 +268,8 @@ export interface AuthorizedWardrobe {
  * The refusal policy above, applied: resolves the wardrobe `ownerId` names
  * (`''` or absent: the actor's own) and throws unless the actor has what
  * the call `need`s: a view (NotFound without one, of `unseen`, so the
- * answer reads like an unknown id of what was asked for), a MANAGE share or
- * ownership (Forbidden), or ownership (Forbidden). Every route that takes
+ * answer reads like an unknown id of what was asked for), else the
+ * capability its role lacks (Forbidden, CAPABILITIES). Every route that takes
  * `?ownerId=` goes through it (a route plugin through its wardrobeGuard),
  * and so does every MCP tool that addresses a wardrobe (wardrobeFor).
  */
@@ -240,9 +281,9 @@ export async function authorizeWardrobe(
   unseen: Resource,
 ): Promise<AuthorizedWardrobe> {
   const access = await resolveWardrobeAccess(db, actor, ownerId || undefined);
-  if (!access.canView) throw new NotFound(unseen);
-  if (need === 'manage' && !access.canManage) throw new Forbidden();
-  if (need === 'own' && !access.isOwner) throw new Forbidden();
+  // Every role has `view`: no role is the unseen wardrobe.
+  if (access.role === undefined) throw new NotFound(unseen);
+  if (!can(access.role, need)) throw new Forbidden();
   // `?ownerId=<self>` is the own wardrobe (nobody shares with themselves),
   // and its links must not carry the parameter.
   return { access, viewOwner: access.isOwner ? undefined : access.ownerId };

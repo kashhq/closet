@@ -1797,3 +1797,9 @@ Consequence: the twin's name is not in config, so it is not derived: every name 
 **Why:** the "ten scenarios, a new one replaces one" rule (2026-10-13) had drifted from the tier (eleven specs ran, using about 19 s of a 180 s budget) and blocked #993's PWA-off project.
 **Decision:** owner chose a time budget: `ci-e2e` stays at or under 180 s (`E2E_BUDGET_SECONDS`, devkit's tier guard). A scenario earns its place by what only a real browser shows; behaviour still goes to `test/integration/`. No script counted scenarios, so nothing was removed; `E2E_FLOOR` stays (it guards against specs silently disappearing).
 **Consequence:** new scenarios no longer replace old ones; the budget is the cap. Unblocks #993.
+
+## 2026-11-25 — A share's scope is a capability table; `?ownerId=` is share-aware only by schema (#680)
+
+Why: what a share covered was implicit in which pages read `?ownerId=`; owner-only pages ignored it and showed the grantee's own outfits, calendar or trips under the owner's address.
+Decision: `CAPABILITIES` (`sharing/access.ts`) names what each role grants (`view`, `manage`, `launder`, `private`, `own`; OWN all, MANAGE all but `own`, VIEW `view`); a call's need is one, `managesWardrobeSql` its SQL form. A route is share-aware exactly when its querystring declares `ownerId` (the root onRoute `markShareAware`); any other signed-in page answers a foreign `?ownerId=` `NotFound('wardrobe')` from the root session hook, reading no share. Rejected: a guard per owner-only plugin (each new page would have to remember it).
+Consequence: a link carrying `?ownerId=` onto an owner-only page 404s; a page that should serve a grantee declares OwnerQuery and goes through the resolver. `launder` and `private` take effect in #680's next two PRs.

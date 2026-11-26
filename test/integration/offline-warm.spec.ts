@@ -307,7 +307,7 @@ describe('GET /offline/warm', () => {
       own = await insertGarment(granteeId, 'closet', true);
     });
 
-    it('warms only their own wardrobe, whatever ownerId says', async () => {
+    it('warms only their own wardrobe; naming the owner is a 404', async () => {
       // The share is live: the grantee does see the owner's wardrobe.
       const shared = await t.inject({
         method: 'GET',
@@ -316,27 +316,31 @@ describe('GET /offline/warm', () => {
       });
       expect(shared.statusCode).toBe(200);
 
-      for (const url of [
-        WARM_LIST_PATH,
-        `${WARM_LIST_PATH}?ownerId=${t.owner.id}`,
-      ]) {
-        const res = await t.inject({
-          method: 'GET',
-          url,
-          headers: { cookie: granteeCookie },
-        });
-        expect(res.headers['x-page-account']).toBe(String(granteeId));
-        const list = await warmList(granteeCookie, url);
-        const garmentPages = list.pages.filter((path) =>
-          /^\/wardrobe\/\d+$/.test(path),
-        );
-        expect(garmentPages).toEqual([`/wardrobe/${own}`]);
-        expect(list.pages).not.toContain(`/outfits/${outfitId}`);
-        expect(list.fragments).toEqual([]);
-        expect(list.keep).toEqual([]);
-        expect(list.images).toHaveLength(1);
-        expect(list.pages.join(' ')).not.toContain('ownerId');
-      }
+      const res = await t.inject({
+        method: 'GET',
+        url: WARM_LIST_PATH,
+        headers: { cookie: granteeCookie },
+      });
+      expect(res.headers['x-page-account']).toBe(String(granteeId));
+      const list = await warmList(granteeCookie, WARM_LIST_PATH);
+      const garmentPages = list.pages.filter((path) =>
+        /^\/wardrobe\/\d+$/.test(path),
+      );
+      expect(garmentPages).toEqual([`/wardrobe/${own}`]);
+      expect(list.pages).not.toContain(`/outfits/${outfitId}`);
+      expect(list.fragments).toEqual([]);
+      expect(list.keep).toEqual([]);
+      expect(list.images).toHaveLength(1);
+      expect(list.pages.join(' ')).not.toContain('ownerId');
+
+      // The warm list is the account's own (#680): never under another's id.
+      const named = await t.inject({
+        method: 'GET',
+        url: `${WARM_LIST_PATH}?ownerId=${t.owner.id}`,
+        headers: { cookie: granteeCookie },
+      });
+      expect(named.statusCode).toBe(404);
+      expect(named.body).not.toContain(`/wardrobe/${closet[0]}`);
     });
   });
 

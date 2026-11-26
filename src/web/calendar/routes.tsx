@@ -131,7 +131,7 @@ function parsePlanned(value: string | undefined): number | 'none' | undefined {
 /**
  * The outfit calendar: the week page and its writes. Outfits and entries are
  * the signed-in user's own; wardrobe shares never reach them, and
- * `?ownerId=` is ignored.
+ * a foreign `?ownerId=` is a 404 (refuseForeignOwner).
  */
 export const calendarRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,

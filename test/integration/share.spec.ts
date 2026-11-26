@@ -1,6 +1,12 @@
-import { desc, isNull } from 'drizzle-orm';
+import { desc, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { wardrobeShare } from '../../src/db/schema';
+import { type SharePermission, user, wardrobeShare } from '../../src/db/schema';
+import {
+  authorizeWardrobe,
+  can,
+  type Capability,
+  managesWardrobeSql,
+} from '../../src/web/sharing/access';
 import { createGarment, garmentRow, garmentsNamed } from './garments';
 import { createTestApp, TEST_PASSWORD, TestApp, userIdOf } from './harness';
 
@@ -118,5 +124,60 @@ describe('wardrobe sharing', () => {
       headers: { cookie: alice.cookie },
     });
     expect(grid.body).toContain('Bob addition');
+  });
+
+  // #680: one scope, two forms. A batched read (the feed's garments) asks
+  // managesWardrobeSql per row; everything else asks the resolver's role.
+  // The SQL form answers `manage`, `launder` and `private` alike, and
+  // nothing where the resolver sees no wardrobe.
+  it('answers managesWardrobeSql as the resolver answers manage, launder and private', async () => {
+    const owner = alice.id;
+    const actor = async (
+      role: SharePermission | 'none',
+    ): Promise<{ role: SharePermission | 'OWN' | 'none'; id: number }> => {
+      const email = `scope-${role.toLowerCase()}@example.com`;
+      await t.register(email);
+      const id = await userId(email);
+      if (role !== 'none') {
+        await t.db.insert(wardrobeShare).values({
+          grantorId: owner,
+          granteeId: id,
+          permission: role,
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+        });
+      }
+      return { role, id };
+    };
+    const actors = [
+      { role: 'OWN' as const, id: owner },
+      await actor('MANAGE'),
+      await actor('VIEW'),
+      await actor('none'),
+    ];
+    const capabilities: Capability[] = ['manage', 'launder', 'private'];
+    for (const { role, id } of actors) {
+      const [{ manages }] = await t.db
+        .select({ manages: managesWardrobeSql(user.id, id) })
+        .from(user)
+        .where(eq(user.id, owner));
+      const resolved = authorizeWardrobe(
+        t.db,
+        { userId: id, surface: 'page' },
+        owner,
+        'view',
+        'wardrobe',
+      );
+      if (role === 'none') {
+        await expect(resolved).rejects.toMatchObject({ statusCode: 404 });
+        expect(manages, role).toBe(false);
+        continue;
+      }
+      const { access } = await resolved;
+      expect(access.role).toBe(role);
+      for (const capability of capabilities) {
+        expect(manages, `${role} ${capability}`).toBe(can(role, capability));
+      }
+    }
   });
 });

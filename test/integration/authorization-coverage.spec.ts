@@ -10,6 +10,11 @@ import {
   templateRouter,
 } from './app-routes';
 import { RESOURCE_ID, RowId } from '../../src/web/schemas';
+import { takesOwnerId } from '../../src/web/sharing/share-aware';
+import { isStaticPath } from '../../src/static-prefixes';
+import { deviceToken } from './api';
+import { ownerLinkChecker } from './owner-links';
+import { recordQueries, userIdOf } from './harness';
 import type { MatrixGroup, Via } from './authorization-matrix';
 
 /**
@@ -74,21 +79,6 @@ interface AppRoute {
   takesId: boolean;
   /** Its querystring takes `?ownerId=`: the matrix must send it. */
   ownerQuery: boolean;
-}
-
-/** Whether a JSON schema (TypeBox: objects, unions, intersections) has `ownerId`. */
-function takesOwnerId(schema: unknown): boolean {
-  if (typeof schema !== 'object' || schema === null) return false;
-  const { properties, anyOf, allOf, oneOf } = schema as {
-    properties?: Record<string, unknown>;
-    anyOf?: unknown[];
-    allOf?: unknown[];
-    oneOf?: unknown[];
-  };
-  if (properties && 'ownerId' in properties) return true;
-  return [...(anyOf ?? []), ...(allOf ?? []), ...(oneOf ?? [])].some(
-    takesOwnerId,
-  );
 }
 
 /** A schema's direct subschemas: properties, items (or a tuple's), unions, patterns. */
@@ -343,5 +333,143 @@ describe('authorization matrix coverage', () => {
     expect(coverageProblems([...routes, added], covered, EXEMPT)).toEqual([
       'POST /unlisted: takes an id, but no matrix case requests it',
     ]);
+  });
+});
+
+const PROBED = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+type Probed = (typeof PROBED)[number];
+
+/**
+ * Routes the probe leaves out: share-aware ones (they take ?ownerId=),
+ * public ones (nobody's wardrobe), the bearer surfaces (their own rules),
+ * static paths (no session) and wildcards (the static files).
+ */
+function unprobed(route: RouteOptions): boolean {
+  const { shareAware, public: isPublic, surface } = route.config ?? {};
+  if (shareAware || isPublic || surface !== undefined) return true;
+  return route.url.includes('*') || isStaticPath(route.url);
+}
+
+/**
+ * A request for every page route that is not share-aware (no OwnerQuery):
+ * each parameter filled with 1, so it reaches the route whatever its ids
+ * name.
+ */
+function ownerOnlyProbes(registered: RouteOptions[]) {
+  return registered.flatMap((route) =>
+    unprobed(route)
+      ? []
+      : [route.method]
+          .flat()
+          // HEAD runs its GET's hooks; the app routes no other method.
+          .filter((method): method is Probed =>
+            (PROBED as readonly string[]).includes(method),
+          )
+          .map((method) => ({
+            method,
+            url: route.url.replace(/:\w+(\([^)]*\))?/g, '1'),
+          })),
+  );
+}
+
+// #680: an owner-only page given another user's ?ownerId= used to ignore it
+// and show the requester's own data under the other's address.
+describe('?ownerId= on an owner-only route', () => {
+  let app: EveryFeatureApp;
+  let otherId: number;
+
+  beforeAll(async () => {
+    app = await bootEveryFeature();
+    await app.t.register('foreign-owner@example.com');
+    otherId = await userIdOf(app.t, 'foreign-owner@example.com');
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  // The onRoute hook is the root's, so it stamps the routes every plugin
+  // registers after it; the querystring schema is the one declaration.
+  it('marks every route, share-aware exactly when its querystring takes ownerId', () => {
+    const wrong = app.registered.flatMap((route) =>
+      route.config?.shareAware === takesOwnerId(route.schema?.querystring)
+        ? []
+        : [`${[route.method].flat().join('|')} ${route.url}`],
+    );
+    expect(wrong).toEqual([]);
+    expect(
+      app.registered.filter((route) => route.config?.shareAware).length,
+    ).toBeGreaterThan(20);
+  });
+
+  it('is a 404 on every page route without OwnerQuery, reading nothing but the session', async () => {
+    const probes = ownerOnlyProbes(app.registered);
+    expect(probes.length).toBeGreaterThan(100);
+    const problems: string[] = [];
+    for (const { method, url } of probes) {
+      let status = 0;
+      const record = await recordQueries(async () => {
+        status = (
+          await app.t.inject({ method, url: `${url}?ownerId=${otherId}` })
+        ).statusCode;
+      });
+      // The session's one statement, with no share read ahead.
+      const reads = record.sql.filter((text) => !/wardrobe_share/.test(text));
+      if (status !== 404 || record.statements !== 1 || reads.length !== 1) {
+        problems.push(
+          `${method} ${url}: ${status}, ${record.statements} statements`,
+        );
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  // The matrix runs ownerLinkChecker over every grantee page it opens;
+  // this holds the checker to what each kind of request sends.
+  it('finds a page request that sends ownerId to an owner-only route', async () => {
+    const links = await ownerLinkChecker(app.registered);
+    const page = [
+      '<a href="/outfits?ownerId=7">outfits</a>',
+      '<a href="/wardrobe?ownerId=7">shared, fine</a>',
+      '<form method="get" action="/calendar"><input type="hidden" name="ownerId" value="7"></form>',
+      '<form method="post" action="/styling"><input type="hidden" name="ownerId" value="7"></form>',
+      '<input type="hidden" id="owner-field" name="ownerId" value="7">',
+      '<div hx-get="/auth/profile/sizes/hint" hx-include="#owner-field"></div>',
+      '<div data-load="/trips?ownerId=7"></div>',
+    ].join('');
+    try {
+      expect(await links.offenders(page, '/wardrobe?ownerId=7')).toEqual([
+        expect.stringMatching(/^GET \/outfits\?ownerId=7: <a /),
+        expect.stringMatching(/^GET \/calendar: <form /),
+        expect.stringMatching(/^GET \/auth\/profile\/sizes\/hint: <div /),
+        expect.stringMatching(/^script \/trips\?ownerId=7: <div /),
+      ]);
+    } finally {
+      await links.close();
+    }
+  });
+
+  it("lets the owner's own id and an empty one through", async () => {
+    for (const query of [`?ownerId=${app.t.owner.id}`, '?ownerId=']) {
+      const res = await app.t.inject({ url: `/outfits${query}` });
+      expect(res.statusCode, query).toBe(200);
+    }
+  });
+
+  // The bearer surfaces have their own rules: the API's closed query is a
+  // 400, /mcp takes no query string and answers its own 401 without a token.
+  it('leaves the API and MCP to their own surfaces', async () => {
+    const { token } = await deviceToken(app.t);
+    const api = await app.t.api(token, {
+      method: 'GET',
+      url: `/api/v1/outfits?ownerId=${otherId}`,
+    });
+    expect(api.statusCode).toBe(400);
+    const mcp = await app.t.inject({
+      method: 'POST',
+      url: `/mcp?ownerId=${otherId}`,
+      anonymous: true,
+    });
+    expect(mcp.statusCode).toBe(401);
   });
 });

@@ -44,6 +44,7 @@ import type { HeicDecoderOptions } from './web/files/heic-decoder';
 import { createPhotos, type Photos, photosConfig } from './web/files/photos';
 import { t } from './web/i18n';
 import { loggableUrl } from './web/loggable-url';
+import { markShareAware, refuseForeignOwner } from './web/sharing/share-aware';
 import { webPlugin } from './web/plugin';
 import { createPushSender, type PushSender } from './web/push/sender';
 import {
@@ -373,6 +374,9 @@ export async function createApp(
   app.addHook('onRoute', assignSurface);
   // And only STATELESS_ROUTES may skip the same-origin check's Origin.
   app.addHook('onRoute', assertStatelessRoute);
+  // A route serves a grantee only when its querystring declares ownerId
+  // (#680); the session hook below refuses the rest a foreign ?ownerId=.
+  app.addHook('onRoute', markShareAware);
   // The queue and the weather's background refreshes first: a job still
   // running needs the pool to record itself, a refresh to save its row.
   // The error tracker last, so a failure on the way out is still sent.
@@ -481,6 +485,11 @@ export async function createApp(
       throw error;
     }
     reply.locals = buildViewContext(request, request.auth);
+    // After the context, so the 404 is a page. Without a session the gate
+    // answers (the login), and a public route is nobody's wardrobe.
+    if (request.auth && request.routeOptions.config.public !== true) {
+      refuseForeignOwner(request, request.auth.user.id);
+    }
   });
 
   // A queued write's replay for another account is refused before its
