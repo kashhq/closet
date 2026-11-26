@@ -162,6 +162,43 @@ export async function insertUser(
   }
 }
 
+/**
+ * The advisory lock first-user registrations take turns on (insertFirstUser),
+ * held to the transaction's end. Exported for the race's spec, which holds it.
+ */
+export function lockFirstUser(db: Queryable) {
+  return db.execute(
+    sql`select pg_advisory_xact_lock(hashtext('closet:first-user'))`,
+  );
+}
+
+export async function anyAccountExists(db: Queryable): Promise<boolean> {
+  const { rows } = await db.execute<{ exists: boolean }>(
+    sql`select exists (select 1 from ${user}) as "exists"`,
+  );
+  return rows[0].exists;
+}
+
+/**
+ * REGISTRATION=first-user's insert (#670): the account only while there is
+ * none, else undefined. Two first registrations at once take turns on
+ * lockFirstUser, and each statement after the lock reads what the winner
+ * committed (READ COMMITTED). **Never fold the three into one statement**:
+ * a statement's snapshot predates its lock wait (#189), so both would see an
+ * empty table. No address can be taken while no account exists.
+ */
+export async function insertFirstUser(
+  db: Db,
+  email: string,
+  passwordHash: string,
+): Promise<AccountRow | undefined> {
+  return db.transaction(async (tx) => {
+    await lockFirstUser(tx);
+    if (await anyAccountExists(tx)) return undefined;
+    return insertUser(tx, email, passwordHash);
+  });
+}
+
 /** What ending an account's other sign-ins took away, besides their sessions. */
 interface Revocations {
   /** Tokens revoked, by kind: the log lines name both. */

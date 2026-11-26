@@ -35,6 +35,7 @@ import {
   createCacheClearRelay,
   createSessionResolver,
 } from './web/auth/session';
+import { createRegistrationGate } from './web/auth/registration';
 import { createSessionTokens } from './web/auth/tokens';
 import { createErrorHandler, DatabaseOutage, HttpError } from './web/errors';
 import { sharedValidators } from './web/schema-validators';
@@ -447,7 +448,6 @@ export async function createApp(
     appName: config.APP_NAME,
     iconName: config.ICON_NAME,
     siteUrl: config.SITE_URL,
-    registrationDisabled: config.DISABLE_REGISTRATION,
     pwaEnabled: config.PWA_ENABLED,
     weatherEnabled: weather !== undefined,
     metricsEnabled: config.METRICS_ENABLED,
@@ -572,7 +572,6 @@ export async function createApp(
       iconName: config.ICON_NAME,
       siteUrl: config.SITE_URL,
       timeZone: config.APP_TIMEZONE,
-      registrationDisabled: config.DISABLE_REGISTRATION,
       pwaEnabled: config.PWA_ENABLED,
       vapid,
       orderMailOwnerId: orderMail?.ownerId,
@@ -585,6 +584,11 @@ export async function createApp(
     logger: web,
     db,
     tokens,
+    registration: createRegistrationGate({
+      db,
+      mode: config.REGISTRATION,
+      logger: logger.child({ logger: 'Registration' }),
+    }),
     photos,
     cutouts,
     jobs: roster,

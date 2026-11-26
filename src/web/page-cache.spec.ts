@@ -420,7 +420,7 @@ describe('sentToLogin', () => {
     ).toBe(false);
   });
 
-  it('is not a redirect to a login page rendered for a signed-in account (DISABLE_REGISTRATION)', () => {
+  it('is not a redirect to a login page rendered for a signed-in account (a closed registration)', () => {
     expect(
       sentToLogin({
         redirected: true,

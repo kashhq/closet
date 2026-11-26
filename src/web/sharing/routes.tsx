@@ -71,7 +71,7 @@ const InviteParams = Type.Object({ token: Type.String({ maxLength: 255 }) });
  */
 export const sharingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,
-  { db, logger },
+  { db, logger, registration },
   done,
 ) => {
   // Profile › Sharing: the signed-in user's own shares and invites, its
@@ -202,7 +202,10 @@ export const sharingRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       return renderPage(
         reply,
         <InvitePage
-          ctx={viewContext(reply)}
+          ctx={{
+            ...viewContext(reply),
+            signupsOpen: await registration.open(),
+          }}
           invite={await findInvite(db, token)}
           token={token}
         />,
