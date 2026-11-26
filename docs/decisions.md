@@ -1786,3 +1786,9 @@ Consequence: a grant change costs that grantee one resend of the wardrobe; a cur
 Why: it counted every commit not authored by the owner's emails as upstream. A Renovate or contributor commit after the fork would have put the owner's own code in the rewrap corpus (most owner lines would match) and counted its lines as inherited.
 Decision: upstream is the fork point and its ancestors. `scripts/ci/upstream_base` holds the full sha (`037e423`, the parent of the owner's first commit), read by `upstream_lines.sh` and `upstream-rewraps.ts`. A blamed line is upstream when its commit is in `git rev-list <base>`; the rewrap corpus is the blobs of those commits. A post-fork line by an email outside `OWNER_EMAILS` is the owner's responsibility: reported as `post-fork <n> <file>` and a total, never failing. The guards are a shallow clone and a base sha missing from the clone; `scripts/upstream-lines.spec.ts` runs the script over a scratch repo.
 Consequence: a different fork point means editing that file; the owner emails now only classify the report.
+
+## 2026-11-25 — Playwright is held by a time budget, not a scenario count (#725)
+
+**Why:** the "ten scenarios, a new one replaces one" rule (2026-10-13) had drifted from the tier (eleven specs ran, using about 19 s of a 180 s budget) and blocked #993's PWA-off project.
+**Decision:** owner chose a time budget: `ci-e2e` stays at or under 180 s (`E2E_BUDGET_SECONDS`, devkit's tier guard). A scenario earns its place by what only a real browser shows; behaviour still goes to `test/integration/`. No script counted scenarios, so nothing was removed; `E2E_FLOOR` stays (it guards against specs silently disappearing).
+**Consequence:** new scenarios no longer replace old ones; the budget is the cap. Unblocks #993.
