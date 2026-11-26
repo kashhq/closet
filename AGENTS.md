@@ -127,6 +127,7 @@ Each rule in full, with its story: `docs/web-layer.md`. A feature lives whole (r
 
 The detail of each rule, its code and its spec: `src/web/security/AGENTS.md`. What every change keeps:
 
+- **Host allowlist** (#702): a Host that is not `SITE_URL`'s, an `ALLOWED_HOSTS` entry or loopback, or no Host at all, is a 421 (one plain-text line naming the fix) at onRequest, before the same-origin hook (DNS rebinding); a new name that reaches the server (a proxy, a scraper) is an `ALLOWED_HOSTS` entry.
 - **CSRF**: the root same-origin hook 403s a POST, PUT, PATCH or DELETE whose `Origin` is not this site (a missing Origin passes only on the bearer surfaces and the reviewed `STATELESS_ROUTES`, which write nothing); nothing changes state on a GET; the service worker never sends a navigation POST to the server (#542).
 - **Rate limits** are per route, opt-in (each budget is named in the security doc).
 - **Refusals do not reveal ids**: unseeable is a 404 like an unknown id; seeable but not changeable is a 403.

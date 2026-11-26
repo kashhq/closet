@@ -26,7 +26,7 @@ src/
                        fetcher (options.outboundFetch: the specs' resolver and address policy only),
                        the weather service when WEATHER_ENABLED (options.weather: the tests' stand-in
                        for Open-Meteo only), then the Fastify instance:
-                       root hooks (same-origin check at onRequest, rate-limit plugin, session resolution
+                       root hooks (host allowlist and same-origin check at onRequest, rate-limit plugin, session resolution
                        and page context at preValidation, skipped for the static paths in
                        static-prefixes.ts; security headers; the request log line), cookie, compression,
                        form and multipart parsers, static roots, the error and not-found handlers, then
@@ -93,7 +93,7 @@ drizzle/               Generated migrations (NNNN_name.sql) + meta/ (journal, sn
 
 ## Request flow
 
-Every request goes through the root hooks in `app.ts` (the same-origin check at onRequest; session into `req.auth` and `ViewContext` into `reply.locals` at preValidation, skipped on static paths), then:
+Every request goes through the root hooks in `app.ts` (the host allowlist, then the same-origin check, at onRequest; session into `req.auth` and `ViewContext` into `reply.locals` at preValidation, skipped on static paths), then:
 
 - **A route** (`src/web/<feature>/routes.tsx`): the plugin's `requireSession` preValidation hook → the route's schema validation (400 page on failure) → the handler → `renderPage(reply, <FeaturePage ctx={viewContext(reply)} />)` or `renderFragment(...)` → JSX components in the shared `Layout`.
 - **A static file** (`public/`; `/modules/*` is `public/modules/`): `@fastify/static`, precompressed, with the cache policy in `src/static-assets.ts`.

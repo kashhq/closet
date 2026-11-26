@@ -318,7 +318,8 @@
       "failed": "Something went wrong"
     },
     "TRY_AGAIN": "Try again",
-    "OPEN_SECTION": "Open {section}"
+    "OPEN_SECTION": "Open {section}",
+    "MISDIRECTED": "This server does not answer for this host name. Its operator adds the name to ALLOWED_HOSTS, or sets SITE_URL to it."
   },
   "refusal": {
     "FORBIDDEN": "Forbidden",

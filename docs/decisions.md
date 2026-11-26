@@ -1787,6 +1787,11 @@ Why: it counted every commit not authored by the owner's emails as upstream. A R
 Decision: upstream is the fork point and its ancestors. `scripts/ci/upstream_base` holds the full sha (`037e423`, the parent of the owner's first commit), read by `upstream_lines.sh` and `upstream-rewraps.ts`. A blamed line is upstream when its commit is in `git rev-list <base>`; the rewrap corpus is the blobs of those commits. A post-fork line by an email outside `OWNER_EMAILS` is the owner's responsibility: reported as `post-fork <n> <file>` and a total, never failing. The guards are a shallow clone and a base sha missing from the clone; `scripts/upstream-lines.spec.ts` runs the script over a scratch repo.
 Consequence: a different fork point means editing that file; the owner emails now only classify the report.
 
+## 2026-11-25 — A request for a Host that is not this site is a 421 (#702)
+Why: the same-origin check compares Origin with the request's own Host, so a DNS-rebinding page (attacker.example resolving to the server) passed it on every surface.
+Decision: one root onRequest hook before it (`allowed-host.ts`) allows `SITE_URL`'s host, `ALLOWED_HOSTS` entries and loopback at any port (HEALTHCHECK, smoke, dev, Playwright, inject), judged on `request.host`, case-insensitive, 80/443 as no port, any other port exact; no Host at all (HTTP/1.0) is refused too. The answer is a 421 sent by the hook with one `text/plain` line naming `ALLOWED_HOSTS` and `SITE_URL` (never the host asked for), not an `HttpError`: the error handler writes a problem or a page, and a new problem `code` would change the OpenAPI contract. Logged by the access line plus one warn per distinct host (the first 20 a boot).
+Consequence: the twin's name is not in config, so it is not derived: every name a client, gate or scraper uses (Caddy passes the original Host) must be in `ALLOWED_HOSTS` before a deploy, or that door is a 421; a production boot whose only host is loopback (the default `SITE_URL`, no `ALLOWED_HOSTS`) warns.
+
 ## 2026-11-25 — Playwright is held by a time budget, not a scenario count (#725)
 
 **Why:** the "ten scenarios, a new one replaces one" rule (2026-10-13) had drifted from the tier (eleven specs ran, using about 19 s of a 180 s budget) and blocked #993's PWA-off project.

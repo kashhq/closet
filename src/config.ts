@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseEnv } from 'node:util';
+import { hostKey, urlHostKey } from './allowed-hosts';
 import { isValidTimeZone } from './calendar-date';
 
 /**
@@ -134,6 +135,11 @@ const ConfigSchema = Type.Object({
   // refuses anything but https: or mailto:, and a site address is not a mailto:, so
   // PWA_ENABLED requires an https SITE_URL (checked below).
   SITE_URL: NonEmpty({ default: 'http://localhost:3000' }),
+  // The other names the server is reached by, `host[:port]`, comma-separated
+  // (#702): a plain-HTTP twin, a gate's public name, a scraper's container
+  // name. SITE_URL's host and loopback are always allowed; a request for any
+  // other Host is a 421 (allowedHosts, src/web/security/allowed-host.ts).
+  ALLOWED_HOSTS: Type.String({ default: '' }),
   // Full-size PNG under public/assets/ for Open Graph previews and the
   // share-link watermark. The manifest and apple-touch-icon use its
   // <stem>-192.png and <stem>-512.png siblings, which must exist beside it
@@ -419,6 +425,11 @@ function crossFieldProblems(config: Config): string[] {
   if (config.LOG_FILE && isInside(config.DATA_PATH, config.LOG_FILE)) {
     problems.push('LOG_FILE: must not be under DATA_PATH');
   }
+  if (!allowedHostEntries(config).every((entry) => hostKey(entry))) {
+    problems.push(
+      'ALLOWED_HOSTS: must be host names or host:port, comma-separated (no scheme or path)',
+    );
+  }
   problems.push(...pwaProblems(config));
   problems.push(...orderMailProblems(config));
   return problems;
@@ -510,6 +521,27 @@ export function orderMailSenders(
 // matters is the sender's authentication (order-mail/trust.ts).
 function looksLikeAddress(value: string): boolean {
   return /^[^\s@,]+@[^\s@,]+$/.test(value);
+}
+
+function allowedHostEntries(config: Pick<Config, 'ALLOWED_HOSTS'>): string[] {
+  return config.ALLOWED_HOSTS.split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The hosts a request may be addressed to, as host keys
+ * (src/allowed-hosts.ts): SITE_URL's, then ALLOWED_HOSTS'. Loopback is the
+ * allowlist's own, never listed.
+ */
+export function allowedHosts(
+  config: Pick<Config, 'SITE_URL' | 'ALLOWED_HOSTS'>,
+): string[] {
+  const keys = [
+    urlHostKey(config.SITE_URL),
+    ...allowedHostEntries(config).map(hostKey),
+  ].filter((key) => key !== undefined);
+  return [...new Set(keys)];
 }
 
 /** TRUSTED_PROXIES as Fastify's trustProxy list. */

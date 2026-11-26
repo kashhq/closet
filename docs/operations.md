@@ -27,6 +27,7 @@ CLOSET_DATA_DIR=<host directory for DATA_PATH>
 CLOSET_MODELS_DIR=<host directory for MODELS_PATH>
 CLOSET_WEB_NETWORK=<the reverse proxy's Docker network>
 TRUSTED_PROXIES=<that network's subnet>   # the proxy is the edge, so X-Forwarded-For is the real client
+ALLOWED_HOSTS=<the plain-HTTP twin>,<the MCP gate's public host>,closet:3000   # every Host but SITE_URL's: else a 421 (#702)
 METRICS_ENABLED=true               # GET /metrics on the Docker network; src/metrics/AGENTS.md
 SENTRY_DSN=http://<key>@<bugsink host>/<project id>   # unset or empty: error tracking off
 ORDER_MAIL_JMAP_TOKEN=<Fastmail API token, Email read-only>   # order email import (#25); unset or empty: off
@@ -164,6 +165,12 @@ Once the database is restored from a dump and the server is up again: `docker ex
 ## Photo quarantine
 
 The nightly reconciliation never deletes a photo set that has no `file` row: it moves it into `DATA_PATH/.trash/<YYYY-MM-DD>/<uuid>.webp/` (a rename on the same filesystem; the day is `APP_TIMEZONE`'s) and deletes a day directory once it is more than 30 days old (#649). After restoring the database from a dump older than the photos, the photos added since land there the next night (log lines `Quarantined orphaned ...`, the report's `orphanedSetsQuarantined`). To put one back: `docker exec closet npm run maintenance:reconcile -- --restore-from-trash <uuid>.webp` (or `<day>/<entry>` when it was quarantined twice); it refuses when a live set of that name exists. Restore its `file` row too, or the next night quarantines it again. Keep `.trash` with the photos in a backup to keep those 30 days too.
+
+## Allowed hosts
+
+Closet answers only requests addressed to `SITE_URL`'s host, an `ALLOWED_HOSTS` entry or loopback; any other Host, or none, is a 421 whose plain-text body names `ALLOWED_HOSTS` and `SITE_URL` (DNS rebinding, #702; Request security). A reverse proxy passes the client's Host on (Caddy's `reverse_proxy` does by default), so every name anyone reaches the server by is an entry: the plain-HTTP twin, the MCP gate's public host, and the metrics scraper's `closet:3000` (a port other than 80 or 443 is part of the entry). The boot logs `Allowed hosts: ...`; a refused name is one `Security` warning, `Refused a request for host "<host>" with 421`. **Fix:** add it to `ALLOWED_HOSTS` and redeploy.
+
+**Upgrading an install from before #702:** one left on the default `SITE_URL` (`http://localhost:3000`) and opened by a LAN address or `.local` name now answers that browser 421 (`This server does not answer for this host name`), and a production boot warns `SITE_URL is a localhost URL and ALLOWED_HOSTS is empty`. Set `SITE_URL` to the address the household opens, or list every name and address in `ALLOWED_HOSTS` (`closet.local,192.0.2.20:3000`; a port other than 80 or 443 is part of the entry).
 
 ## Trusted proxies
 
