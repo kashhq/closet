@@ -1,5 +1,7 @@
 import { count, eq } from 'drizzle-orm';
+import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { connectionOptions } from '../../src/db/client';
 import { user } from '../../src/db/schema';
 import { lockFirstUser } from '../../src/web/auth/queries';
 import { PAGE_ACCOUNT_HEADER } from '../../src/web/page-cache';
@@ -223,5 +225,72 @@ describe('registration first-user (the default)', () => {
     });
     expect(landing.body).toContain('Registration is closed on this server');
     expect(landing.body).not.toContain('href="/auth/register"');
+  });
+});
+
+/**
+ * A restart with an account already stored starts latched: the account's
+ * deletion in a session that never opened a registration page cannot
+ * reopen sign-up (#1268).
+ */
+describe('registration first-user after a restart', () => {
+  let t: TestApp;
+
+  beforeAll(async () => {
+    t = await createTestApp(
+      { REGISTRATION: undefined },
+      {
+        migrated: true,
+        beforeBoot: async (env) => {
+          const client = new Client(
+            connectionOptions({
+              host: env.DATABASE_HOST,
+              port: Number(env.DATABASE_PORT),
+              database: env.DATABASE_NAME,
+              user: env.DATABASE_USER,
+              password: env.DATABASE_PASS,
+              ssl: false,
+            }),
+          );
+          await client.connect();
+          try {
+            await client.query(
+              `insert into "user" (email, password) values ('stored@example.com', 'x')`,
+            );
+          } finally {
+            await client.end();
+          }
+        },
+      },
+    );
+    await t.db.delete(user);
+  });
+
+  afterAll(() => t?.cleanup());
+
+  it('stays closed after the last account is deleted', async () => {
+    const page = await t.inject({
+      method: 'GET',
+      url: '/auth/register',
+      anonymous: true,
+    });
+    expect(page.statusCode).toBe(302);
+    expect(page.headers.location).toBe(CLOSED);
+
+    const post = await t.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'late@example.com',
+        password: TEST_PASSWORD,
+        confirmPassword: TEST_PASSWORD,
+      },
+      headers: uniqueClient(),
+      anonymous: true,
+    });
+    expect(post.statusCode).toBe(302);
+    expect(post.headers.location).toBe(CLOSED);
+    expect(post.cookies).toHaveLength(0);
+    expect(await t.db.select({ n: count() }).from(user)).toEqual([{ n: 0 }]);
   });
 });

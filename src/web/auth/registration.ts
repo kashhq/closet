@@ -24,22 +24,32 @@ export interface RegistrationGate {
   register(email: string, passwordHash: string): Promise<RegistrationOutcome>;
 }
 
-export function createRegistrationGate(deps: {
+/**
+ * Async because first-user reads the account table once here, at boot: a
+ * restart with an account already stored starts latched, so deleting the
+ * last account in a session that never visited a registration page cannot
+ * reopen sign-up.
+ */
+export async function createRegistrationGate(deps: {
   db: Db;
   mode: RegistrationMode;
   logger: Logger;
-}): RegistrationGate {
+}): Promise<RegistrationGate> {
   const { db, mode, logger } = deps;
-  // first-user's latch: once this process has seen an account, sign-up stays
-  // closed without asking the database again. It assumes one instance (a
-  // second server latches on its own first look) and never re-opens: a last
-  // account deleted leaves sign-up closed until a restart, the safe way.
+  // first-user's latch: once this process has seen an account (at boot or
+  // later), sign-up stays closed without asking the database again. While it
+  // is unset the table was empty at the last look, so open() keeps asking.
+  // It assumes one instance (a second server latches on its own boot look)
+  // and never re-opens: a last account deleted leaves sign-up closed until a
+  // restart, the safe way.
   let accountSeen = false;
   const latch = () => {
     if (accountSeen) return;
     accountSeen = true;
     logger.info('Registration closed: the first account exists (first-user)');
   };
+
+  if (mode === 'first-user' && (await anyAccountExists(db))) latch();
 
   return {
     mode,

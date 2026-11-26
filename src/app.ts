@@ -593,7 +593,7 @@ export async function createApp(
     logger: web,
     db,
     tokens,
-    registration: createRegistrationGate({
+    registration: await createRegistrationGate({
       db,
       mode: config.REGISTRATION,
       logger: logger.child({ logger: 'Registration' }),
