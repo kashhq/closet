@@ -49,7 +49,8 @@ export type JobName =
   | 'replan_prune'
   | 'order_mail'
   | 'muse_rounds'
-  | 'sync_prune';
+  | 'sync_prune'
+  | 'weather_prune';
 
 /**
  * A job's ending, closed. `success` and `failure` are the homelab contract
@@ -337,6 +338,25 @@ export class Metrics {
     this.errors.captureException(error, {
       source: 'cutout_model',
       tags: { kind },
+    });
+  }
+
+  /**
+   * `order_mail_owner_missing` (#976): 1 while the order mail is off for
+   * want of an owner (OrderMailOwnerWatch), else 0; registered by createApp
+   * only with ORDER_MAIL_JMAP_TOKEN set, so an unconfigured order mail has no
+   * series. Readiness reports the same as an optional check, never a 503: the
+   * gauge is what a dashboard or rule can select. Read in memory, never from
+   * the database.
+   */
+  trackOrderMailOwner(missing: () => boolean): void {
+    new Gauge({
+      name: 'order_mail_owner_missing',
+      help: 'Whether the order mail is off because its owner account is missing (1) or not (0).',
+      registers: [this.registry],
+      collect() {
+        this.set(missing() ? 1 : 0);
+      },
     });
   }
 

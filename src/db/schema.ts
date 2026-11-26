@@ -213,6 +213,10 @@ export const user = pgTable(
     email: varchar('email', { length: 255 }),
     // bcrypt hash.
     password: varchar('password', { length: 255 }).notNull(),
+    // The session version every session token carries as `sv` (tokens.ts):
+    // "Sign out everywhere" and a new password bump it, ending every session
+    // issued before (#700). A counter, never a time: nothing compares clocks.
+    sessionVersion: integer('session_version').default(0).notNull(),
     // When the owner last opened their wishlist: suggestions newer than it
     // are "new from Muse" (src/wardrobe/suggestions.ts). Never rendered into
     // a cached page; null: never opened since suggestions came.
@@ -255,7 +259,7 @@ export const userDevice = pgTable(
       .defaultNow()
       .notNull(),
     // When the browser last confirmed the subscription: every signed-in app
-    // start sends it again (public/js/push.js).
+    // start sends it again (views/assets/page/push.ts).
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -364,6 +368,13 @@ export const personalAccessToken = pgTable(
     // cursor over the owner's decisions, null before its first call.
     // Written only by readSuggestionFeedback (src/web/wishlist/feedback.ts).
     feedbackReadAt: timestamp('feedback_read_at', { withTimezone: true }),
+    // An agent token's scope (#701), fixed at mint (Agent Access): no write
+    // tool is registered for a read-only token, and an own-wardrobe-only
+    // token's actor sees no shared wardrobe (src/web/sharing/access.ts).
+    // false is full power: every token minted before 0067, and every device
+    // token, which never reads either.
+    readOnly: boolean('read_only').default(false).notNull(),
+    ownWardrobeOnly: boolean('own_wardrobe_only').default(false).notNull(),
   },
   (table) => [
     unique('personal_access_token_token_hash_unique').on(table.tokenHash),
@@ -401,6 +412,22 @@ export const install = pgTable(
   (table) => [check('install_singleton_check', sql`${table.singleton}`)],
 );
 
+// Every install id a claim of an unpaired database put in a marker, recorded
+// before the marker is written (markThenPair, storage-identity.ts, #1049). A
+// claim that loses the pairing race withdraws its marker; one that crashes
+// first leaves a marker whose id only this table knows, which the next boot
+// heals as its own orphan, where a marker no row records stays another
+// install's (#833). The id that is paired leaves it in the pairing's
+// transaction (pairInstallOnce, repairInstallId): an id once paired and then
+// re-paired away is another install's, never an orphan. Holds only first
+// boots' losing claims. Not synced.
+export const storageClaim = pgTable('storage_claim', {
+  installId: uuid('install_id').primaryKey(),
+  claimedAt: timestamp('claimed_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // Which history of this database the changes feed's cursors belong to
 // (#652): every cursor carries the epoch it was answered under, and one
 // presented under another is expired. A restore brings back the epoch of
@@ -427,9 +454,6 @@ export const file = pgTable(
   'file',
   {
     id: serial('id').primaryKey(),
-    // A random UUID set by the app on insert. Nothing reads it since the
-    // share preview is addressed by the shared item's id (#669); #960 drops it.
-    shareableId: varchar('shareable_id', { length: 255 }).notNull(),
     fileName: varchar('file_name', { length: 255 }).notNull(),
     // An ISO timestamp as text, as MikroORM wrote it.
     createdOn: varchar('created_on', { length: 255 }).notNull(),
@@ -497,7 +521,9 @@ export const file = pgTable(
       'file_variant_key_check',
       sql`${table.variantKey} is null or (${table.cutoutStatus} in ('ready', 'edited') and ${table.variantKey} ~ '^[0-9a-f]{12}$')`,
     ),
-    uniqueIndex('file_shareable_id_unique').on(table.shareableId),
+    // What the photo foreign keys of garment, selfie and inspiration point
+    // at: a row shows only its owner's photo (#703).
+    unique('file_id_created_by_id_unique').on(table.id, table.createdById),
     foreignKey({
       name: 'file_created_by_id_foreign',
       columns: [table.createdById],
@@ -832,12 +858,18 @@ export const garment = pgTable(
       table.id.desc().nullsFirst(),
     ),
     uniqueIndex('garment_shareable_id_unique').on(table.shareableId),
+    // A garment shows only its owner's photo row (#703): the pair, not the
+    // id alone, so deleting an account (its file rows cascade) can never
+    // empty another wardrobe's garment. The migration (drizzle/0065) holds
+    // the real action, `ON DELETE SET NULL ("photo_id")`: drizzle cannot
+    // write a column list, and a plain SET NULL would null owner_id too.
+    // NO ACTION on update: a file row changing hands never moves a garment.
     foreignKey({
-      name: 'garment_photo_id_foreign',
-      columns: [table.photoId],
-      foreignColumns: [file.id],
+      name: 'garment_photo_id_owner_id_foreign',
+      columns: [table.photoId, table.ownerId],
+      foreignColumns: [file.id, file.createdById],
     })
-      .onUpdate('cascade')
+      .onUpdate('no action')
       .onDelete('set null'),
     foreignKey({
       name: 'garment_owner_id_foreign',
@@ -1055,13 +1087,13 @@ export const outfit = pgTable(
     clientId: clientId(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key.
     index('outfit_owner_id_revision_index').on(table.ownerId, table.revision),
     unique('outfit_owner_id_client_id_unique').on(
       table.ownerId,
       table.clientId,
     ),
-    index('outfit_owner_id_index').on(table.ownerId),
     uniqueIndex('outfit_shareable_id_unique').on(table.shareableId),
     foreignKey({
       name: 'outfit_owner_id_foreign',
@@ -1282,7 +1314,8 @@ export const garmentWear = pgTable(
     clientId: clientId(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key (an account's deletion cascades by it).
     index('garment_wear_owner_id_revision_index').on(
       table.ownerId,
       table.revision,
@@ -1301,8 +1334,6 @@ export const garmentWear = pgTable(
     // The counts (per garment, days after the last wash). Also the index of
     // the garment_id foreign key.
     index('garment_wear_garment_id_day_index').on(table.garmentId, table.day),
-    // The owner_id foreign key's (an account's deletion cascades by it).
-    index('garment_wear_owner_id_index').on(table.ownerId),
     foreignKey({
       name: 'garment_wear_garment_id_foreign',
       columns: [table.garmentId],
@@ -1425,12 +1456,13 @@ export const selfie = pgTable(
     })
       .onUpdate('cascade')
       .onDelete('set null'),
+    // Only its owner's photo row (#703; garment_photo_id_owner_id_foreign).
     foreignKey({
-      name: 'selfie_photo_id_foreign',
-      columns: [table.photoId],
-      foreignColumns: [file.id],
+      name: 'selfie_photo_id_owner_id_foreign',
+      columns: [table.photoId, table.ownerId],
+      foreignColumns: [file.id, file.createdById],
     })
-      .onUpdate('cascade')
+      .onUpdate('no action')
       .onDelete('cascade'),
   ],
 );
@@ -1485,12 +1517,13 @@ export const inspiration = pgTable(
     })
       .onUpdate('cascade')
       .onDelete('cascade'),
+    // Only its owner's photo row (#703; garment_photo_id_owner_id_foreign).
     foreignKey({
-      name: 'inspiration_photo_id_foreign',
-      columns: [table.photoId],
-      foreignColumns: [file.id],
+      name: 'inspiration_photo_id_owner_id_foreign',
+      columns: [table.photoId, table.ownerId],
+      foreignColumns: [file.id, file.createdById],
     })
-      .onUpdate('cascade')
+      .onUpdate('no action')
       .onDelete('cascade'),
   ],
 );
@@ -1853,12 +1886,12 @@ export const weekPlan = pgTable(
     updatedAt: syncUpdatedAt(),
   },
   (table) => [
-    // The sync feed's keyset (#196b), by owner and revision.
+    // The sync feed's keyset (#196b), by owner and revision. Also the index of
+    // the owner_id foreign key.
     index('week_plan_owner_id_revision_index').on(
       table.ownerId,
       table.revision,
     ),
-    index('week_plan_owner_id_index').on(table.ownerId),
     foreignKey({
       name: 'week_plan_owner_id_foreign',
       columns: [table.ownerId],
@@ -2718,6 +2751,36 @@ export const orderItem = pgTable(
       name: 'order_item_garment_id_foreign',
       columns: [table.garmentId],
       foreignColumns: [garment.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+  ],
+);
+
+// The order mail's owner (#976): the account ORDER_MAIL_OWNER named when
+// the order mail first bound it (adoptOrderMailOwner, at boot) or the
+// operator last rebound it (`npm run order-mail:bind-owner -- --confirm`),
+// and never found by email again. One row: the primary key is a boolean that
+// can only be true. The row outlives its account: deletion sets `user_id`
+// null, so "bound, then deleted" stays apart from "never bound" and no boot
+// re-adopts whoever registers the address next. Not synced (no owner).
+export const orderMailOwner = pgTable(
+  'order_mail_owner',
+  {
+    singleton: boolean('singleton').primaryKey().default(true),
+    userId: integer('user_id'),
+    boundAt: timestamp('bound_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check('order_mail_owner_singleton_check', sql`${table.singleton}`),
+    // The foreign key's index.
+    unique('order_mail_owner_user_id_unique').on(table.userId),
+    foreignKey({
+      name: 'order_mail_owner_user_id_foreign',
+      columns: [table.userId],
+      foreignColumns: [user.id],
     })
       .onUpdate('cascade')
       .onDelete('set null'),

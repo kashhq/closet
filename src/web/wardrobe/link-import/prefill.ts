@@ -100,6 +100,7 @@ function productValues(
       {
         ...BLANK_PROPERTIES,
         type: product.type ?? '',
+        sleeve: product.sleeve ?? '',
         warmth: product.warmth === null ? '' : String(product.warmth),
         materials: product.materials,
         fabricWeight:

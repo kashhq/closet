@@ -3,95 +3,61 @@
 /devkit/
 /devkit.*
 
-# compiled output
-/dist
-/node_modules
-/build
+# Dependencies and what the build writes: tsc's dist/, the CI metrics' build/
+/node_modules/
+/dist/
+/build/
 
-# Logs
-logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
+# Secrets and local settings: every .env.<name> (the committed .env holds only defaults)
+**/.env.*
 
-# OS
-.DS_Store
-
-# Tests
-/coverage
-/.nyc_output
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/mcp.json
-
-# dotenv environment variable files
-.env.*
-
-# temp directory
-.temp
-.tmp
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-
-.lighthouseci/
-**/*.db
-**/*.sqlite
-**/*.sqlite3
-data/**
-# The server-mode cutout model (MODELS_PATH default, 940 MB)
+# What the running app writes locally: photos (DATA_PATH) and the cutout model
+# (MODELS_PATH, 940 MB), and a LOG_FILE or npm's debug log
+/data/
 /models/
-public/bundle.css
-public/sw.js
-# Bundled from views/assets/outbox.ts (npm run generate:outbox)
-public/js/outbox.js
-public/build.json
-public/vendor/
-public/modules/
+/logs/
+*.log
+# Node's diagnostic reports (--report-on-fatalerror)
+/report.*.json
+
+# Generated into public/ by npm run build; the server reads them, git never does
+/public/bundle.css
+/public/sw.js
+/public/build.json
+/public/vendor/
+/public/modules/
+# Bundled from views/assets/outbox.ts and views/assets/page/*.ts (npm run generate:pages): wholly
+# the build's, which empties it of anything it did not output
+/public/js/gen/
 # Generated from the lockfile and node_modules (npm run generate:notices)
-public/THIRD-PARTY-NOTICES.txt
+/public/THIRD-PARTY-NOTICES.txt
 # Precompressed variants (npm run generate:precompress)
-public/**/*.br
-public/**/*.gz
-views/assets/src-sw.js
+/public/**/*.br
+/public/**/*.gz
+# esbuild's bundle of the service worker, before Workbox injects the precache list
+/views/assets/src-sw.js
 
-# Playwright
-node_modules/
-/test-results/
-# The seed personas' phone screenshots (test/screenshots.spec.ts)
+# Test and audit output: coverage, Playwright's results and reports, the seed
+# personas' screenshots (test/screenshots.spec.ts), Lighthouse's working
+# directory, and the page audit's and Lighthouse's results
+/coverage/
+/test-results
+/*-report/
+/playwright/
 /screenshots/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+/.lighthouseci/
+/scripts/results
 
-# Load test results
-/scripts/results/
+# Editors: only the shared VS Code settings are tracked
+/.idea/
+/.vscode/*
+!/.vscode/settings.json
+**/.DS_Store
 
 # Agent tooling (worktrees are full checkouts)
 **/.claude/*
 !/.claude/settings.json
+
+# Python bytecode
+__pycache__/
+*.pyc

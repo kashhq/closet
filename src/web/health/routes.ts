@@ -5,6 +5,7 @@ import type {
 } from 'fastify';
 import { buildMigrationTimes, lastMigrationAt } from '../../db/migrate';
 import { probeWritable, storageFix } from '../../storage-probe';
+import { LIVE_HEADER, LIVE_VALUE } from '../../live-answer';
 import { identityRefusal, STORAGE_MARKER_FIX } from '../files/storage-identity';
 import type { WebOptions } from '../plugin';
 import { enforceLimit, HEALTH_LIMIT } from '../security/rate-limit';
@@ -12,6 +13,7 @@ import {
   checkCutoutQueue,
   checkDatabase,
   checkJobs,
+  checkOrderMailOwner,
   checkTrustedProxies,
   createStorageCheck,
   readiness,
@@ -22,9 +24,9 @@ import {
  * src/web/health/AGENTS.md). Public, static paths (static-prefixes.ts: no
  * session, no access line), `no-store` so no cache answers for the server.
  *
- * - GET /health/live checks nothing: 200 while the process serves.
- *   public/js/connectivity.js probes it with HEAD, so the offline banner
- *   never says "offline" because a dependency is down.
+ * - GET /health/live checks nothing: 200 while the process serves, with
+ *   LIVE_HEADER (src/live-answer.ts). connectivity.ts probes it with HEAD, so the
+ *   offline banner never says "offline" because a dependency is down.
  * - GET /health/ready runs the checks (checks.ts): 200 up, 503 down.
  *   The image's HEALTHCHECK, scripts/smoke-image.sh and devkit's
  *   contract probe read it. Rate-limited (HEALTH_LIMIT).
@@ -34,7 +36,7 @@ import {
  */
 export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   app,
-  { config, db, logger, jobs, cutouts, photos, proxyWatch },
+  { config, db, logger, jobs, cutouts, photos, proxyWatch, orderMailWatch },
   done,
 ) => {
   const log = logger.child({ logger: 'Health' });
@@ -43,7 +45,8 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
   const limit = app.createRateLimit(HEALTH_LIMIT);
   const storage = createStorageCheck({
     directories: config.storageDirs,
-    probe: probeWritable,
+    probe: ({ key, path }) =>
+      probeWritable(path, { log: { logger: log, label: key } }),
     fix: storageFix,
     identity: async () => {
       // The marker against the id claimed (and, in production, paired) at
@@ -59,7 +62,10 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
     '/health/live',
     { config: { public: true } },
     async (_request, reply) =>
-      reply.header('Cache-Control', 'no-store').send({ status: 'up' }),
+      reply
+        .header('Cache-Control', 'no-store')
+        .header(LIVE_HEADER, LIVE_VALUE)
+        .send({ status: 'up' }),
   );
 
   const ready = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -70,6 +76,7 @@ export const healthRoutes: FastifyPluginCallback<WebOptions> = (
       cron_jobs: checkJobs(jobs.stuck()),
       cutout_queue: checkCutoutQueue(cutouts.state),
       trusted_proxies: checkTrustedProxies(proxyWatch.peer),
+      order_mail_owner: checkOrderMailOwner(orderMailWatch.missing),
     });
     return reply
       .status(body.status === 'up' ? 200 : 503)

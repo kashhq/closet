@@ -27,7 +27,7 @@ export interface DecodedHeic {
 
 /** An upload with more pixels than Photos accepts, whatever its format. */
 export function imageTooLarge(): HttpError {
-  return new HttpError(400, 'Image too large');
+  return new HttpError(400, t('refusal.upload.tooLarge'));
 }
 
 /**
@@ -105,7 +105,7 @@ export async function decodeHeic(
 async function readHeic(stream: Readable, maxBytes: number): Promise<Buffer> {
   const buffer = await readUpTo(stream, maxBytes);
   if (!buffer) {
-    throw new HttpError(413, `HEIC uploads are limited to ${maxBytes} bytes`);
+    throw new HttpError(413, t('refusal.upload.heicTooLarge', { maxBytes }));
   }
   return buffer;
 }

@@ -6,16 +6,14 @@ import {
   type Occasion,
   OCCASIONS,
 } from '../../wardrobe/occasions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
-import { BackLink, EmptyState, SheetBackdrop } from '../layout/parts';
+import { type PageLayout, PageShell } from '../layout/page-shell';
+import { BackLink, EmptyState } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import {
   DestinationFields,
   destinationQuery,
@@ -42,6 +40,8 @@ import {
   type StylingState,
   stylingUrl,
 } from './urls';
+import { FIELD_GRID } from '../layout/columns';
+import { closesMenu, needsNetwork, pageModule } from '../page-contract';
 
 /**
  * GET /styling (#42; docs/plans/2026-09-26-redesign.md, "Styling"): the
@@ -110,15 +110,9 @@ export interface SaveDraft {
   scheduleOccasion?: Occasion;
 }
 
-const ALL_GARMENTS_KEY = 'gallery.ALL_GARMENTS' satisfies StringKey;
+const ALL_GARMENTS_KEY = 'ALL_GARMENTS' satisfies StringKey;
 const SAVE_CHANGES_KEY = 'styling.SAVE_CHANGES' satisfies StringKey;
-
-// The page's own script (public/js/styling.js, through the importmap): an
-// inline module, so it runs again after a boosted navigation brings a new
-// page (a <script src> module runs once per document). A fixed string with
-// nothing interpolated.
-const STYLING_INIT = `import { initStyling } from 'styling';
-initStyling(document.getElementById('styling-rows'));`;
+const PREVIEW_KEY = 'styling.PREVIEW' satisfies StringKey;
 
 export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
   const { ctx, model } = props;
@@ -129,61 +123,68 @@ export function StylingPage(props: { ctx: ViewContext; model: StylingModel }) {
     picksOffered: model.picksOffered,
   };
   return (
-    <Layout ctx={ctx} title={t('styling.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('styling.TITLE')}
-        back={model.state.returnTo}
+    <PageShell
+      ctx={ctx}
+      name="styling"
+      bar={{
+        title: t('styling.TITLE'),
+        back: model.state.returnTo,
         // Save posts natively and lands elsewhere (the outfit, a week); on a
         // shared wardrobe nothing saves.
-        formPage={!model.shared}
-        scope={
+        formPage: !model.shared,
+        scope: (
           <ScopeMenu
             capsule={model.capsule}
             capsules={model.capsules}
             state={model.state}
           />
-        }
-      />
-      {/* pb-dock: the composer's bar is sticky in the flow (StylingAside),
-          so the page leaves only the dock's height below it. */}
-      <PageMain width="wide" class="pt-20 pb-dock lg:pb-8 flex flex-col gap-3">
-        <Header model={model} />
-        {model.rows.length > 0 ? (
-          // Two columns from lg (#468): the rows, and the aside beside them.
-          // Below lg both wrappers are `contents`, so a phone lays out the
-          // same boxes as before they existed.
-          <div class={COMPOSER_COLUMNS}>
-            <div class="contents lg:flex lg:flex-col lg:gap-3 lg:min-w-0">
-              {/* Not guarded as a whole: guarding it would dim and freeze the
-                  strips it wraps, and "choosing still works" offline
-                  (styling.OFFLINE). Every network control around it
-                  (Shuffle, picks, + Add row, the sheet's Save) carries its
-                  own data-needs-network. */}
-              <PostForm
-                id="styling-form"
-                action={STYLING_PATH}
-                allowOffline="choosing a look works offline; Save is guarded in the sheet"
-              >
-                <StateFields model={model} />
-                <StylingRows model={model} context={context} />
-              </PostForm>
-              <AddRow model={model} />
-              <script
-                type="module"
-                dangerouslySetInnerHTML={{ __html: STYLING_INIT }}
-              />
-            </div>
-            <StylingAside ctx={ctx} model={model} />
-          </div>
-        ) : (
-          <Empty model={model} />
-        )}
-      </PageMain>
-      {model.rows.length > 0 && !model.shared && <SaveSheet model={model} />}
-      <Dock ctx={ctx} />
-    </Layout>
+        ),
+      }}
+      // The strips reach the screen's edges; the header pads its own text.
+      body={{ gutter: 'bleed', gap: 3 }}
+      {...stylingLayout(ctx, model)}
+      overlays={
+        model.rows.length > 0 && !model.shared && <SaveSheet model={model} />
+      }
+    >
+      <Header model={model} />
+      {model.rows.length > 0 ? (
+        <>
+          {/* Not guarded as a whole: guarding it would dim and freeze the
+                strips it wraps, and "choosing still works" offline
+                (styling.OFFLINE). Every network control around it
+                (Shuffle, picks, + Add row, the sheet's Save) carries its
+                own data-needs-network. */}
+          <PostForm
+            id="styling-form"
+            action={STYLING_PATH}
+            allowOffline="choosing a look works offline; Save is guarded in the sheet"
+          >
+            <StateFields model={model} />
+            <StylingRows model={model} context={context} />
+          </PostForm>
+          <AddRow model={model} />
+        </>
+      ) : (
+        <Empty model={model} />
+      )}
+    </PageShell>
   );
+}
+
+/**
+ * The page's frame (#1073): `panel`, the outfit beside the rows from lg and
+ * the bar above the dock on a phone (StylingAside), once there are rows; the
+ * empty state is a `wide` single column, as there is no outfit to show.
+ */
+function stylingLayout(ctx: ViewContext, model: StylingModel): PageLayout {
+  if (model.rows.length === 0) return { width: 'wide' };
+  return {
+    layout: 'panel',
+    aside: <StylingAside ctx={ctx} model={model} />,
+    asideLabel: t(PREVIEW_KEY),
+    asideBelowLg: 'bar',
+  };
 }
 
 /**
@@ -197,7 +198,13 @@ export function StylingRows(props: {
 }) {
   const { model, context } = props;
   return (
-    <div id="styling-rows" class="flex flex-col gap-4">
+    // The page's own script (public/js/styling.js) sets up the rows on
+    // every visit and every rows answer (page-mount.ts).
+    <div
+      id="styling-rows"
+      class="flex flex-col gap-4"
+      {...pageModule('styling')}
+    >
       <PicksToggle context={context} />
       {model.notice === 'no-idea' && (
         <p class="alert alert-info alert-soft mx-4 py-2 text-sm" role="status">
@@ -227,43 +234,37 @@ export function StylingRows(props: {
   );
 }
 
-/** The composer's frame from lg: the rows' column, then the aside's fixed one. */
-const COMPOSER_COLUMNS =
-  'contents lg:grid lg:grid-cols-[1fr_20rem] lg:gap-6 lg:pr-4';
-
 /**
  * The outfit as it stands and the way to keep it: the preview and the fit
- * line, then Shuffle and Save. On a phone (#664) it is the bar above the
- * dock, `sticky`, not fixed: in the flow after the rows and "Add row", it
- * rides on the dock while they scroll and lands below the last one at their
- * end, so it never covers a row whatever its height (the fit's chips wrap,
- * the preview opens). z-10: over the rows (a strip's step buttons are z-10
- * and come first), under "Add row"'s z-20 menu. From lg (#468) it is the
- * column beside the rows, sticky under the app bar. In DOM order after the
- * rows, so Tab reaches Shuffle and Save last on both.
+ * line, then Shuffle and Save, the panel's aside (`#styling-aside`,
+ * `asideBelowLg: 'bar'`). On a phone (#664) it is the bar above the dock,
+ * sticky in the flow after the rows and "Add row": it rides on the dock
+ * while they scroll and lands below the last one at their end, so it never
+ * covers a row whatever its height (the fit's chips wrap, the preview
+ * opens). Over the rows (a strip's step buttons are z-10 and come first),
+ * under "Add row"'s z-20 menu. From lg (#468) it is the column beside the
+ * rows, sticky under the app bar; there as on the phone the preview gives
+ * way (`min-h-0`, scrolling inside) before the fit line and the buttons
+ * leave the window. In DOM order after the rows, so Tab reaches Shuffle and
+ * Save last on both. `group/bar` (a box-less wrapper inside the aside's
+ * flex column) is what Shuffle and Save read the preview's state from.
  */
 function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
   const { model } = props;
   return (
-    <div
-      data-styling-bar=""
-      class="group/bar sticky bottom-dock z-10 flex max-h-[calc(100dvh-var(--app-bar-h)-var(--spacing-dock))] flex-col border-t border-base-300 bg-base-100 lg:top-20 lg:max-h-none lg:bottom-auto lg:z-auto lg:gap-4 lg:self-start lg:border-0 lg:bg-transparent"
-    >
+    <div class="group/bar contents">
       {/* A tap opens the strip into the whole outfit (CSS off `open`, the
           PREVIEW_* classes). The open panel scrolls inside the space between
           the app bar (`--app-bar-h`) and the dock, so a tall outfit never
-          slides under either. From lg the outfit is always whole (every
-          `group-open:` class has its `lg:` twin, so `open` is never touched
-          there); styling.js takes the summary out of the tab order
-          (`syncPreviewToggle`). The summary is named by its sr-only text, as
-          the preview inside is aria-hidden (each strip says its choice). The
-          fit line stays outside it, so it is read on its own. */}
-      <details
-        class="group min-h-0 overflow-y-auto lg:overflow-visible"
-        data-preview-toggle=""
-      >
-        <summary class="relative flex cursor-pointer list-none flex-col px-4 pt-2 lg:cursor-auto lg:p-0 [&::-webkit-details-marker]:hidden">
-          <span class="sr-only">{t('styling.PREVIEW')}</span>
+          slides under either. From lg the outfit is always whole (the
+          `preview-whole:` variant, main.css, so `open` is never touched
+          there); styling.js makes the summary inert (`syncPreviewToggle`).
+          The summary is named by its sr-only text, as the preview inside is
+          aria-hidden (each strip says its choice). The fit line stays
+          outside it, so it is read on its own. */}
+      <details class="group min-h-0 overflow-y-auto" data-preview-toggle="">
+        <summary class="tap-row relative flex cursor-pointer list-none flex-col px-4 pt-2 [&::-webkit-details-marker]:hidden">
+          <span class="sr-only">{t(PREVIEW_KEY)}</span>
           <StylingPreview rows={model.rows} />
           <span
             class="absolute right-4 top-4 text-muted group-open:rotate-180 lg:hidden"
@@ -274,11 +275,11 @@ function StylingAside(props: { ctx: ViewContext; model: StylingModel }) {
         </summary>
       </details>
       {props.ctx.weatherEnabled && !model.shared && (
-        <div class="px-4 pt-1 lg:p-0">
+        <div class="px-4 pt-1">
           <StylingFit />
         </div>
       )}
-      <ActionBar model={model} />
+      <StylingActions model={model} />
     </div>
   );
 }
@@ -315,7 +316,7 @@ export function StylingFit(props: { oob?: boolean }) {
         hx-swap="innerHTML"
         hx-indicator="#styling-fit-line"
         aria-live="polite"
-        data-needs-network=""
+        {...needsNetwork()}
       ></div>
       <p class="text-xs text-muted" data-offline-note="">
         {t('styling.FIT_OFFLINE')}
@@ -353,21 +354,19 @@ const emphasis = (primary: boolean) =>
  * The preview's two shapes, from one markup (#664): the phone's closed bar
  * draws it as a strip, every piece in one line top to toe (a long outfit
  * scrolls inside it); open, and always from lg, it is the whole outfit
- * stacked (#468). Each class pair below is that shape, spelled twice
- * because `group-open:` (the bar's <details>) and `lg:` are separate
- * variants; they agree, so neither wins over the other.
+ * stacked (#468): the `preview-whole:` variant (main.css), one class per
+ * declaration for both.
  */
 const PREVIEW_FRAME =
-  'flex min-w-0 items-center gap-1 overflow-x-auto pr-8 group-open:flex-col group-open:items-stretch group-open:gap-2 group-open:overflow-visible group-open:rounded-box group-open:bg-base-200 group-open:p-4 lg:flex-col lg:items-stretch lg:gap-2 lg:overflow-visible lg:rounded-box lg:bg-base-200 lg:p-4';
+  'flex min-w-0 items-center gap-1 overflow-x-auto pr-8 preview-whole:flex-col preview-whole:items-stretch preview-whole:gap-2 preview-whole:overflow-visible preview-whole:rounded-box preview-whole:bg-base-200 preview-whole:p-4';
 const PREVIEW_HEADING =
-  'hidden text-xs font-semibold uppercase tracking-wide text-muted group-open:block lg:block';
+  'hidden text-xs font-semibold uppercase tracking-wide text-muted preview-whole:block';
 const PREVIEW_WORN =
-  'flex items-center gap-1 group-open:flex-col group-open:gap-2 lg:flex-col lg:gap-2';
-const PREVIEW_WORN_SLOT =
-  'size-12 group-open:h-24 group-open:w-full lg:h-24 lg:w-full';
+  'flex items-center gap-1 preview-whole:flex-col preview-whole:gap-2';
+const PREVIEW_WORN_SLOT = 'size-12 preview-whole:h-24 preview-whole:w-full';
 const PREVIEW_ALONG =
-  'flex gap-1 group-open:flex-wrap group-open:justify-center group-open:gap-2 lg:flex-wrap lg:justify-center lg:gap-2';
-const PREVIEW_ALONG_SLOT = 'size-10 group-open:size-16 lg:size-16';
+  'flex gap-1 preview-whole:flex-wrap preview-whole:justify-center preview-whole:gap-2';
+const PREVIEW_ALONG_SLOT = 'size-10 preview-whole:size-16';
 
 /**
  * The outfit as it stands (#468), top to toe: a slot per row in row order
@@ -395,7 +394,7 @@ export function StylingPreview(props: {
       class={PREVIEW_FRAME}
       aria-hidden="true"
     >
-      <p class={PREVIEW_HEADING}>{t('styling.PREVIEW')}</p>
+      <p class={PREVIEW_HEADING}>{t(PREVIEW_KEY)}</p>
       {/* Shown only while no slot holds a garment (the bare page, #665): CSS
           off `data-preview-garment`, the one chosen-state attribute the
           server draws, a rows answer redraws and styling.js keeps, so it
@@ -560,7 +559,7 @@ function PicksToggle({ context }: { context: RowContext }) {
         hx-target="#styling-rows"
         hx-swap="outerHTML"
         hx-push-url={stylingUrl({ ...state, picks: !on })}
-        data-needs-network=""
+        {...needsNetwork()}
         data-styling-picks={on ? 'on' : 'off'}
       >
         {on && <span aria-hidden="true">✓</span>}
@@ -666,8 +665,8 @@ function AddRow({ model }: { model: StylingModel }) {
               hx-include="#styling-form"
               hx-target="#styling-rows"
               hx-swap="outerHTML"
-              data-needs-network=""
-              onclick="this.closest('details').open = false"
+              {...needsNetwork()}
+              {...closesMenu()}
             >
               {roleLabel(role)}
             </button>
@@ -680,13 +679,13 @@ function AddRow({ model }: { model: StylingModel }) {
 
 /**
  * Shuffle, which leads while the preview holds no garment, then Save
- * (the sheet), which takes over once it does (the `group/bar` classes), or over a shared wardrobe the reason there
- * is no Save: in a line at the foot of the phone's bar (StylingAside), and
- * from lg under the preview, its buttons stacked full width.
+ * (the sheet), which takes over once it does (the `group/bar` classes), or
+ * over a shared wardrobe the reason there is no Save: one line at the foot
+ * of the aside at both sizes (StylingAside), Save taking the rest of it.
  */
-function ActionBar({ model }: { model: StylingModel }) {
+function StylingActions({ model }: { model: StylingModel }) {
   return (
-    <div class="flex w-full items-center gap-2 px-4 py-2 max-w-page-narrow mx-auto lg:flex-col lg:items-stretch lg:p-0 lg:max-w-none">
+    <div class="flex w-full items-center gap-2 px-4 py-2 max-w-page-narrow mx-auto">
       <button
         type="button"
         class="btn btn-primary group-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
@@ -694,7 +693,7 @@ function ActionBar({ model }: { model: StylingModel }) {
         hx-include="#styling-form"
         hx-target="#styling-rows"
         hx-swap="outerHTML"
-        data-needs-network=""
+        {...needsNetwork()}
         data-styling-shuffle=""
       >
         ⤮ {t('gallery.SHUFFLE')}
@@ -704,8 +703,8 @@ function ActionBar({ model }: { model: StylingModel }) {
       ) : (
         <button
           type="button"
-          class="btn btn-primary flex-1 lg:flex-none group-not-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
-          onclick="document.getElementById('styling-save').showModal()"
+          class="btn btn-primary flex-1 group-not-has-[[data-preview-garment]:not([data-preview-garment=''])]/bar:btn-outline"
+          {...sheetOpener(SAVE_SHEET_ID)}
         >
           {t(model.outfit ? SAVE_CHANGES_KEY : 'SAVE')}
         </button>
@@ -723,6 +722,8 @@ function saveLabel(model: StylingModel): string {
     : destinationPickLabel(destination);
 }
 
+const SAVE_SHEET_ID = 'styling-save';
+
 /**
  * The Save sheet: the name (the outfit's own when changing one; blank names
  * it for its garments), then where it goes. With `?for=` that is decided
@@ -732,58 +733,51 @@ function saveLabel(model: StylingModel): string {
 function SaveSheet({ model }: { model: StylingModel }) {
   const { destination } = model;
   return (
-    <dialog
-      id="styling-save"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="styling-save-title"
+    <Sheet
+      id={SAVE_SHEET_ID}
+      kind="choice"
+      labelledBy="styling-save-title"
+      gap={3}
+      dismiss="cancel"
     >
-      <div class="modal-box flex flex-col gap-3 pb-8">
-        <h2 id="styling-save-title" class="font-bold text-lg">
-          {t(model.outfit ? SAVE_CHANGES_KEY : 'styling.SAVE_TITLE')}
-        </h2>
-        <label class="flex flex-col gap-1">
-          <span class="label-text">{t('NAME')}</span>
-          <input
-            type="text"
-            name="name"
-            form="styling-form"
-            class="input input-bordered w-full"
-            value={model.refusal?.draft.name ?? model.outfit?.name ?? ''}
-            maxlength={OUTFIT_NAME_MAX}
-            placeholder={t('styling.NAME_PLACEHOLDER')}
-          />
-        </label>
-        {destination.kind === 'none' ? (
-          <ScheduleFields
-            day={model.refusal?.draft.scheduleDate}
-            occasion={model.refusal?.draft.scheduleOccasion}
-          />
-        ) : (
-          <p class="text-sm" data-styling-save-for="">
-            {destinationSummary(model, destination)}
-          </p>
-        )}
-        <div class="modal-action mt-2">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-          <button
-            type="submit"
-            form="styling-form"
-            class="btn btn-primary"
-            data-needs-network=""
-            data-styling-save=""
-          >
-            {saveLabel(model)}
-          </button>
-        </div>
+      <h2 id="styling-save-title" class="font-bold text-lg">
+        {t(model.outfit ? SAVE_CHANGES_KEY : 'styling.SAVE_TITLE')}
+      </h2>
+      <label class="flex flex-col gap-1">
+        <span class="label-text">{t('NAME')}</span>
+        <input
+          type="text"
+          name="name"
+          form="styling-form"
+          class="input input-bordered w-full"
+          value={model.refusal?.draft.name ?? model.outfit?.name ?? ''}
+          maxlength={OUTFIT_NAME_MAX}
+          placeholder={t('styling.NAME_PLACEHOLDER')}
+        />
+      </label>
+      {destination.kind === 'none' ? (
+        <ScheduleFields
+          day={model.refusal?.draft.scheduleDate}
+          occasion={model.refusal?.draft.scheduleOccasion}
+        />
+      ) : (
+        <p class="text-sm" data-styling-save-for="">
+          {destinationSummary(model, destination)}
+        </p>
+      )}
+      <div class="modal-action mt-2">
+        <SheetCancel />
+        <button
+          type="submit"
+          form="styling-form"
+          class="btn btn-primary"
+          {...needsNetwork()}
+          data-styling-save=""
+        >
+          {saveLabel(model)}
+        </button>
       </div>
-      <SheetBackdrop label={t('CANCEL')} />
-    </dialog>
+    </Sheet>
   );
 }
 
@@ -814,7 +808,7 @@ function destinationSummary(
 function ScheduleFields(props: { day?: IsoDate; occasion?: Occasion }) {
   const occasion = props.occasion ?? DEFAULT_OCCASION;
   return (
-    <div class="grid grid-cols-2 gap-3">
+    <div class={FIELD_GRID}>
       <label class="flex flex-col gap-1">
         <span class="label-text">{t('ADD_TO_CALENDAR')}</span>
         <input

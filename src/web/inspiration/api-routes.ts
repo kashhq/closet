@@ -10,13 +10,17 @@ import {
 import type { ApiOptions } from '../api/plugin';
 import { idCursor, readIdCursor } from '../api/resource';
 import { HttpError } from '../errors';
+import { t } from '../i18n';
 import { servePrivatePhoto } from '../files/private-photo';
 import { OutfitPicked, toOutfitPicked } from '../gallery/idea-resource';
-import { t } from '../i18n';
 import { enforceLimit, LINK_IMPORT_LIMIT } from '../security/rate-limit';
 import { actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
-import { LinkImportError, REFUSALS } from '../wardrobe/link-import/import';
+import {
+  LinkImportError,
+  REFUSALS,
+  reasonLedMessage,
+} from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX, linkIn } from '../wardrobe/link-import/link-text';
 import {
   Look,
@@ -32,7 +36,6 @@ import {
   LookRecreationResource,
   LookTextInput,
   LookUpload,
-  LOOK_PAGE_SIZE,
   PhotoReplaced,
   PieceFound,
   PieceParams,
@@ -45,19 +48,21 @@ import {
   toLookRecreation,
   toWrittenPiece,
 } from './look-resource';
-import { pieceKindValue } from './piece-input';
 import {
-  addInspirationPiece,
-  addPieceToWishlist,
-  deleteInspirationPiece,
+  addLookPiece,
+  changeLookPiece,
+  editLookText,
+  findLookPiece,
+  removeLookPiece,
+  saveLookAsOutfit,
+  setLookPieces,
+} from './look-actions';
+import {
   findInspiration,
   isOwnInspirationPhoto,
   listInspirations,
-  setInspirationPieces,
-  updateInspirationPiece,
-  updateInspirationText,
 } from './queries';
-import { saveRecreation } from './recreate-writes';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { recreateOwnLook } from './recreation';
 import { SHARE_PHOTO_MAX_BYTES } from './share-target';
 import {
@@ -117,17 +122,18 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     },
     async (request) => {
       const { cursor, limit = LOOK_PAGE_SIZE } = request.query;
-      // One more than the page: whether another follows.
-      const looks = await listInspirations(db, actorOf(request).userId, {
-        before: cursor === undefined ? undefined : readIdCursor(cursor),
-        limit: limit + 1,
-      });
-      const page = looks.slice(0, limit);
-      const more = looks.length > limit;
+      const { looks, next } = await listInspirations(
+        db,
+        actorOf(request).userId,
+        {
+          before: cursor === undefined ? undefined : readIdCursor(cursor),
+          limit,
+        },
+      );
       return {
-        data: page.map(toLookListItem),
+        data: looks.map(toLookListItem),
         pagination: {
-          ...(more && { nextCursor: idCursor(page[page.length - 1].id) }),
+          ...(next !== null && { nextCursor: idCursor(next) }),
           limit,
         },
       };
@@ -247,22 +253,18 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { id } = request.params;
       const { title, note } = request.body;
       if (title === undefined && note === undefined) {
-        const message = 'Send a title, a note or both';
+        const message = t('refusal.inspiration.titleOrNote');
         throw new HttpError(400, message, {
           validation: [{ path: 'body', message }],
         });
       }
-      await updateInspirationText(db, id, userId, {
+      await editLookText({ db, logger }, actorOf(request), id, {
         ...(title !== undefined && { title: text(title) }),
         ...(note !== undefined && { note: text(note) }),
       });
-      logger.info(
-        `Inspiration ${id} ${[title !== undefined && 'title', note !== undefined && 'note'].filter(Boolean).join(' and ')} saved by user ${userId}${via}`,
-      );
       return reply.status(204).send(null);
     },
   );
@@ -342,12 +344,13 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { id } = request.params;
       const piece = readLookPiece(request.body, 'body');
-      const position = await addInspirationPiece(db, id, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) added by user ${userId}${via}`,
+      const position = await addLookPiece(
+        { db, logger },
+        actorOf(request),
+        id,
+        piece,
       );
       return reply.status(201).send(toWrittenPiece(position, piece));
     },
@@ -368,16 +371,11 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { id } = request.params;
       const pieces = request.body.pieces.map((piece, index) =>
         readLookPiece(piece, `body/pieces/${index}`),
       );
-      const set = await setInspirationPieces(db, id, userId, pieces);
-      logger.info(
-        `Inspiration ${id} pieces set by user ${userId}${via}: ${set.kept} kept, ${set.removed} removed, ${set.added} added`,
-      );
-      return set;
+      return setLookPieces({ db, logger }, actorOf(request), id, pieces);
     },
   );
 
@@ -396,12 +394,14 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { id, position } = request.params;
       const piece = readLookPiece(request.body, 'body');
-      await updateInspirationPiece(db, id, position, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) saved by user ${userId}${via}`,
+      await changeLookPiece(
+        { db, logger },
+        actorOf(request),
+        id,
+        position,
+        piece,
       );
       return toWrittenPiece(position, piece);
     },
@@ -421,12 +421,8 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { id, position } = request.params;
-      await deleteInspirationPiece(db, id, position, userId);
-      logger.info(
-        `Inspiration ${id} piece ${position} removed by user ${userId}${via}`,
-      );
+      await removeLookPiece({ db, logger }, actorOf(request), id, position);
       return reply.status(204).send(null);
     },
   );
@@ -470,11 +466,10 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { id } = request.params;
-      const saved = await saveRecreation(
-        db,
-        userId,
+      const saved = await saveLookAsOutfit(
+        { db, logger },
+        actorOf(request),
         id,
         request.body.choices.map(({ position, garmentId }) => ({
           position,
@@ -482,11 +477,6 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         })),
       );
       const { outfit } = saved;
-      logger.info(
-        outfit.alreadySaved
-          ? `Inspiration ${id} recreated by user ${userId}${via}: its ${saved.garments} garment(s) are already outfit ${outfit.id}, nothing created`
-          : `Inspiration ${id} saved as outfit ${outfit.id} by user ${userId}${via} with ${saved.garments} garment(s)`,
-      );
       if (outfit.alreadySaved) return toOutfitPicked(outfit);
       return reply
         .status(201)
@@ -509,13 +499,12 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { id, position } = request.params;
-      const found = await addPieceToWishlist(db, userId, id, position);
-      logger.info(
-        found.created
-          ? `Inspiration ${id} piece ${position} added to the wishlist of user ${userId}${via} as garment ${found.garmentId}`
-          : `Inspiration ${id} piece ${position} already on the wishlist of user ${userId}${via} as garment ${found.garmentId}, nothing created`,
+      const found = await findLookPiece(
+        { db, logger },
+        actorOf(request),
+        id,
+        position,
       );
       if (!found.created) return found;
       return reply
@@ -562,7 +551,7 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
 
 /** A link the paste never fetches: the 400 naming the field, its reason leading the detail. */
 function refusedLink(reason: keyof typeof REFUSALS): HttpError {
-  const message = `${reason}: ${t(REFUSALS[reason].message)}`;
+  const message = reasonLedMessage(reason);
   return new HttpError(REFUSALS[reason].status, message, {
     validation: [{ path: 'body/url', message }],
   });

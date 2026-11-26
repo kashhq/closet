@@ -13,9 +13,15 @@ import { addDays, type IsoDate } from '../../src/calendar-date';
 import {
   availableGarment,
   dirtyCopiesSql,
+  markWashed,
   wearsSinceWashSql,
 } from '../../src/web/wears/queries';
-import { WASH_CASES, washCaseRows } from '../support/wash-cases';
+import {
+  WASH_CASES,
+  WASH_MOVE_CASES,
+  washCaseRows,
+  washMoveRows,
+} from '../support/wash-cases';
 import { t as text } from '../../src/web/i18n';
 import { createGarment } from './garments';
 import {
@@ -42,6 +48,10 @@ import {
  * TypeScript, agreeing. The owner's own records throughout: a grantee sees
  * none of it (the refusals are in authorization-wardrobe.spec.ts).
  */
+
+/** The wear line's day, which the page's script words (src/web/day-time.tsx). */
+const lastWornOn = (day: string) =>
+  `last worn <time datetime="${day}" data-day-label="relative">`;
 
 const form = (fields: Record<string, string | string[]>) => {
   const body = new URLSearchParams();
@@ -209,12 +219,13 @@ describe('wears and washes', () => {
       expect(hasText((await garmentPage(other)).body, 'Not worn yet')).toBe(
         true,
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Calendar entry ${entry} marked worn by user \\d+ \\(2 wears logged\\)$`,
-          ),
-        ),
+      expect(t.logs.ops('calendar.entry.worn')).toContainEqual(
+        expect.objectContaining({
+          entryId: entry,
+          worn: true,
+          changed: true,
+          wears: 2,
+        }),
       );
     });
 
@@ -259,7 +270,8 @@ describe('wears and washes', () => {
       expect(await wearsOf(tee)).toHaveLength(2);
       const page = await garmentPage(tee);
       expect(hasText(page.body, 'Worn once')).toBe(true);
-      expect(hasText(page.body, 'last worn yesterday')).toBe(true);
+      // Worded by the page's script (src/page-day.ts, #708).
+      expect(page.body).toContain(lastWornOn(daysAgo(1)));
     });
 
     // #13: several outfits a day, each for an occasion. Wears still count
@@ -335,7 +347,7 @@ describe('wears and washes', () => {
       await markWorn(await schedule(outfit, daysAgo(4)));
       const before = unescapeHtml((await garmentPage(tee)).body);
       expect(hasText(before, 'Worn 2 times')).toBe(true);
-      expect(hasText(before, 'last worn 4 days ago')).toBe(true);
+      expect(before).toContain(lastWornOn(daysAgo(4)));
 
       await deleteOutfit(outfit);
 
@@ -345,13 +357,9 @@ describe('wears and washes', () => {
       ]);
       const after = unescapeHtml((await garmentPage(tee)).body);
       expect(hasText(after, 'Worn 2 times')).toBe(true);
-      expect(hasText(after, 'last worn 4 days ago')).toBe(true);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Outfit ${outfit} deleted by user \\d+ \\(2 wears kept as day-level wears\\)$`,
-          ),
-        ),
+      expect(after).toContain(lastWornOn(daysAgo(4)));
+      expect(t.logs.ops('outfit.deleted')).toContainEqual(
+        expect.objectContaining({ outfitId: outfit, wearsKept: 2 }),
       );
     });
 
@@ -430,9 +438,12 @@ describe('wears and washes', () => {
     it('says a worn calendar entry today wore it, instead of offering a second wear', async () => {
       const tee = await newGarment('Entry today tee', 'tops');
       await markWorn(await schedule(await newOutfit('Today', [tee]), today()));
+      // The page names the day and how (#708): its script shows the
+      // calendar's badge for Wore today on that day (wornState).
       const page = await garmentPage(tee);
-      expect(hasText(page.body, 'Worn today (calendar)')).toBe(true);
-      expect(page.body).not.toContain(`/wardrobe/${tee}/wear`);
+      expect(page.body).toContain(
+        `data-worn-on="${today()}" data-worn-by="entry"`,
+      );
     });
   });
 
@@ -532,7 +543,11 @@ describe('wears and washes', () => {
       // Today's wear was before the wash: nothing since.
       expect(hasText(page, 'Worn 4 times · 0 since washed')).toBe(true);
       expect(hasText(page, 'Needs a wash')).toBe(false);
-      expect(hasText(page, 'Last washed today')).toBe(true);
+      // A live answer names its day for the page's script (#708).
+      expect(page).toContain(`data-as-of-day="${today()}"`);
+      expect(page).toContain(
+        `Last washed <time datetime="${today()}" data-day-label="relative">`,
+      );
     });
 
     it('counts copies: three tees are three wears, "1 of 3 need a wash" until the last', async () => {
@@ -607,7 +622,7 @@ describe('wears and washes', () => {
 
     it('prompts the owner from the wardrobe when something needs a wash', async () => {
       const grid = await t.inject({ method: 'GET', url: '/wardrobe' });
-      expect(grid.body).toMatch(/\d+ garments need a wash/);
+      expect(grid.body).toMatch(/\d+ to wash/);
       expect(grid.body).toContain('href="/laundry"');
     });
 
@@ -903,6 +918,35 @@ describe('wears and washes', () => {
       const expected = WASH_CASES.map((c) => [c.name, c.count]);
       expect(sqlCounts).toEqual(expected);
       expect(pure).toEqual(expected);
+    });
+
+    // washMoves' SQL twin, markWashed's update, over the pure rule's table (#793).
+    it('moves a wash by the same rule in SQL as in TypeScript, on every case', async () => {
+      const instant = (ms: number | null) =>
+        ms === null ? null : new Date(ms);
+      const answers: [string, boolean][] = [];
+      for (const c of WASH_MOVE_CASES) {
+        const id = await createGarment(t, { name: c.name, category: 'tops' });
+        const { stored, next } = washMoveRows(c, daysAgo(2), t.timeZone);
+        await asFixture(t.db, (tx) =>
+          tx
+            .update(garment)
+            .set({
+              lastWashedOn: stored?.day ?? null,
+              washedAt: instant(stored?.washedAt ?? null),
+            })
+            .where(eq(garment.id, id)),
+        );
+        const { washed } = await markWashed(
+          t.db,
+          t.owner.id,
+          [id],
+          next.day,
+          instant(next.washedAt),
+        );
+        answers.push([c.name, washed[0].changed]);
+      }
+      expect(answers).toEqual(WASH_MOVE_CASES.map((c) => [c.name, c.moves]));
     });
   });
 

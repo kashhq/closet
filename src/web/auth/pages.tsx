@@ -1,46 +1,48 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import { todayIn } from '../../calendar-date';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { ProfileSection } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
 import { wardrobeExportPath } from '../page-cache';
-import { STYLE_PROFILE_PATH } from '../style/urls';
-import {
-  PUSH_SETTINGS_ID,
-  PushEndpointField,
-  PushSettings,
-  PushSignedOut,
-} from '../push/settings';
+import { PushEndpointField, PushSignedOut } from '../push/settings';
+import { PUSH_SETTINGS_ID } from '../push/urls';
 import {
   PermissionBadge,
-  SharingSection,
   type SharingModel,
+  sharingSummary,
 } from '../sharing/pages';
 import type { ShareView } from '../sharing/queries';
 import { SHARING_SECTION_ID } from '../sharing/urls';
-import type { BodyMeasurements, BrandSize } from '../sizes/queries';
 import { SIZES_SECTION_ID } from '../sizes/urls';
-import { SizesSection } from '../sizes/views';
 import type { ViewContext } from '../view-context';
 import type { TemplateSlot } from '../../wardrobe/week';
-import type { WeatherSettings as Settings } from '../weather/queries';
-import { WEATHER_SETTINGS_ID, WeatherSettings } from '../weather/settings';
+import {
+  NO_WEATHER_SETTINGS,
+  type WeatherSettings as Settings,
+} from '../weather/queries';
+import { weatherSummary } from '../weather/settings';
+import { WEATHER_SETTINGS_ID } from '../weather/urls';
 import { WEEK_SETTINGS_ID } from '../week-plan/urls';
-import { WeekTemplateSettings } from '../week-plan/views';
+import { weekTemplateSummary } from '../week-plan/views';
 import { AccountShell } from './account-shell';
+import { PostForm } from '../form';
 import {
   ErrorAlert,
   Field,
   Fieldset,
-  PostForm,
   SubmitButton,
   UsernameTwin,
 } from './form';
 import { SignOutForm } from './logout';
+import { type SettingsRowId, settingsRows } from './settings-rows';
 import { RETURN_TO_PARAM } from './return-to';
-import type { TokenListing } from './personal-tokens';
+import {
+  DEVICE_IDLE_DAYS,
+  idleExpired,
+  type TokenListing,
+} from './personal-tokens';
 import {
   ACCOUNT_SECTION_ID,
   AGENT_ACCESS_SECTION_ID,
@@ -48,9 +50,9 @@ import {
   DEVICES_SECTION_ID,
   EXPORT_SECTION_ID,
   profileSection,
+  SIGN_OUT_EVERYWHERE_PATH,
   SIGN_OUT_SECTION_ID,
   STYLE_SECTION_ID,
-  TOKENS_PATH,
 } from './urls';
 import type {
   ChangePasswordBody,
@@ -58,6 +60,7 @@ import type {
   RegisterBody,
   UpdateEmailBody,
 } from './validation';
+import { Icon } from '../layout/icon';
 
 /** The pages under /auth. Each takes the page context and what to show. */
 
@@ -66,6 +69,10 @@ const ACCOUNT_SECTION_PATH = profileSection(ACCOUNT_SECTION_ID);
 
 /** "Sign out": the logout page's title, Profile's section and its index entry. */
 const SIGN_OUT_KEY = 'profile.SIGN_OUT' satisfies StringKey;
+
+/** Sign out everywhere: its page's title, legend and button, Profile's link. */
+const SIGN_OUT_EVERYWHERE_KEY =
+  'profile.SIGN_OUT_EVERYWHERE' satisfies StringKey;
 
 /**
  * After a new password: what it ended, and who still has the wardrobe. The
@@ -143,7 +150,9 @@ export function LoginPage(props: {
 /** The sign-in forms' card: the frame their `bare` Fieldset leaves to it. */
 function SignedOutFrame(props: { children: Child }) {
   return (
-    <div class="card card-border bg-base-200 w-xs p-4">{props.children}</div>
+    <Card variant="inset" class="w-full max-w-xs p-4">
+      {props.children}
+    </Card>
   );
 }
 
@@ -241,119 +250,143 @@ export function RegisterPage(
 export interface ProfileProps {
   ctx: ViewContext;
   passwordChanged: boolean;
-  /** The week template section (#16): the stored slots, and whether it was just saved. */
-  week: { slots: readonly TemplateSlot[]; saved: boolean };
-  /** The weather section's state; absent with WEATHER_ENABLED=false. */
-  weather?: { settings: Settings; timeZone: string; now: Date };
-  /** The Sharing section: this user's shares and invites. */
-  sharing: SharingModel;
-  /** Agent access: the `mcp` tokens in force. */
+  /** Sign out everywhere's redirect (#700). */
+  signedOutEverywhere: boolean;
+  /** The Sharing row's summary and the new password's notice: this user's shares. */
+  sharing: Pick<SharingModel, 'outbound' | 'inbound' | 'pending'>;
+  /** The Your week row's summary: the stored template (#16). */
+  week: readonly TemplateSlot[];
+  /** The Weather row's summary; absent with WEATHER_ENABLED=false (no row). */
+  weather?: Settings;
+  /** Agent access's summary: the `mcp` tokens in force. */
   tokens: TokenListing[];
-  /**
-   * Devices (#189): the `device` tokens in force, the household's timezone
-   * for their days, and the revoke redirect's notice.
-   */
-  devices: {
-    tokens: TokenListing[];
-    timeZone: string;
-    notice?: 'revoked' | 'revoke-gone';
-  };
-  /** Sizes (#24): the measurements and the brand notes. */
-  sizes: { measurements: BodyMeasurements; brands: BrandSize[] };
+  /** The Devices row's summary (#189): the native clients signed in. */
+  devices: TokenListing[];
 }
 
 /**
+ * The one-shot notices of Profile's redirects, above the index: a new
+ * password, Sign out everywhere (#700).
+ */
+function ProfileNotices(props: ProfileProps) {
+  return (
+    <>
+      {props.passwordChanged && (
+        <PasswordChangedNotice
+          shares={props.sharing.outbound.filter((share) => share.acceptedAt)}
+        />
+      )}
+      {props.signedOutEverywhere && (
+        <div role="status" class="alert alert-success">
+          <span>{t('profile.SIGNED_OUT_EVERYWHERE')}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * One setting on Profile's index: its name, what it is set to, and a
+ * chevron, the whole row a link to the setting's own page. The row carries
+ * the id the setting's section had before #728, so an old deep link
+ * (`/auth/profile#sharing`, a cached page's, a notification's) lands on it:
+ * a fragment never reaches the server, so no redirect could.
+ */
+function SettingsRow(props: {
+  id: string;
+  href: string;
+  label: string;
+  summary: string;
+}) {
+  return (
+    <li id={props.id}>
+      <a href={props.href} class="flex items-center gap-3 py-3">
+        <span class="flex flex-col flex-1 min-w-0">
+          <span class="font-medium">{props.label}</span>
+          <span class="text-sm text-muted truncate">{props.summary}</span>
+        </span>
+        <Icon
+          paths="m8.25 4.5 7.5 7.5-7.5 7.5"
+          class="size-4 shrink-0 text-muted"
+          weight="2"
+        />
+      </a>
+    </li>
+  );
+}
+
+/** What each row of `settingsRows` says its setting is set to. */
+const SETTING_SUMMARIES: Readonly<
+  Record<SettingsRowId, (props: ProfileProps) => string>
+> = {
+  [SHARING_SECTION_ID]: (props) => sharingSummary(props.sharing),
+  [PUSH_SETTINGS_ID]: () => t('profile.NOTIFICATIONS_SUMMARY'),
+  [WEATHER_SETTINGS_ID]: (props) =>
+    weatherSummary(props.weather ?? NO_WEATHER_SETTINGS),
+  [WEEK_SETTINGS_ID]: (props) => weekTemplateSummary(props.week),
+  [STYLE_SECTION_ID]: () => t('profile.STYLE_HINT'),
+  [SIZES_SECTION_ID]: () => t('profile.SIZES_SUMMARY'),
+  [AGENT_ACCESS_SECTION_ID]: (props) =>
+    props.tokens.length === 0
+      ? t('agentAccess.NONE')
+      : t('agentAccess.SUMMARY', { count: props.tokens.length }),
+  [DEVICES_SECTION_ID]: (props) =>
+    props.devices.length === 0
+      ? t('devices.NONE')
+      : t('devices.SUMMARY', { count: props.devices.length }),
+};
+
+/**
  * Profile, the avatar's page (docs/plans/2026-09-26-redesign.md, "The app
- * bar"): every setting of the signed-in user's own, in sections, in the
- * plan's order. Each section is an anchor that pages and redirects link to
- * (`/auth/profile#weather`); the jump links at the top reach them on a
- * phone. Editors too large for a section keep their own page, linked from
- * it (the style profile, agent access, the account's forms), with a back
- * arrow to their section.
+ * bar"), an index since #728: the account, then a row per setting opening
+ * its own page (each with a back arrow to its row), the export, and Sign
+ * out. No form sits above Sign out, and the whole page fits two phone
+ * screens: a setting's editor never grows here again (docs/decisions.md
+ * 2026-11-14).
  */
 export function ProfilePage(props: ProfileProps) {
   const { ctx } = props;
-  // Web Push needs the service worker, which only PWA_ENABLED serves.
-  const sections: { id: string; label: string }[] = [
-    { id: ACCOUNT_SECTION_ID, label: t('profile.ACCOUNT') },
-    { id: SHARING_SECTION_ID, label: t('WARDROBE_SHARING') },
-    ...(ctx.pwaEnabled
-      ? [{ id: PUSH_SETTINGS_ID, label: t('PUSH_HEADING') }]
-      : []),
-    ...(props.weather
-      ? [{ id: WEATHER_SETTINGS_ID, label: t('weather.SETTINGS_HEADING') }]
-      : []),
-    { id: WEEK_SETTINGS_ID, label: t('weekPlan.template.HEADING') },
-    { id: STYLE_SECTION_ID, label: t('style.TITLE') },
-    { id: SIZES_SECTION_ID, label: t('sizes.TITLE') },
-    { id: EXPORT_SECTION_ID, label: t('profile.EXPORT') },
-    { id: AGENT_ACCESS_SECTION_ID, label: t('agentAccess.TITLE') },
-    ...(props.devices.tokens.length > 0
-      ? [{ id: DEVICES_SECTION_ID, label: t('devices.TITLE') }]
-      : []),
-    { id: SIGN_OUT_SECTION_ID, label: t(SIGN_OUT_KEY) },
-  ];
   return (
-    <Layout ctx={ctx} title={t('PROFILE')}>
-      <AppBar ctx={ctx} title={t('PROFILE')} />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-4">
-        {props.passwordChanged && (
-          <PasswordChangedNotice
-            shares={props.sharing.outbound.filter((share) => share.acceptedAt)}
-          />
-        )}
-        {/* Above the sections: the last device's revoke hides its section. */}
-        {props.devices.notice && (
-          <div role="status" class="alert alert-success">
-            <span>
-              {t(
-                props.devices.notice === 'revoked'
-                  ? 'devices.REVOKED'
-                  : 'devices.ALREADY_REVOKED',
-              )}
-            </span>
-          </div>
-        )}
-        <nav
-          aria-label={t('profile.SECTIONS')}
-          class="flex gap-2 overflow-x-auto overscroll-x-contain pb-1"
-        >
-          {sections.map((section) => (
-            <a
-              href={`#${section.id}`}
-              class="btn btn-sm btn-ghost border-base-300 shrink-0"
-            >
-              {section.label}
-            </a>
+    <PageShell
+      ctx={ctx}
+      name="profile"
+      bar={{ title: t('PROFILE') }}
+      body={{ gap: 4 }}
+    >
+      <ProfileNotices {...props} />
+      <AccountSection ctx={ctx} />
+      <Card
+        as="nav"
+        variant="content"
+        class="w-full"
+        aria-label={t('profile.SETTINGS')}
+      >
+        <ul class="card-body py-1 gap-0 divide-y divide-base-300">
+          {settingsRows(ctx).map((row) => (
+            <SettingsRow
+              id={row.id}
+              href={row.href}
+              label={t(row.label)}
+              summary={SETTING_SUMMARIES[row.id](props)}
+            />
           ))}
-        </nav>
-        <AccountSection ctx={ctx} />
-        <SharingSection {...props.sharing} />
-        {ctx.pwaEnabled && <PushSettings />}
-        {props.weather && <WeatherSettings {...props.weather} />}
-        <WeekTemplateSettings {...props.week} />
-        <ProfileSection id={STYLE_SECTION_ID} heading={t('style.TITLE')}>
-          <p class="text-sm text-muted">{t('profile.STYLE_HINT')}</p>
-          <a href={STYLE_PROFILE_PATH} class="btn btn-sm self-start">
-            {t('profile.EDIT_STYLE')}
-          </a>
-        </ProfileSection>
-        <SizesSection {...props.sizes} />
-        <ExportSection />
-        <AgentAccessSection tokens={props.tokens} />
-        {props.devices.tokens.length > 0 && (
-          <DevicesSection {...props.devices} />
-        )}
-        <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
-          <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>
-          <SignOutForm />
-        </ProfileSection>
-        <a href="/about" class="link link-hover text-sm self-center">
-          {t('ABOUT_TITLE')}
+        </ul>
+      </Card>
+      <ExportSection />
+      <ProfileSection id={SIGN_OUT_SECTION_ID} heading={t(SIGN_OUT_KEY)}>
+        <p class="text-sm text-muted">{t('profile.SIGN_OUT_HINT')}</p>
+        <SignOutForm />
+        <p class="text-sm text-muted">
+          {t('profile.SIGN_OUT_EVERYWHERE_LINK_HINT')}
+        </p>
+        <a href={SIGN_OUT_EVERYWHERE_PATH} class="btn btn-sm self-start">
+          {t(SIGN_OUT_EVERYWHERE_KEY)}
         </a>
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      </ProfileSection>
+      <a href="/about" class="link link-hover text-sm self-center">
+        {t('ABOUT_TITLE')}
+      </a>
+    </PageShell>
   );
 }
 
@@ -416,69 +449,75 @@ function AccountSection({ ctx }: { ctx: ViewContext }) {
 }
 
 /**
- * Profile › Agent access: the tokens in force by name; creating and
- * revoking stay on their page (TOKENS_PATH), where a new token is shown
- * once in the answer to its password-checked form.
+ * Profile › Devices (#189; a Profile section until #728, DEVICES_PATH
+ * since): the native clients signed in, by the name they gave and their
+ * last use, each revocable here without the password (revoking only
+ * narrows access). Profile and the settings nav list it always (their rows
+ * read no data), and the page says when none is signed in: nothing on the
+ * web mints a device token. Never the token or its prefix. Its
+ * revokes land back here, so a `formPage`.
  */
-function AgentAccessSection(props: { tokens: TokenListing[] }) {
+export function DevicesPage(props: {
+  ctx: ViewContext;
+  tokens: TokenListing[];
+  timeZone: string;
+  now: Date;
+  notice?: 'revoked' | 'revoke-gone';
+}) {
+  const deviceUse = (device: TokenListing) => {
+    if (idleExpired(device, props.now)) {
+      return t('devices.IDLE_SIGNED_OUT', { days: DEVICE_IDLE_DAYS });
+    }
+    return device.lastUsedAt
+      ? t('devices.LAST_USED', {
+          day: todayIn(props.timeZone, device.lastUsedAt),
+        })
+      : t('devices.NEVER_USED');
+  };
   return (
-    <ProfileSection
-      id={AGENT_ACCESS_SECTION_ID}
-      heading={t('agentAccess.TITLE')}
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('devices.TITLE')}
+      section={DEVICES_SECTION_ID}
+      formPage
     >
+      {props.notice && (
+        <div role="status" class="alert alert-success">
+          <span>
+            {t(
+              props.notice === 'revoked'
+                ? 'devices.REVOKED'
+                : 'devices.ALREADY_REVOKED',
+            )}
+          </span>
+        </div>
+      )}
+      <p class="text-sm text-muted">
+        {t('devices.INTRO', { days: DEVICE_IDLE_DAYS })}
+      </p>
       {props.tokens.length === 0 ? (
-        <p class="text-sm text-muted">{t('agentAccess.NONE')}</p>
+        <p class="text-sm">{t('devices.NONE')}</p>
       ) : (
-        <ul class="text-sm flex flex-col gap-1">
-          {props.tokens.map((token) => (
-            <li class="flex items-center gap-2 min-w-0">
-              <span class="truncate">{token.name}</span>
-              <code class="text-xs text-muted">{token.prefix}…</code>
+        <ul class="divide-y divide-base-300">
+          {props.tokens.map((device) => (
+            <li class="py-2 flex items-center justify-between gap-2">
+              <div class="flex flex-col min-w-0">
+                <span class="truncate">{device.name}</span>
+                <span class="text-xs text-muted">{deviceUse(device)}</span>
+              </div>
+              <PostForm
+                action={`${DEVICES_PATH}/${device.id}/revoke`}
+                confirm={t('devices.REVOKE_CONFIRM', { name: device.name })}
+              >
+                <button type="submit" class="btn btn-ghost btn-sm text-error">
+                  {t('devices.REVOKE')}
+                </button>
+              </PostForm>
             </li>
           ))}
         </ul>
       )}
-      <a href={TOKENS_PATH} class="btn btn-sm self-start">
-        {t('agentAccess.MANAGE')}
-      </a>
-    </ProfileSection>
-  );
-}
-
-/**
- * Profile › Devices (#189): the native clients signed in, by the name they
- * gave and their last use, each revocable here without the password
- * (revoking only narrows access). Shown only while there is one: nothing on
- * the web mints a device token. Never the token or its prefix.
- */
-function DevicesSection(props: { tokens: TokenListing[]; timeZone: string }) {
-  const day = (instant: Date) => todayIn(props.timeZone, instant);
-  return (
-    <ProfileSection id={DEVICES_SECTION_ID} heading={t('devices.TITLE')}>
-      <p class="text-sm text-muted">{t('devices.INTRO')}</p>
-      <ul class="divide-y divide-base-300">
-        {props.tokens.map((device) => (
-          <li class="py-2 flex items-center justify-between gap-2">
-            <div class="flex flex-col min-w-0">
-              <span class="truncate">{device.name}</span>
-              <span class="text-xs text-muted">
-                {device.lastUsedAt
-                  ? t('devices.LAST_USED', { day: day(device.lastUsedAt) })
-                  : t('devices.NEVER_USED')}
-              </span>
-            </div>
-            <PostForm
-              action={`${DEVICES_PATH}/${device.id}/revoke`}
-              confirm={t('devices.REVOKE_CONFIRM', { name: device.name })}
-            >
-              <button type="submit" class="btn btn-ghost btn-sm text-error">
-                {t('devices.REVOKE')}
-              </button>
-            </PostForm>
-          </li>
-        ))}
-      </ul>
-    </ProfileSection>
+    </SettingsPage>
   );
 }
 
@@ -584,6 +623,43 @@ export function ChangePasswordPage(props: {
               other device's go with its session. */}
           {props.ctx.pwaEnabled && <PushEndpointField />}
           <SubmitButton label={t('CHANGE_PASSWORD')} />
+        </Fieldset>
+      </PostForm>
+    </AccountShell>
+  );
+}
+
+/**
+ * Sign out everywhere (#700), behind the current password (step-up rule).
+ * Not an `endsSession` form: this device stays signed in with a new cookie,
+ * so the worker keeps its session caches, as after a new password.
+ */
+export function SignOutEverywherePage(props: {
+  ctx: ViewContext;
+  wrongPassword?: boolean;
+}) {
+  return (
+    <AccountShell
+      ctx={props.ctx}
+      title={t(SIGN_OUT_EVERYWHERE_KEY)}
+      back={profileSection(SIGN_OUT_SECTION_ID)}
+    >
+      <p class="text-sm text-muted">{t('profile.SIGN_OUT_EVERYWHERE_HINT')}</p>
+      <PostForm action={SIGN_OUT_EVERYWHERE_PATH}>
+        <Fieldset legend={t(SIGN_OUT_EVERYWHERE_KEY)}>
+          <UsernameTwin email={props.ctx.user?.email} />
+          <Field
+            id="currentPassword"
+            label={t('CURRENT_PASSWORD')}
+            type="password"
+            autocomplete="current-password"
+            errors={
+              props.wrongPassword ? [t('WRONG_CURRENT_PASSWORD')] : undefined
+            }
+          />
+          {/* Keeps this device's notifications; every other device's go. */}
+          {props.ctx.pwaEnabled && <PushEndpointField />}
+          <SubmitButton label={t(SIGN_OUT_EVERYWHERE_KEY)} />
         </Fieldset>
       </PostForm>
     </AccountShell>

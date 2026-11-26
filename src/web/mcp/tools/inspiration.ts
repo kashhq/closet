@@ -7,6 +7,7 @@ import {
   INSPIRATION_PIECE_ROLES,
   PATTERNS,
 } from '../../../wardrobe/properties';
+import { LIST_LIMIT_MAX } from '../../api/resource';
 import { HttpError } from '../../errors';
 import { t } from '../../i18n';
 import {
@@ -14,17 +15,22 @@ import {
   INSPIRATION_MAX_PIECES,
   type InspirationDetail,
   listInspirations,
-  setInspirationPieces,
   wishlisted,
 } from '../../inspiration/queries';
+import { LOOK_PAGE_SIZE } from '../../inspiration/page-size';
 import { typesOfRole } from '../../inspiration/piece-input';
 import {
   type LookRecreation,
   recreateOwnLook,
 } from '../../inspiration/recreation';
+import { setLookPieces } from '../../inspiration/look-actions';
 import { addLinkedInspiration } from '../../inspiration/writes';
-import { LinkImportError, REFUSALS } from '../../wardrobe/link-import/import';
-import { defineTool, type ToolContext } from '../tool';
+import {
+  LinkImportError,
+  REFUSALS,
+  reasonLedMessage,
+} from '../../wardrobe/link-import/import';
+import { actorOf, defineTool, type ToolContext } from '../tool';
 import { rowId } from './common';
 
 /**
@@ -68,7 +74,12 @@ function lookPiece(
   if (type !== null && !typesOfRole(piece.role).includes(type)) {
     throw new HttpError(
       400,
-      `pieces[${index}].type: "${type}" is not a type of ${piece.role} (${typesOfRole(piece.role).join(', ')})`,
+      t('refusal.inspiration.pieceType', {
+        index,
+        type,
+        role: piece.role,
+        types: typesOfRole(piece.role).join(', '),
+      }),
     );
   }
   return {
@@ -144,12 +155,27 @@ export const inspirationTools = [
   defineTool({
     name: 'list_inspiration',
     title: 'List my saved looks',
-    description:
-      "Your saved looks (Outfits › Inspiration), newest first: outfits you saw and kept as a photo, a link or both, each with its title, its link, whether it has a photo and how many pieces it is tagged with. A look with no pieces is untagged: read its link's page and tag it with set_inspiration_pieces. Your own only.",
-    input: z.object({}),
+    description: `Your saved looks (Outfits › Inspiration), newest first: outfits you saw and kept as a photo, a link or both, each with its title, its link, whether it has a photo and how many pieces it is tagged with. ${LOOK_PAGE_SIZE} a page unless \`limit\` asks: pass the answer's \`next\` (null on the last page) back as \`before\` for the next. A look with no pieces is untagged: read its link's page and tag it with set_inspiration_pieces. Your own only.`,
+    input: z.object({
+      before: rowId()
+        .optional()
+        .describe("The previous page's `next`, passed back as it came."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(LIST_LIMIT_MAX)
+        .optional()
+        .describe(
+          `How many a page holds: ${LOOK_PAGE_SIZE} unless asked, at most ${LIST_LIMIT_MAX}.`,
+        ),
+    }),
     writes: false,
-    async run(_args, ctx) {
-      const looks = await listInspirations(ctx.db, ctx.userId);
+    async run({ before, limit = LOOK_PAGE_SIZE }, ctx) {
+      const { looks, next } = await listInspirations(ctx.db, ctx.userId, {
+        before,
+        limit,
+      });
       return {
         looks: looks.map((look) => ({
           id: look.id,
@@ -158,6 +184,7 @@ export const inspirationTools = [
           hasPhoto: look.photo !== null,
           pieceCount: look.pieceCount,
         })),
+        next,
       };
     },
   }),
@@ -185,10 +212,7 @@ export const inspirationTools = [
     openWorld: true,
     async run(args, ctx) {
       if (!(await ctx.allowLinkImport())) {
-        throw new HttpError(
-          429,
-          'Too many link imports: try again in a minute',
-        );
+        throw new HttpError(429, t('refusal.rateLimit.linkImport'));
       }
       let saved: Awaited<ReturnType<typeof addLinkedInspiration>>;
       try {
@@ -209,7 +233,7 @@ export const inspirationTools = [
         // reason leads, as add_garment_from_link's.
         throw new HttpError(
           REFUSALS[error.reason].status,
-          `${error.reason}: ${t(REFUSALS[error.reason].message)}`,
+          reasonLedMessage(error.reason),
         );
       }
       const look = await findInspiration(ctx.db, saved.id, ctx.userId);
@@ -229,14 +253,11 @@ export const inspirationTools = [
     idempotent: true,
     async run(args, ctx) {
       const pieces = args.pieces.map(lookPiece);
-      const set = await setInspirationPieces(
-        ctx.db,
+      await setLookPieces(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
         args.id,
-        ctx.userId,
         pieces,
-      );
-      ctx.webLogger.info(
-        `Inspiration ${args.id} pieces set by user ${ctx.userId} (MCP): ${set.kept} kept, ${set.removed} removed, ${set.added} added`,
       );
       return recreationOut(await lookRecreation(ctx, args.id));
     },

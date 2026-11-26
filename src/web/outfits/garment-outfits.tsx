@@ -34,6 +34,7 @@ export function GarmentOutfitsStrip(props: { outfits: GarmentOutfits }) {
               <OutfitCollage
                 garments={collagePieces(outfit.garments, { warn: false })}
                 size="thumb"
+                decorative
               />
               <span class="text-xs truncate">
                 {outfit.name || t('UNTITLED_OUTFIT')}

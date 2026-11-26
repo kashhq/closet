@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { captureLogs } from '../../test/support/log-capture';
 import { PROJECT_ROOT } from '../project-root';
@@ -47,7 +48,7 @@ const started = () =>
 
 const until = async (condition: () => boolean) => {
   for (let i = 0; i < 200 && !condition(); i++) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await sleep(10);
   }
   expect(condition()).toBe(true);
 };

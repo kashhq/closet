@@ -1,13 +1,18 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ASSET_VERSION_HEADER } from '../../src/static-build';
 import { PUBLIC_DIR } from '../../src/static-assets';
+import { PROBE_DIRECTORY } from '../../src/storage-probe';
+import { STORAGE_MARKER } from '../../src/web/files/storage';
 import { REPLAY_TIMEOUT_MS } from '../../src/offline-writes';
 import { createGarment, jpegPhoto, uploadPhoto } from './garments';
 import { HEALTH_LIMIT } from '../../src/web/security/rate-limit';
+import { LIVE_HEADER, LIVE_VALUE } from '../../src/live-answer';
 import {
   createTestApp,
   PWA_ENV,
@@ -19,11 +24,22 @@ import {
 /**
  * How the app shell reaches the installed PWA: cache headers on static roots,
  * the heartbeat, versioned asset URLs in the layout, and the wardrobe
- * fragment path that htmx filtering swaps into #wardrobe-main.
+ * fragment path that htmx filtering swaps into #wardrobe-body.
  */
 // What the image's build bakes in (Dockerfile ARG -> ENV): the heartbeat and
 // the asset keys name it.
 const RELEASE = '0123abc';
+
+/** A Content-Security-Policy header as directive name to its sources. */
+function cspDirectives(header: unknown): Map<string, string[]> {
+  return new Map(
+    String(header)
+      .split(';')
+      .map((directive) => directive.trim().split(/\s+/))
+      .filter(([name]) => name)
+      .map(([name, ...sources]) => [name, sources]),
+  );
+}
 
 describe('delivery (PWA_ENABLED=true)', () => {
   let t: TestApp;
@@ -47,7 +63,10 @@ describe('delivery (PWA_ENABLED=true)', () => {
     });
 
     it('serves public/ files immutable for a year', async () => {
-      const res = await t.inject({ method: 'GET', url: '/js/connectivity.js' });
+      const res = await t.inject({
+        method: 'GET',
+        url: '/js/gen/connectivity.js',
+      });
       expect(res.statusCode).toBe(200);
       expect(res.headers['cache-control']).toBe(
         'public, max-age=31536000, immutable',
@@ -97,7 +116,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
     const JAVASCRIPT = 'application/javascript; charset=utf-8';
 
     it.each([
-      ['/js/connectivity.js', 'js/connectivity.js'],
+      ['/js/gen/connectivity.js', 'js/gen/connectivity.js'],
       ['/modules/htmx.min.js', 'modules/htmx.min.js'],
       // An importmap module: a wrong type and the browser refuses it.
       ['/modules/workbox-window.prod.mjs', 'modules/workbox-window.prod.mjs'],
@@ -126,27 +145,32 @@ describe('delivery (PWA_ENABLED=true)', () => {
     it('serves gzip to a client without brotli', async () => {
       const res = await t.inject({
         method: 'GET',
-        url: '/js/connectivity.js',
+        url: '/js/gen/connectivity.js',
         headers: { 'accept-encoding': 'gzip' },
       });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-encoding']).toBe('gzip');
       expect(res.headers['content-type']).toBe(JAVASCRIPT);
       expect(res.headers['vary']).toMatch(/accept-encoding/i);
-      expect(res.rawPayload.equals(file('js/connectivity.js.gz'))).toBe(true);
+      expect(res.rawPayload.equals(file('js/gen/connectivity.js.gz'))).toBe(
+        true,
+      );
       expect(
-        gunzipSync(res.rawPayload).equals(file('js/connectivity.js')),
+        gunzipSync(res.rawPayload).equals(file('js/gen/connectivity.js')),
       ).toBe(true);
     });
 
     it('serves the file itself to a request without Accept-Encoding', async () => {
-      const res = await t.inject({ method: 'GET', url: '/js/connectivity.js' });
+      const res = await t.inject({
+        method: 'GET',
+        url: '/js/gen/connectivity.js',
+      });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-encoding']).toBeUndefined();
       expect(res.headers['content-type']).toBe(JAVASCRIPT);
       // A shared cache must not hand this copy to a client that accepts br.
       expect(res.headers['vary']).toMatch(/accept-encoding/i);
-      expect(res.rawPayload.equals(file('js/connectivity.js'))).toBe(true);
+      expect(res.rawPayload.equals(file('js/gen/connectivity.js'))).toBe(true);
     });
 
     it('still compresses pages on the fly', async () => {
@@ -187,6 +211,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
           fix: expect.any(String),
         },
         trusted_proxies: { status: 'up', required: false },
+        order_mail_owner: { status: 'up', required: false },
       },
     };
 
@@ -218,6 +243,21 @@ describe('delivery (PWA_ENABLED=true)', () => {
         expect(res.body).toBe('');
       },
     );
+
+    // A captive portal's 200 is not this server (#731): the heartbeat's
+    // verdict (src/live-answer.ts, which the route and the heartbeat share)
+    // asks for the route's own header.
+    it("marks /health/live as the server's own, as the heartbeat checks", async () => {
+      for (const method of ['HEAD', 'GET'] as const) {
+        const res = await t.inject({
+          method,
+          url: '/health/live',
+          headers: uniqueClient(),
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.headers[LIVE_HEADER.toLowerCase()]).toBe(LIVE_VALUE);
+      }
+    });
 
     it('limits /health/ready and /healthz together per address, never /health/live', async () => {
       const client = uniqueClient();
@@ -298,9 +338,13 @@ describe('delivery (PWA_ENABLED=true)', () => {
         html.match(/<meta\s+name="htmx-config"[^>]*>/g) ?? [];
       expect(metas).toHaveLength(1);
       const content = /content="([^"]+)"/.exec(metas[0])![1];
-      // No view transitions (they drop taps while they run) and a short
-      // history cache (layout.tsx says why).
+      // No view transitions (they drop taps while they run), no attribute
+      // settling and a short history cache (layout.tsx says why).
       expect(JSON.parse(unescapeHtml(content))).toEqual({
+        // No script from a swap and no eval (#672: the CSP refuses both).
+        allowEval: false,
+        allowScriptTags: false,
+        attributesToSettle: [],
         disableInheritance: true,
         historyCacheSize: 3,
         // The outbox's replay timeout bounds every htmx request (#642).
@@ -331,29 +375,61 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(csp).not.toMatch(/https?:/);
     });
 
-    it('allows no eval and no blob: scripts, workers or fetches', async () => {
+    it('allows no inline script but the importmap, no eval and no blob: scripts, workers or fetches', async () => {
       const res = await t.inject({ method: 'GET', url: '/wardrobe' });
-      const directives = new Map(
-        String(res.headers['content-security-policy'])
-          .split(';')
-          .map((directive) => directive.trim().split(/\s+/))
-          .filter(([name]) => name)
-          .map(([name, ...sources]) => [name, sources]),
+      const directives = cspDirectives(res.headers['content-security-policy']);
+      // #672: the one inline script is the importmap, by the hash of the
+      // text this page serves, recomputed here so a drift between the
+      // header and the layout fails.
+      const importmap = /<script type="importmap">([\s\S]*?)<\/script>/.exec(
+        res.body,
       );
+      expect(importmap).not.toBeNull();
+      const served = createHash('sha256')
+        .update(importmap![1])
+        .digest('base64');
       expect(directives.get('script-src')).toEqual([
         "'self'",
-        "'unsafe-inline'",
+        `'sha256-${served}'`,
       ]);
       expect(directives.get('worker-src')).toEqual(["'self'"]);
       expect(directives.get('connect-src')).toEqual(["'self'"]);
       // The mask editor draws from object URLs.
       expect(directives.get('img-src')).toContain('blob:');
+      // Byte-stable: no nonce, so a second answer names the same policy
+      // (the tab roots' revalidation and the worker's 304 rely on it).
+      const again = await t.inject({ method: 'GET', url: '/wardrobe' });
+      expect(again.headers['content-security-policy']).toBe(
+        res.headers['content-security-policy'],
+      );
     });
+
+    it.each([
+      ['a page', '/wardrobe', 200],
+      ['the 404 page', '/no-such-page', 404],
+      ['an error page', '/wardrobe?wash=boil', 400],
+      ['the offline page', '/offline.html', 200],
+      ['the login page, signed out', '/auth/login', 200, true],
+      ['a static file', '/js/gen/actions.js', 200],
+    ])(
+      'sets base-uri, form-action and object-src on %s',
+      async (_name, url, status, anonymous = false) => {
+        const res = await t.inject({ method: 'GET', url, anonymous });
+        expect(res.statusCode).toBe(status);
+        const directives = cspDirectives(
+          res.headers['content-security-policy'],
+        );
+        expect(directives.get('base-uri')).toEqual(["'self'"]);
+        expect(directives.get('form-action')).toEqual(["'self'"]);
+        expect(directives.get('object-src')).toEqual(["'none'"]);
+        expect(directives.get('script-src')).not.toContain("'unsafe-inline'");
+      },
+    );
 
     it('loads page-only libraries on their pages, not in the shell', () => {
       // pwa.js imports the install dialog and pull to refresh only where
       // they apply; the element is never in the markup.
-      expect(html).toContain('/js/pwa.js?v=');
+      expect(html).toContain('/js/gen/pwa.js?v=');
       expect(html).not.toContain('src="/modules/pwa-install');
       expect(html).not.toContain('<pwa-install');
       // Styling's module is only mapped here; its page imports it.
@@ -371,7 +447,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       await createGarment(t, { name: 'Fragment shirt' });
     });
 
-    it('returns only #wardrobe-main to an htmx request', async () => {
+    it('returns only #wardrobe-body to an htmx request', async () => {
       const res = await t.inject({
         method: 'GET',
         url: '/wardrobe?keyword=Fragment',
@@ -381,7 +457,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(res.headers.vary).toContain('HX-Request');
       expect(res.body).not.toContain('<html');
       expect(res.body).not.toContain('<nav');
-      expect(res.body.trimStart()).toMatch(/^<main id="wardrobe-main"/);
+      expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-body"/);
       expect(res.body).toContain('Fragment shirt');
       expect(res.body).toContain('id="filter-modal"');
     });
@@ -395,14 +471,14 @@ describe('delivery (PWA_ENABLED=true)', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers.vary).toContain('HX-Boosted');
       expect(res.body).toContain('<html');
-      expect(res.body).toContain('id="wardrobe-main"');
+      expect(res.body).toContain('id="wardrobe-body"');
     });
 
     it('renders the same partial inside the full page', async () => {
       const res = await t.inject({ method: 'GET', url: '/wardrobe' });
-      expect(res.body).toContain('id="wardrobe-main"');
+      expect(res.body).toContain('id="wardrobe-body"');
       expect(res.body).toMatch(
-        /<form[^>]*hx-get="\/wardrobe"[^>]*hx-target="#wardrobe-main"/,
+        /<form[^>]*hx-get="\/wardrobe"[^>]*hx-target="#wardrobe-body"/,
       );
     });
   });
@@ -470,8 +546,8 @@ describe('delivery (PWA_ENABLED=true)', () => {
         string,
         string
       >;
-      expect(imports.freshness).toMatch(/^\/js\/freshness\.js\?v=/);
-      expect(imports['age-label']).toMatch(/^\/js\/age-label\.js\?v=/);
+      expect(imports.freshness).toMatch(/^\/js\/gen\/freshness\.js\?v=/);
+      expect(imports['age-label']).toMatch(/^\/js\/gen\/age-label\.js\?v=/);
     });
   });
 
@@ -517,7 +593,7 @@ describe('delivery (PWA_ENABLED=true)', () => {
       );
       const script = await t.inject({
         method: 'GET',
-        url: '/js/pwa.js?v=1',
+        url: '/js/gen/pwa.js?v=1',
       });
       expect(script.headers['cache-control']).toBe(
         'public, max-age=31536000, immutable',
@@ -526,8 +602,9 @@ describe('delivery (PWA_ENABLED=true)', () => {
   });
 });
 
-// A directory the process cannot create (its parent is a file) is the
-// unwritable storage the 503 names, whoever runs the spec.
+// Every storage failure the spec can build, before the first readiness
+// call (the verdict is cached 5 s): MODELS_PATH under a file, DATA_PATH's
+// probe directory a file, its marker gone. No mode bits, so root runs it too.
 describe('/health/ready with unwritable storage', () => {
   let t: TestApp;
   let scratch: string;
@@ -537,6 +614,12 @@ describe('/health/ready with unwritable storage', () => {
     const file = join(scratch, 'not-a-directory');
     writeFileSync(file, '');
     t = await createTestApp({ MODELS_PATH: join(file, 'models') });
+    await rm(join(t.dataPath, PROBE_DIRECTORY), {
+      recursive: true,
+      force: true,
+    });
+    await writeFile(join(t.dataPath, PROBE_DIRECTORY), '');
+    await rm(join(t.dataPath, STORAGE_MARKER));
   });
 
   afterAll(async () => {
@@ -544,7 +627,7 @@ describe('/health/ready with unwritable storage', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it('answers 503 naming storage, with its fix and no error text', async () => {
+  it('answers 503 naming storage by its keys, with no error text and no path', async () => {
     const res = await t.inject({
       method: 'GET',
       url: '/health/ready',
@@ -556,9 +639,12 @@ describe('/health/ready with unwritable storage', () => {
     expect(body.checks.storage).toEqual({
       status: 'down',
       required: true,
-      fix: expect.stringContaining('docs/operations.md#permissions'),
+      fix: 'DATA_PATH and MODELS_PATH cannot be written; docs/operations.md#permissions; see docs/operations.md#photo-storage-marker',
     });
     expect(body.checks.database).toEqual({ status: 'up', required: true });
     expect(res.body).not.toContain('ENOTDIR');
+    // The body is unauthenticated (#1090): no `/` starting a path segment
+    // anywhere (the docs pointers are relative), so no host directory.
+    expect(res.body).not.toMatch(/(?<![\w.#-])\/[\w.-]/);
   });
 });

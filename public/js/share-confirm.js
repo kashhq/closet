@@ -37,7 +37,7 @@ function show(root, state) {
 
 /**
  * Save look, enabled, unless the page is offline right now: then it is left
- * to the offline guard (public/js/connectivity.js), marked as one it
+ * to the offline guard (views/assets/page/connectivity.ts), marked as one it
  * disabled, so it is enabled with the guard's others on reconnecting. The
  * guard skips a control already disabled, which this one was until now.
  */

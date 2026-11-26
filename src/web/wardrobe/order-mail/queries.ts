@@ -1,6 +1,11 @@
 import { and, desc, eq, inArray, ne, type SQL, sql } from 'drizzle-orm';
 import type { Db, Queryable } from '../../../db/client';
-import { orderEmail, orderItem, user } from '../../../db/schema';
+import {
+  orderEmail,
+  orderItem,
+  orderMailOwner,
+  user,
+} from '../../../db/schema';
 import { selectScalars } from '../../../db/select-scalars';
 import type { IsoDate } from '../../../calendar-date';
 import {
@@ -24,10 +29,130 @@ import {
  * Every read of an item names its owner, so another user's id is a 404.
  */
 
+/**
+ * The stored owner (order_mail_owner, #976): undefined with no row (never
+ * bound), `userId` null once that account was deleted, and the account's
+ * current email, which the boot only compares with ORDER_MAIL_OWNER.
+ */
+export interface StoredOrderMailOwner {
+  userId: number | null;
+  email: string | null;
+}
+
+export async function storedOrderMailOwner(
+  db: Db,
+): Promise<StoredOrderMailOwner | undefined> {
+  const [row] = await db
+    .select({ userId: orderMailOwner.userId, email: user.email })
+    .from(orderMailOwner)
+    .leftJoin(user, eq(user.id, orderMailOwner.userId));
+  return row;
+}
+
+/** What one adoption attempt found (adoptOrderMailOwner). */
+export interface OrderMailOwnerAdoption {
+  /** The account with the address, if any. */
+  candidateId: number | null;
+  /** It passed the history rule. */
+  eligible: boolean;
+  /** This statement wrote the row (false: ineligible, or another boot won). */
+  adopted: boolean;
+}
+
+/**
+ * The first binding (#976), one statement so two boots racing cannot both
+ * adopt: the account `ownerEmail` names is bound only when no row exists
+ * (`on conflict do nothing` on the singleton; the loser re-reads) and the
+ * order mail has no history or that history is the account's alone. An
+ * install that polled before keeps its emails when the owner's account is
+ * deleted (only items cascade), so whoever registers the old address later
+ * owns no item and is refused here. Emails with no item at all are refused
+ * too: that is exactly what a deleted owner leaves, and nothing dates an
+ * account (order_email names no user, `user` has no created_at), so an
+ * owner who never had an item is bound by the CLI instead. `ownerEmail` is normalized, as findUserByEmail's.
+ */
+export async function adoptOrderMailOwner(
+  db: Db,
+  ownerEmail: string,
+): Promise<OrderMailOwnerAdoption> {
+  const { rows } = await db.execute<{
+    candidateId: number | null;
+    eligible: boolean;
+    adopted: boolean;
+  }>(sql`
+    with candidate as (
+      select ${user.id} as id from ${user}
+      where lower(${user.email}) = ${ownerEmail}
+    ),
+    eligible as (
+      select candidate.id from candidate
+      where not exists (select 1 from ${orderEmail})
+        or (
+          exists (select 1 from ${orderItem} where ${orderItem.ownerId} = candidate.id)
+          and not exists (select 1 from ${orderItem} where ${orderItem.ownerId} <> candidate.id)
+        )
+    ),
+    adopted as (
+      insert into ${orderMailOwner} (user_id) select id from eligible
+      on conflict (singleton) do nothing
+      returning user_id
+    )
+    select
+      (select id from candidate) as "candidateId",
+      exists (select 1 from eligible) as "eligible",
+      exists (select 1 from adopted) as "adopted"
+  `);
+  return rows[0];
+}
+
+/** The binding before and after a rebind (bindOrderMailOwner). */
+export interface OrderMailOwnerRebind {
+  /** The row existed before. */
+  wasBound: boolean;
+  /** Its account then: null when never bound or deleted. */
+  previousId: number | null;
+  /** The account bound now; null when no account has the address. */
+  boundId: number | null;
+}
+
+/**
+ * The operator's rebind (`npm run order-mail:bind-owner`, #976): binds the
+ * account `ownerEmail` names whatever was bound, in one statement, without
+ * the adoption's history rule (the operator chose it). `ownerEmail` is
+ * normalized.
+ */
+export async function bindOrderMailOwner(
+  db: Db,
+  ownerEmail: string,
+): Promise<OrderMailOwnerRebind> {
+  const { rows } = await db.execute<{
+    wasBound: boolean;
+    previousId: number | null;
+    boundId: number | null;
+  }>(sql`
+    with previous as (select user_id from ${orderMailOwner}),
+    bound as (
+      insert into ${orderMailOwner} (user_id)
+      select ${user.id} from ${user} where lower(${user.email}) = ${ownerEmail}
+      on conflict (singleton) do update
+        set user_id = excluded.user_id, bound_at = now()
+      returning user_id
+    )
+    select
+      exists (select 1 from previous) as "wasBound",
+      (select user_id from previous) as "previousId",
+      (select user_id from bound) as "boundId"
+  `);
+  return rows[0];
+}
+
 /** What a poll starts from (pollStart). */
 export interface PollStart {
-  /** ORDER_MAIL_OWNER's account; undefined when no account has the address. */
-  ownerId: number | undefined;
+  /**
+   * The binding still names the boot's owner: false once that account was
+   * deleted, or the operator rebound it, since the boot (#976).
+   */
+  ownerBound: boolean;
   /**
    * The next query's `after` (inclusive): the oldest failing email's
    * arrival, so it is read again, else the newest settled one's (#693).
@@ -38,20 +163,18 @@ export interface PollStart {
 }
 
 /**
- * The owner's account, the account's watermark and its failing emails, in
- * one statement (#173: a poll was a statement for each). `ownerEmail` must
- * already be normalized (lower case), as findUserByEmail's is; only the id
- * is read, never the password hash that lookup carries.
+ * Whether the binding still names the owner, the account's watermark and
+ * its failing emails, in one statement (#173: a poll was a statement for
+ * each).
  */
 export async function pollStart(
   db: Db,
-  ownerEmail: string,
+  ownerId: number,
   accountId: string,
 ): Promise<PollStart> {
-  const { ownerId, newest, failing } = await selectScalars(db, {
-    ownerId: sql<number | null>`(
-      select ${user.id} from ${user}
-      where lower(${user.email}) = ${ownerEmail} limit 1
+  const { ownerBound, newest, failing } = await selectScalars(db, {
+    ownerBound: sql<boolean>`exists(
+      select 1 from ${orderMailOwner} where ${orderMailOwner.userId} = ${ownerId}
     )`,
     // As JSON: an ISO string, which Date reads (the raw row's timestamptz
     // text is not ISO).
@@ -73,7 +196,7 @@ export async function pollStart(
     )`,
   });
   return {
-    ownerId: ownerId ?? undefined,
+    ownerBound,
     watermark: newest === null ? undefined : new Date(newest),
     failing: failing.map(({ emailId, receivedAt }) => ({
       emailId,

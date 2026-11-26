@@ -1,8 +1,9 @@
-import fastifyCompress from '@fastify/compress';
-import fastifyCookie from '@fastify/cookie';
-import fastifyFormbody from '@fastify/formbody';
-import fastifyMultipart from '@fastify/multipart';
+import compressPlugin from '@fastify/compress';
+import cookiePlugin from '@fastify/cookie';
+import formbodyPlugin from '@fastify/formbody';
+import multipartPlugin from '@fastify/multipart';
 import Fastify, {
+  type FastifyBaseLogger,
   type FastifyInstance,
   LogController,
   type RouteOptions,
@@ -35,6 +36,7 @@ import {
 } from './web/auth/session';
 import { createSessionTokens } from './web/auth/tokens';
 import { createErrorHandler, DatabaseOutage, HttpError } from './web/errors';
+import { sharedValidators } from './web/schema-validators';
 import { configurePhotoUrls } from './web/files/image-url';
 import { configurePasswordHashing } from './web/auth/passwords';
 import type { HeicDecoderOptions } from './web/files/heic-decoder';
@@ -49,6 +51,8 @@ import {
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
 import { createAllowedHostHook } from './web/security/allowed-host';
+import { contentSecurityPolicy } from './web/security/csp';
+import { importMapScript } from './web/layout/import-map';
 import { registerRateLimit } from './web/security/rate-limit';
 import {
   assertStatelessRoute,
@@ -57,10 +61,15 @@ import {
 import { UntrustedProxyWatch } from './web/security/untrusted-proxy';
 import { assignSurface, surfaceOf } from './web/surface';
 import { isWarmRequest } from './warm-request';
-import { createQueuedWriteHook } from './web/offline-writes';
+import {
+  createQueuedReplayLog,
+  createQueuedWriteHook,
+} from './web/offline-writes';
 import { createViewContextBuilder } from './web/view-context';
 import { createJmapClient } from './web/wardrobe/order-mail/jmap';
 import type { OrderMailDeps } from './web/wardrobe/order-mail/poll';
+import { OrderMailOwnerWatch } from './web/wardrobe/order-mail/owner-watch';
+import { resolveOrderMailOwner } from './web/wardrobe/order-mail/owner';
 import {
   createOpenMeteoClient,
   type WeatherEndpoints,
@@ -166,6 +175,11 @@ export interface AppOptions {
    * never passes it.
    */
   photoUploadMax?: number;
+  /**
+   * SIGN_IN_ACCOUNT_LIMIT's max: the restore specs sign one owner in again
+   * after every restore, more than 5 a minute. Production never passes it.
+   */
+  signInAccountMax?: number;
 }
 
 function buildInfoFor(config: Config): BuildInfo {
@@ -244,10 +258,25 @@ export async function createApp(
   // first time the database answers again.
   const outage = new DatabaseOutage(dbLogger);
   const db = createDb(database, dbLogger, {
-    onAnswer: () => outage.recovered(),
+    onAnswer: (startedAt) => outage.recovered(startedAt),
   });
-  // Refuses an unmounted photo share (StorageIdentityError, main.ts); the
-  // pool is ended here, since no onClose hook exists yet to end it.
+  // Both can refuse the boot before any onClose hook exists, so a refusal
+  // ends the pool here: the owner lookup failing (an unanswering database),
+  // an unmounted photo share (StorageIdentityError, main.ts). An owner
+  // missing refuses nothing: it turns the order mail off (OrderMailOwnerWatch),
+  // reported by readiness's optional check and a gauge, never a 503.
+  const orderMailLogger = logger.child({ logger: 'OrderMail' });
+  const orderMailWatch = new OrderMailOwnerWatch(orderMailLogger);
+  const orderMailOwner = await orderMailOwnerAtBoot(
+    config,
+    db,
+    metrics,
+    orderMailWatch,
+    orderMailLogger,
+  ).catch(async (error: unknown) => {
+    await db.$client.end();
+    throw error;
+  });
   const photos = await createPhotos(
     photosConfig(config),
     db,
@@ -284,6 +313,8 @@ export async function createApp(
     db,
     fetcher,
     options.orderMail,
+    orderMailOwner,
+    orderMailWatch,
   );
   // loadConfig requires both keys and an https SITE_URL when PWA_ENABLED; the
   // sender checks the pair's shape here, so a malformed one fails the boot.
@@ -303,9 +334,18 @@ export async function createApp(
       metrics,
     });
 
+  // Typed as Fastify's own logger interface, not pino's Logger: the app is
+  // then the plain FastifyInstance every register* function and plugin takes
+  // (strictFunctionTypes refuses a pino-typed instance there).
+  const fastifyLogger: FastifyBaseLogger = logger.child({ logger: 'Fastify' });
   const app = Fastify({
+    // Fastify's own ajv factory, each compiled validator kept per process
+    // (one boot here; one per spec file in the integration tier, #724).
+    schemaController: {
+      compilersFactory: { buildValidator: sharedValidators },
+    },
     trustProxy,
-    loggerInstance: logger.child({ logger: 'Fastify' }),
+    loggerInstance: fastifyLogger,
     // One line per request comes from the onResponse hook below.
     logController: new LogController({ disableRequestLogging: true }),
     // Every request's id is minted here (12 hex), never taken from an
@@ -391,6 +431,10 @@ export async function createApp(
     tokens,
     logger: sessionLogger,
   });
+  // The page's one inline script, made once: every page renders this string
+  // (ViewContext.importMap) and the CSP allows it by its hash (csp.ts), so
+  // the two cannot differ (#672).
+  const importMap = importMapScript(build.assetVersion);
   const buildViewContext = createViewContextBuilder({
     appName: config.APP_NAME,
     iconName: config.ICON_NAME,
@@ -400,9 +444,10 @@ export async function createApp(
     weatherEnabled: weather !== undefined,
     metricsEnabled: config.METRICS_ENABLED,
     errorTrackingEnabled: errors.enabled,
-    orderMailOwner: orderMail?.ownerEmail,
+    orderMailOwnerId: orderMail?.ownerId,
     release: build.release,
     assetVersion: build.assetVersion,
+    importMap,
     timeZone: config.APP_TIMEZONE,
   });
   // Declared up front so every request object has the same shape; the hook
@@ -437,10 +482,15 @@ export async function createApp(
     'preHandler',
     createQueuedWriteHook(logger.child({ logger: 'Web' })),
   );
+  app.addHook(
+    'onResponse',
+    createQueuedReplayLog(logger.child({ logger: 'Web' })),
+  );
 
   // Security headers on all responses
+  const everyResponse = securityHeaders(importMap);
   app.addHook('onSend', (_request, reply, payload, done) => {
-    reply.headers(SECURITY_HEADERS);
+    reply.headers(everyResponse);
     done(null, payload);
   });
   // Clear-Site-Data on a redirect is repeated on the page it lands on, which
@@ -477,17 +527,16 @@ export async function createApp(
     done();
   });
 
-  await app.register(fastifyCookie);
+  await app.register(cookiePlugin);
   // Pages and fragments; a static file goes out precompressed when it has
   // a variant (static-assets.ts), which this leaves alone.
-  await app.register(fastifyCompress);
+  await app.register(compressPlugin);
   // Forms post urlencoded bodies; JSON is Fastify's own parser.
-  await app.register(fastifyFormbody);
-  await app.register(fastifyMultipart, {
-    limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB
-      files: 5,
-    },
+  await app.register(formbodyPlugin);
+  // The parser's outer bounds per request (100 MiB a part); a photo past
+  // the decoders' pixel or HEIC caps is refused before that (photos.ts).
+  await app.register(multipartPlugin, {
+    limits: { files: 5, fileSize: 100 * 2 ** 20 },
   });
 
   await registerStaticAssets(
@@ -518,9 +567,12 @@ export async function createApp(
       registrationDisabled: config.DISABLE_REGISTRATION,
       pwaEnabled: config.PWA_ENABLED,
       vapid,
-      orderMailOwner: orderMail?.ownerEmail,
+      orderMailOwnerId: orderMail?.ownerId,
       release: build.release,
-      storageDirs: [config.DATA_PATH, config.MODELS_PATH],
+      storageDirs: [
+        { key: 'DATA_PATH', path: config.DATA_PATH },
+        { key: 'MODELS_PATH', path: config.MODELS_PATH },
+      ],
     },
     logger: web,
     db,
@@ -529,6 +581,7 @@ export async function createApp(
     cutouts,
     jobs: roster,
     proxyWatch,
+    orderMailWatch,
     fetcher,
     weather,
     mcpLogger: logger.child({ logger: 'Mcp' }),
@@ -537,6 +590,7 @@ export async function createApp(
     metrics,
     errors,
     photoUploadMax: options.photoUploadMax,
+    signInAccountMax: options.signInAccountMax,
   });
 
   return {
@@ -567,16 +621,22 @@ function createOrderMail(
   db: Db,
   fetcher: OutboundFetcher,
   stub: AppOptions['orderMail'],
+  ownerId: number | undefined,
+  ownerWatch: OrderMailOwnerWatch,
 ): OrderMailDeps | undefined {
   const boot = logger.child({ logger: 'Bootstrap' });
-  if (!config.ORDER_MAIL_JMAP_TOKEN) {
-    boot.info('Order mail: off (ORDER_MAIL_JMAP_TOKEN unset)');
+  if (!config.ORDER_MAIL_JMAP_TOKEN || ownerId === undefined) {
+    boot.info(
+      config.ORDER_MAIL_JMAP_TOKEN
+        ? 'Order mail: off (no owner: see the OrderMail error above)'
+        : 'Order mail: off (ORDER_MAIL_JMAP_TOKEN unset)',
+    );
     return undefined;
   }
   const senders = orderMailSenders(config);
   // The token is never logged; the owner and senders are the owner's own.
   boot.info(
-    `Order mail: on (${stub ? 'a stand-in for Fastmail' : 'Fastmail'}, every ${config.ORDER_MAIL_POLL_MINUTES} min, ${senders.length} trusted senders)`,
+    `Order mail: on (${stub ? 'a stand-in for Fastmail' : 'Fastmail'}, every ${config.ORDER_MAIL_POLL_MINUTES} min, ${senders.length} trusted senders, for user ${ownerId})`,
   );
   return {
     db,
@@ -590,10 +650,32 @@ function createOrderMail(
     }),
     fetcher,
     senders,
-    ownerEmail: normalizeEmail(config.ORDER_MAIL_OWNER),
+    ownerId,
+    ownerWatch,
     timeZone: config.APP_TIMEZONE,
     logger: logger.child({ logger: 'OrderMail' }),
   };
+}
+
+/**
+ * The order mail's stored owner (#976), or undefined: no token (no row is
+ * read or written, no gauge), or none to be had (OrderMailOwnerWatch set).
+ */
+async function orderMailOwnerAtBoot(
+  config: Config,
+  db: Db,
+  metrics: Metrics,
+  watch: OrderMailOwnerWatch,
+  logger: Logger,
+): Promise<number | undefined> {
+  if (!config.ORDER_MAIL_JMAP_TOKEN) return undefined;
+  metrics.trackOrderMailOwner(() => watch.missing);
+  return resolveOrderMailOwner(
+    db,
+    normalizeEmail(config.ORDER_MAIL_OWNER),
+    watch,
+    logger,
+  );
 }
 
 /**
@@ -630,19 +712,14 @@ function createWeather(
   });
 }
 
-// Inline script: the pages' one-line handlers and inline modules (AGENTS.md,
-// Conventions). blob: images: the mask editor draws the original and the
-// cutout from object URLs. No eval (htmx's filters, hx-on and js: values are
-// unused) and no blob: scripts or workers: those were the in-browser
-// background-removal model's, removed on 2026-09-26.
-const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none';";
-
-// Every response's, set by the root onSend hook.
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Content-Security-Policy': CONTENT_SECURITY_POLICY,
-} as const;
+// Every response's, set by the root onSend hook. The CSP is this build's
+// (src/web/security/csp.ts: the hash of the importmap every page renders).
+function securityHeaders(importMap: string) {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Content-Security-Policy': contentSecurityPolicy(importMap),
+  } as const;
+}

@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { loginUrl } from '../../src/web/auth/return-to';
 import {
   createTestApp,
@@ -36,7 +45,8 @@ describe('sessions', () => {
     const token = res.cookies.find((c) => c.name === 'access_token');
     expect(token?.httpOnly).toBe(true);
     expect(token?.path).toBe('/');
-    // Not sent on cross-site POSTs; never Secure (AGENTS.md, Conventions).
+    // Not sent on cross-site POSTs; not Secure over plain http (the HTTP
+    // twin: AGENTS.md, Conventions; account.spec.ts covers https).
     expect(token?.sameSite).toBe('Lax');
     expect(token?.secure).toBeUndefined();
   });
@@ -249,6 +259,14 @@ describe('sessions', () => {
     const HIDDEN = (path: string) =>
       `type="hidden" name="returnTo" value="${path}"`;
 
+    // An account per test: the cases sign in more than
+    // SIGN_IN_ACCOUNT_LIMIT allows one account a minute (#705).
+    let email: string;
+    beforeEach(async () => {
+      email = `lands-${randomUUID()}@example.com`;
+      await t.register(email);
+    });
+
     const signInFrom = (returnTo?: unknown, password = TEST_PASSWORD) =>
       t.inject({
         method: 'POST',
@@ -290,6 +308,11 @@ describe('sessions', () => {
 
       const res = await signInFrom(WEEK);
       expect(res.headers.location).toBe(WEEK);
+    });
+
+    it('lands back on Profile › Devices, which lives at /auth/devices', async () => {
+      const res = await signInFrom('/auth/devices?revoked=1');
+      expect(res.headers.location).toBe('/auth/devices?revoked=1');
     });
 
     it.each([

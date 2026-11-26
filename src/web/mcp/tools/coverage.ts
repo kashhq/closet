@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import type { Db } from '../../../db/client';
 import { QUANTITY_MAX } from '../../../wardrobe/availability';
@@ -41,7 +42,7 @@ function rangeOf<T extends number>(
   range: Range<T>,
 ): Range<T> {
   if (range.min > range.max) {
-    throw new HttpError(400, `${property}: min is above max`);
+    throw new HttpError(400, t('refusal.coverage.minAboveMax', { property }));
   }
   return range;
 }

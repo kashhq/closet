@@ -6,7 +6,7 @@ import {
   MAX_INPUT_PIXELS,
   type Photos,
 } from '../../files/photos';
-import type { StringKey } from '../../i18n';
+import { type CopyKey, t, type Translated } from '../../i18n';
 import type { Logger } from '../../../logger';
 import type { RateLimitChecker } from '../../security/rate-limit';
 import {
@@ -65,6 +65,21 @@ export type LinkImportRefusal =
   /** Fetched as an image, but not one Photos can decode (or too many pixels). */
   | 'unreadable-image';
 
+/**
+ * What an API or agent caller is told of a refusal: the reason leads (a
+ * machine-readable word to branch on), then the copy.
+ */
+export function reasonLed(
+  reason: LinkImportRefusal | 'title-only',
+  message: Translated,
+): Translated {
+  return t('linkImport.REASON_LED', { reason, message });
+}
+
+export function reasonLedMessage(reason: LinkImportRefusal): Translated {
+  return reasonLed(reason, t(REFUSALS[reason].message));
+}
+
 /** A refusal of the link import's (REFUSALS says what the user is told). */
 export class LinkImportError extends Error {
   constructor(readonly reason: LinkImportRefusal) {
@@ -80,7 +95,7 @@ export class LinkImportError extends Error {
  * inside the network must not tell the user where it points).
  */
 export const REFUSALS: Readonly<
-  Record<LinkImportRefusal, { message: StringKey; status: 400 | 502 }>
+  Record<LinkImportRefusal, { message: CopyKey; status: 400 | 502 }>
 > = {
   'no-link': { message: 'linkImport.NO_LINK', status: 400 },
   'invalid-url': { message: 'linkImport.INVALID_URL', status: 400 },

@@ -6,18 +6,20 @@ import {
 } from '../../push/reminders';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { ProfileSection } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
+import type { ViewContext } from '../view-context';
 import type { ReminderSettings } from './queries';
 import type { SendReport } from './sender';
-
-/** Where the reminders' fragment goes; push.js loads it once the device is on. */
-const REMINDERS_ID = 'push-reminders';
+import { PUSH_SETTINGS_ID } from './urls';
+import { PUSH_REMINDERS_ID, pushAction, pushShownIn } from '../page-contract';
 
 /**
- * The profile page's notification controls. Whether this browser can and
+ * Profile › Notifications (a Profile section until #728, its own page
+ * since, PUSH_SETTINGS_PATH; only with PWA_ENABLED, like every /push
+ * route): this device's notification controls. Whether this browser can and
  * does receive notifications is only known in the browser, so every state's
  * text is rendered here, hidden, and the <push-settings> element
- * (public/js/push.js) shows the one that applies. The permission prompt
+ * (views/assets/page/push.ts) shows the one that applies. The permission prompt
  * only ever comes from the enable button: browsers penalize prompts without
  * a gesture and iOS refuses them.
  *
@@ -25,37 +27,38 @@ const REMINDERS_ID = 'push-reminders';
  * (permission denied), unsupported, install (iOS/iPadOS outside the
  * installed app, where there is no push at all), error.
  */
-/** The Profile's notifications section: its anchor. */
-export const PUSH_SETTINGS_ID = 'notifications';
-
-export function PushSettings() {
+export function PushSettingsPage(props: { ctx: ViewContext }) {
   return (
-    <ProfileSection id={PUSH_SETTINGS_ID} heading={t('PUSH_HEADING')}>
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('PUSH_HEADING')}
+      section={PUSH_SETTINGS_ID}
+    >
       <push-settings class="flex flex-col gap-2">
-        <p data-show="checking">{t('PUSH_CHECKING')}</p>
-        <p data-show="on" hidden>
+        <p {...pushShownIn('checking')}>{t('PUSH_CHECKING')}</p>
+        <p {...pushShownIn('on')} hidden>
           {t('PUSH_STATE_ON')}
         </p>
-        <p data-show="off" hidden>
+        <p {...pushShownIn('off')} hidden>
           {t('PUSH_STATE_OFF')}
         </p>
-        <p data-show="blocked" hidden>
+        <p {...pushShownIn('blocked')} hidden>
           {t('PUSH_STATE_BLOCKED')}
         </p>
-        <p data-show="unsupported" hidden>
+        <p {...pushShownIn('unsupported')} hidden>
           {t('PUSH_STATE_UNSUPPORTED')}
         </p>
-        <p data-show="install" hidden>
+        <p {...pushShownIn('install')} hidden>
           {t('PUSH_STATE_INSTALL')}
         </p>
-        <p data-show="error" class="text-error" role="alert" hidden>
+        <p {...pushShownIn('error')} class="text-error" role="alert" hidden>
           {t('PUSH_STATE_ERROR')}
         </p>
         <button
           type="button"
           class="btn btn-primary"
-          data-show="off error"
-          data-action="enable"
+          {...pushShownIn('off', 'error')}
+          {...pushAction('enable')}
           hidden
         >
           {t('PUSH_ENABLE')}
@@ -63,8 +66,8 @@ export function PushSettings() {
         <button
           type="button"
           class="btn"
-          data-show="on"
-          data-action="disable"
+          {...pushShownIn('on')}
+          {...pushAction('disable')}
           hidden
         >
           {t('PUSH_DISABLE')}
@@ -73,7 +76,7 @@ export function PushSettings() {
               is (its subscription's endpoint), so push.js asks for them once
               the state is on (POST /push/reminders/form) and they replace
               this slot. */}
-        <div id={REMINDERS_ID} data-show="on" hidden></div>
+        <div id={PUSH_REMINDERS_ID} {...pushShownIn('on')} hidden></div>
       </push-settings>
       {/* Sends to all of the user's devices, not only this one, so it is
             there whatever this browser's state; the answer says how many. */}
@@ -87,7 +90,7 @@ export function PushSettings() {
         {t('PUSH_SEND_TEST')}
       </button>
       <div id="push-test-result" aria-live="polite"></div>
-    </ProfileSection>
+    </SettingsPage>
   );
 }
 
@@ -125,8 +128,16 @@ export function PushSignedOut() {
   return <push-signed-out hidden></push-signed-out>;
 }
 
-/** POST /push/test's answer, swapped under the button. */
-export function TestResult({ report }: { report: SendReport }) {
+/**
+ * POST /push/test's answer, swapped under the button: what the send
+ * reached, or `rate-limited` past PUSH_TEST_LIMIT (nothing was sent).
+ */
+export function TestResult({
+  report,
+}: {
+  report: SendReport | 'rate-limited';
+}) {
+  if (report === 'rate-limited') return <p>{t('PUSH_TEST_TOO_SOON')}</p>;
   if (report.devices === 0) return <p>{t('PUSH_TEST_NO_DEVICES')}</p>;
   return (
     <>
@@ -165,13 +176,17 @@ export function ReminderSettingsForm(props: {
   const { endpoint, settings } = props;
   if (!settings) {
     return (
-      <p id={REMINDERS_ID} data-show="on" class="text-sm">
+      <p id={PUSH_REMINDERS_ID} {...pushShownIn('on')} class="text-sm">
         {t('today.reminders.NOT_REGISTERED')}
       </p>
     );
   }
   return (
-    <div id={REMINDERS_ID} data-show="on" class="border-t border-base-300 pt-3">
+    <div
+      id={PUSH_REMINDERS_ID}
+      {...pushShownIn('on')}
+      class="border-t border-base-300 pt-3"
+    >
       <AutosaveForm action="/push/reminders" class="flex flex-col gap-3">
         <h3 class="font-semibold text-sm">{t('today.reminders.HEADING')}</h3>
         <input type="hidden" name="endpoint" value={endpoint} />

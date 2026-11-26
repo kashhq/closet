@@ -32,7 +32,12 @@ import {
 } from './harness';
 import { deviceToken, expectProblem } from './api';
 import { callTool, createAccessToken, mcpRequest, tool } from './mcp';
-import { expectFragment, expectFullPage, HX_FRAGMENT } from './pages';
+import {
+  expectAutosaveControls,
+  expectFragment,
+  expectFullPage,
+  HX_FRAGMENT,
+} from './pages';
 import { startWeatherStub, type WeatherStub } from '../support/weather-stub';
 import { BY_PERSON } from '../../src/web/write-origin';
 
@@ -138,16 +143,30 @@ describe('weather', () => {
       const res = await summary();
       expect(res.statusCode).toBe(200);
       expectFragment(res);
-      expect(res.body).toContain('href="/auth/profile#weather"');
+      expect(res.body).toContain('href="/auth/profile/weather"');
       expect(stub.hits).toEqual([]);
     });
 
-    it('offers the settings on the profile', async () => {
-      const res = await t.inject({ method: 'GET', url: '/auth/profile' });
+    it('offers the settings on their own page, a row on Profile (#728)', async () => {
+      const profile = await t.inject({ method: 'GET', url: '/auth/profile' });
+      expect(profile.body).toContain(
+        '<li id="weather"><a href="/auth/profile/weather"',
+      );
+      expect(profile.body).toContain('No home city yet');
+      expect(profile.body).not.toContain('hx-get="/weather/places"');
+      const res = await t.inject({
+        method: 'GET',
+        url: '/auth/profile/weather',
+      });
       expectFullPage(res);
-      expect(res.body).toContain('id="weather"');
+      expectAutosaveControls(res);
+      expect(res.body).toMatch(
+        /<a href="\/auth\/profile#weather" class="btn[^"]*" aria-label="Back"/,
+      );
       expect(res.body).toContain('hx-get="/weather/places"');
-      expect(res.body).toContain("import { initLocate } from 'locate'");
+      expect(res.body).toMatch(
+        /<div id="weather-location"[^>]*data-page-module="locate"/,
+      );
     });
   });
 
@@ -226,8 +245,12 @@ describe('weather', () => {
         homeLongitude: ROUNDED.longitude,
         hereLatitude: null,
       });
-      const res = await t.inject({ method: 'GET', url: '/auth/profile' });
-      expect(res.body).toContain('Home: Fort Greene, New York, United States');
+      for (const url of ['/auth/profile', '/auth/profile/weather']) {
+        const res = await t.inject({ method: 'GET', url });
+        expect(res.body).toContain(
+          'Home: Fort Greene, New York, United States',
+        );
+      }
     });
 
     it("shows today's weather, New York's today, fetched with the rounded location only", async () => {
@@ -517,19 +540,8 @@ describe('weather', () => {
 
       const wardrobe = await t.inject({ method: 'GET', url: '/wardrobe' });
       expectFullPage(wardrobe);
-      expect(wardrobe.body).toContain('hx-get="/weather/summary"');
-      // Filtering swaps #wardrobe-main alone; the line sits outside it.
-      const fragment = await t.inject({
-        method: 'GET',
-        url: '/wardrobe?category=tops',
-        headers: HX_FRAGMENT,
-      });
-      expect(fragment.body).not.toContain('/weather/summary');
-      const selecting = await t.inject({
-        method: 'GET',
-        url: '/wardrobe?select=1',
-      });
-      expect(selecting.body).not.toContain('/weather/summary');
+      // The catalog has no weather line (#732).
+      expect(wardrobe.body).not.toContain('/weather/summary');
     });
 
     // #158: Today is the day's own data (network first, not a byte-stable
@@ -583,7 +595,10 @@ describe('weather', () => {
       expect(hasText(res.body, 'Saved')).toBe(true);
       expect(res.body).toMatch(/id="weather-offset"[^>]*hx-swap-oob="true"/);
       expect(res.body).not.toContain('name="unit"');
-      const profile = await t.inject({ method: 'GET', url: '/auth/profile' });
+      const profile = await t.inject({
+        method: 'GET',
+        url: '/auth/profile/weather',
+      });
       expect(profile.body).toMatch(/value="fahrenheit"[^>]*\schecked/);
       const day = forecastDayOf('demo', weatherFor('demo', TODAY, 1)[0]);
       expect(unescapeHtml((await summary()).body)).toContain(
@@ -866,7 +881,7 @@ describe('weather', () => {
       expect((await feedback('just-right')).statusCode).toBe(400);
     });
 
-    it('answers a plain post with the profile', async () => {
+    it('answers a plain post with the settings page', async () => {
       const res = await t.inject({
         method: 'POST',
         url: '/weather/feedback',
@@ -874,7 +889,7 @@ describe('weather', () => {
         payload: 'feeling=too-warm',
       });
       expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/auth/profile#weather');
+      expect(res.headers.location).toBe('/auth/profile/weather');
     });
   });
 
@@ -1055,6 +1070,8 @@ describe('weather off (WEATHER_ENABLED=false)', () => {
       '/weather/summary',
       '/weather/places?q=Brooklyn',
       '/styling/fit?role=top&garmentId=&lock=',
+      // Profile › Weather's page (#728) is the weather's too.
+      '/auth/profile/weather',
     ]) {
       const res = await t.inject({ method: 'GET', url, headers: HX_FRAGMENT });
       expect(res.statusCode).toBe(404);

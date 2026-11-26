@@ -76,7 +76,7 @@ describe('the err serializer', () => {
       message: 'connect ECONNREFUSED <url> GET <url> failed, <param>',
       stack: expect.stringContaining(
         'caused by: Error: connect ECONNREFUSED <url>',
-      ),
+      ) as string,
       code: 'E_UPSTREAM',
       status: 502,
     });
@@ -153,7 +153,9 @@ describe('the line shape', () => {
     );
     logger.child({ logger: 'Photos' }).warn({ count: 2 }, 'shown');
     expect(JSON.parse(lines[0])).toEqual({
-      ts: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/),
+      ts: expect.stringMatching(
+        /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
+      ) as string,
       level: 'warn',
       version: 'abc1234',
       logger: 'Photos',

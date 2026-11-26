@@ -16,7 +16,7 @@ import {
 /**
  * Brings the database to the schema in drizzle/ at boot, before anything
  * queries it. The only migration authority: MikroORM's migrator no longer
- * runs (its tree, test/support/legacy-migrations/, is frozen history).
+ * runs, and its migration tree left the repository (#1225).
  *
  * - A database built by the legacy MikroORM migrations (it has
  *   `mikro_orm_migrations`, as production does) must have applied the last of
@@ -40,10 +40,10 @@ import {
 export const MIGRATIONS_FOLDER = join(PROJECT_ROOT, 'drizzle');
 
 /**
- * The newest file in test/support/legacy-migrations/. A database whose
- * `mikro_orm_migrations` lacks it was left behind by an older build and does
- * not match the baseline. test/integration/migration-runner.spec.ts checks
- * this against the folder.
+ * The last MikroORM migration, the newest row a MikroORM-era build wrote to
+ * `mikro_orm_migrations`. A database lacking it was left behind by an older
+ * build and does not match the baseline. migration-runner.spec.ts checks it
+ * against test/support/legacy-database.ts's list.
  */
 export const LAST_LEGACY_MIGRATION = 'Migration20260926021506';
 

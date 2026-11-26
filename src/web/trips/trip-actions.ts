@@ -1,6 +1,8 @@
+import type { FastifyRequest } from 'fastify';
 import type { Db, Queryable } from '../../db/client';
 import { selectScalars } from '../../db/select-scalars';
 import type { IsoDate } from '../../calendar-date';
+import type { Logger } from '../../logger';
 import { DEFAULT_OCCASION, type Occasion } from '../../wardrobe/occasions';
 import { tripPhase, wearableToday } from '../../wardrobe/packing';
 import type { PickedLocation } from '../../weather/location';
@@ -12,18 +14,29 @@ import { outfitNotFound } from '../outfits/outfit-actions';
 import type { PickResult } from '../outfits/pick';
 import type { OutfitOrigin } from '../../wardrobe/outfit-origin';
 import type { OutfitList } from '../outfits/outfit-list';
-import { type GarmentOutfit, savedOutfitsSql } from '../outfits/queries';
+import {
+  type GarmentOutfit,
+  type OutfitPage,
+  type OutfitPageAsk,
+  savedOutfitsSql,
+} from '../outfits/queries';
+import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
+import { type RateLimitChecker, withinLimit } from '../security/rate-limit';
 import type { Actor } from '../sharing/access';
+import type { PickedPlace } from '../weather/place-input';
 import { type TripModel, tripModel, tripPageModel } from './model';
 import { type PackedChange, setPacked } from './packed';
 import {
   addTripItems,
   addTripOutfit,
   copyTripItems,
+  createTripAt,
+  createTripOnce,
   deleteTrip,
   findTrip,
   findTripOutfit,
+  type NewTripPlace,
   type NotATripDay,
   ownTripSql,
   pickForTrip,
@@ -55,11 +68,12 @@ import type { WriteOrigin } from '../write-origin';
  * underneath (queries.ts, packed.ts, model.ts) trust their `ownerId`: only
  * this path reaches them from a surface (the trips list and create aside,
  * which refuse nothing). Refusals carry a `logDetail` where the message
- * alone would not say what was refused, so callers log only what was done.
+ * alone would not say what was refused. Each write logs its own outcome,
+ * once, as one `trip.*` line (logOp, #712): its callers log nothing.
  */
 
 /** Another's trip or no trip: one refusal for both (ids reveal nothing). */
-export function tripNotFound(): NotFound {
+function tripNotFound(): NotFound {
   return new NotFound('trip');
 }
 
@@ -113,22 +127,24 @@ export async function requireTripModel(
 }
 
 /**
- * The add page's read, one statement: the trip, the actor's saved outfits
- * of `list` (#659) and the trip's outfits with their days.
+ * The add page's read, one statement: the trip, a page of the actor's
+ * saved outfits of `list` (#659, #660) and the trip's outfits with their
+ * days. The page's and its sentinel's (GET /trips/:id/outfits/new/more).
  */
 export async function requireAddOutfitPage(
   db: Db,
   actor: Actor,
   id: number,
   list: OutfitList,
+  page: OutfitPageAsk,
 ): Promise<{
   trip: TripRow;
-  outfits: GarmentOutfit[];
+  outfits: OutfitPage<GarmentOutfit>;
   onTrip: TripOutfitDay[];
 }> {
   const found = await selectScalars(db, {
     trip: ownTripSql(id, actor.userId),
-    outfits: savedOutfitsSql(actor.userId, list),
+    outfits: savedOutfitsSql(actor.userId, list, page),
     onTrip: tripOutfitDaysSql(id, actor.userId),
   });
   if (!found.trip) throw tripNotFound();
@@ -139,31 +155,171 @@ export async function requireAddOutfitPage(
   };
 }
 
+/**
+ * A new trip's picked place, as addTrip takes it: the place and the
+ * destination budget it is charged against (WEATHER_LOCATION_LIMIT: a
+ * located trip is a forecast to fetch and a cached row), or no charge when
+ * this instance locates nothing (no WEATHER_ENABLED). The budget is the
+ * request's, so the route builds it (newTripPlace).
+ */
+export interface PlaceAsk {
+  place: PickedPlace;
+  /** Counts the place against the budget: false once it is spent. */
+  charge: (() => Promise<boolean>) | null;
+}
+
+/**
+ * Why a new trip's asked place was not located (the API's `placeUnlocated`):
+ * `budget`, spent this minute, so the place can be found again later;
+ * `no-weather`, the instance has no weather, so no place is ever located.
+ * Either way the place's label is the destination.
+ */
+export const PLACE_UNLOCATED = ['budget', 'no-weather'] as const;
+export type PlaceUnlocated = (typeof PLACE_UNLOCATED)[number];
+
+/**
+ * The page's and the API's create's place (#861): without WEATHER_ENABLED,
+ * whose search is the only source of one (the form shows no picker), its
+ * label alone, its coordinates neither stored nor charged.
+ */
+export function newTripPlace(
+  place: PickedPlace | null,
+  {
+    weatherEnabled,
+    budget,
+    request,
+    logger,
+    who,
+  }: {
+    weatherEnabled: boolean;
+    budget: RateLimitChecker;
+    request: FastifyRequest;
+    logger: Logger;
+    who: string;
+  },
+): PlaceAsk | null {
+  if (!place) return null;
+  return {
+    place,
+    charge: weatherEnabled
+      ? () => withinLimit(budget, request, { logger, who })
+      : null,
+  };
+}
+
+/**
+ * A new trip of the actor's (the form, POST /api/v1/trips): createTripAt,
+ * or with the API's `clientId` createTripOnce, whose retry answers the
+ * first trip (`created` false) and whose id of a trip deleted since is a
+ * 410. An asked place names the destination (setTripDestination's rule);
+ * it is located only when the trip is created and its charge allows, so a
+ * retry or a 410 spends no slot. Past the budget, or without weather, the
+ * trip is created unlocated, never refused (#863), and `placeUnlocated`
+ * says why. Logs whether it was located, never the place: where someone
+ * travels is theirs.
+ */
+export async function addTrip(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  input: {
+    fields: TripFields;
+    place: PlaceAsk | null;
+    today: IsoDate;
+    clientId?: string;
+  },
+): Promise<{
+  id: number;
+  created: boolean;
+  placeUnlocated: PlaceUnlocated | undefined;
+}> {
+  const { place: ask, today, clientId } = input;
+  const { fields, place } = placeToStore(input.fields, ask);
+  const once = clientId
+    ? await createTripOnce(db, actor.userId, fields, place, today, clientId)
+    : {
+        row: await createTripAt(db, actor.userId, fields, place, today),
+        created: true,
+      };
+  if (once === 'gone') throw new HttpError(410, t('TRIP_DELETED'));
+  const { id, away, located } = once.row;
+  // A retry answers the first trip as it was saved: nothing unlocated now.
+  const placeUnlocated =
+    once.created && ask && !located ? whyUnlocated(ask) : undefined;
+  logOp(logger, actor, 'trip.created', {
+    tripId: id,
+    changed: once.created,
+    startsOn: fields.startsOn,
+    endsOn: fields.endsOn,
+    located: once.created ? located : undefined,
+    placeUnlocated,
+    autoEntriesRemoved: away,
+    clientId: clientId?.slice(0, 8),
+  });
+  return { id, created: once.created, placeUnlocated };
+}
+
+/**
+ * addTrip's write of its asked place: the place's label names the
+ * destination either way (setTripDestination's rule), so an unlocated one
+ * keeps it for the person's Find; the create's transaction charges it
+ * (`locate`) once the trip row is in.
+ */
+function placeToStore(
+  fields: TripFields,
+  ask: PlaceAsk | null,
+): { fields: TripFields; place: NewTripPlace | null } {
+  if (!ask) return { fields, place: null };
+  return {
+    fields: { ...fields, destination: ask.place.name },
+    place: {
+      ...ask.place,
+      locate: ask.charge ?? (() => Promise.resolve(false)),
+    },
+  };
+}
+
+/** An asked place left unlocated: its budget refused it, or nothing could charge it. */
+function whyUnlocated(ask: PlaceAsk): PlaceUnlocated {
+  return ask.charge ? 'budget' : 'no-weather';
+}
+
 /** The trip form's save of the actor's trip (updateTrip). */
 export async function editTrip(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
   fields: TripFields,
   today: IsoDate,
-): Promise<{ undated: number; locationCleared: boolean; away: number }> {
+): Promise<{ undated: number; locationCleared: boolean }> {
   const saved = await updateTrip(db, id, actor.userId, fields, today);
   if (saved === 'not-found') throw tripNotFound();
-  return saved;
+  logOp(logger, actor, 'trip.updated', {
+    tripId: id,
+    startsOn: fields.startsOn,
+    endsOn: fields.endsOn,
+    undated: saved.undated,
+    locationCleared: saved.locationCleared,
+    autoEntriesRemoved: saved.away,
+  });
+  return { undated: saved.undated, locationCleared: saved.locationCleared };
 }
 
 /** Deletes the actor's trip; its outfits stay (deleteTrip). */
 export async function removeTrip(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
 ): Promise<void> {
   if (!(await deleteTrip(db, id, actor.userId))) throw tripNotFound();
+  logOp(logger, actor, 'trip.deleted', { tripId: id });
 }
 
-/** The destination picked from the geocoding search (setTripDestination). */
+/**
+ * The destination picked from the geocoding search (setTripDestination),
+ * logged without the place, as a new trip is.
+ */
 export async function locateTrip(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   id: number,
   place: { name: string; location: PickedLocation },
@@ -171,6 +327,7 @@ export async function locateTrip(
   if (!(await setTripDestination(db, id, actor.userId, place))) {
     throw tripNotFound();
   }
+  logOp(logger, actor, 'trip.located', { tripId: id });
 }
 
 /**
@@ -179,7 +336,7 @@ export async function locateTrip(
  * outfit (an incomplete one is its own 409, OutfitIncomplete).
  */
 export async function planTripOutfit(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { tripId: number; outfitId: number } & TripSlot,
   madeBy: WriteOrigin,
@@ -190,8 +347,17 @@ export async function planTripOutfit(
     madeBy,
   });
   if (outcome === 'no-outfit') throw outfitNotFound();
-  if (outcome === 'added' || outcome === 'already') return outcome;
-  return refuseTripSlot(outcome, input.day);
+  if (outcome !== 'added' && outcome !== 'already') {
+    return refuseTripSlot(outcome, input.day);
+  }
+  logOp(logger, actor, 'trip.outfit.added', {
+    tripId: input.tripId,
+    outfitId: input.outfitId,
+    day: input.day ?? null,
+    occasion: input.occasion ?? null,
+    changed: outcome === 'added',
+  });
+  return outcome;
 }
 
 /**
@@ -200,7 +366,7 @@ export async function planTripOutfit(
  * could not hold are named as every pick names them (garmentsGoneError).
  */
 export async function pickIdeaForTrip(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: {
     tripId: number;
@@ -219,12 +385,22 @@ export async function pickIdeaForTrip(
   if (outcome === 'no-trip' || 'notATripDay' in outcome) {
     return refuseTripSlot(outcome, input.day);
   }
+  // A saved outfit's op: one query finds every outfit a trip gained.
+  logOp(logger, actor, 'trip.outfit.added', {
+    tripId: input.tripId,
+    outfitId: outcome.outfit.id,
+    day: input.day ?? null,
+    occasion: input.occasion ?? null,
+    changed: outcome.added === 'added',
+    garmentIds: input.garmentIds,
+    outfitCreated: !outcome.outfit.alreadySaved,
+  });
   return outcome;
 }
 
 /** Takes an outfit off the actor's trip, its orphaned packed marks with it (removeTripOutfit). */
 export async function takeOffTrip(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { tripId: number; tripOutfitId: number },
 ): Promise<{ outfitId: number; unpacked: number }> {
@@ -233,6 +409,11 @@ export async function takeOffTrip(
     ownerId: actor.userId,
   });
   if (removed === 'not-found') throw tripNotFound();
+  logOp(logger, actor, 'trip.outfit.removed', {
+    ...input,
+    outfitId: removed.outfitId,
+    unpacked: removed.unpacked,
+  });
   return removed;
 }
 
@@ -244,7 +425,7 @@ export async function takeOffTrip(
  * too); else a 409, as a page left open past midnight posts yesterday's.
  */
 export async function wearTripOutfit(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { tripId: number; tripOutfitId: number },
   when: { at: Date; today: IsoDate },
@@ -281,6 +462,16 @@ export async function wearTripOutfit(
   });
   // The day is today, never after it.
   if (worn === 'future') throw new Error('Today is after today');
+  logOp(logger, actor, 'trip.outfit.worn', {
+    ...input,
+    outfitId: found.outfitId,
+    day: today,
+    occasion,
+    entryId: worn.entryId,
+    entryPlanned: worn.scheduled === 'scheduled',
+    changed: worn.worn.changed,
+    wears: worn.worn.wears,
+  });
   return { outfitId: found.outfitId, day: found.day, occasion, worn };
 }
 
@@ -291,8 +482,8 @@ export interface ChecklistTicks {
   unpacked: readonly number[];
 }
 
-/** The packing list's autosave on the actor's trip (setPacked). */
-export async function packTrip(
+/** The packing marks the ticks moved, unlogged: packTrip's and tickTripGarment's. */
+async function setTripPacked(
   db: Db,
   actor: Actor,
   ticks: ChecklistTicks,
@@ -302,14 +493,44 @@ export async function packTrip(
   return change;
 }
 
-/** The extras' autosave on the actor's trip (setItemsPacked), with the extras as they now are. */
-export async function packTripItems(
+/** The extras' marks the ticks moved, unlogged: packTripItems' and tickTripItem's. */
+async function setTripItemsPacked(
   db: Db,
   actor: Actor,
   ticks: ChecklistTicks,
 ): Promise<PackedChange & { items: TripItemRow[] }> {
   const change = await setItemsPacked(db, { ...ticks, ownerId: actor.userId });
   if (change === 'not-found') throw tripNotFound();
+  return change;
+}
+
+/** The packing list's autosave on the actor's trip (setPacked). */
+export async function packTrip(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  ticks: ChecklistTicks,
+): Promise<PackedChange & { onList: number }> {
+  const change = await setTripPacked(db, actor, ticks);
+  logOp(logger, actor, 'trip.packing.set', {
+    tripId: ticks.tripId,
+    packed: change.packed,
+    unpacked: change.unpacked,
+  });
+  return change;
+}
+
+/** The extras' autosave on the actor's trip (setItemsPacked), with the extras as they now are. */
+export async function packTripItems(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  ticks: ChecklistTicks,
+): Promise<PackedChange & { items: TripItemRow[] }> {
+  const change = await setTripItemsPacked(db, actor, ticks);
+  logOp(logger, actor, 'trip.extras.set', {
+    tripId: ticks.tripId,
+    packed: change.packed,
+    unpacked: change.unpacked,
+  });
   return change;
 }
 
@@ -333,16 +554,22 @@ function ticksOf(id: number, { tripId, packed }: Tick): ChecklistTicks {
  * with one) is the garment's 404, which a queued tick may drop.
  */
 export async function tickTripGarment(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   tick: Tick & { garmentId: number },
 ): Promise<{ changed: boolean }> {
-  const change = await packTrip(db, actor, ticksOf(tick.garmentId, tick));
+  const change = await setTripPacked(db, actor, ticksOf(tick.garmentId, tick));
   if (change.onList === 0) {
     throw new NotFound('garment', {
       logDetail: `garment ${tick.garmentId} is not on trip ${tick.tripId}'s packing list`,
     });
   }
+  logOp(logger, actor, 'trip.packing.set', {
+    tripId: tick.tripId,
+    garmentId: tick.garmentId,
+    packed: change.packed,
+    unpacked: change.unpacked,
+  });
   return { changed: change.packed + change.unpacked > 0 };
 }
 
@@ -352,41 +579,56 @@ export async function tickTripGarment(
  * removal is.
  */
 export async function tickTripItem(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   tick: Tick & { itemId: number },
 ): Promise<{ item: TripItemRow; changed: boolean }> {
-  const change = await packTripItems(db, actor, ticksOf(tick.itemId, tick));
+  const change = await setTripItemsPacked(
+    db,
+    actor,
+    ticksOf(tick.itemId, tick),
+  );
   const item = change.items.find((row) => row.id === tick.itemId);
   if (!item) {
     throw new NotFound('trip', {
       logDetail: `extra ${tick.itemId} is not on trip ${tick.tripId}`,
     });
   }
+  logOp(logger, actor, 'trip.extras.set', {
+    tripId: tick.tripId,
+    itemId: tick.itemId,
+    packed: change.packed,
+    unpacked: change.unpacked,
+  });
   return { item, changed: change.packed + change.unpacked > 0 };
 }
 
-/** An extra on the actor's trip; the count added (0: the label is there already). */
+/**
+ * An extra on the actor's trip; the count added (0: the label is there
+ * already). Logged without the label, the person's own text.
+ */
 export async function addTripItem(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   tripId: number,
   label: string,
 ): Promise<number> {
   const added = await addTripItems(db, tripId, actor.userId, [label]);
   if (added === 'not-found') throw tripNotFound();
+  logOp(logger, actor, 'trip.extra.added', { tripId, changed: added > 0 });
   return added;
 }
 
 /** Removes one extra of the actor's trip (removeTripItem). */
 export async function removeTripExtra(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { tripId: number; itemId: number },
 ): Promise<void> {
   if (!(await removeTripItem(db, { ...input, ownerId: actor.userId }))) {
     throw tripNotFound();
   }
+  logOp(logger, actor, 'trip.extra.removed', input);
 }
 
 /**
@@ -394,7 +636,7 @@ export async function removeTripExtra(
  * same one (copyTripItems); the count added.
  */
 export async function copyTripExtras(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   input: { fromTripId: number; toTripId: number },
 ): Promise<number> {
@@ -404,5 +646,10 @@ export async function copyTripExtras(
       logDetail: `copy from trip ${input.fromTripId} to ${input.toTripId}`,
     });
   }
+  logOp(logger, actor, 'trip.extras.copied', {
+    tripId: input.toTripId,
+    fromTripId: input.fromTripId,
+    added: copied,
+  });
   return copied;
 }

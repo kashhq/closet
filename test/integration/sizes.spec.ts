@@ -125,14 +125,12 @@ describe('sizes', () => {
   });
 
   describe('measurements', () => {
-    it('shows an empty Sizes section on the profile, with the editor a tap away', async () => {
+    it('is a row on Profile, the editor a tap away (#728)', async () => {
       const profile = await get('/auth/profile');
       expect(profile.statusCode).toBe(200);
-      expect(profile.body).toContain('id="sizes"');
-      expect(profile.body).toContain('href="#sizes"');
-      expect(profile.body).toContain('No measurements yet.');
-      expect(profile.body).toContain('No brand notes yet.');
-      expect(profile.body).toContain('href="/auth/profile/sizes"');
+      expect(profile.body).toContain(
+        '<li id="sizes"><a href="/auth/profile/sizes"',
+      );
       const editor = await get('/auth/profile/sizes');
       expect(editor.statusCode).toBe(200);
       // Inches until the person chooses, as the migration's default says.
@@ -158,11 +156,6 @@ describe('sizes', () => {
         neckCm: 39.37,
         heightCm: null,
       });
-      const profile = await get('/auth/profile');
-      expect(profile.body).toContain('32 in');
-      expect(profile.body).toContain('32.25 in');
-      expect(profile.body).toContain('15.5 in');
-      expect(profile.body).not.toContain('No measurements yet.');
       const editor = await get('/auth/profile/sizes?saved=measurements');
       expect(editor.body).toContain('Measurements saved');
       expect(editor.body).toMatch(/name="waist" value="32"/);
@@ -257,8 +250,8 @@ describe('sizes', () => {
         },
       ]);
       uniqlo = rows[0].id;
-      const profile = await get('/auth/profile');
-      expect(profile.body).toContain(UNIQLO_NOTE);
+      const editor = await get('/auth/profile/sizes');
+      expect(editor.body).toContain('value="Runs big"');
     });
 
     it('keeps one row per brand whatever the case', async () => {
@@ -352,8 +345,8 @@ describe('sizes', () => {
         note: 'Runs large: size down',
       });
       expect(changed.statusCode).toBe(303);
-      expect((await get('/auth/profile')).body).toContain(
-        'Red Wing: Runs large: size down',
+      expect((await get('/auth/profile/sizes')).body).toContain(
+        'value="Runs large: size down"',
       );
       const removed = await post(
         `/auth/profile/sizes/brands/${redWing}/delete`,

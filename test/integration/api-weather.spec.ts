@@ -97,8 +97,8 @@ describe('the weather', () => {
       name: 'Fort Greene, New York, United States',
       ...ROUNDED,
     });
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      expect.stringMatching(/^Weather home set by user \d+ \(API\)$/),
+    expect(t.logs.ops('weather.home.set')).toContainEqual(
+      expect.objectContaining({ surface: 'api' }),
     );
 
     const week = (await api('GET', '/weather')).json<Weather>();

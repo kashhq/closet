@@ -1,17 +1,19 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { FastifyRequest } from 'fastify';
-import { createHash } from 'node:crypto';
 import { todayIn } from '../../calendar-date';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { IsoDateSchema } from '../schemas';
-import { enforceLimit, SIGN_IN_ACCOUNT_LIMIT } from '../security/rate-limit';
-import { createToken, revokeToken, TOKEN_NAME_MAX } from './personal-tokens';
-import { normalizeEmail } from './queries';
-import { checkSignIn, failedSignInFor, signInGate } from './sign-in';
+import { actorOf } from '../sharing/access';
+import {
+  createToken,
+  FULL_SCOPE,
+  revokeToken,
+  TOKEN_NAME_MAX,
+} from './personal-tokens';
+import { checkSignIn, failedSignInFor, signInGuards } from './sign-in';
 import { Email, Password } from './validation';
 
 const TokenSignInBody = Type.Object({
@@ -43,54 +45,52 @@ const Me = Type.Object(
     timeZone: Type.String(),
     /** The household's today (todayIn), the day a wear or wash defaults to. */
     today: IsoDateSchema,
+    /**
+     * What this server has, decided at registration: a client reads it here
+     * rather than guessing from a 404 (src/web/api/AGENTS.md).
+     */
+    features: Type.Object(
+      {
+        weather: Type.Boolean({
+          description:
+            'WEATHER_ENABLED: the /weather routes, GET and PUT /trips/{id}/weather and destination exist',
+        }),
+        push: Type.Boolean({
+          description: 'PWA_ENABLED: Web Push (the /push routes) exists',
+        }),
+      },
+      { title: 'Features' },
+    ),
+    /** The build: the same release /health/ready reports as `version`. */
+    version: Type.String({
+      description: 'The server build, as `version` on /health/ready',
+    }),
   },
   { title: 'Me', description: 'The account the token acts as' },
 );
 
 /**
- * The per-account key of SIGN_IN_ACCOUNT_LIMIT: a hash of the address as
- * the lookup normalises it, so the counter never holds an email. Runs in
- * preHandler, after the body's schema check.
- */
-function accountKey(request: FastifyRequest): string {
-  const { body } = request;
-  const email =
-    typeof body === 'object' &&
-    body !== null &&
-    'email' in body &&
-    typeof body.email === 'string'
-      ? body.email
-      : '';
-  return `account ${createHash('sha256').update(normalizeEmail(email)).digest('hex')}`;
-}
-
-/**
  * The API's account routes (#190; plan section 3), registered by apiPlugin
  * under /api/v1:
  *  - POST /auth/token: a native client signs in and gets a device token,
- *    public, under the login page's SIGN_IN_LIMIT (one budget for both
- *    doors) and SIGN_IN_ACCOUNT_LIMIT. It sets no cookie.
+ *    public, under the login page's own SIGN_IN_LIMIT and
+ *    SIGN_IN_ACCOUNT_LIMIT budgets (signInGuards: one of each for both
+ *    doors). It sets no cookie.
  *  - DELETE /auth/token: signs this device out, revoking the calling token
  *    and nothing else.
- *  - GET /me: who the token acts as, and the household's day.
+ *  - GET /me: who the token acts as, the household's day, the server's
+ *    features and build.
  */
 export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
-  { db, config, apiLogger: logger, signInLimit },
+  { db, config, weather, apiLogger: logger, signInLimits },
   done,
 ) => {
-  const accountLimit = app.createRateLimit({
-    ...SIGN_IN_ACCOUNT_LIMIT,
-    keyGenerator: accountKey,
-  });
-
   app.post(
     '/auth/token',
     {
       config: { public: true },
-      onRequest: signInGate(signInLimit, logger),
-      preHandler: (request) =>
-        enforceLimit(accountLimit, request, { logger, who: 'an account' }),
+      ...signInGuards(signInLimits, logger),
       schema: {
         operationId: 'signIn',
         tags: ['auth'],
@@ -114,11 +114,13 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { account } = check;
       const result = await createToken(
         { db, logger },
+        { userId: account.id, surface: 'api' },
         {
-          userId: account.id,
           kind: 'device',
           name: deviceName.trim(),
+          scope: FULL_SCOPE,
           verifiedPassword: account.password,
+          address: request.ip,
         },
       );
       // A device at the cap evicts, never refuses: only a password changed
@@ -129,9 +131,6 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         );
         throw new HttpError(401, t('LOGIN_FAILED'));
       }
-      logger.info(
-        `User ${account.id} signed in a device: token ${result.id} from ${request.ip}${result.evictedId === undefined ? '' : `, evicting token ${result.evictedId}`}`,
-      );
       // The only time the token exists in a response: nothing may store it.
       reply.header('Cache-Control', 'no-store').status(201);
       return { token: result.token, tokenId: result.id };
@@ -151,14 +150,11 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { user, tokenId } = request.accessToken!;
-      // False only when something revoked it since this request
+      const { tokenId } = request.accessToken!;
+      // Unchanged only when something revoked it since this request
       // authenticated (a new password, Profile › Devices): signed out
       // either way, which is what the client asked for.
-      const revoked = await revokeToken(db, user.id, 'device', tokenId);
-      logger.info(
-        `User ${user.id} signed out device token ${tokenId}${revoked ? '' : ' (already revoked)'}`,
-      );
+      await revokeToken({ db, logger }, actorOf(request), 'device', tokenId);
       return reply.status(204).send(null);
     },
   );
@@ -180,6 +176,8 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         ...(user.email === null ? {} : { email: user.email }),
         timeZone: config.timeZone,
         today: todayIn(config.timeZone, new Date()),
+        features: { weather: weather !== undefined, push: config.pwaEnabled },
+        version: config.release,
       };
     },
   );

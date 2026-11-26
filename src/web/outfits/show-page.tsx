@@ -1,17 +1,16 @@
 import type { GarmentMarkKind } from '../../wardrobe/marks';
 import { DEFAULT_OCCASION, OCCASIONS } from '../../wardrobe/occasions';
-import { PostForm } from '../auth/form';
-import type { IsoDate } from '../../calendar-date';
+import { PostForm } from '../form';
 import { dayLabel, occasionLabel } from '../date-labels';
+import { defaultsToToday } from '../day-time';
 import { AlreadySavedToast } from '../gallery/already-saved';
 import type { AlreadySaved } from '../gallery/urls';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
 import { AgentBadge } from '../agent-badge';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { GarmentThumb, SheetBackdrop } from '../layout/parts';
+import { PageShell } from '../layout/page-shell';
+import { GarmentThumb } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { EntrySelfie, SelfieView } from '../selfies/views';
 import {
   type PublicShare,
@@ -42,7 +41,11 @@ import { ToBuySection } from './to-buy';
 import { outfitUrl } from './urls';
 
 const PLAN_SHEET_ID = 'outfit-plan-sheet';
-const OPEN_PLAN_SHEET = `document.getElementById('${PLAN_SHEET_ID}').showModal()`;
+
+/** A garment of the outfit with the marks its collage and list show. */
+type OutfitPiece = OutfitSummary['garments'][number] & {
+  marks: GarmentMarkKind[];
+};
 
 /**
  * GET /outfits/:id (redesign plan, "Outfits"; R5): the outfit as a record,
@@ -62,8 +65,6 @@ export function OutfitPage(props: {
   ctx: ViewContext;
   outfit: OutfitPageDetail;
   entries: OutfitEntries;
-  /** The household's today: the Plan sheet's first day. */
-  today: IsoDate;
   /** The gallery's pick or a save found this outfit already saved (?alreadySaved=). */
   alreadySaved?: AlreadySaved;
   /** A reaction to Muse's proposal came back here (`?decided=`). */
@@ -84,74 +85,98 @@ export function OutfitPage(props: {
     toBuy.length === 0 &&
     (!outfit.proposal || outfit.proposal.reaction === 'loved');
   return (
-    <Layout ctx={ctx} title={name}>
-      <AppBar
-        ctx={ctx}
-        title={name}
-        back="/outfits"
-        actions={<OutfitMenu ctx={ctx} outfit={outfit} />}
-      />
-      <main class="flex flex-col gap-6 px-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        {outfit.proposal && (
-          <ProposalBlock
-            outfitId={outfit.id}
-            proposal={outfit.proposal}
-            complete={toBuy.length === 0}
-          />
-        )}
-        {outfit.agent && (
-          <p class="px-1">
-            <AgentBadge
-              agent={outfit.agent}
-              byMuse={outfit.proposal !== null}
-            />
-          </p>
-        )}
-        {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
-        {outfit.garments.length > 0 ? (
-          <OutfitCollage garments={pieces} eager />
-        ) : (
-          <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
-        )}
-        {toBuy.length > 0 && <ToBuySection pieces={toBuy} />}
-        <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(outfit)} />
-        <div class="flex gap-2">
-          {mayBePlanned && (
-            <button
-              type="button"
-              class="btn btn-primary flex-1"
-              onclick={OPEN_PLAN_SHEET}
-              data-outfit-plan=""
-            >
-              {t('outfits.PLAN')}
-            </button>
-          )}
-          <a
-            href={stylingUrl({
-              outfitId: outfit.id,
-              // Its pieces to buy on their strips, to swap one for another (#335).
-              picks: toBuy.length > 0,
-              returnTo: outfitUrl(outfit.id),
-            })}
-            class="btn btn-outline flex-1"
-            data-outfit-edit=""
+    <PageShell
+      ctx={ctx}
+      name="outfit"
+      bar={{
+        title: name,
+        back: '/outfits',
+        actions: <OutfitMenu ctx={ctx} outfit={outfit} />,
+      }}
+      layout="split"
+      aside={
+        <OutfitSubject
+          outfit={outfit}
+          pieces={pieces}
+          complete={toBuy.length === 0}
+        />
+      }
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {mayBePlanned && <PlanSheet outfitId={outfit.id} />}
+          <AlreadySavedToast kind={props.alreadySaved} />
+          <DecisionToastView toast={props.toast} />
+        </>
+      }
+    >
+      {toBuy.length > 0 && <ToBuySection pieces={toBuy} />}
+      <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(outfit)} />
+      <div class="flex gap-2">
+        {mayBePlanned && (
+          <button
+            type="button"
+            class="btn btn-primary flex-1"
+            {...sheetOpener(PLAN_SHEET_ID)}
+            data-outfit-plan=""
           >
-            {t('outfits.EDIT')}
-          </a>
-        </div>
-        {entries.planned.length > 0 && (
-          <PlannedList planned={entries.planned} />
+            {t('outfits.PLAN')}
+          </button>
         )}
-        {entries.worn.length > 0 && (
-          <WornStrip outfitId={outfit.id} worn={entries.worn} />
-        )}
-        {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
-      </main>
-      {mayBePlanned && <PlanSheet outfitId={outfit.id} today={props.today} />}
-      <AlreadySavedToast kind={props.alreadySaved} />
-      <DecisionToastView toast={props.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+        <a
+          href={stylingUrl({
+            outfitId: outfit.id,
+            // Its pieces to buy on their strips, to swap one for another (#335).
+            picks: toBuy.length > 0,
+            returnTo: outfitUrl(outfit.id),
+          })}
+          class="btn btn-outline flex-1"
+          data-outfit-edit=""
+        >
+          {t('outfits.EDIT')}
+        </a>
+      </div>
+      {entries.planned.length > 0 && <PlannedList planned={entries.planned} />}
+      {entries.worn.length > 0 && (
+        <WornStrip outfitId={outfit.id} worn={entries.worn} />
+      )}
+      {outfit.garments.length > 0 && <GarmentList pieces={pieces} />}
+    </PageShell>
+  );
+}
+
+/**
+ * The split page's subject: what the outfit is (Muse's proposal and its
+ * answer, who made it, the notes) and the collage. A phone reads them before
+ * the actions, so they lead the subject rather than the facts.
+ */
+function OutfitSubject(props: {
+  outfit: OutfitPageDetail;
+  pieces: OutfitPiece[];
+  complete: boolean;
+}) {
+  const { outfit } = props;
+  return (
+    <div class="flex flex-col gap-6">
+      {outfit.proposal && (
+        <ProposalBlock
+          outfitId={outfit.id}
+          proposal={outfit.proposal}
+          complete={props.complete}
+        />
+      )}
+      {outfit.agent && (
+        <p class="px-1">
+          <AgentBadge agent={outfit.agent} byMuse={outfit.proposal !== null} />
+        </p>
+      )}
+      {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
+      {outfit.garments.length > 0 ? (
+        <OutfitCollage garments={props.pieces} eager />
+      ) : (
+        <p class="text-muted text-sm italic">{t('OUTFIT_NO_GARMENTS')}</p>
+      )}
+    </div>
   );
 }
 
@@ -335,13 +360,7 @@ function WornStrip(props: { outfitId: number; worn: WornDay[] }) {
 }
 
 /** The garments in the order the outfit was built, each opening its page. */
-function GarmentList({
-  pieces,
-}: {
-  pieces: (OutfitSummary['garments'][number] & {
-    marks: GarmentMarkKind[];
-  })[];
-}) {
+function GarmentList({ pieces }: { pieces: OutfitPiece[] }) {
   return (
     <section aria-labelledby="outfit-garments-title">
       <h2 id="outfit-garments-title" class="text-sm text-muted mb-2">
@@ -354,7 +373,11 @@ function GarmentList({
             class="flex flex-col items-center gap-1 w-20"
           >
             <span class="relative">
-              <GarmentThumb garment={piece} class="rounded-box bg-base-200" />
+              <GarmentThumb
+                garment={piece}
+                class="rounded-box bg-base-200"
+                decorative
+              />
               <FootMark marks={piece.marks} />
             </span>
             <span class="text-xs text-center line-clamp-2 leading-tight">
@@ -370,64 +393,58 @@ function GarmentList({
 /**
  * Plan: the outfit on a day, for an occasion, through POST /calendar (a
  * native post; 302 to that day's week, which shows it). Replaces the Saved
- * grid's per-card dropdown (R5). The day starts at today; the occasion is
+ * grid's per-card dropdown (R5). The day starts at today, the client's
+ * (defaultsToToday: the page keeps its ETag across days, #708); the occasion is
  * a row of radios styled as chips, all day checked (the calendar's "+ Plan"
  * sheet's pattern, R6). Planning an outfit already on that day changes
  * nothing (an outfit is on a day once).
  */
-function PlanSheet(props: { outfitId: number; today: IsoDate }) {
+function PlanSheet(props: { outfitId: number }) {
   return (
-    <dialog
+    <Sheet
       id={PLAN_SHEET_ID}
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="outfit-plan-sheet-title"
+      kind="choice"
+      labelledBy="outfit-plan-sheet-title"
+      gap={4}
+      dismiss="close"
     >
-      <div class="modal-box flex flex-col gap-4 pb-8">
-        <h2 id="outfit-plan-sheet-title" class="font-semibold text-lg">
-          {t('outfits.PLAN_TITLE')}
-        </h2>
-        <PostForm action="/calendar" class="flex flex-col gap-4">
-          <input type="hidden" name="outfitId" value={String(props.outfitId)} />
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-muted">{t('outfits.PLAN_DAY')}</span>
-            <input
-              type="date"
-              name="date"
-              class="input w-full"
-              value={props.today}
-              required
-            />
-          </label>
-          <fieldset>
-            <legend class="text-sm text-muted mb-2">{t('OCCASION')}</legend>
-            <div class="flex flex-wrap gap-2">
-              {OCCASIONS.map((occasion) => (
-                <input
-                  type="radio"
-                  name="occasion"
-                  value={occasion}
-                  class="btn btn-sm rounded-full checked:btn-primary"
-                  aria-label={occasionLabel(occasion)}
-                  checked={occasion === DEFAULT_OCCASION}
-                />
-              ))}
-            </div>
-          </fieldset>
-          <div class="modal-action mt-0">
-            <button
-              type="button"
-              class="btn btn-ghost"
-              onclick="this.closest('dialog').close()"
-            >
-              {t('CANCEL')}
-            </button>
-            <button type="submit" class="btn btn-primary">
-              {t('outfits.PLAN_SUBMIT')}
-            </button>
+      <h2 id="outfit-plan-sheet-title" class="font-semibold text-lg">
+        {t('outfits.PLAN_TITLE')}
+      </h2>
+      <PostForm action="/calendar" class="flex flex-col gap-4">
+        <input type="hidden" name="outfitId" value={String(props.outfitId)} />
+        <label class="flex flex-col gap-1">
+          <span class="text-sm text-muted">{t('outfits.PLAN_DAY')}</span>
+          <input
+            type="date"
+            name="date"
+            class="input w-full"
+            {...defaultsToToday}
+            required
+          />
+        </label>
+        <fieldset>
+          <legend class="text-sm text-muted mb-2">{t('OCCASION')}</legend>
+          <div class="chip-row">
+            {OCCASIONS.map((occasion) => (
+              <input
+                type="radio"
+                name="occasion"
+                value={occasion}
+                class="btn btn-sm rounded-full checked:btn-primary"
+                aria-label={occasionLabel(occasion)}
+                checked={occasion === DEFAULT_OCCASION}
+              />
+            ))}
           </div>
-        </PostForm>
-      </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+        </fieldset>
+        <div class="modal-action mt-0">
+          <SheetCancel />
+          <button type="submit" class="btn btn-primary">
+            {t('outfits.PLAN_SUBMIT')}
+          </button>
+        </div>
+      </PostForm>
+    </Sheet>
   );
 }

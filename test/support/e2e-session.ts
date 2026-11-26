@@ -86,11 +86,12 @@ export async function registerElsewhere(
  * the service worker sees, which drop its session caches.
  */
 export async function switchAccount(page: Page, email: string): Promise<void> {
-  // Signing out is Profile's, reached through the avatar (#82).
-  await page.locator('#avatar').click();
+  // Signing out is Profile's, reached through the avatar on a phone and
+  // the rail's Profile link from lg (#82, #1061): whichever shows.
+  await page.getByRole('link', { name: 'Profile', exact: true }).click();
   await page
     .locator('#sign-out')
-    .getByRole('button', { name: 'Logout' })
+    .getByRole('button', { name: 'Sign out' })
     .click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   await submitLogin(page, email);
@@ -113,11 +114,5 @@ export async function submitLogin(page: Page, email: string): Promise<void> {
   );
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }
-
-/**
- * The order mail's owner on the e2e server (playwright.config.ts sets
- * ORDER_MAIL_OWNER to it): the one account with a review list (#25).
- */
-export const ORDER_REVIEW_OWNER = 'orders-owner@example.com';

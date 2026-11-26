@@ -1,7 +1,7 @@
 import { type Static, Type } from '@sinclair/typebox';
 import type { FieldErrors } from '../auth/validation';
 import { type IsoDate, parseIsoDate } from '../../calendar-date';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { choice, pick, RowId } from '../schemas';
 import {
   NEVER_WASH,
@@ -536,6 +536,20 @@ export interface FormAudience {
   owner: boolean;
 }
 
+/**
+ * Who owns the garment a form saves: the requester in their own wardrobe
+ * (`viewOwner` undefined: authorizeWardrobe's isOwner), and always for a
+ * clone, which lands there. The one rule for both sides of the owner-only
+ * fields (FormAudience): the form renders them only for the
+ * owner, and the routes read them from the post only for the owner.
+ */
+export function formAudience(
+  mode: { kind: 'new' | 'edit' | 'clone' },
+  viewOwner: number | undefined,
+): FormAudience {
+  return { owner: mode.kind === 'clone' || viewOwner === undefined };
+}
+
 /** A stored garment's care fields as the form shows them to `audience`. */
 function storedCareValues(
   stored: CareFields,
@@ -575,7 +589,9 @@ function readCareFields(
     'care' | 'quantity' | 'washAfterWears' | 'condition' | 'conditionNote'
   >,
   audience: FormAudience,
-): { ok: true; fields: Partial<CareFields> } | { ok: false; error: string } {
+):
+  | { ok: true; fields: Partial<CareFields> }
+  | { ok: false; error: Translated } {
   if (posted.care !== '1') return { ok: true, fields: {} };
   const typed = posted.quantity?.trim() || '1';
   const quantity = Number(typed);
@@ -735,7 +751,7 @@ function readFabricWeight(
   posted: string,
   unit: FabricWeightUnit,
   shownGsm: string,
-): { gsm: number | null } | { error: string } {
+): { gsm: number | null } | { error: Translated } {
   const typed = posted.trim();
   if (!typed) return { gsm: null };
   const value = Number(typed.replace(',', '.'));
@@ -769,7 +785,9 @@ function readFabricWeight(
 function readProperties(
   values: PropertyFormValues,
   category: string,
-): { ok: true; fields: GarmentPropertyFields } | { ok: false; error: string } {
+):
+  | { ok: true; fields: GarmentPropertyFields }
+  | { ok: false; error: Translated } {
   const weight = readFabricWeight(
     values.fabricWeight,
     values.fabricWeightUnit,
@@ -920,7 +938,7 @@ function presetSource(
  */
 function readColors(posted: string[] = []): {
   colors: GarmentColor[] | null;
-  errors: string[];
+  errors: Translated[];
 } {
   return {
     colors: storedSet(GARMENT_COLORS, posted),
@@ -943,7 +961,7 @@ function readDay(posted: string | undefined): IsoDate | null | undefined {
  */
 function readSourceUrl(
   posted: string | undefined,
-): { url: string | null } | { error: string } {
+): { url: string | null } | { error: Translated } {
   const typed = posted?.trim();
   if (!typed) return { url: null };
   const url = URL.parse(typed);
@@ -961,7 +979,7 @@ const PRICE = /^(\d{1,8})(?:\.(\d{1,2}))?$/;
 /** A typed price as stored ('49.90'), null when blank, or a message. */
 export function readPrice(
   posted: string | undefined,
-): { price: string | null } | { error: string } {
+): { price: string | null } | { error: Translated } {
   const typed = posted
     ?.trim()
     .replace(/^\$\s*/, '')
@@ -1079,7 +1097,7 @@ function readReplaces(
 /** The messages for what a well-formed garment form can still get wrong. */
 function formErrors(read: {
   category: string;
-  colors: { errors: string[] };
+  colors: { errors: Translated[] };
   acquiredOn: IsoDate | null | undefined;
   properties: ReturnType<typeof readProperties> | undefined;
   product: ReturnType<typeof readProductFields>;

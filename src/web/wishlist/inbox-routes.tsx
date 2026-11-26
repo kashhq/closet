@@ -20,7 +20,7 @@ import {
   withParams,
 } from '../wardrobe/urls';
 import { NeedPage } from './group-page';
-import { markSuggestionsSeen, readInbox } from './inbox';
+import { readInbox } from './inbox';
 import {
   GroupCards,
   INBOX_MORE_PATH,
@@ -35,6 +35,7 @@ import {
 } from './suggestion-parts';
 import {
   makeDecision,
+  markNeedsSeen,
   type OwnerDecision,
   requireNeed,
 } from './suggestion-actions';
@@ -168,13 +169,7 @@ export const inboxRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   // the answer is the marker's slot, out of band. A write, so never cached
   // (doc section 9: the bare page stays the same before and after).
   app.post(INBOX_SEEN_PATH, async (request, reply) => {
-    const ownerId = sessionUserId(request);
-    const needs = await markSuggestionsSeen(db, ownerId);
-    if (needs.length > 0) {
-      logger.info(
-        `Suggestions seen by user ${ownerId}: ${needs.length} needs new (${needs.map((need) => need.id).join(', ')})`,
-      );
-    }
+    const needs = await markNeedsSeen({ db, logger }, actorOf(request));
     return renderFragment(reply, <NewFromMuse needs={needs} />);
   });
 
@@ -218,19 +213,11 @@ export const inboxRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       toast,
     }: { returnTo: string | undefined; fallback: string; toast: DecisionToast },
   ): Promise<FastifyReply> {
-    const outcome = await makeDecision(
-      db,
+    await makeDecision(
+      { db, logger },
       actorOf(request),
       request.query.ownerId,
       decision,
-    );
-    const { access } = outcome;
-    const subject =
-      'garmentId' in decision
-        ? `garment ${decision.garmentId}`
-        : `need ${decision.groupId}`;
-    logger.info(
-      `Decision ${decision.kind} on ${subject} (need ${outcome.groupId ?? 'none'}) by user ${access.ownerId}: ${outcome.dismissed.length} set aside, ${outcome.restored.length} restored`,
     );
     return reply.redirect(
       withParams(safeReturnTo(returnTo, fallback), { [DECISION_FLAG]: toast }),
@@ -360,15 +347,11 @@ export const inboxRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { params: GarmentParams, querystring: OwnerQuery } },
     async (request, reply) => {
       const { id } = request.params;
-      const outcome = await makeDecision(
-        db,
+      await makeDecision(
+        { db, logger },
         actorOf(request),
         request.query.ownerId,
         { kind: 'returned', garmentId: id },
-      );
-      const { access } = outcome;
-      logger.info(
-        `Garment ${id} returned (archived) by user ${access.ownerId}; need ${outcome.groupId ?? 'none'} open again`,
       );
       return navigateTo(
         reply,

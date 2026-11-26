@@ -1,3 +1,4 @@
+import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, HTTPMethods, RouteOptions } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -8,13 +9,16 @@ import {
   type RouteKey,
   templateRouter,
 } from './app-routes';
+import { RESOURCE_ID, RowId } from '../../src/web/schemas';
 import type { MatrixGroup, Via } from './authorization-matrix';
 
 /**
  * Every route that takes an id is in the authorization matrix (#182): a
  * route whose path has a parameter (`:id`, `:itemId`, a wildcard), or whose
  * querystring or body schema takes `ownerId` (the share-aware wardrobe
- * routes, which address someone's wardrobe without a path parameter), is
+ * routes, which address someone's wardrobe without a path parameter), or
+ * whose body or querystring carries a RowId anywhere (`garmentIds`,
+ * `outfitId`: the schema's RESOURCE_ID mark, src/web/schemas.ts), is
  * requested by some matrix case, or is on EXEMPT with the reason it needs
  * none. A route whose querystring takes `ownerId` is requested with it (the
  * `ownerId` via). So a new id route fails CI until it joins its group's
@@ -47,6 +51,10 @@ const EXEMPT: Record<RouteKey, string> = {
     'a redirect to the Wishlist inbox that reads nothing (#337, plans removed); covered by plans-removed.spec.ts',
   'GET /wardrobe/:id/plan-items':
     "a redirect to the garment's page that reads nothing (#337, plans removed): the page then authorizes; covered by plans-removed.spec.ts",
+  'POST /outfits/ideas/feedback':
+    'weather only, and its `capsule` and `with` are echoed into the redirect to the gallery, never read: the gallery then authorizes them, as the matrix\'s "GET /outfits/ideas/more?capsule=" shows; the write is the requester\'s own temperature offset (nudgeTemperatureOffset); covered by gallery.spec.ts',
+  'POST /outfits/ideas/allow':
+    'the undo of avoid: it deletes the pair where owner_id is the requester (allowPair, an Actor) and answers 404 when none exists, which the shared fixture must not have (it would change what every ideas read draws); covered by api-ideas.spec.ts "avoids a pair once and allows it again; only between your own garments" (same function; a stranger\'s DELETE is a 404)',
   'GET /api/v1/garments/:id/goes-with':
     '"Goes with my closet" (#194b) has no page route of its own (the wishlist item\'s page draws it for the owner alone, so no page case answers what the API\'s does): covered by authorization-wardrobe.spec.ts "GET /api/v1/garments/:id/goes-with is the owner\'s alone"',
   'DELETE /api/v1/garments/:id/wears/:day':
@@ -61,7 +69,7 @@ interface AppRoute {
   key: RouteKey;
   /**
    * The path has a parameter or a wildcard, or the body names a wardrobe
-   * (`ownerId`).
+   * (`ownerId`), or the body or querystring carries a RowId.
    */
   takesId: boolean;
   /** Its querystring takes `?ownerId=`: the matrix must send it. */
@@ -83,6 +91,68 @@ function takesOwnerId(schema: unknown): boolean {
   );
 }
 
+/** A schema's direct subschemas: properties, items (or a tuple's), unions, patterns. */
+function subschemas(schema: object): unknown[] {
+  const { properties, items, anyOf, allOf, oneOf, patternProperties } =
+    schema as {
+      properties?: Record<string, unknown>;
+      items?: unknown;
+      anyOf?: unknown[];
+      allOf?: unknown[];
+      oneOf?: unknown[];
+      patternProperties?: Record<string, unknown>;
+    };
+  return [
+    ...Object.values(properties ?? {}),
+    ...Object.values(patternProperties ?? {}),
+    ...[items].flat(),
+    ...(anyOf ?? []),
+    ...(allOf ?? []),
+    ...(oneOf ?? []),
+  ];
+}
+
+/**
+ * Whether a schema carries a RowId at any depth: a property, an array's
+ * items, a union's member. The ownerId of a querystring is one too, which
+ * its own rule already requires.
+ */
+export function carriesResourceId(schema: unknown): boolean {
+  if (typeof schema !== 'object' || schema === null) return false;
+  return RESOURCE_ID in schema || subschemas(schema).some(carriesResourceId);
+}
+
+// `ownerId` is the wardrobe address, which its own rule (takesOwnerId) guards.
+const ID_NAME = /^(?!ownerId$)(id|.*Ids?)$/;
+
+/**
+ * Properties named like an id (`garmentId`, `ids`) that are integers or
+ * arrays of them but not RowId: the guard cannot see them, so a request id
+ * must be a RowId.
+ */
+export function untaggedIdProperties(schema: unknown): string[] {
+  if (typeof schema !== 'object' || schema === null) return [];
+  const { properties } = schema as { properties?: Record<string, unknown> };
+  const own = Object.entries(properties ?? {}).flatMap(([name, property]) => {
+    const { type, items } = property as { type?: string; items?: unknown };
+    const integer =
+      type === 'integer' || (type === 'array' && isInteger(items));
+    return ID_NAME.test(name) && integer && !carriesResourceId(property)
+      ? [name]
+      : [];
+  });
+  return [...own, ...subschemas(schema).flatMap(untaggedIdProperties)];
+}
+
+function isInteger(schema: unknown): boolean {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    (schema as { type?: string }).type === 'integer' &&
+    !(RESOURCE_ID in schema)
+  );
+}
+
 function appRoutes(registered: RouteOptions[]): AppRoute[] {
   const routes = registered.flatMap((route) =>
     [route.method].flat().map((method: HTTPMethods) => ({
@@ -90,6 +160,9 @@ function appRoutes(registered: RouteOptions[]): AppRoute[] {
       url: route.url,
       ownerQuery: takesOwnerId(route.schema?.querystring),
       ownerBody: takesOwnerId(route.schema?.body),
+      resourceIds:
+        carriesResourceId(route.schema?.body) ||
+        carriesResourceId(route.schema?.querystring),
     })),
   );
   const gets = new Set(
@@ -100,9 +173,9 @@ function appRoutes(registered: RouteOptions[]): AppRoute[] {
       // Fastify's HEAD beside every GET (exposeHeadRoutes) runs the GET's
       // handler: the GET's cases cover it.
       .filter(({ method, url }) => method !== 'HEAD' || !gets.has(url))
-      .map(({ method, url, ownerQuery, ownerBody }) => ({
+      .map(({ method, url, ownerQuery, ownerBody, resourceIds }) => ({
         key: `${method} ${url}`,
-        takesId: /[:*]/.test(url) || ownerQuery || ownerBody,
+        takesId: /[:*]/.test(url) || ownerQuery || ownerBody || resourceIds,
         ownerQuery,
       }))
   );
@@ -224,6 +297,51 @@ describe('authorization matrix coverage', () => {
     };
     expect(coverageProblems([...routes, added], covered, EXEMPT)).toEqual([
       'GET /wardrobe/:id/unlisted: takes an id, but no matrix case requests it',
+    ]);
+  });
+
+  it('has no request id that is a bare integer instead of a RowId', () => {
+    const bare = app.registered.flatMap((route) =>
+      ['body', 'querystring'].flatMap((part) =>
+        untaggedIdProperties(
+          (route.schema as Record<string, unknown> | undefined)?.[part],
+        ).map(
+          (name) =>
+            `${[route.method].flat().join('|')} ${route.url}: ${part}.${name}`,
+        ),
+      ),
+    );
+    expect(bare).toEqual([]);
+  });
+
+  it('sees a RowId in a body, however nested', () => {
+    expect(carriesResourceId(Type.Object({ outfitId: RowId }))).toBe(true);
+    expect(
+      carriesResourceId(Type.Object({ garmentIds: Type.Array(RowId) })),
+    ).toBe(true);
+    expect(
+      carriesResourceId(
+        Type.Union([Type.Object({ a: Type.Optional(RowId) }), Type.Null()]),
+      ),
+    ).toBe(true);
+    expect(
+      carriesResourceId(
+        Type.Object({ note: Type.String(), n: Type.Integer() }),
+      ),
+    ).toBe(false);
+  });
+
+  it('fails on a body-id route nobody listed', async () => {
+    const { covered } = await matrixCoverage(groups, router);
+    const [added] = appRoutes([
+      {
+        method: 'POST',
+        url: '/unlisted',
+        schema: { body: Type.Object({ garmentIds: Type.Array(RowId) }) },
+      } as RouteOptions,
+    ]);
+    expect(coverageProblems([...routes, added], covered, EXEMPT)).toEqual([
+      'POST /unlisted: takes an id, but no matrix case requests it',
     ]);
   });
 });

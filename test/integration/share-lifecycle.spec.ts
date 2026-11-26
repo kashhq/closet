@@ -14,7 +14,7 @@ import { invitePath } from '../../src/web/sharing/urls';
 import { createGarment, garmentRow, garmentsNamed } from './garments';
 import {
   createTestApp,
-  sessionFingerprintOf,
+  sessionStampOf,
   TEST_PASSWORD,
   TestApp,
   unescapeHtml,
@@ -45,7 +45,7 @@ describe('wardrobe share lifecycle', () => {
   }
 
   /** Where sharing is managed since #82: Profile › Sharing. */
-  const SHARING = '/auth/profile#sharing';
+  const SHARING = '/auth/profile/sharing';
 
   const signUp = async (label: string): Promise<Account> => {
     const email = `${label}-${randomUUID().slice(0, 8)}@example.com`;
@@ -65,7 +65,7 @@ describe('wardrobe share lifecycle', () => {
   /**
    * An invite with its grantee already set. The UI only makes open links
    * (grantee null); this is the row shape acceptInvite/declineInvite guard
-   * with "sent to a different email address", so it is written directly.
+   * with "addressed to another email address", so it is written directly.
    */
   const createAddressedInvite = async (addressee: Account) => {
     const inviteToken = randomUUID();
@@ -102,8 +102,8 @@ describe('wardrobe share lifecycle', () => {
   };
 
   /**
-   * A refused accept: redirect back to Profile › Sharing carrying the
-   * refusal code, which the section shows as its message.
+   * A refused accept: redirect back to Profile › Sharing's page carrying the
+   * refusal code, which the page shows as its message.
    */
   const expectAcceptRefused = async (
     res: Awaited<ReturnType<typeof accept>>,
@@ -113,11 +113,11 @@ describe('wardrobe share lifecycle', () => {
   ) => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe(
-      `/auth/profile?shareError=${code}#sharing`,
+      `/auth/profile/sharing?shareError=${code}`,
     );
     const page = await t.inject({
       method: 'GET',
-      url: `/auth/profile?shareError=${code}`,
+      url: `/auth/profile/sharing?shareError=${code}`,
       headers: { cookie: account.cookie },
     });
     expect(page.body).toContain(message);
@@ -215,8 +215,8 @@ describe('wardrobe share lifecycle', () => {
     // Plain boosted links, whole pages: the title and the tabs change too.
     expect(menu).toContain(`href="/wardrobe?ownerId=${owner.id}"`);
     expect(menu).not.toContain('hx-target');
-    expect(menu).toContain('View only');
-    expect(menu).toContain('href="/auth/profile#sharing"');
+    expect(menu).toContain('Can view');
+    expect(menu).toContain('href="/auth/profile/sharing"');
 
     const shared = await t.inject({
       method: 'GET',
@@ -224,7 +224,11 @@ describe('wardrobe share lifecycle', () => {
       headers: { cookie: grantee.cookie },
     });
     expect(shared.statusCode).toBe(200);
-    expect(shared.body).toMatch(/<h1[^>]*>[^<]*’s wardrobe<\/h1>/);
+    // Its full name in the h1's tooltip: from lg the bar cuts it to one
+    // line beside the tabs (#1110).
+    expect(shared.body).toMatch(
+      /<h1[^>]*title="([^"]*’s wardrobe)"[^>]*>\1<\/h1>/,
+    );
     expect(shared.body).toContain(`/wardrobe/${garmentId}?ownerId=${owner.id}`);
 
     // Pages the installed app cached before still swap the grid with the
@@ -236,7 +240,7 @@ describe('wardrobe share lifecycle', () => {
       headers: { cookie: grantee.cookie, 'hx-request': 'true' },
     });
     expect(swapped.statusCode).toBe(200);
-    expect(swapped.body).toMatch(/^<main id="wardrobe-main"/);
+    expect(swapped.body).toMatch(/^<div id="wardrobe-body"/);
     expect(swapped.body).toContain(
       `/wardrobe/${garmentId}?ownerId=${owner.id}`,
     );
@@ -579,7 +583,7 @@ describe('wardrobe share lifecycle', () => {
       await expectAcceptRefused(
         await accept(token, other),
         'wrong-recipient',
-        'This invite was sent to a different email address.',
+        'This invite is addressed to another email address.',
         other,
       );
       expect(await shareBetween(other)).toBeNull();
@@ -698,7 +702,7 @@ describe('wardrobe share lifecycle', () => {
         .where(eq(wardrobeShare.grantorId, grantor.id));
       const profile = await t.inject({
         method: 'GET',
-        url: '/auth/profile',
+        url: '/auth/profile/sharing',
         headers: { cookie: grantor.cookie },
       });
       expect(unescapeHtml(profile.body)).toContain(invitePath(row.token!));
@@ -770,7 +774,7 @@ describe('wardrobe share lifecycle', () => {
       // Listed to its grantor as expired, without its link, still revocable.
       const profile = await t.inject({
         method: 'GET',
-        url: '/auth/profile',
+        url: '/auth/profile/sharing',
         headers: { cookie: owner.cookie },
       });
       expect(unescapeHtml(profile.body)).not.toContain(invitePath(token));
@@ -913,10 +917,10 @@ describe('wardrobe share lifecycle', () => {
 
     it('an invite minted while the password waits goes with it; one that waited for the password is refused', async () => {
       const grantor = await signUpAs('mint-race');
-      const fingerprint = await sessionFingerprintOf(t.db, grantor.id);
+      const session = await sessionStampOf(t.db, grantor.id);
       const [minted, change] = await interleave(
         t.db,
-        (tx) => mintInvite(tx, grantor.id, 'VIEW', { fingerprint }),
+        (tx) => mintInvite(tx, grantor.id, 'VIEW', { session }),
         () => updatePasswordHash(t.db, grantor.id, 'not-a-hash-held'),
       );
       expect(minted).toBeDefined();
@@ -935,6 +939,23 @@ describe('wardrobe share lifecycle', () => {
       );
       expect(res.statusCode).toBe(401);
       expect(res.headers['hx-redirect']).toBe('/auth/login');
+      expect(await invitesOf(waiter)).toEqual([]);
+    });
+
+    // Sign out everywhere moves only the session version (#700): an invite
+    // asked for by a session it ended, waiting on the lock, is refused too.
+    it('an invite that waited for a session-version bump is refused', async () => {
+      const waiter = await signUpAs('mint-version');
+      const [, res] = await interleave(
+        t.db,
+        (tx) =>
+          tx
+            .update(user)
+            .set({ sessionVersion: 7 })
+            .where(eq(user.id, waiter.id)),
+        () => createLink(waiter, { permission: 'VIEW' }, true),
+      );
+      expect(res.statusCode).toBe(401);
       expect(await invitesOf(waiter)).toEqual([]);
     });
   });

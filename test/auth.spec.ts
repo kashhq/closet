@@ -30,7 +30,10 @@ test('register through the form, sign out from Profile, sign back in', async ({
   // Signed out, "/" is a 302 to the login page.
   await page.goto('/');
   await expect(page).toHaveURL(/\/auth\/login$/);
-  await expect(page.locator('body')).toContainText(APP_NAME);
+  await expect(
+    page.locator('body'),
+    'the login page names the app',
+  ).toContainText(APP_NAME);
 
   // The signed-out shell at phone width (#662): the mark, no dead dock, the
   // one primary button, nothing wider than the screen.
@@ -40,6 +43,15 @@ test('register through the form, sign out from Profile, sign back in', async ({
   await expect(page.locator('main img[src^="/assets/icon"]')).toBeVisible();
   await expect(page.locator('.dock')).toHaveCount(0);
   await expect(page.locator('main .btn-primary')).toHaveCount(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  // At 200% text the form still fits the phone (#730).
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -64,19 +76,20 @@ test('register through the form, sign out from Profile, sign back in', async ({
   );
   await page.locator('#confirmPassword').press('Tab');
   await checked;
-  await page.getByRole('button', { name: 'Register' }).click();
+  await page.getByRole('button', { name: 'Create account' }).click();
   // A plain registration lands on Today (#661).
   await page.waitForURL((url) => url.pathname === '/' && url.search === '');
 
-  // The avatar opens Profile, whose sign-out signs out (#82).
+  // Profile (the avatar on a phone, the rail's link from lg: #82, #1061)
+  // holds the sign-out.
   await page.goto('/wardrobe');
   await expect(page.locator('#avatar')).toHaveText(
     email.charAt(0).toUpperCase(),
   );
-  await page.locator('#avatar').click();
+  await page.getByRole('link', { name: 'Profile', exact: true }).click();
   await page
     .locator('#sign-out')
-    .getByRole('button', { name: 'Logout' })
+    .getByRole('button', { name: 'Sign out' })
     .click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   // Signed out, the wardrobe bounces to login, which returns there (#661).
@@ -91,7 +104,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
       response.url().endsWith('/auth/login') &&
       response.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   expect((await refusal).status()).toBe(401);
   await expect(page.locator('[role="alert"]')).toHaveText(
     'Incorrect email or password',
@@ -103,7 +116,7 @@ test('register through the form, sign out from Profile, sign back in', async ({
   // The refused post's page kept the returnTo: signing in lands on the
   // wardrobe it bounced from.
   await page.locator('#password').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/wardrobe$/);
   await expect(page.locator('#avatar')).toHaveText(
     email.charAt(0).toUpperCase(),

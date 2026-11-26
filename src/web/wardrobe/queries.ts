@@ -29,6 +29,7 @@ import type { AwayReason } from '../../wardrobe/availability';
 import type { CareLabel, CareWash } from '../../wardrobe/care';
 import type { EntryStatus, GarmentStatus } from '../../wardrobe/status';
 import { inCapsule } from '../capsules/queries';
+import { managesWardrobeSql } from '../sharing/access';
 import type { SignablePhotoRef, PlinthPhoto } from '../files/image-url';
 import type { StoredPhoto } from '../files/image-variant';
 import {
@@ -107,7 +108,7 @@ export interface GridFilters {
   wash?: CareWash;
   /**
    * Which garments: the closet, the closet and the archive (the modal's
-   * "Show archived"), or the wishlist.
+   * "Include archived"), or the wishlist.
    */
   scope: GarmentScope;
   /** Members of this capsule only (inCapsule). */
@@ -624,13 +625,19 @@ export interface SyncedGarmentRow extends GarmentDetail {
   agent: AgentLabel | null;
   /** The owner's repair log; null on a wardrobe the viewer does not own. */
   repairs: RepairEntry[] | null;
+  /**
+   * The viewer owns its wardrobe or holds a MANAGE share: only they are
+   * shown its public link, as its page shows it (#959).
+   */
+  viewerManages: boolean;
 }
 
 /**
  * The garments with these ids, in one statement whatever their owners (the
  * changes feed's page, src/web/sync/feed.ts, which read the ids from the
  * wardrobes `viewerId` may see, in the same snapshot). The repair log is
- * the owner's own record: read only where `viewerId` owns the garment.
+ * the owner's own record: read only where `viewerId` owns the garment; the
+ * public link only where they may manage it.
  */
 export function garmentsByIds(
   db: Queryable,
@@ -647,6 +654,7 @@ export function garmentsByIds(
       repairs: sql<
         RepairEntry[] | null
       >`case when ${garment.ownerId} = ${viewerId} then ${repairLogSql(garment.id)} end`,
+      viewerManages: managesWardrobeSql(garment.ownerId, viewerId),
     })
     .from(garment)
     .leftJoin(file, eq(file.id, garment.photoId))

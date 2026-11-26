@@ -9,8 +9,9 @@ import type { SignablePhotoRef } from '../files/image-url';
  * role's **cycle** is "No garment" and then the addressed wardrobe's closet
  * garments of that role (`inCloset`, within the capsule when one is chosen),
  * newest first: what a row's strip scrolls through. The page reads only a
- * window of each cycle (queries.ts: STRIP_PAGE past the deepest selected
- * garment); the strip's sentinel fetches the rest a page at a time.
+ * window of each cycle per row (queries.ts: STRIP_PAGE either side of the
+ * row's garment, or the first STRIP_PAGE); the strip's sentinels fetch the
+ * rest a page at a time, older at its end and newer at its start (#996).
  *
  * A row is a role and its state: which garment is centred (null: "No
  * garment") and whether it is locked (Shuffle leaves it alone). The rows
@@ -36,11 +37,20 @@ export interface RowGarment {
   photo: SignablePhotoRef | null;
 }
 
-/** The window of a role's cycle a page shows: its first `garments.length` of `count`, newest first. */
+/** A garment of a role's cycle with its place in it: 1 is the newest. */
+interface RankedGarment extends RowGarment {
+  rank: number;
+}
+
+/**
+ * What a page read of a role's cycle (of `count`), newest first: the head
+ * and the garments around each chosen one, which may be separate runs;
+ * each row's strip shows the run around its own garment (windowAround).
+ */
 export interface RoleWindow {
   role: GarmentRole;
   count: number;
-  garments: RowGarment[];
+  garments: RankedGarment[];
   /**
    * Include picks' garments of this role (`?picks=1`, status `wishlist`),
    * shown before the cycle on the strip and never chosen by default, nor
@@ -63,8 +73,14 @@ export interface StylingRow extends RowState {
    * saving keeps it; its status marks it), then the window of the cycle.
    */
   garments: RowGarment[];
-  /** The cycle has more past the window: the next page starts before this id. */
+  /** The cycle has older garments past the window: the next page starts before this id. */
   moreBefore?: number;
+  /**
+   * The cycle has newer garments than the window (its garment is deep in
+   * the cycle): the previous page ends after this id, the window's first,
+   * and its sentinel sits right before that garment.
+   */
+  moreAfter?: number;
 }
 
 /** A role's order top to toe; a role outside the list (none is) sorts last. */
@@ -210,10 +226,11 @@ export function openingStates(
 }
 
 /**
- * The page's rows: each state with its role's window. A selected garment
- * the window does not hold is one outside the cycle (`detached`: archived,
- * the only kind of owned garment no cycle has), shown first; one found in
- * neither is gone (deleted since), and the row falls back to "No garment".
+ * The page's rows: each state with its role's window around its garment
+ * (windowAround). A selected garment the window does not hold is one
+ * outside the cycle (`detached`: archived, the only kind of owned garment
+ * no cycle has), shown first; one found in neither is gone (deleted
+ * since), and the row falls back to "No garment".
  */
 export function stylingRows(
   states: readonly RowState[],
@@ -222,13 +239,33 @@ export function stylingRows(
 ): StylingRow[] {
   return states.map((state) => {
     const window = windows.find((w) => w.role === state.role);
-    const strip = [...(window?.picks ?? []), ...(window?.garments ?? [])];
+    const run = window ? windowAround(window, state.garmentId) : [];
+    const strip = [...(window?.picks ?? []), ...run];
+    const first = run.at(0);
+    const last = run.at(-1);
     return {
       ...state,
       ...stripOf(state.garmentId, strip, detached),
-      moreBefore: window && nextPageBefore(window),
+      moreBefore:
+        window && last && last.rank < window.count ? last.id : undefined,
+      moreAfter: first && first.rank > 1 ? first.id : undefined,
     };
   });
+}
+
+/**
+ * The run of `window` a row's strip shows: STRIP_PAGE either side of the
+ * row's garment when the cycle has it, else the head (the first
+ * STRIP_PAGE), which roleWindowsSql always reads.
+ */
+function windowAround(
+  window: RoleWindow,
+  garmentId: number | null,
+): RankedGarment[] {
+  const at = window.garments.find((g) => g.id === garmentId)?.rank;
+  const [from, to] =
+    at === undefined ? [1, STRIP_PAGE] : [at - STRIP_PAGE, at + STRIP_PAGE];
+  return window.garments.filter((g) => g.rank >= from && g.rank <= to);
 }
 
 /** A row's strip and choice: the cycle's window, led by a detached choice. */
@@ -244,10 +281,4 @@ function stripOf(
   return outside
     ? { garmentId, garments: [outside, ...cycle] }
     : { garmentId: null, garments: cycle };
-}
-
-/** Where the strip's next page starts, when the cycle has more than the window. */
-function nextPageBefore(window: RoleWindow): number | undefined {
-  const last = window.garments.at(-1);
-  return last && window.count > window.garments.length ? last.id : undefined;
 }

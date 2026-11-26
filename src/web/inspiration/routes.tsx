@@ -3,12 +3,14 @@ import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyReply } from 'fastify';
 import { todayIn } from '../../calendar-date';
 import { sessionUserId } from '../auth/require-session';
+import { actorOf } from '../sharing/access';
 import { AutosaveSaved } from '../autosave';
 import { HttpError } from '../errors';
 import { INSPIRATION_PHOTO_ROOT } from '../files/image-url';
 import { sendPrivatePhoto } from '../files/private-photo';
 import { t } from '../i18n';
 import { alreadySavedParam } from '../gallery/urls';
+import { OutfitCursor } from '../outfits/schemas';
 import { outfitUrl } from '../outfits/urls';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
@@ -21,13 +23,19 @@ import {
   REFUSALS,
 } from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX, linkIn } from '../wardrobe/link-import/link-text';
-import { InspirationListPage } from './list-page';
+import { InspirationListPage, LookTiles } from './list-page';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { NewInspirationPage } from './new-page';
-import { PieceBody, pieceKindValue, readPiece } from './piece-input';
 import {
-  addInspirationPiece,
-  addPieceToWishlist,
-  deleteInspirationPiece,
+  addLookPiece,
+  changeLookPiece,
+  editLookText,
+  findLookPiece,
+  removeLookPiece,
+  saveLookAsOutfit,
+} from './look-actions';
+import { PieceBody, readPiece } from './piece-input';
+import {
   findInspiration,
   INSPIRATION_MAX_PIECES,
   INSPIRATION_NOTE_MAX,
@@ -35,11 +43,9 @@ import {
   isOwnInspirationPhoto,
   listInspirations,
   MAX_PIECE_POSITION,
-  updateInspirationPiece,
-  updateInspirationText,
 } from './queries';
 import { RecreatePage } from './recreate-page';
-import { type PostedChoice, saveRecreation } from './recreate-writes';
+import type { PostedChoice } from './recreate-writes';
 import { recreateOwnLook } from './recreation';
 import { ShareConfirmPage } from './share-confirm-page';
 import { shareFallback } from './share-fallback';
@@ -52,6 +58,7 @@ import { InspirationPage } from './show-page';
 import {
   INSPIRATION_LINK_PATH,
   INSPIRATION_PATH,
+  INSPIRATION_TILES_PATH,
   inspirationPiecesUrl,
   inspirationUrl,
   NEW_INSPIRATION_PATH,
@@ -70,6 +77,10 @@ import {
 const LOOK_ROUTE = `${INSPIRATION_PATH}/:id`;
 
 const LookParams = Type.Object({ id: RowId });
+
+// The tab's next page: the last id of the page before (a keyset bound, no
+// resource mark: it addresses no look).
+const TilesQuery = Type.Object({ before: OutfitCursor });
 /** A piece's place in its look (inspiration_piece.position, a smallint). */
 const PIECE_POSITION = Type.Integer({
   minimum: 0,
@@ -142,12 +153,41 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
   }
 
   app.get(INSPIRATION_PATH, async (request, reply) => {
-    const looks = await listInspirations(db, sessionUserId(request));
+    const { looks, next } = await listInspirations(db, sessionUserId(request), {
+      limit: LOOK_PAGE_SIZE,
+    });
     return renderPage(
       reply,
-      <InspirationListPage ctx={viewContext(reply)} looks={looks} />,
+      <InspirationListPage
+        ctx={viewContext(reply)}
+        looks={looks}
+        next={next}
+      />,
     );
   });
+
+  // The tab's sentinel (hx-trigger="revealed", #528): the page below
+  // `before`, always a fragment. The cursor only bounds the owner's own
+  // list; a malformed one is a 400 (only our sentinel builds it).
+  app.get(
+    INSPIRATION_TILES_PATH,
+    { schema: { querystring: TilesQuery } },
+    async (request, reply) => {
+      const ownerId = sessionUserId(request);
+      const { before } = request.query;
+      const { looks, next } = await listInspirations(db, ownerId, {
+        before,
+        limit: LOOK_PAGE_SIZE,
+      });
+      logger.debug(
+        `GET ${INSPIRATION_TILES_PATH}: ${looks.length} looks of user ${ownerId} below ${before}${next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(
+        reply,
+        <LookTiles looks={looks} next={next} firstPage={false} />,
+      );
+    },
+  );
 
   app.get(NEW_INSPIRATION_PATH, async (_request, reply) =>
     renderPage(
@@ -261,14 +301,12 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: TextBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
       const title = request.body.title.trim();
       const note = request.body.note.trim();
-      await updateInspirationText(db, id, userId, {
+      await editLookText({ db, logger }, actorOf(request), id, {
         title: title || null,
         note: note || null,
       });
-      logger.info(`Inspiration ${id} title and note saved by user ${userId}`);
       if (!request.headers['hx-request']) {
         return reply.redirect(inspirationUrl(id), 303);
       }
@@ -308,12 +346,8 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: PieceBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
       const piece = readPiece(request.body);
-      const position = await addInspirationPiece(db, id, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) added by user ${userId}`,
-      );
+      await addLookPiece({ db, logger }, actorOf(request), id, piece);
       return reply.redirect(inspirationPiecesUrl(id), 303);
     },
   );
@@ -323,11 +357,13 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams, body: PieceBody } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
       const piece = readPiece(request.body);
-      await updateInspirationPiece(db, id, position, userId, piece);
-      logger.info(
-        `Inspiration ${id} piece ${position} (${pieceKindValue(piece)}) saved by user ${userId}`,
+      await changeLookPiece(
+        { db, logger },
+        actorOf(request),
+        id,
+        position,
+        piece,
       );
       if (!request.headers['hx-request']) {
         return reply.redirect(inspirationPiecesUrl(id), 303);
@@ -341,11 +377,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
-      await deleteInspirationPiece(db, id, position, userId);
-      logger.info(
-        `Inspiration ${id} piece ${position} removed by user ${userId}`,
-      );
+      await removeLookPiece({ db, logger }, actorOf(request), id, position);
       return reply.redirect(inspirationPiecesUrl(id), 303);
     },
   );
@@ -380,18 +412,11 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: LookParams, body: ChoicesBody } },
     async (request, reply) => {
       const { id } = request.params;
-      const userId = sessionUserId(request);
-      const saved = await saveRecreation(
-        db,
-        userId,
+      const { outfit } = await saveLookAsOutfit(
+        { db, logger },
+        actorOf(request),
         id,
         postedChoices(request.body),
-      );
-      const { outfit } = saved;
-      logger.info(
-        outfit.alreadySaved
-          ? `Inspiration ${id} recreated by user ${userId}: its ${saved.garments} garment(s) are already outfit ${outfit.id}, nothing created`
-          : `Inspiration ${id} saved as outfit ${outfit.id} by user ${userId} with ${saved.garments} garment(s)`,
       );
       const flag = alreadySavedParam(outfit);
       return reply.redirect(
@@ -409,13 +434,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
     { schema: { params: PieceParams } },
     async (request, reply) => {
       const { id, position } = request.params;
-      const userId = sessionUserId(request);
-      const found = await addPieceToWishlist(db, userId, id, position);
-      logger.info(
-        found.created
-          ? `Inspiration ${id} piece ${position} added to the wishlist of user ${userId} as garment ${found.garmentId}`
-          : `Inspiration ${id} piece ${position} already on the wishlist of user ${userId} as garment ${found.garmentId}, nothing created`,
-      );
+      await findLookPiece({ db, logger }, actorOf(request), id, position);
       return reply.redirect(recreatePieceUrl(id, position), 303);
     },
   );
@@ -465,7 +484,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
 /** The save's choices: the posted pairs, a 400 when they do not pair up (saveRecreation refuses a piece twice). */
 function postedChoices(body: Static<typeof ChoicesBody>): PostedChoice[] {
   if (body.position.length !== body.garment.length) {
-    throw new HttpError(400, 'Each piece needs a position and a choice');
+    throw new HttpError(400, t('refusal.inspiration.choiceRows'));
   }
   return body.position.map((position, index) => {
     const garment = body.garment[index];

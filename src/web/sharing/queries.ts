@@ -10,7 +10,7 @@ import {
   user,
   wardrobeShare,
 } from '../../db/schema';
-import { passwordFingerprintSql } from '../auth/tokens';
+import { type SessionStamp, sessionStillOpenSql } from '../auth/tokens';
 import { NotFound } from '../refusals';
 import type { Actor } from './access';
 
@@ -32,7 +32,7 @@ import type { Actor } from './access';
 export const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** An unanswered invite created at or before this instant has expired. */
-export function inviteCutoff(now: Date): Date {
+function inviteCutoff(now: Date): Date {
   return new Date(now.getTime() - INVITE_LIFETIME_MS);
 }
 
@@ -158,16 +158,19 @@ export async function findInvite(
 }
 
 /**
- * Makes an open invite, or undefined, storing nothing, when the session
+ * Makes an open invite to `ownerId`'s wardrobe with `role` (the grantor is
+ * the wardrobe's owner), or undefined, storing nothing, when the session
  * that asked has ended: one insert-select from the grantor's own row,
- * locked, only while its password fingerprint is still `fingerprint` (the
- * session's, sessionFingerprint), as upsertDevice does (#512). Without a
- * `fingerprint` (the seed and spec fixtures: no session) the row is still
- * locked and nothing is checked; a missing grantor is NotFound('account'). The lock is
- * the one a new password's writer takes (updatePasswordHash), so the two
+ * locked, only while it still opens `session` (the session's stamp,
+ * sessionStamp: its fingerprint and session version), as upsertDevice does
+ * (#512). Without a `session` (the seed and spec fixtures: no session) the
+ * row is still locked and nothing is checked; a missing grantor is
+ * NotFound('account'). The lock is the one a new password's writer and
+ * Sign out everywhere take (updatePasswordHash, endOtherSessions), so they
  * take turns: an invite committed first is deleted by the password's
- * revocations, read after their own wait; a password committed first moves
- * the fingerprint and this inserts nothing. `no key update`: it conflicts
+ * revocations, read after their own wait (Sign out everywhere keeps
+ * invites: revokeSignIns); a bump committed first moves the stamp and
+ * this inserts nothing. `no key update`: it conflicts
  * with the password's update without holding up the household's foreign
  * key checks. wardrobe_share is not a synced table (src/db/sync-tables.ts),
  * so the user row lock is the only lock here, never the owner lock.
@@ -180,37 +183,35 @@ export interface NewInvite {
 }
 export function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
-  options: { fingerprint: string; now?: Date },
+  ownerId: number,
+  role: SharePermission,
+  options: { session: SessionStamp; now?: Date },
 ): Promise<NewInvite | undefined>;
 export function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
+  ownerId: number,
+  role: SharePermission,
   options?: { now?: Date },
 ): Promise<NewInvite>;
 export async function createInvite(
   db: Queryable,
-  grantorId: number,
-  permission: SharePermission,
-  { fingerprint, now = new Date() }: { fingerprint?: string; now?: Date } = {},
+  ownerId: number,
+  role: SharePermission,
+  { session, now = new Date() }: { session?: SessionStamp; now?: Date } = {},
 ): Promise<NewInvite | undefined> {
-  const session =
-    fingerprint === undefined
-      ? sql``
-      : sql` and ${passwordFingerprintSql} = ${fingerprint}`;
+  const stillOpen =
+    session === undefined ? sql`` : sql` and ${sessionStillOpenSql(session)}`;
   const { rows } = await db.execute<{ id: number; invite_token: string }>(sql`
     insert into ${wardrobeShare} (grantor_id, permission, invite_token, created_at)
-    select ${user.id}, ${permission}, ${randomUUID()}, ${now}
+    select ${user.id}, ${role}, ${randomUUID()}, ${now}
     from ${user}
-    where ${user.id} = ${grantorId}${session}
+    where ${user.id} = ${ownerId}${stillOpen}
     for no key update
     returning id, invite_token`);
   const [row] = rows;
   if (row) return { id: row.id, inviteToken: row.invite_token };
-  if (fingerprint !== undefined) return undefined;
-  throw new NotFound('account', { logDetail: `user ${grantorId}` });
+  if (session !== undefined) return undefined;
+  throw new NotFound('account', { logDetail: `user ${ownerId}` });
 }
 
 /**

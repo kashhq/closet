@@ -8,6 +8,12 @@ import type { UnreadReason } from './writes';
 export const INSPIRATION_PATH = '/inspiration';
 export const NEW_INSPIRATION_PATH = `${INSPIRATION_PATH}/new`;
 export const INSPIRATION_LINK_PATH = `${INSPIRATION_PATH}/link`;
+export const INSPIRATION_TILES_PATH = `${INSPIRATION_PATH}/tiles`;
+
+/** The tab's next page of tiles (#528): the looks below `before`, an id. */
+export function inspirationTilesUrl(before: number): string {
+  return `${INSPIRATION_TILES_PATH}?before=${before}`;
+}
 
 /** A look's page; `unread` says once why a link came without its photo. */
 export function inspirationUrl(id: number, unread?: UnreadReason): string {

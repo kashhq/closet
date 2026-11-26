@@ -90,7 +90,7 @@ describe('tagging mode', () => {
     const res = await t.inject({ method: 'GET', url: '/wardrobe' });
     expectNoRawI18nKeys(res);
     // Tote, Heavy tee, Blank tee; not the tagged or the archived one.
-    expect(res.body).toContain('3 garments need details');
+    expect(res.body).toContain('3 to tag');
     expect(res.body).toContain('href="/wardrobe/tag"');
   });
 
@@ -266,10 +266,8 @@ describe('tagging mode', () => {
 
   it('logs the tap', async () => {
     await tag(ids.blank, { formality: '3' });
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      expect.stringMatching(
-        new RegExp(`^Garment ${ids.blank} tagged by user \\d+: formality$`),
-      ),
+    expect(t.logs.ops('garment.tagged')).toContainEqual(
+      expect.objectContaining({ garmentId: ids.blank, fields: ['formality'] }),
     );
   });
 
@@ -294,9 +292,7 @@ describe('tagging mode', () => {
     expect(await row(id)).toEqual(before);
     // The same type again brings no presets: formality stays the person's.
     expect((await row(id)).formality).toBeNull();
-    expect(t.logs.messages('info', 'Web')).not.toContainEqual(
-      expect.stringContaining(`Garment ${id} tagged`),
-    );
+    expect(t.logs.ops('garment.tagged')).toEqual([]);
     // The next card, all the same.
     expect(res.headers['hx-retarget']).toBe('#tag-card');
     expect(res.body).toContain('id="tag-card"');
@@ -312,8 +308,8 @@ describe('tagging mode', () => {
       revision: expect.any(Number),
       updatedAt: expect.any(Date),
     });
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      `Garment ${id} tagged by user ${t.owner.id}: formality`,
+    expect(t.logs.ops('garment.tagged')).toContainEqual(
+      expect.objectContaining({ garmentId: id, fields: ['formality'] }),
     );
     await t.inject({ method: 'POST', url: `/wardrobe/${id}/archive` });
   });
@@ -356,6 +352,6 @@ describe('tagging mode', () => {
     expectNoRawI18nKeys(res);
     expect(res.body).toContain('Every garment has its details.');
     const wardrobe = await t.inject({ method: 'GET', url: '/wardrobe' });
-    expect(wardrobe.body).not.toContain('need details');
+    expect(wardrobe.body).not.toContain('to tag');
   });
 });

@@ -20,9 +20,21 @@ import { literals, withoutNulls } from '../api/resource';
 import { IsoDateSchema } from '../schemas';
 import type { TripTypicalDay } from '../trips/forecast';
 import type { Place } from './open-meteo';
-import { LocationBody, PlaceBody } from './place-picker';
+import { LocationBody, PlaceBody } from './place-input';
 import { HERE_FRESH_HOURS } from './queries';
 import type { UserWeather } from './service';
+
+/**
+ * Every weather operation says it exists only with WEATHER_ENABLED: its
+ * route is never registered otherwise (`apiPlugin`), and a client reads the
+ * switch from `features.weather` on GET /me. A new weather route wraps its
+ * description in this.
+ */
+export function weatherOnly(description?: string): string {
+  const condition =
+    'Exists only when `features.weather` on GET /me is true; otherwise it is not registered and answers a 404.';
+  return description ? `${description} ${condition}` : condition;
+}
 
 /**
  * A day's weather and what it asks of an outfit, as the machines read it:

@@ -1,7 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { type Static, Type } from '@sinclair/typebox';
 import { FEELINGS } from '../../weather/temperature';
-import { sessionUserId } from '../auth/require-session';
 import { type IsoDate, todayIn } from '../../calendar-date';
 import {
   DestinationBody,
@@ -12,9 +11,9 @@ import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
 import { RowId } from '../schemas';
 import { safeReturnTo } from '../security/return-to';
-import { actorOf } from '../sharing/access';
+import { actorOf, type Actor } from '../sharing/access';
 import { viewContext } from '../view-context';
-import { nudgeTemperatureOffset } from '../weather/queries';
+import { nudgeWeatherOffset } from '../weather/weather-actions';
 import { aimIdeas } from './aim';
 import {
   dailySeed,
@@ -27,14 +26,13 @@ import {
 } from './ideas';
 import { IdeaCards, IdeasPage, type SeededState } from './ideas-page';
 import { MAX_PICKED, pickTo, postedDestination } from './pick';
-import { allowPair, avoidPair } from './queries';
+import { allowGarmentPair, avoidGarmentPair } from './pair-actions';
 import {
   type GalleryState,
   IDEAS_ALLOW_PATH,
   IDEAS_PATH,
   ideasUrl,
 } from './urls';
-import { garmentNotFound } from '../wardrobe/garment-access';
 
 /**
  * The outfit gallery (#9): the Outfits page's Ideas tab and its writes.
@@ -120,10 +118,11 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
 ) => {
   /** The page's and the sentinel's shared reading of the query, and the ideas for it. */
   async function galleryFor(
-    ownerId: number,
+    actor: Actor,
     query: Static<typeof GalleryQuery>,
     options: { capsuleMenu: boolean },
   ) {
+    const ownerId = actor.userId;
     const now = new Date();
     const today: IsoDate = todayIn(config.timeZone, now);
     const [{ capsule, styled }, { destination, planning, trip, weatherAt }] =
@@ -133,7 +132,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           withId: query.with,
           today,
         }),
-        aimIdeas(db, ownerId, parseDestination(query), today),
+        aimIdeas(db, actor, parseDestination(query), today),
       ]);
     const state: SeededState = {
       destination,
@@ -178,7 +177,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { querystring: GalleryQuery } },
     async (request, reply) => {
       // The capsule menu rides in the ideas' own statement (#168).
-      const gallery = await galleryFor(sessionUserId(request), request.query, {
+      const gallery = await galleryFor(actorOf(request), request.query, {
         capsuleMenu: true,
       });
       return renderPage(
@@ -205,7 +204,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     `${IDEAS_PATH}/more`,
     { schema: { querystring: GalleryQuery } },
     async (request, reply) => {
-      const gallery = await galleryFor(sessionUserId(request), request.query, {
+      const gallery = await galleryFor(actorOf(request), request.query, {
         capsuleMenu: false,
       });
       return renderFragment(reply, <IdeaCards model={gallery.cards} />);
@@ -240,15 +239,11 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       `${IDEAS_PATH}/feedback`,
       { schema: { body: FeedbackBody } },
       async (request, reply) => {
-        const ownerId = sessionUserId(request);
         const state = postedState(request.body);
-        const offset = await nudgeTemperatureOffset(
-          db,
-          ownerId,
+        await nudgeWeatherOffset(
+          { db, logger },
+          actorOf(request),
           request.body.feeling,
-        );
-        logger.info(
-          `Temperature feedback from user ${ownerId} in the gallery: ${request.body.feeling}, offset now ${offset}`,
         );
         return reply.redirect(ideasUrl(state), 303);
       },
@@ -262,14 +257,9 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     `${IDEAS_PATH}/avoid`,
     { schema: { body: PairBody } },
     async (request, reply) => {
-      const ownerId = sessionUserId(request);
       const state = postedState(request.body);
       const [a, b] = request.body.garmentId;
-      const outcome = await avoidPair(db, ownerId, a, b);
-      if (outcome === 'not-found') throw garmentNotFound();
-      logger.info(
-        `Garments ${a} and ${b} ${outcome === 'added' ? 'avoided' : 'already avoided'} together by user ${ownerId}`,
-      );
+      await avoidGarmentPair({ db, logger }, actorOf(request), a, b);
       if (request.headers['hx-request']) {
         return reply.type('text/html; charset=utf-8').send('');
       }
@@ -286,10 +276,7 @@ export const galleryRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const [a, b] = request.body.garmentId;
-      await allowPair(db, actor, a, b);
-      logger.info(
-        `Garments ${a} and ${b} allowed together again by user ${actor.userId}`,
-      );
+      await allowGarmentPair({ db, logger }, actor, a, b);
       return reply.redirect(
         safeReturnTo(request.body.returnTo, `/wardrobe/${a}`),
         303,

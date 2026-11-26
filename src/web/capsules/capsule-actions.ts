@@ -1,3 +1,4 @@
+import { type ActionDeps, logOp } from '../op-log';
 import type { WebOptions } from '../plugin';
 import { NotFound } from '../refusals';
 import {
@@ -18,6 +19,7 @@ import {
   type CapsuleFields,
   changeMembership,
   createCapsule,
+  createCapsuleOnce,
   deleteCapsule,
   findCapsule,
   type NameTaken,
@@ -123,7 +125,7 @@ export async function requireCapsule(
  * drawn again).
  */
 export async function createOwnCapsule(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   ownerId: number | '' | undefined,
   fields: CapsuleFields,
@@ -136,12 +138,53 @@ export async function createOwnCapsule(
     'capsule',
   );
   const id = await createCapsule(db, wardrobe.access.ownerId, fields);
-  return id === 'name-taken' ? id : { ...wardrobe, id };
+  if (id === 'name-taken') return id;
+  logOp(logger, actor, 'capsule.created', {
+    capsuleId: id,
+    ownerId: wardrobe.access.ownerId,
+  });
+  return { ...wardrobe, id };
+}
+
+/**
+ * createOwnCapsule for the API's retried create (`clientId`): 'gone' for
+ * the id of a capsule deleted since, `created: false` for a retry.
+ */
+export async function createOwnCapsuleOnce(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  ownerId: number | '' | undefined,
+  fields: CapsuleFields,
+  clientId: string,
+): Promise<
+  NameTaken | 'gone' | (AuthorizedWardrobe & { id: number; created: boolean })
+> {
+  const wardrobe = await authorizeWardrobe(
+    db,
+    actor,
+    ownerId,
+    'own',
+    'capsule',
+  );
+  const once = await createCapsuleOnce(
+    db,
+    wardrobe.access.ownerId,
+    fields,
+    clientId,
+  );
+  if (typeof once === 'string') return once;
+  logOp(logger, actor, 'capsule.created', {
+    capsuleId: once.id,
+    ownerId: wardrobe.access.ownerId,
+    changed: once.created,
+    clientId,
+  });
+  return { ...wardrobe, ...once };
 }
 
 /** Rename and notes (the owner's alone), or 'name-taken' for the form to say so. */
 export async function renameCapsule(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: CapsuleAddress,
   fields: CapsuleFields,
@@ -154,12 +197,17 @@ export async function renameCapsule(
     fields,
   );
   if (saved === 'not-found') throw capsuleNotFound();
-  return saved === 'name-taken' ? saved : wardrobe;
+  if (saved === 'name-taken') return saved;
+  logOp(logger, actor, 'capsule.updated', {
+    capsuleId: address.id,
+    ownerId: wardrobe.access.ownerId,
+  });
+  return wardrobe;
 }
 
 /** Deletes the capsule (the owner's alone); its garments stay. */
 export async function deleteOwnCapsule(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: CapsuleAddress,
 ): Promise<AuthorizedWardrobe> {
@@ -167,6 +215,10 @@ export async function deleteOwnCapsule(
   if (!(await deleteCapsule(db, address.id, wardrobe.access.ownerId))) {
     throw capsuleNotFound();
   }
+  logOp(logger, actor, 'capsule.deleted', {
+    capsuleId: address.id,
+    ownerId: wardrobe.access.ownerId,
+  });
   return wardrobe;
 }
 
@@ -189,7 +241,7 @@ export type MembershipChanged = AuthorizedWardrobe & {
  * nothing.
  */
 export async function setCapsuleMembers(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: CapsuleAddress,
   garments: MembersChange,
@@ -204,6 +256,12 @@ export async function setCapsuleMembers(
     },
   );
   if (!capsules.has(address.id)) throw capsuleNotFound();
+  logOp(logger, actor, 'capsule.members.changed', {
+    capsuleId: address.id,
+    ownerId: wardrobe.access.ownerId,
+    added,
+    removed,
+  });
   return { ...wardrobe, added, removed };
 }
 
@@ -213,7 +271,7 @@ export async function setCapsuleMembers(
  * and changes nothing).
  */
 export async function setGarmentCapsules(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   capsules: MembersChange,
@@ -228,5 +286,11 @@ export async function setGarmentCapsules(
     },
   );
   if (!garments.has(address.id)) throw garmentNotFound();
+  logOp(logger, actor, 'garment.capsules.changed', {
+    garmentId: address.id,
+    ownerId: wardrobe.access.ownerId,
+    added,
+    removed,
+  });
   return { ...wardrobe, added, removed };
 }

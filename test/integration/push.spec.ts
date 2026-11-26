@@ -11,8 +11,13 @@ import {
 } from 'vitest';
 import webpush, { type PushSubscription } from 'web-push';
 import { user, userDevice } from '../../src/db/schema';
+import { PUSH_TEST_LIMIT } from '../../src/web/security/rate-limit';
 import { createTestApp, PWA_ENV, TestApp } from './harness';
-import { expectFragment, expectFullPage } from './pages';
+import {
+  expectAutosaveControls,
+  expectFragment,
+  expectFullPage,
+} from './pages';
 
 /**
  * Web Push (src/web/push/): subscriptions stored per browser endpoint, the
@@ -328,7 +333,7 @@ describe('web push (PWA_ENABLED=true)', () => {
       expect(JSON.parse(String(payload))).toEqual({
         title: 'Closet notifications work',
         body: 'This is the test you sent from your profile.',
-        url: '/auth/profile#notifications',
+        url: '/auth/profile/notifications',
         tag: 'push-test',
       });
       expect(options).toMatchObject({
@@ -460,12 +465,58 @@ describe('web push (PWA_ENABLED=true)', () => {
         'The test could not be delivered to 1 of your devices.',
       );
     });
+
+    // #705: a looping client must not get the VAPID identity throttled.
+    it('sends PUSH_TEST_LIMIT tests a minute per user, then answers its fragment saying to wait, sending nothing', async () => {
+      const { cookie } = await userWithDevices(1);
+      const other = await userWithDevices(1);
+      const send = vi
+        .spyOn(webpush, 'sendNotification')
+        .mockResolvedValue(DELIVERED);
+
+      for (let i = 0; i < PUSH_TEST_LIMIT.max; i++) {
+        const res = await sendTest(cookie);
+        expect(res.body).toContain('Test sent to 1 of your devices.');
+      }
+      t.logs.clear();
+      const limited = await sendTest(cookie);
+
+      expect(limited.statusCode).toBe(200);
+      expectFragment(limited);
+      expect(limited.body).toContain('Try again in a minute.');
+      expect(limited.body).not.toContain('Test sent');
+      expect(send).toHaveBeenCalledTimes(PUSH_TEST_LIMIT.max);
+      expect(t.logs.messages('warn')).toEqual([
+        expect.stringMatching(
+          /^Rate limit reached: POST \/push\/test for user \d+: nothing sent$/,
+        ),
+      ]);
+      // Per user: another account's test still goes.
+      expect((await sendTest(other.cookie)).body).toContain(
+        'Test sent to 1 of your devices.',
+      );
+    });
   });
 
-  describe('profile page', () => {
-    it('renders the notification controls and marks the page signed in', async () => {
+  describe('Profile › Notifications (#728: its own page)', () => {
+    it('is a row on Profile, keeping the old anchor', async () => {
       const res = await t.inject({ method: 'GET', url: '/auth/profile' });
+      expect(res.body).toContain(
+        '<li id="notifications"><a href="/auth/profile/notifications"',
+      );
+      expect(res.body).not.toContain('<push-settings');
+    });
+
+    it('renders the notification controls and marks the page signed in', async () => {
+      const res = await t.inject({
+        method: 'GET',
+        url: '/auth/profile/notifications',
+      });
       expectFullPage(res);
+      expectAutosaveControls(res);
+      expect(res.body).toMatch(
+        /<a href="\/auth\/profile#notifications" class="btn[^"]*" aria-label="Back"/,
+      );
       expect(res.body).toMatch(/<html[^>]*\bdata-signed-in\b/);
       expect(res.body).toContain('<push-settings');
       expect(res.body).toContain('data-action="enable"');
@@ -474,7 +525,7 @@ describe('web push (PWA_ENABLED=true)', () => {
       expect(res.body).toMatch(/<p data-show="checking">/);
       expect(res.body).toMatch(/<p data-show="on" hidden/);
       expect(res.body).toMatch(/hx-post="\/push\/test"/);
-      expect(res.body).toContain('"push":"/js/push.js?v=');
+      expect(res.body).toContain('"push":"/js/gen/push.js?v=');
     });
 
     it('a signed-out page is not marked signed in', async () => {

@@ -6,11 +6,13 @@ import {
 } from '../../wardrobe/week';
 import type { Slot } from '../../wardrobe/week-planner';
 import type { IsoDate } from '../../calendar-date';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { DAY_NAMES, dayLabel, occasionLabel } from '../date-labels';
 import { dayAnchor, dayUrl } from '../calendar/urls';
-import { t } from '../i18n';
-import { ProfileSection, SavedToast, StripFlags } from '../layout/parts';
+import { joinCopy, t, type Translated } from '../i18n';
+import { SavedToast, StripFlags } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
+import type { ViewContext } from '../view-context';
 import { collagePieces, OutfitCollage } from '../outfits/collage';
 import type { PlannedBanner } from './plan';
 import { weekdayFieldNames } from './template';
@@ -21,13 +23,13 @@ import {
   UNDONE_FLAG,
   WEEK_SAVED_FLAG,
   WEEK_SETTINGS_ID,
-  WEEK_TEMPLATE_PATH,
+  WEEK_SETTINGS_PATH,
 } from './urls';
 
 /**
  * The weekly auto-plan's pieces (#16): the "Plan my week" button (the
  * calendar and Today), the banner after a plan with its Undo, and the
- * Profile's week template section. Every write is a native PostForm
+ * week template's page (Profile › Your week). Every write is a native PostForm
  * (data-needs-network: disabled offline with the banner's explanation).
  */
 
@@ -46,8 +48,8 @@ export function PlanWeekForm(props: { class?: string; small?: boolean }) {
   );
 }
 
-function slotText(slot: Slot): string {
-  return `${dayLabel(slot.day)} · ${occasionLabel(slot.occasion)}`;
+function slotText(slot: Slot): Translated {
+  return joinCopy([dayLabel(slot.day), occasionLabel(slot.occasion)], ' · ');
 }
 
 function plannedHeading(banner: PlannedBanner): string {
@@ -98,6 +100,7 @@ export function PlannedWeekBanner({
                   <OutfitCollage
                     garments={collagePieces(entry.garments, { warn: false })}
                     size="thumb"
+                    decorative
                   />
                 </div>
                 <span>
@@ -117,14 +120,17 @@ export function PlannedWeekBanner({
       {banner.stillEmpty.length > 0 && (
         <p class="text-sm" data-still-empty>
           {t('weekPlan.STILL_EMPTY', {
-            slots: banner.stillEmpty.map(slotText).join(', '),
+            slots: joinCopy(banner.stillEmpty.map(slotText), ', '),
           })}
         </p>
       )}
       {banner.away.length > 0 && (
         <p class="text-sm" data-away-skipped>
           {t('weekPlan.AWAY_SKIPPED', {
-            days: banner.away.map((day) => dayLabel(day)).join(', '),
+            days: joinCopy(
+              banner.away.map((day) => dayLabel(day)),
+              ', ',
+            ),
           })}
         </p>
       )}
@@ -173,23 +179,27 @@ export function UndoneToast({ removed }: { removed: number | undefined }) {
 }
 
 /**
- * The Profile's week template (#16; the redesign's Profile section): per
- * weekday, the day's outfit (one of DAY_OCCASIONS or none) and the
- * occasions around it, saved with one Save (a native post, 303 back here).
- * Not saved on change on purpose: seven rows are one decision, and a
- * half-edited week must not be planned from.
+ * Profile › Your week (#16; a Profile section until #728): per weekday, the
+ * day's outfit (one of DAY_OCCASIONS or none) and the occasions around it,
+ * saved with one Save (a native post, 303 back here, so a `formPage`). Not
+ * saved on change on purpose: seven rows are one decision, and a
+ * half-edited week must not be planned from. Its own page so that Save is
+ * the page's one action, not a lone button among autosaving neighbours.
  */
-export function WeekTemplateSettings(props: {
+export function WeekTemplatePage(props: {
+  ctx: ViewContext;
   slots: readonly TemplateSlot[];
   saved: boolean;
 }) {
   return (
-    <ProfileSection
-      id={WEEK_SETTINGS_ID}
-      heading={t('weekPlan.template.HEADING')}
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('weekPlan.template.HEADING')}
+      section={WEEK_SETTINGS_ID}
+      formPage
     >
-      <p class="text-sm text-base-content/70">{t('weekPlan.template.HINT')}</p>
-      <PostForm action={WEEK_TEMPLATE_PATH} class="flex flex-col gap-3">
+      <p class="text-sm text-muted">{t('weekPlan.template.HINT')}</p>
+      <PostForm action={WEEK_SETTINGS_PATH} class="flex flex-col gap-3">
         {templateDays(props.slots).map((day) => {
           const names = weekdayFieldNames(day.weekday);
           const weekday = t(DAY_NAMES[day.weekday]);
@@ -232,7 +242,7 @@ export function WeekTemplateSettings(props: {
             </fieldset>
           );
         })}
-        <button type="submit" class="btn btn-primary btn-sm">
+        <button type="submit" class="btn btn-primary">
           {t('SAVE')}
         </button>
       </PostForm>
@@ -240,6 +250,18 @@ export function WeekTemplateSettings(props: {
         <SavedToast id="week-saved-toast" text={t('weekPlan.template.SAVED')} />
       )}
       <StripFlags names={[WEEK_SAVED_FLAG]} />
-    </ProfileSection>
+    </SettingsPage>
   );
+}
+
+/**
+ * Profile's Your week row: how many weekdays have a slot the planner reads (a day
+ * outfit or an occasion around it: any stored slot, as planMyWeek's
+ * `template.length === 0` check), or that the template is empty ("Plan my week" then asks for it first).
+ */
+export function weekTemplateSummary(slots: readonly TemplateSlot[]): string {
+  const days = new Set(slots.map((slot) => slot.weekday)).size;
+  return days === 0
+    ? t('weekPlan.template.SUMMARY_NONE')
+    : t('weekPlan.template.SUMMARY_DAYS', { count: days });
 }

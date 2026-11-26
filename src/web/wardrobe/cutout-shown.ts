@@ -1,4 +1,5 @@
 import type { CutoutStatus } from '../../cutout/state';
+import type { GarmentDetail } from './queries';
 
 /**
  * With CUTOUT_ENABLED=false nothing will ever finish a `pending` cutout or
@@ -19,4 +20,19 @@ export function shownPhoto<P extends { cutoutStatus: CutoutStatus }>(
     return photo;
   }
   return { ...photo, cutoutStatus: 'none' };
+}
+
+/**
+ * A garment with its photo as shown (shownPhoto): what every view of a
+ * garment's photo is handed, the garment page, its cutout poll and the
+ * garment form's subject (GarmentPhotoView).
+ */
+export function withShownPhoto(
+  garment: GarmentDetail,
+  cutoutsEnabled: boolean,
+): GarmentDetail {
+  return {
+    ...garment,
+    photo: garment.photo && shownPhoto(garment.photo, cutoutsEnabled),
+  };
 }

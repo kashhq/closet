@@ -1,7 +1,13 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
-import { enforceLimit, type RateLimitChecker } from '../security/rate-limit';
+import {
+  enforceLimit,
+  type RateLimitChecker,
+  SIGN_IN_ACCOUNT_LIMIT,
+  SIGN_IN_LIMIT,
+} from '../security/rate-limit';
 import { verifyPassword } from './passwords';
 import { type AccountRow, findUserByEmail, normalizeEmail } from './queries';
 
@@ -38,19 +44,65 @@ export function failedSignInFor(check: { userId?: number }): string {
 }
 
 /**
- * What the two sign-in doors are registered with: their one SIGN_IN_LIMIT
- * checker, built once in webPlugin (a checker per door would be a budget
- * each).
+ * What the two sign-in doors are registered with: their two shared
+ * checkers, built once in webPlugin by createSignInLimits (a checker per
+ * door would be a budget each, #705): `address`, SIGN_IN_LIMIT per client
+ * address, and `account`, SIGN_IN_ACCOUNT_LIMIT per account.
  */
-export interface SignInLimit {
-  signInLimit: RateLimitChecker;
+export interface SignInLimits {
+  signInLimits: { address: RateLimitChecker; account: RateLimitChecker };
+}
+
+/** `accountMax` is WebOptions.signInAccountMax, for the specs alone. */
+export function createSignInLimits(
+  app: FastifyInstance,
+  accountMax = SIGN_IN_ACCOUNT_LIMIT.max,
+): SignInLimits['signInLimits'] {
+  return {
+    address: app.createRateLimit(SIGN_IN_LIMIT),
+    account: app.createRateLimit({
+      ...SIGN_IN_ACCOUNT_LIMIT,
+      max: accountMax,
+      keyGenerator: accountKey,
+    }),
+  };
 }
 
 /**
- * The sign-in doors' onRequest hook: counts the attempt against the shared
- * per-address budget before the body is read.
+ * SIGN_IN_ACCOUNT_LIMIT's key: a hash of the address as the lookup
+ * normalises it (checkSignIn), so the counter never holds an email. Read
+ * at preHandler, after the body's schema check; both doors' bodies name it
+ * `email`.
  */
-export function signInGate(checker: RateLimitChecker, logger: Logger) {
-  return (request: FastifyRequest) =>
-    enforceLimit(checker, request, { logger, who: request.ip });
+function accountKey(request: FastifyRequest): string {
+  const { body } = request;
+  const email =
+    typeof body === 'object' &&
+    body !== null &&
+    'email' in body &&
+    typeof body.email === 'string'
+      ? body.email
+      : '';
+  return `account ${createHash('sha256').update(normalizeEmail(email)).digest('hex')}`;
+}
+
+/**
+ * The hooks both sign-in doors spread into their route options, so the
+ * two cannot count differently: the per-address budget at onRequest,
+ * before the body is read, then the per-account budget at preHandler,
+ * once the email is parsed and before checkSignIn's bcrypt comparison.
+ * Every attempt counts, a right password included: a 429 is the same
+ * answer whether the password was right, so the limit tells a guesser
+ * nothing.
+ */
+export function signInGuards(
+  { address, account }: SignInLimits['signInLimits'],
+  logger: Logger,
+) {
+  return {
+    onRequest: (request: FastifyRequest) =>
+      enforceLimit(address, request, { logger, who: request.ip }),
+    preHandler: (request: FastifyRequest) =>
+      enforceLimit(account, request, { logger, who: 'an account' }),
+  };
 }

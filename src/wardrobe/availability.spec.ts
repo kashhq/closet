@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { WASH_CASES, washCaseRows } from '../../test/support/wash-cases';
+import {
+  WASH_CASES,
+  WASH_MOVE_CASES,
+  washCaseRows,
+  washMoveRows,
+} from '../../test/support/wash-cases';
 import {
   cleanCopies,
   defaultWashAfter,
@@ -9,6 +14,7 @@ import {
   needsWash,
   NEVER_WASH,
   washLimit,
+  washMoves,
   wearsSinceWash,
   type WashState,
 } from './availability';
@@ -77,6 +83,12 @@ describe('wears since the last wash', () => {
       'America/New_York',
     );
     expect(wearsSinceWash(wears, lastWash)).toBe(c.count);
+  });
+
+  // The table markWashed's update answers too (test/integration/wears.spec.ts).
+  it.each(WASH_MOVE_CASES)('a wash moves, $name: $moves', (c) => {
+    const { stored, next } = washMoveRows(c, '2026-11-08', 'America/New_York');
+    expect(washMoves(stored, next)).toBe(c.moves);
   });
 });
 

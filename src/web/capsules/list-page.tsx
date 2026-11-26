@@ -1,12 +1,16 @@
 import { t } from '../i18n';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, PlinthImage } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { capsuleUrl, wardrobeUrl } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import {
+  WardrobeAddSheet,
+  type WardrobeHeaderProps,
+  wardrobeBar,
+} from '../wardrobe/wardrobe-header';
 import type { CapsuleCard, StripGarment } from './queries';
+import { CARD_GRID, THUMB_ROW_WIDE } from '../layout/columns';
 
 export interface CapsulesModel {
   /** The closet (inCloset): the first and permanent capsule. */
@@ -32,7 +36,8 @@ export function garmentCount(count: number): string {
  * the capsule every other is carved from (it is not a row: it links to the
  * grid), then the wardrobe's capsules by name, each its name, its count
  * and its newest garments on the plinth, like the grid's tiles: no card
- * chrome, the garments are the colour. "New capsule" is the add sheet's.
+ * chrome, the garments are the colour. One column on a phone, as many as
+ * fit from lg (`CARD_GRID`, #1071). "New capsule" is the add sheet's.
  */
 export function CapsulesPage(props: {
   ctx: ViewContext;
@@ -40,50 +45,51 @@ export function CapsulesPage(props: {
 }) {
   const { ctx, model } = props;
   const { viewOwner } = model;
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'capsules',
+    viewOwner,
+    sharedWardrobes: model.sharedWardrobes,
+    canEdit: model.canEdit,
+    newCapsule: model.isOwner,
+  };
   return (
-    <Layout ctx={ctx} title={t('CAPSULES')}>
-      <WardrobeHeader
-        ctx={ctx}
-        tab="capsules"
-        viewOwner={viewOwner}
-        sharedWardrobes={model.sharedWardrobes}
-        canEdit={model.canEdit}
-        newCapsule={model.isOwner}
-      />
-      <div class="pt-16">
-        <WardrobeTabs active="capsules" viewOwner={viewOwner} />
-        <main class="px-4 pt-4 pb-24 w-full max-w-lg mx-auto">
-          <ul class="flex flex-col gap-6" id="capsule-list">
-            <CapsuleEntry
-              href={wardrobeUrl(viewOwner)}
-              name={t('CLOSET')}
-              count={model.closet.count}
-              strip={model.closet.strip}
-            />
-            {model.capsules.map((capsule) => (
-              <CapsuleEntry
-                href={capsuleUrl(capsule.id, viewOwner)}
-                name={capsule.name}
-                count={capsule.count}
-                strip={capsule.strip}
-              />
-            ))}
-          </ul>
-          {model.capsules.length === 0 && (
-            <EmptyState
-              message={t(model.isOwner ? 'NO_CAPSULES' : 'NO_CAPSULES_SHARED')}
-            >
-              {model.isOwner && (
-                <a href="/capsules/new" class="btn btn-primary btn-sm">
-                  {t('ADD_FIRST_CAPSULE')}
-                </a>
-              )}
-            </EmptyState>
+    <PageShell
+      ctx={ctx}
+      name="capsules"
+      title={t('CAPSULES')}
+      bar={wardrobeBar(header)}
+      width="wide"
+      overlays={<WardrobeAddSheet {...header} />}
+    >
+      <ul class={`${CARD_GRID} gap-6`} id="capsule-list">
+        <CapsuleEntry
+          href={wardrobeUrl(viewOwner)}
+          name={t('ALL_GARMENTS')}
+          count={model.closet.count}
+          strip={model.closet.strip}
+        />
+        {model.capsules.map((capsule) => (
+          <CapsuleEntry
+            href={capsuleUrl(capsule.id, viewOwner)}
+            name={capsule.name}
+            count={capsule.count}
+            strip={capsule.strip}
+          />
+        ))}
+      </ul>
+      {model.capsules.length === 0 && (
+        <EmptyState
+          message={t(model.isOwner ? 'NO_CAPSULES' : 'NO_CAPSULES_SHARED')}
+        >
+          {model.isOwner && (
+            <a href="/capsules/new" class="btn btn-primary btn-sm">
+              {t('ADD_FIRST_CAPSULE')}
+            </a>
           )}
-        </main>
-      </div>
-      <Dock ctx={ctx} />
-    </Layout>
+        </EmptyState>
+      )}
+    </PageShell>
   );
 }
 
@@ -107,7 +113,7 @@ function CapsuleEntry(props: {
           </span>
         </div>
         {props.strip.length > 0 && (
-          <div class="grid grid-cols-4 gap-2">
+          <div class={THUMB_ROW_WIDE}>
             {props.strip.map((garment) => (
               <PlinthImage
                 photo={garment.photo}

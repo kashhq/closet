@@ -19,6 +19,9 @@ import { pageErrors } from './support/page-errors';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+/** The 64 px app bar, the tabs, the scope row and a chip row (measured ~230 px); the six-row layout put the grid near 300. */
+const CHROME_BEFORE_GRID_PX = 250;
+
 /** The page's htmx, for its config (src/web/layout/layout.tsx, HTMX_CONFIG). */
 interface HtmxWindow {
   htmx: { config: { timeout: number } };
@@ -93,7 +96,11 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await page.goto(`/wardrobe/${oxford}`);
   const wear = page.locator('#garment-wear');
   await expect(wear.getByText('Worn once')).toBeVisible();
+  // The page's script (showPageDay, #708) swaps Wore today for the badge.
   await expect(wear.getByText('Worn today (calendar)')).toBeVisible();
+  await expect(
+    wear.getByRole('button', { name: 'Wore today', exact: true }),
+  ).toBeHidden();
   await expect(wear.getByText('Needs a wash')).toBeVisible();
   await press(page, wear.getByRole('button', { name: 'Washed' }));
   await expect(wear.getByText('0 since washed')).toBeVisible();
@@ -120,7 +127,7 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   });
   await page.locator('.dock a[href="/wardrobe"]').click();
   await expect(page).toHaveURL(/\/wardrobe$/);
-  await expect(page.getByText('1 garment needs a wash')).toBeVisible();
+  await expect(page.getByText('1 to wash')).toBeVisible();
   expect(
     await page.evaluate(
       () => 'survivor' in document.getElementById('toast-host')!,
@@ -129,17 +136,58 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   await expect(toast).toContainText(text('wear.status.WORE_TODAY'));
 
   // The wardrobe prompts the laundry; Mark washed empties the hamper.
-  await expect(page.getByText('1 garment needs a wash')).toBeVisible();
+  await expect(page.getByText('1 to wash')).toBeVisible();
+  // Chrome stays slim (#732): the app bar, tabs, scope row and one chip row,
+  // no weather line and one banner each, so the first garment starts within
+  // CHROME_BEFORE_GRID_PX of the top of the screen at 390 px.
+  const firstTile = await page
+    .locator('#wardrobe-grid > *')
+    .first()
+    .boundingBox();
+  expect(firstTile!.y).toBeLessThanOrEqual(CHROME_BEFORE_GRID_PX);
   await page
-    .locator('#wardrobe-main')
-    .getByRole('link', { name: 'Laundry' })
+    .locator('#wardrobe-body')
+    .getByRole('link', { name: '1 to wash' })
     .click();
   await expect(
-    page.getByRole('tab', { name: 'Laundry', selected: true }),
-  ).toBeVisible();
+    page
+      .getByRole('navigation', { name: 'Wardrobe sections' })
+      .getByRole('link', { name: 'Laundry' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(
     page.getByRole('checkbox', { name: 'White tees' }),
   ).toBeChecked();
+  // On the phone the bar follows the rows in the DOM, as on screen, so Tab
+  // reaches the hamper's first row before Mark washed.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  const stops: string[] = [];
+  while (!stops.includes('bar') && stops.length < 40) {
+    await page.keyboard.press('Tab');
+    stops.push(
+      await page.evaluate(() => {
+        const focused = document.activeElement;
+        if (focused?.closest('#laundry-actions')) return 'bar';
+        return focused?.closest('#laundry-body li') ? 'row' : 'other';
+      }),
+    );
+  }
+  expect(stops).toContain('bar');
+  expect(stops.indexOf('row')).toBeGreaterThanOrEqual(0);
+  expect(stops.indexOf('row')).toBeLessThan(stops.indexOf('bar'));
+  // From lg the action bar heads the hamper's column (#1063), not the
+  // viewport's far edge: Mark washed sits above the rows it washes, its end
+  // on theirs.
+  const phone = page.viewportSize()!;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const washBox = await page
+    .getByRole('button', { name: 'Mark washed' })
+    .boundingBox();
+  const firstRow = await page.locator('#laundry-body li').first().boundingBox();
+  expect(washBox!.y + washBox!.height).toBeLessThan(firstRow!.y);
+  expect(
+    Math.abs(washBox!.x + washBox!.width - (firstRow!.x + firstRow!.width)),
+  ).toBeLessThanOrEqual(1);
+  await page.setViewportSize(phone);
   await press(page, page.getByRole('button', { name: 'Mark washed' }));
   await expect(toast).toContainText('1 washed');
   await expect(page.getByText('Nothing needs a wash.')).toBeVisible();
@@ -208,7 +256,7 @@ test('mark an outfit worn, wash it, log a wear alone, and do the laundry', async
   // not-found page: the boosted tap's error page, swapped in.
   await page.goto('/wardrobe');
   const tile = page
-    .locator('#wardrobe-main')
+    .locator('#wardrobe-body')
     .getByRole('link', { name: /Oxford/ });
   await expect(tile).toBeVisible();
   const deleted = await page.request.delete(`/wardrobe/${oxford}`, {

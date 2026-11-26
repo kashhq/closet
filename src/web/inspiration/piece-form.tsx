@@ -4,10 +4,10 @@ import {
   PATTERNS,
 } from '../../wardrobe/properties';
 import type { LookPiece } from '../../wardrobe/recreate';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { FormField } from '../form-field';
-import { t } from '../i18n';
+import { joinCopy, t, type Translated } from '../i18n';
 import { roleGroupLabel, roleLabel, valueLabel } from '../wardrobe/labels';
 import { PIECE_KINDS, type PieceKind, pieceKindValue } from './piece-input';
 import { INSPIRATION_MAX_PIECES, type StoredPiece } from './queries';
@@ -16,6 +16,7 @@ import {
   inspirationPiecePath,
   inspirationPiecesPath,
 } from './urls';
+import { DENSE_FIELD_GRID } from '../layout/columns';
 
 /**
  * A look's pieces on its page (#22b): what the owner reads in the look,
@@ -30,14 +31,17 @@ import {
  */
 
 /** A piece in words: "Blazer · Blue, White". */
-export function pieceName(piece: LookPiece): string {
+export function pieceName(piece: LookPiece): Translated {
   const kind = piece.type
     ? valueLabel('type', piece.type)
     : roleLabel(piece.role);
   if (piece.colors.length === 0) return kind;
   return t('inspiration.PIECE_NAME', {
     kind,
-    colors: piece.colors.map((c) => valueLabel('color', c)).join(', '),
+    colors: joinCopy(
+      piece.colors.map((c) => valueLabel('color', c)),
+      ', ',
+    ),
   });
 }
 
@@ -60,7 +64,7 @@ export function PieceList(props: {
       {!full && props.hints.length > 0 && (
         <div class="flex flex-col gap-2" data-piece-hints="">
           <p class="text-sm text-muted">{t('inspiration.HINTS')}</p>
-          <div class="flex flex-wrap gap-2">
+          <div class="chip-row">
             {props.hints.map((hint) => (
               <PostForm action={inspirationPiecesPath(lookId)}>
                 <PieceHiddenFields piece={hint} />
@@ -88,7 +92,7 @@ export function PieceList(props: {
           <div class="collapse-content">
             <PostForm
               action={inspirationPiecesPath(lookId)}
-              class="grid grid-cols-2 gap-x-3 gap-y-1"
+              class={DENSE_FIELD_GRID}
             >
               <PieceFields idPrefix="new-piece" piece={NEW_PIECE} />
               <button
@@ -123,7 +127,7 @@ function PieceCard(props: { lookId: number; piece: StoredPiece }) {
       <AutosaveForm
         action={inspirationPiecePath(lookId, piece.position)}
         native
-        class="grid grid-cols-2 gap-x-3 gap-y-1"
+        class={DENSE_FIELD_GRID}
       >
         <PieceFields idPrefix={idPrefix} piece={piece} />
       </AutosaveForm>

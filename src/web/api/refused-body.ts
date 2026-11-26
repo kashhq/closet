@@ -1,5 +1,6 @@
 import type { FieldErrors } from '../auth/validation';
 import { HttpError } from '../errors';
+import { joinCopy } from '../i18n';
 
 /**
  * A form reader's refusal as the API's 400: `errors` names each field as
@@ -12,17 +13,19 @@ export function refusedBody<Field extends string>(
   errors: FieldErrors<Field>,
   pointerOf: Record<Field, string>,
 ): HttpError {
-  const validation = (
-    Object.entries(errors) as [Field, string[] | undefined][]
-  ).flatMap(([field, messages = []]) =>
-    messages.map((message) => ({
+  // eslint-disable-next-line closet/no-forged-copy -- the keys of a Record<Field, ...> are Fields, which name form fields, never copy
+  const validation = (Object.keys(errors) as Field[]).flatMap((field) =>
+    (errors[field] ?? []).map((message) => ({
       path: `body${pointerOf[field]}`,
       message,
     })),
   );
   return new HttpError(
     400,
-    validation.map(({ message }) => message).join(' '),
+    joinCopy(
+      validation.map(({ message }) => message),
+      ' ',
+    ),
     {
       validation,
       logDetail: `refused fields: ${Object.keys(errors).join(', ')}`,

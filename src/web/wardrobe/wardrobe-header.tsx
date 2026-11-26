@@ -1,16 +1,11 @@
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import { INSIGHTS_PATH, RECAP_PATH } from '../insights/urls';
-import { AppBar } from '../layout/app-bar';
-import { LinkTabs } from '../layout/link-tabs';
-import {
-  CameraIcon,
-  PHOTO_ACCEPT,
-  PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
-  SheetBackdrop,
-} from '../layout/parts';
+import type { AppBarProps } from '../layout/app-bar';
+import type { LinkTabsProps } from '../layout/link-tabs';
+import { Sheet, sheetOpener } from '../layout/sheet';
+import { CameraIcon, PHOTO_ACCEPT, PhotoLibraryIcon } from '../layout/parts';
 import type { SharedWardrobe } from '../sharing/access';
 import { PermissionBadge } from '../sharing/pages';
 import { SHARING_PATH } from '../sharing/urls';
@@ -26,6 +21,8 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from './urls';
+import { needsNetwork, photoPick } from '../page-contract';
+import { Icon } from '../layout/icon';
 
 /**
  * The Wardrobe's header and tabs (docs/plans/2026-09-26-redesign.md,
@@ -72,52 +69,58 @@ export interface WardrobeHeaderProps {
 }
 
 /**
- * The app bar of a Wardrobe tab. Nothing in it varies but with the data
- * (the switcher's wardrobes, what the requester may do), so /wardrobe
- * stays byte-stable as a stale-while-revalidate tab root. The add sheet
- * is a dialog beside the bar, opened by its ＋.
+ * The app bar of a Wardrobe tab, as `PageShell`'s `bar`, the tabs with it,
+ * so the four pages cannot draw them apart. Nothing in it varies but with
+ * the data (the switcher's wardrobes, what the requester may do), so
+ * /wardrobe stays byte-stable as a stale-while-revalidate tab root. Its ＋
+ * opens `WardrobeAddSheet`, which the page renders beside it.
  */
-export function WardrobeHeader(props: WardrobeHeaderProps) {
+export function wardrobeBar(
+  props: WardrobeHeaderProps,
+): Omit<AppBarProps, 'ctx'> {
   const { ctx, viewOwner, canEdit } = props;
-  const canAdd = canEdit || props.newCapsule === true;
-  return (
-    <>
-      <AppBar
-        ctx={ctx}
-        title={wardrobeTitle(props.sharedWardrobes, viewOwner)}
-        titleMenu={<SwitcherItems {...props} />}
-        actions={
-          <>
-            <WardrobeMenu
-              viewOwner={viewOwner}
-              canEdit={canEdit}
-              selectUrl={props.selectUrl}
-              orders={ctx.orderReview}
-            />
-            {canAdd && (
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-circle"
-                aria-label={t('add.TITLE')}
-                aria-haspopup="dialog"
-                onclick={OPEN_ADD_SHEET}
-              >
-                <PlusIcon />
-              </button>
-            )}
-          </>
-        }
-      />
-      {canAdd && (
-        <AddSheet
-          tab={props.tab}
+  return {
+    title: wardrobeTitle(props.sharedWardrobes, viewOwner),
+    titleMenu: <SwitcherItems {...props} />,
+    tabs: wardrobeTabs(props.tab, viewOwner),
+    actions: (
+      <>
+        <WardrobeMenu
           viewOwner={viewOwner}
           canEdit={canEdit}
-          newCapsule={props.newCapsule === true}
+          selectUrl={props.selectUrl}
+          orders={ctx.orderReview}
         />
-      )}
-    </>
+        {canAddIn(props) && (
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-circle"
+            aria-label={t('add.TITLE')}
+            {...sheetOpener(ADD_SHEET_ID)}
+          >
+            <PlusIcon />
+          </button>
+        )}
+      </>
+    ),
+  };
+}
+
+/** The ＋'s add sheet, where the requester may add; nothing otherwise. */
+export function WardrobeAddSheet(props: WardrobeHeaderProps) {
+  if (!canAddIn(props)) return null;
+  return (
+    <AddSheet
+      tab={props.tab}
+      viewOwner={props.viewOwner}
+      canEdit={props.canEdit}
+      newCapsule={props.newCapsule === true}
+    />
   );
+}
+
+function canAddIn(props: WardrobeHeaderProps): boolean {
+  return props.canEdit || props.newCapsule === true;
 }
 
 /** "Wardrobe" for one's own; "Dana's wardrobe" for a shared one. */
@@ -236,9 +239,8 @@ export function WardrobeMenu(props: {
 
 const TO_WISHLIST = destinationParams({ to: 'wishlist' });
 
-/** The `onclick` of a control opening the add sheet: the header's ＋, Today's first-run button. */
-export const OPEN_ADD_SHEET =
-  "document.getElementById('add-sheet').showModal()";
+/** The add sheet's id: its openers are the header's ＋ and Today's first-run button (`sheetOpener`). */
+export const ADD_SHEET_ID = 'add-sheet';
 
 /**
  * The add sheet (plan: "+" in the Wardrobe header): a garment for the
@@ -289,38 +291,37 @@ export function AddSheet(props: {
     </AddGroup>
   );
   return (
-    <dialog
-      id="add-sheet"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="add-sheet-title"
+    <Sheet
+      id={ADD_SHEET_ID}
+      kind="menu"
+      labelledBy="add-sheet-title"
+      gap={4}
+      dismiss="close"
     >
-      <div class="modal-box group flex flex-col gap-4">
-        <h2 id="add-sheet-title" class="font-bold text-lg">
-          {t('add.TITLE')}
-        </h2>
-        {props.newCapsule && (
-          <AddGroup title={t('CAPSULES')}>
-            <AddItem href="/capsules/new" icon={CAPSULE_ICON}>
-              {t('NEW_CAPSULE')}
-            </AddItem>
-          </AddGroup>
-        )}
-        {props.canEdit &&
-          (props.tab === 'wishlist' ? (
-            <>
-              {wishlist}
-              {closet}
-            </>
-          ) : (
-            <>
-              {closet}
-              {wishlist}
-            </>
-          ))}
-        {props.canEdit && <PhotoForms viewOwner={viewOwner} />}
-      </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <h2 id="add-sheet-title" class="font-bold text-lg">
+        {t('add.TITLE')}
+      </h2>
+      {props.newCapsule && (
+        <AddGroup title={t('CAPSULES')}>
+          <AddItem href="/capsules/new" icon={CAPSULE_ICON}>
+            {t('NEW_CAPSULE')}
+          </AddItem>
+        </AddGroup>
+      )}
+      {props.canEdit &&
+        (props.tab === 'wishlist' ? (
+          <>
+            {wishlist}
+            {closet}
+          </>
+        ) : (
+          <>
+            {closet}
+            {wishlist}
+          </>
+        ))}
+      {props.canEdit && <PhotoForms viewOwner={viewOwner} />}
+    </Sheet>
   );
 }
 
@@ -337,7 +338,7 @@ function AddGroup(props: { title: string; children: Child }) {
  * The sheet's camera or library row: its file input's label, joined to its
  * own form (PhotoForms) through the `form` attribute, since a form inside
  * a daisyUI menu item loses the item's styling. Choosing a photo prepares
- * it on the phone and submits (PREPARE_AND_SUBMIT_PHOTO). The camera has
+ * it on the phone and submits (`photoPick`). The camera has
  * an input of its own, as on the garment page's photo sheet: some
  * Chrome/Android versions drop the Camera option from a library input's
  * chooser. The library takes several photos at once (#200): each is
@@ -349,7 +350,7 @@ function PhotoItem(props: { source: 'camera' | 'library' }) {
   const camera = props.source === 'camera';
   const Icon = camera ? CameraIcon : PhotoLibraryIcon;
   return (
-    <li data-needs-network="">
+    <li {...needsNetwork()}>
       <label class="relative py-3 gap-3" data-photo-source={props.source}>
         <Icon class="size-5" />
         {t(camera ? 'garment.PHOTO_CAMERA' : 'garment.PHOTO_LIBRARY')}
@@ -361,7 +362,7 @@ function PhotoItem(props: { source: 'camera' | 'library' }) {
           capture={camera ? 'environment' : undefined}
           multiple={!camera}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </li>
@@ -386,7 +387,7 @@ function PhotoForms(props: { viewOwner: number | undefined }) {
       <PostForm id={photoFormId('camera')} action={action} multipart />
       <PostForm id={photoFormId('library')} action={action} multipart />
       <p
-        class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]:flex"
+        class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/sheet:flex"
         role="status"
       >
         <span class="loading loading-spinner loading-sm"></span>
@@ -401,17 +402,7 @@ function AddItem(props: { href: string; icon: string; children: Child }) {
   return (
     <li>
       <a href={props.href} class="py-3 gap-3">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="size-5"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d={props.icon} />
-        </svg>
+        <Icon paths={props.icon} class="size-5" weight="1.5" />
         {props.children}
       </a>
     </li>
@@ -427,52 +418,33 @@ const CAPSULE_ICON =
   'M6.429 9.75 2.25 12l4.179 2.25m0-4.5 5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0 4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0-5.571 3-5.571-3';
 
 /**
- * The Wardrobe's tabs, underlined: plain boosted links, so the dock keeps
- * its size (plan section 2). All carry `?ownerId=` in a shared wardrobe,
- * so a grantee moves between the grantor's closet, capsules and wishlist;
- * Laundry, the requester's own, is left out there.
+ * The Wardrobe's tabs (the bar's, through `wardrobeBar`): plain boosted
+ * links, so the dock keeps its size (plan section 2). All carry `?ownerId=`
+ * in a shared wardrobe, so a grantee moves between the grantor's closet,
+ * capsules and wishlist; Laundry, the requester's own, is left out there.
  */
-export function WardrobeTabs(props: {
-  active: WardrobeTab;
-  viewOwner: number | undefined;
-}) {
-  const { viewOwner } = props;
+function wardrobeTabs(
+  active: WardrobeTab,
+  viewOwner: number | undefined,
+): LinkTabsProps<WardrobeTab> {
   const tab = (name: WardrobeTab, label: string) => ({
     name,
     href: tabUrl(name, viewOwner),
     label,
   });
-  return (
-    <LinkTabs
-      active={props.active}
-      class="tabs tabs-border px-2"
-      id="wardrobe-tabs"
-      tabs={[
-        tab('closet', t('CLOSET')),
-        tab('capsules', t('CAPSULES')),
-        viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
-        tab('wishlist', t('wishlist.TAB')),
-      ]}
-    />
-  );
+  return {
+    active,
+    label: t('NAV_WARDROBE_VIEWS'),
+    id: 'wardrobe-tabs',
+    tabs: [
+      tab('closet', t('CLOSET')),
+      tab('capsules', t('CAPSULES')),
+      viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
+      tab('wishlist', t('wishlist.TAB')),
+    ],
+  };
 }
 
 function PlusIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="2"
-      stroke="currentColor"
-      class="size-5"
-      aria-hidden="true"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M12 4.5v15m7.5-7.5h-15"
-      />
-    </svg>
-  );
+  return <Icon paths="M12 4.5v15m7.5-7.5h-15" class="size-5" weight="2" />;
 }

@@ -61,11 +61,14 @@ describe('capsules', () => {
     expect(made.statusCode, made.body).toBe(201);
     const { id } = made.json<{ id: number }>();
     expect(made.headers.location).toBe(`/api/v1/capsules/${id}`);
-    expect(
-      t.logs
-        .messages('info')
-        .find((line) => line.startsWith(`Capsule ${id} created`)),
-    ).toContain('client id 3b0f9d0e');
+    expect(t.logs.ops('capsule.created')).toEqual([
+      expect.objectContaining({
+        capsuleId: id,
+        surface: 'api',
+        changed: true,
+        clientId: '3b0f9d0e-8a7c-4f61-9b2e-5d4c3b2a1f01',
+      }),
+    ]);
     expect((await api('GET', `/capsules/${id}`)).json()).toEqual({
       id,
       name: 'Office',

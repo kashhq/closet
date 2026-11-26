@@ -1,6 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import { SYNC_ROOTS, type SyncResource } from '../../db/sync-tables';
+import { SHARE_PERMISSIONS } from '../../db/schema';
+import {
+  SYNC_ROOTS,
+  SYNC_STAMPS,
+  type SyncResource,
+} from '../../db/sync-tables';
 import { literals } from '../api/resource';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
@@ -74,6 +79,14 @@ export function isExpired(at: Position, floor: number): boolean {
   );
 }
 
+/**
+ * What the caller may do in a wardrobe, which decides what its rows carry:
+ * their own (a garment's repairs and care, every public link), or a
+ * share's permission (a MANAGE grantee is shown a garment's link, #959).
+ */
+export const GRANTS = ['OWN', ...SHARE_PERMISSIONS] as const;
+export type Grant = (typeof GRANTS)[number];
+
 /** Which history of the database a page reads (sync_epoch, #652). */
 export interface Epoch {
   epoch: string;
@@ -113,6 +126,16 @@ export interface ChangesCursor {
   /** By owner id. */
   positions: Map<number, Position>;
   /**
+   * The grant each position was read under, by owner id. A wardrobe whose
+   * grant differs now (a VIEW share raised to MANAGE, a share revoked and
+   * given again) is read again from its start, as a share new to the
+   * cursor is: the rows it holds were shaped for the old one. Empty in a
+   * cursor answered before grants were kept (#959), so each of its
+   * wardrobes is read once more, which delivers the links that release
+   * added to rows already synced.
+   */
+  grants: Map<number, Grant>;
+  /**
    * A full sync (begun without a cursor) not finished yet: every page of it
    * says so, so the client can drop what it did not re-send (feed.ts).
    */
@@ -124,11 +147,17 @@ const Count = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const PositionJson = Type.Tuple([
   Count,
   literals(Object.values(KIND)),
-  literals<SyncResource | ''>(['', ...SYNC_ROOTS.map((root) => root.table)]),
+  literals<SyncResource | ''>([
+    '',
+    ...SYNC_ROOTS.map((root) => root.table),
+    ...SYNC_STAMPS.map((stamp) => stamp.resource),
+  ]),
   Type.Integer({ minimum: 0, maximum: ROW_ID_MAX }),
   Type.Integer({ minimum: 0, maximum: ROW_ID_MAX }),
   Count,
 ]);
+
+const OwnerKey = Type.String({ pattern: '^[1-9]\\d{0,9}$' });
 
 const CursorJson = Type.Object(
   {
@@ -143,7 +172,8 @@ const CursorJson = Type.Object(
     ),
     c: Count,
     s: Type.Optional(Type.Literal(1)),
-    w: Type.Record(Type.String({ pattern: '^[1-9]\\d{0,9}$' }), PositionJson),
+    w: Type.Record(OwnerKey, PositionJson),
+    g: Type.Optional(Type.Record(OwnerKey, literals(GRANTS))),
   },
   { additionalProperties: false },
 );
@@ -165,6 +195,7 @@ export function writeChangesCursor(
       c: cursor.coverage,
       ...(cursor.snapshot && { s: 1 }),
       w: positions,
+      g: Object.fromEntries(cursor.grants),
     }),
   ).toString('base64url');
 }
@@ -186,11 +217,18 @@ export function readChangesCursor(text: string): ChangesCursor {
     if (ownerId > ROW_ID_MAX) throw badCursor();
     positions.set(ownerId, { revision, kind, resource, id, seq, floor });
   }
+  const grants = new Map<number, Grant>();
+  for (const [owner, grant] of Object.entries(json.g ?? {})) {
+    const ownerId = Number(owner);
+    if (ownerId > ROW_ID_MAX) throw badCursor();
+    grants.set(ownerId, grant);
+  }
   return {
     userId: json.u ?? null,
     epoch: json.e ?? null,
     coverage: json.c,
     positions,
+    grants,
     snapshot: json.s === 1,
   };
 }

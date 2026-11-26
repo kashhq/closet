@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import { Forbidden, NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
@@ -37,14 +38,16 @@ const OWNER = 1;
 const NEED = 30;
 const PICK = 10;
 const noStatements = {} as Db;
+const deps = { db: noStatements, logger: captureLogs().logger };
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: 2,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
 const stranger = sharedAs(null);
 const viewer = sharedAs('VIEW');
 const manager = sharedAs('MANAGE');
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 
 /** Every decision a page makes, with the resource an unseen one reads as. */
 const decisions: [OwnerDecision, string][] = [
@@ -70,7 +73,7 @@ describe('a decision is the owner’s alone', () => {
   it.each(decisions)(
     '%o: a stranger’s is not found',
     async (decision, message) => {
-      const refused = makeDecision(noStatements, stranger, OWNER, decision);
+      const refused = makeDecision(deps, stranger, OWNER, decision);
       await expect(refused).rejects.toBeInstanceOf(NotFound);
       await expect(refused).rejects.toMatchObject({ statusCode: 404, message });
       expect(decide).not.toHaveBeenCalled();
@@ -79,14 +82,14 @@ describe('a decision is the owner’s alone', () => {
 
   it.each(decisions)('%o: forbidden to a VIEW grantee', async (decision) => {
     await expect(
-      makeDecision(noStatements, viewer, OWNER, decision),
+      makeDecision(deps, viewer, OWNER, decision),
     ).rejects.toBeInstanceOf(Forbidden);
     expect(decide).not.toHaveBeenCalled();
   });
 
   it.each(decisions)('%o: forbidden to a MANAGE grantee', async (decision) => {
     await expect(
-      makeDecision(noStatements, manager, OWNER, decision),
+      makeDecision(deps, manager, OWNER, decision),
     ).rejects.toBeInstanceOf(Forbidden);
     expect(decide).not.toHaveBeenCalled();
   });
@@ -98,7 +101,7 @@ describe('a decision is the owner’s alone', () => {
       dismissed: [11],
       restored: [],
     });
-    const decided = await makeDecision(noStatements, owner, '', {
+    const decided = await makeDecision(deps, owner, '', {
       kind: 'choose',
       garmentId: PICK,
     });
@@ -112,7 +115,7 @@ describe('a decision is the owner’s alone', () => {
   it("is the 404 of what it names when decide finds it not the owner's", async () => {
     vi.mocked(decide).mockResolvedValue({ ok: false, reason: 'not-found' });
     await expect(
-      makeDecision(noStatements, owner, undefined, {
+      makeDecision(deps, owner, undefined, {
         kind: 'undo-group',
         groupId: NEED,
       }),
@@ -126,7 +129,7 @@ describe('a decision is the owner’s alone', () => {
   it('is a 409 for a stale page or a double tap', async () => {
     vi.mocked(decide).mockResolvedValue({ ok: false, reason: 'not-allowed' });
     await expect(
-      makeDecision(noStatements, owner, undefined, {
+      makeDecision(deps, owner, undefined, {
         kind: 'returned',
         garmentId: PICK,
       }),
@@ -226,16 +229,16 @@ describe("Muse's writes are the caller's own wardrobe", () => {
   it('answers the new need, or a 409 naming the one of that name', async () => {
     const need = { name: 'Blazer', budget: null, note: null, tokenId: 3 };
     vi.mocked(createOptionGroup).mockResolvedValue({ ok: true, id: NEED });
-    await expect(createNeed(noStatements, owner, need)).resolves.toBe(NEED);
+    await expect(createNeed(deps, owner, need)).resolves.toBe(NEED);
     vi.mocked(createOptionGroup).mockResolvedValue({
       ok: false,
       reason: 'dismissed',
       id: NEED,
       dismissedReason: 'not_now',
     });
-    await expect(createNeed(noStatements, owner, need)).rejects.toMatchObject({
+    await expect(createNeed(deps, owner, need)).rejects.toMatchObject({
       statusCode: 409,
-      message: expect.stringContaining(`id ${NEED}, not_now`),
+      message: expect.stringContaining(`id ${NEED}, not_now`) as string,
     });
   });
 });

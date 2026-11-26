@@ -43,8 +43,9 @@ async function main(): Promise<void> {
     logger,
   );
   const weather = await startWeatherStub();
-  // The order mail's poll (with ORDER_MAIL_JMAP_TOKEN, as playwright.config.ts
-  // sets it) reads an empty stand-in inbox, never Fastmail.
+  // The order mail's poll, when the environment sets ORDER_MAIL_JMAP_TOKEN
+  // (playwright.config.ts does not, #706), reads an empty stand-in inbox,
+  // never Fastmail.
   const jmap = config.ORDER_MAIL_JMAP_TOKEN
     ? await startJmapStub(config.ORDER_MAIL_JMAP_TOKEN)
     : undefined;

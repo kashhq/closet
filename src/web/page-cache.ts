@@ -5,7 +5,7 @@
  * The tab roots open stale-while-revalidate: the worker answers a document
  * load from its cache at once and fetches the page again behind it. The
  * page on screen learns how old it is and whether the server's copy differs
- * from the worker (public/js/freshness.js), and says so.
+ * from the worker (views/assets/page/freshness.ts), and says so.
  */
 
 import { isApiPath } from './api-path';
@@ -25,7 +25,7 @@ import { type Section, SECTION_HOME } from './layout/sections';
  * copies are stamped and owned (pageStore); pages-v1 held neither and is
  * retired on activate. A full page is stored under its absolute URL
  * (pageCacheKey), which the offline fallback page reads to link only what
- * this device saved (`data-pages-cache`, public/js/connectivity.js).
+ * this device saved (`data-pages-cache`, views/assets/page/connectivity.ts).
  */
 export const PAGES_CACHE = 'pages-v2';
 
@@ -47,7 +47,7 @@ export const CACHED_AT_HEADER = 'X-SW-Cached-At';
  * route template), and reading it this way needs nothing the worker must
  * remember until the page asks: asking its own memory for what it served,
  * keyed by the navigation's resultingClientId, did not survive a worker
- * WebKit had stopped meanwhile (public/js/freshness.js duplicates this
+ * WebKit had stopped meanwhile (views/assets/page/freshness.ts duplicates this
  * name; it cannot import a TS module). Once the page sees this, it asks for
  * REVALIDATE_PAGE itself (src-sw.ts), a fresh, self-contained request that
  * needs nothing remembered either.
@@ -186,6 +186,114 @@ export function cachedAt(headers: {
 }): number {
   const value = Number(headers.get(CACHED_AT_HEADER));
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * A stored copy's Server-Timing with its arrival stamp (CACHED_AT_TIMING_NAME)
+ * set to `stampMs`: the server's entries kept, any earlier stamp replaced, so
+ * a copy re-stamped on a 304 (#708) carries exactly one, the one
+ * freshness.js finds first.
+ */
+export function stampedServerTiming(
+  timing: string | null,
+  stampMs: string,
+): string {
+  const kept = (timing ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(
+      (entry) =>
+        entry !== '' && entry.split(';')[0].trim() !== CACHED_AT_TIMING_NAME,
+    );
+  return [...kept, `${CACHED_AT_TIMING_NAME};desc="${stampMs}"`].join(', ');
+}
+
+interface HeadersOf {
+  status: number;
+  headers: { get(name: string): string | null };
+}
+
+/**
+ * The If-None-Match a worker's refetch sends (#708; send(),
+ * src/web/render.ts): the stored copy's ETag, only for a copy of the account
+ * that owns the cache (`owner`, OWNER_KEY); none for another's, a copy
+ * without one, or no copy.
+ */
+export function revalidationTag(
+  copy: HeadersOf | undefined,
+  owner: string | undefined,
+): string | undefined {
+  if (!copy || owner === undefined || pageAccount(copy.headers) !== owner) {
+    return undefined;
+  }
+  return copy.headers.get('ETag') ?? undefined;
+}
+
+/**
+ * Whether a refetch's 304 confirms the stored copy, which is then stored
+ * again with a new stamp, its body unchanged: a 304 naming the copy's tag
+ * and its account, which still owns the cache. Anything else stores nothing.
+ */
+export function confirmsCopy(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): boolean {
+  const account = pageAccount(copy.headers);
+  return (
+    answer.status === 304 &&
+    owner !== undefined &&
+    account === owner &&
+    pageAccount(answer.headers) === account &&
+    answer.headers.get('ETag') === copy.headers.get('ETag')
+  );
+}
+
+/**
+ * What a worker's conditional refetch does with its answer (PageRefresh):
+ * a page (or a failure) is the answer, stored or refused by the page
+ * plugins; a 304 confirming the copy (confirmsCopy) re-stamps it; any
+ * other 304 (another tag, or the cache changed hands while it was in
+ * flight, #991) confirms nothing this cache may keep, so the page is asked
+ * again unconditionally, as when there is no copy: a raw 304 is no page,
+ * and the warm would count it failed.
+ */
+export type ConditionalVerdict = 'answer' | 'confirmed' | 'unconditional';
+
+export function conditionalVerdict(
+  answer: HeadersOf,
+  copy: HeadersOf,
+  owner: string | undefined,
+): ConditionalVerdict {
+  if (answer.status !== 304) return 'answer';
+  return confirmsCopy(answer, copy, owner) ? 'confirmed' : 'unconditional';
+}
+
+/**
+ * What a 304 tells its stored copy (RFC 9111 4.3.4, 3.2): every header the
+ * 304 carries replaces the copy's (X-Asset-Version, Cache-Control,
+ * X-Page-Account, Server-Timing, Vary), except those describing the body
+ * it did not send, which stay the copy's. The storage checks then read the
+ * updated headers (forbidsStorage: a route that moved to no-store drops
+ * its copy rather than keeping it).
+ */
+const BODY_HEADERS = new Set([
+  'content-encoding',
+  'content-length',
+  'content-range',
+  'content-type',
+  'transfer-encoding',
+]);
+
+export function confirmedHeaders(
+  stored: Headers,
+  confirming: Headers,
+): Headers {
+  const headers = new Headers(stored);
+  confirming.forEach((value, name) => {
+    if (!BODY_HEADERS.has(name)) headers.set(name, value);
+  });
+  return headers;
 }
 
 /**
@@ -455,9 +563,9 @@ export interface RefreshBackoff {
 }
 
 /** The wait after a first failure, doubling with each one after it. */
-export const REFRESH_BACKOFF_BASE_MS = 5 * 60_000;
+const REFRESH_BACKOFF_BASE_MS = 5 * 60_000;
 /** The longest wait: a page that keeps failing is asked once a day. */
-export const REFRESH_BACKOFF_CAP_MS = 24 * 60 * 60_000;
+const REFRESH_BACKOFF_CAP_MS = 24 * 60 * 60_000;
 
 export function nextRefreshBackoff(
   previous: RefreshBackoff | undefined,
@@ -536,6 +644,78 @@ export function refreshedRecord(
 ): RefreshedRecord {
   if (waiting.length === 0) return { at: now };
   return { at: now, retryAt: Math.min(...waiting.map((b) => b.retryAt)) };
+}
+
+/** A key due in the activation refresh, with the backoff beside it. */
+export interface DueRefresh<Key> {
+  key: Key;
+  /** The page's cache URL: what `backoffs` and the plan's `previous` are keyed by. */
+  url: string;
+  /** The record's current value; undefined with none, or an expired or unreadable one. */
+  backoff: RefreshBackoff | undefined;
+  /** Whether a record of any kind sits in the cache for it (an expired one still does). */
+  recorded: boolean;
+}
+
+/**
+ * Splits the due keys at the start of a run: the ones asked now (with the
+ * backoff they carry, so a new failure doubles it) and those still waiting.
+ */
+export function planRefresh<Key>(
+  due: readonly DueRefresh<Key>[],
+  now: number,
+): {
+  asked: Key[];
+  waiting: RefreshBackoff[];
+  previous: Map<string, RefreshBackoff>;
+} {
+  const asked: Key[] = [];
+  const waiting: RefreshBackoff[] = [];
+  const previous = new Map<string, RefreshBackoff>();
+  for (const { key, url, backoff } of due) {
+    if (isBackingOff(backoff, now)) waiting.push(backoff);
+    else {
+      asked.push(key);
+      if (backoff) previous.set(url, backoff);
+    }
+  }
+  return { asked, waiting, previous };
+}
+
+/**
+ * What one asked key's answer does to its backoff record: `{ backoff }` to
+ * write (the next one for a failure) or, with `backoff` undefined, to delete
+ * (any other answer, when a record exists); undefined to leave it as it was
+ * (a stop: the key was never really asked, or the walk ended on it).
+ */
+export function backoffAfter(
+  step: RefetchStep,
+  previous: RefreshBackoff | undefined,
+  recorded: boolean,
+  now: number,
+  activatedAt: number,
+): { backoff: RefreshBackoff | undefined } | undefined {
+  if (step.verdict === 'failed') {
+    return { backoff: nextRefreshBackoff(previous, now, activatedAt) };
+  }
+  if (!('stop' in step) && recorded) return { backoff: undefined };
+  return undefined;
+}
+
+/**
+ * What a finished walk writes as REFRESHED_AT_KEY: nothing when it stopped
+ * (the refresh stays due), else the run's end with the earliest backoff
+ * still running, whether it was left waiting or has just been set.
+ */
+export function walkRecord(
+  stopped: boolean,
+  now: number,
+  waiting: readonly RefreshBackoff[],
+  after: ReadonlyMap<string, RefreshBackoff | undefined>,
+): RefreshedRecord | undefined {
+  if (stopped) return undefined;
+  const set = [...after.values()].filter((b) => b !== undefined);
+  return refreshedRecord(now, [...waiting, ...set]);
 }
 
 /**

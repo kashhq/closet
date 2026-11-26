@@ -15,8 +15,10 @@
     "src/cutout/child.ts",
     // Loaded by the pages' <script> tags (src/web/layout/), never imported.
     "public/js/*.js",
-    // The page's outbox, bundled into public/js/outbox.js by `npm run generate:outbox`.
+    // The page's TypeScript modules, each bundled into public/js/gen/<name>.js by
+    // `npm run generate:pages` (buildPageModules, scripts/static-assets.ts).
     "views/assets/outbox.ts",
+    "views/assets/page/*.ts",
     // The CSS entry of `npm run generate:tailwind`: its @import and @plugin lines use tailwindcss
     // and daisyui.
     "views/assets/main.css",
@@ -25,27 +27,31 @@
     // Forked or loaded by path from the specs (the cutout runner's specs,
     // test/support/legacy-migrations.ts).
     "test/fixtures/cutout-children/*.mjs",
-    "test/support/legacy-migrations/*.ts"
+    "test/support/legacy-migrations/*.ts",
   ],
-  // The browser's importmap (importMap() in src/web/layout/layout.tsx): the bare names public/js/
-  // modules import each other by. Keep in step with it; an alias missing here reads as an
+  // The browser's importmap (src/web/layout/import-map.ts): the bare names the client modules
+  // import each other by, a TypeScript module's source or a plain one's file. Keep in step with it; an alias missing here reads as an
   // unlisted dependency and fails the ratchet's knip_deps.
   "paths": {
     "toast": ["public/js/toast.js"],
-    "mask-editor": ["public/js/mask-editor.js"],
+    "mask-editor": ["views/assets/page/mask-editor.ts"],
     "photo-input": ["public/js/photo-input.js"],
     "snap-strip": ["public/js/snap-strip.js"],
     "styling": ["public/js/styling.js"],
-    "locate": ["public/js/locate.js"],
-    "push": ["public/js/push.js"],
-    "freshness": ["public/js/freshness.js"],
-    "age-label": ["public/js/age-label.js"],
-    "single-flight": ["public/js/single-flight.js"],
+    "locate": ["views/assets/page/locate.ts"],
+    "push": ["views/assets/page/push.ts"],
+    "freshness": ["views/assets/page/freshness.ts"],
+    "age-label": ["views/assets/page/age-label.ts"],
+    "single-flight": ["views/assets/page/single-flight.ts"],
     "select-count": ["public/js/select-count.js"],
     "recap-export": ["public/js/recap-export.js"],
     "click-gate": ["public/js/click-gate.js"],
-    "share-saved": ["public/js/share-saved.js"],
-    "pwa-install": ["node_modules/@khmyznikov/pwa-install/dist/pwa-install.bundle.js"]
+    "share-confirm": ["public/js/share-confirm.js"],
+    "share-saved": ["views/assets/page/share-saved.ts"],
+    "search-shortcut": ["views/assets/page/search-shortcut.ts"],
+    "pwa-install": [
+      "node_modules/@khmyznikov/pwa-install/dist/pwa-install.bundle.js",
+    ],
   },
   "ignoreDependencies": [
     // Copied from node_modules into public/modules/ by path (CLIENT_MODULES in
@@ -55,6 +61,6 @@
     "@fontsource-variable/fraunces",
     "@fontsource-variable/inter",
     // A pino transport, named by string in src/logger.ts.
-    "pino-pretty"
-  ]
+    "pino-pretty",
+  ],
 }

@@ -12,7 +12,10 @@ import {
 import { selectScalars } from '../../src/db/select-scalars';
 import { addDays } from '../../src/calendar-date';
 import { t as text } from '../../src/web/i18n';
-import { savedOutfitsSql } from '../../src/web/outfits/queries';
+import {
+  FIRST_OUTFIT_PAGE,
+  savedOutfitsSql,
+} from '../../src/web/outfits/queries';
 import { wearIdea } from '../../src/web/today/queries';
 import { decide, markSuggestion } from '../../src/web/wishlist/decisions';
 import {
@@ -463,12 +466,14 @@ describe('Today', () => {
           eq(garmentWear.outfitCalendarId, entry.id),
         ),
       ).toBe(idea.length);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Idea worn by user ${t.owner.id} on ${t.today()} \\(all-day\\): outfit ${outfitId} .*marked worn`,
-          ),
-        ),
+      expect(t.logs.ops('idea.worn')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          day: t.today(),
+          occasion: 'all-day',
+          outfitId,
+          changed: true,
+        }),
       );
 
       const html = unescapeHtml((await get('/')).body);
@@ -534,9 +539,9 @@ describe('Today', () => {
         { id: agents, origin: 'agent' },
       ]);
       const { kept } = await selectScalars(t.db, {
-        kept: savedOutfitsSql(t.owner.id, 'kept'),
+        kept: savedOutfitsSql(t.owner.id, 'kept', FIRST_OUTFIT_PAGE),
       });
-      expect(kept.map((row) => row.id)).toEqual(
+      expect(kept.outfits.map((row) => row.id)).toEqual(
         expect.arrayContaining([mine, agents]),
       );
     });
@@ -557,7 +562,7 @@ describe('Today', () => {
         ),
       ).toBe(1);
       expect(await t.db.$count(garmentWear)).toBe(before + idea.length);
-      expect(t.logs.messages('info', 'Web').at(-1)).toMatch(/already worn$/);
+      expect(t.logs.ops('idea.worn').at(-1)).toMatchObject({ changed: false });
     });
 
     // #158: the owner lock is taken once, by wearIdea; pickIdea, insertEntry

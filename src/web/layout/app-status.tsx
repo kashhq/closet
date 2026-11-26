@@ -1,11 +1,13 @@
 import { t } from '../i18n';
 import type { ViewContext } from '../view-context';
 import { ClockIcon } from './parts';
+import { APP_STATUS_ID, role, statusTextAttributes } from '../page-contract';
+import { Icon } from './icon';
 
 /**
  * Connectivity banner, the outbox's status and notice, and the toast host,
- * owned by public/js/connectivity.js, public/js/outbox.js, public/js/pwa.js,
- * public/js/freshness.js, public/js/request-failures.js and public/js/toast.js.
+ * owned by the page's modules (connectivity, the outbox, pwa, freshness,
+ * request-failures and toast; the names they read: src/web/page-contract.ts).
  * Lives inside <body>, so every hx-boost swap replaces it with this empty
  * copy; the scripts re-apply their state on htmx:afterSettle. The toast host
  * alone survives a swap (`hx-preserve`). The strings travel as data
@@ -19,29 +21,31 @@ export function AppStatus({ ctx }: { ctx: ViewContext }) {
   const signedIn = ctx.user !== undefined;
   return (
     <div
-      id="app-status"
-      data-text-offline={t('OFFLINE_BANNER')}
-      data-text-reconnecting={t('RECONNECTING')}
-      data-text-back-online={t('BACK_ONLINE')}
-      data-text-update-available={t('UPDATE_AVAILABLE')}
-      data-text-update-needs-network={t('UPDATE_NEEDS_NETWORK')}
-      data-text-reload={t('RELOAD')}
-      // freshness.js puts "3 minutes ago" (Intl.RelativeTimeFormat) in {ago}.
-      data-text-updated-ago={t('UPDATED_AGO', { ago: '{ago}' })}
-      data-text-newer-page={t('NEWER_PAGE_AVAILABLE')}
-      data-text-refresh={t('REFRESH')}
-      // request-failures.js: an htmx request with no answer, or one that
-      // is not this app's (a proxy's 502); the server's own carry theirs.
-      data-text-request-timed-out={t('REQUEST_TIMED_OUT')}
-      data-text-request-failed={t('REQUEST_FAILED')}
-      data-text-request-id={t('REQUEST_ID')}
+      id={APP_STATUS_ID}
+      {...statusTextAttributes({
+        offline: t('OFFLINE_BANNER'),
+        reconnecting: t('RECONNECTING'),
+        'back-online': t('BACK_ONLINE'),
+        'update-available': t('UPDATE_AVAILABLE'),
+        'update-needs-network': t('UPDATE_NEEDS_NETWORK'),
+        reload: t('RELOAD'),
+        // freshness.ts puts "3 minutes ago" (Intl.RelativeTimeFormat) in {ago}.
+        'updated-ago': t('UPDATED_AGO', { ago: '{ago}' }),
+        'newer-page': t('NEWER_PAGE_AVAILABLE'),
+        refresh: t('REFRESH'),
+        // request-failures.js: an htmx request with no answer, or one that
+        // is not this app's (a proxy's 502); the server's own carry theirs.
+        'request-timed-out': t('REQUEST_TIMED_OUT'),
+        'request-failed': t('REQUEST_FAILED'),
+        'request-id': t('REQUEST_ID'),
+      })}
       data-account={ctx.user && String(ctx.user.id)}
       data-time-zone={signedIn ? ctx.timeZone : undefined}
       {...(signedIn ? outboxText() : {})}
     >
       {/* The banners stack under the app bar; the stack itself takes no
           taps, so an empty one never covers the page. */}
-      <div class="fixed top-16 left-rail right-0 z-[999] px-4 pt-2 flex flex-col gap-2 pointer-events-none">
+      <div class="fixed top-bar left-rail right-0 z-[999] px-4 pt-2 flex flex-col gap-2 pointer-events-none">
         <div
           id="connectivity-banner"
           role="status"
@@ -50,7 +54,7 @@ export function AppStatus({ ctx }: { ctx: ViewContext }) {
         >
           <div class="alert alert-warning alert-soft py-2 text-sm shadow-sm">
             <OfflineIcon class="size-5 shrink-0" />
-            <span data-role="text"></span>
+            <span {...role('text')}></span>
           </div>
         </div>
         {signedIn && <OutboxStatus />}
@@ -135,7 +139,7 @@ function outboxText(): Record<`data-text-outbox-${string}`, string> {
 /**
  * The outbox's banner ("3 changes waiting to sync", "Syncing 3 changes",
  * "Sign in to save 3 changes") and its notice of the writes that were not
- * saved, which stays until Dismiss. public/js/outbox.js fills both.
+ * saved, which stays until Dismiss. public/js/gen/outbox.js fills both.
  */
 function OutboxStatus() {
   return (
@@ -148,7 +152,7 @@ function OutboxStatus() {
       >
         <div class="alert alert-info alert-soft py-2 text-sm shadow-sm">
           <ClockIcon class="size-5 shrink-0" />
-          <span data-role="text"></span>
+          <span {...role('text')}></span>
         </div>
       </div>
       {/* A polite live region, not role="alert": it is on every signed-in
@@ -160,7 +164,7 @@ function OutboxStatus() {
         class="hidden pointer-events-auto"
       >
         <div class="alert alert-error alert-soft py-2 text-sm shadow-sm items-start">
-          <ul data-role="list" class="flex flex-col gap-1 flex-1 min-w-0"></ul>
+          <ul {...role('list')} class="flex flex-col gap-1 flex-1 min-w-0"></ul>
           <button
             type="button"
             class="btn btn-ghost btn-sm"
@@ -177,19 +181,10 @@ function OutboxStatus() {
 /** Heroicons "signal-slash"; also on the offline page. */
 export function OfflineIcon(props: { class: string }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width="1.5"
-      stroke="currentColor"
+    <Icon
+      paths="m3 3 8.735 8.735m0 0a.374.374 0 1 1 .53.53m-.53-.53.53.53m0 0L21 21M14.652 9.348a3.75 3.75 0 0 1 0 5.304m2.121-7.425a6.75 6.75 0 0 1 0 9.546m2.121-11.667c3.808 3.807 3.808 9.98 0 13.788m-9.546-4.242a3.733 3.733 0 0 1-1.06-2.122m-1.061 4.243a6.75 6.75 0 0 1-1.625-6.929m-.496 9.05c-3.068-3.067-3.664-7.67-1.79-11.334M12 12h.008v.008H12V12Z"
       class={props.class}
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="m3 3 8.735 8.735m0 0a.374.374 0 1 1 .53.53m-.53-.53.53.53m0 0L21 21M14.652 9.348a3.75 3.75 0 0 1 0 5.304m2.121-7.425a6.75 6.75 0 0 1 0 9.546m2.121-11.667c3.808 3.807 3.808 9.98 0 13.788m-9.546-4.242a3.733 3.733 0 0 1-1.06-2.122m-1.061 4.243a6.75 6.75 0 0 1-1.625-6.929m-.496 9.05c-3.068-3.067-3.664-7.67-1.79-11.334M12 12h.008v.008H12V12Z"
-      />
-    </svg>
+      weight="1.5"
+    />
   );
 }

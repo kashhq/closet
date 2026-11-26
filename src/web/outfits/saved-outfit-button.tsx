@@ -1,8 +1,12 @@
+import { cardClass } from '../card';
 import type { Child } from 'hono/jsx';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
+import { OUTFIT_ROW_GRID } from '../layout/columns';
 import { t } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { collagePieces, OutfitCollage } from './collage';
-import { type OutfitList, OutfitListTabs } from './outfit-list';
+import type { OutfitList } from './outfit-list';
+import { OutfitListTabs } from './outfit-list-tabs';
 import type { GarmentOutfit } from './queries';
 import { buyFirstNote } from './to-buy';
 
@@ -30,7 +34,10 @@ function SavedOutfitButton(props: {
       type="submit"
       name="outfitId"
       value={String(outfit.id)}
-      class="group card bg-base-100 shadow-sm gap-2 p-2 text-left disabled:bg-base-200 disabled:shadow-none disabled:cursor-not-allowed"
+      class={cardClass(
+        'content',
+        'group gap-2 p-2 text-left disabled:bg-base-200 disabled:cursor-not-allowed',
+      )}
       disabled={note !== undefined}
     >
       <span class="flex min-w-0 group-disabled:opacity-50" aria-hidden="true">
@@ -50,12 +57,43 @@ function SavedOutfitButton(props: {
 }
 
 /**
+ * One page of a picker's SavedOutfitButtons and, when there are more
+ * (`more`: the next page's address, #660), the sentinel that fetches it.
+ * The pickers' next-page routes (GET /calendar/plan/more, GET
+ * /trips/:id/outfits/new/more) answer with this alone, so the page lands
+ * inside the same form.
+ */
+export function SavedOutfitButtons(props: {
+  outfits: GarmentOutfit[];
+  noteOf: (outfit: GarmentOutfit) => string | undefined;
+  more: string | undefined;
+}) {
+  return (
+    <>
+      {props.outfits.map((outfit) => (
+        <SavedOutfitButton outfit={outfit} note={props.noteOf(outfit)} />
+      ))}
+      {props.more !== undefined && (
+        <PageSentinel
+          as="div"
+          class="col-span-full flex justify-center py-4"
+          href={props.more}
+          trigger="revealed"
+          marker="picker"
+        />
+      )}
+    </>
+  );
+}
+
+/**
  * The pickers' "Saved" section (the calendar's plan page, a trip's add
  * page): the two lists' tabs (#659: `list` is the one shown, `href` the
- * page's address without it), the owner's outfits of that list as
- * SavedOutfitButtons of one native PostForm to `action`, which carries
- * the page's hidden fields (`children`), or the line saying there are
- * none.
+ * page's address without it), the first page of the owner's outfits of
+ * that list as SavedOutfitButtons of one native PostForm to `action`,
+ * which carries the page's hidden fields (`children`), or the line saying
+ * there are none. The buttons are `OUTFIT_ROW_GRID`'s items, and a next
+ * page's land beside them, its sentinel spanning the row.
  */
 export function SavedOutfitPicker(props: {
   heading: Child;
@@ -64,6 +102,8 @@ export function SavedOutfitPicker(props: {
   href: string;
   outfits: GarmentOutfit[];
   noteOf: (outfit: GarmentOutfit) => string | undefined;
+  /** The next page's address (SavedOutfitButtons' `more`); none on the last. */
+  more: string | undefined;
   children: Child;
 }) {
   return (
@@ -73,11 +113,13 @@ export function SavedOutfitPicker(props: {
       </h2>
       <OutfitListTabs list={props.list} href={props.href} />
       {props.outfits.length > 0 ? (
-        <PostForm action={props.action} class="flex flex-col gap-2">
+        <PostForm action={props.action} class={OUTFIT_ROW_GRID}>
           {props.children}
-          {props.outfits.map((outfit) => (
-            <SavedOutfitButton outfit={outfit} note={props.noteOf(outfit)} />
-          ))}
+          <SavedOutfitButtons
+            outfits={props.outfits}
+            noteOf={props.noteOf}
+            more={props.more}
+          />
         </PostForm>
       ) : (
         <p class="text-sm text-muted">

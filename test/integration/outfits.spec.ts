@@ -160,7 +160,7 @@ describe('outfits', () => {
   it('GET /outfits shows its empty state before any outfit exists', async () => {
     const list = await t.inject({ method: 'GET', url: '/outfits' });
     expect(list.statusCode).toBe(200);
-    expect(hasText(list.body, 'No outfits yet.')).toBe(true);
+    expect(hasText(list.body, 'No saved outfits.')).toBe(true);
     expect(list.body).toContain('href="/styling"');
   });
 
@@ -221,7 +221,7 @@ describe('outfits', () => {
 
       const empty = await createOutfit({}, []);
       expect(await savedSlots(empty)).toEqual([]);
-      // A blank name is no name: the pages say "Untitled Outfit".
+      // A blank name is no name: the pages say "Untitled outfit".
       expect((await outfitRow(empty)).name).toBeNull();
     });
 
@@ -366,7 +366,7 @@ describe('outfits', () => {
       expect(res.body).not.toContain('hx-post="/calendar"');
       // Notes are the outfit page's.
       expect(hasText(res.body, 'Mondays')).toBe(false);
-      expect(hasText(res.body, 'No outfits yet.')).toBe(false);
+      expect(hasText(res.body, 'No saved outfits.')).toBe(false);
     });
 
     it('shows an outfit with its garments, notes and edit/delete actions', async () => {
@@ -461,10 +461,17 @@ describe('outfits', () => {
         // The entry is an OutfitCollage (R6): every garment of the outfit,
         // laid out by role (top, pants, shoes) whatever order it was saved in
         // (shoes, pants, top); the saved order is the outfit page's list.
-        const alts = imgTags(res.body).map(
-          (tag) => /alt="([^"]*)"/.exec(tag)?.[1],
-        );
-        expect(alts).toEqual(['Order top', 'Order pants', 'Order shoes']);
+        // The entry's link names the outfit, so its photos are decorative
+        // (alt="", #730); the order is read from each piece's category.
+        const tags = imgTags(res.body);
+        expect(tags.map((tag) => /alt="([^"]*)"/.exec(tag)?.[1])).toEqual([
+          '',
+          '',
+          '',
+        ]);
+        expect(
+          tags.map((tag) => /data-collage-piece="([^"]*)"/.exec(tag)?.[1]),
+        ).toEqual(['tops', 'bottoms', 'footwear']);
       });
 
       it('lists outfits newest first, in one statement with their activity', async () => {

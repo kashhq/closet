@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogs } from '../../../test/support/log-capture';
 import type { Db } from '../../db/client';
 import type { Photos } from '../files/photos';
-import type { Logger } from '../../logger';
 import { NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
 import { setEntryWorn } from '../wears/queries';
@@ -64,20 +64,21 @@ const DAY = '2026-11-16';
 const db = {} as Db;
 const sharedAs = (permission: 'VIEW' | 'MANAGE' | null): Actor => ({
   userId: OTHER,
+  surface: 'page',
   shareReadAhead: { ownerId: OWNER, permission },
 });
-const owner: Actor = { userId: OWNER };
+const owner: Actor = { userId: OWNER, surface: 'page' };
 const others: [string, Actor][] = [
   ['a stranger', sharedAs(null)],
   ['a VIEW grantee', sharedAs('VIEW')],
   ['a MANAGE grantee', sharedAs('MANAGE')],
 ];
 const deleteVariants = vi.fn();
-const logInfo = vi.fn();
+const { logger, logs } = captureLogs();
 const deps = {
   db,
   photos: { deleteVariants } as unknown as Photos,
-  logger: { info: logInfo } as unknown as Logger,
+  logger,
 };
 const target = { entryId: ENTRY, day: DAY, occasion: 'work' as const };
 const unworn = {
@@ -98,7 +99,7 @@ const paths: [string, string, (actor: Actor) => Promise<unknown>][] = [
     (actor) => {
       vi.mocked(scheduleOutfit).mockResolvedValue('no-such-outfit');
       return planOutfit(
-        db,
+        deps,
         actor,
         {
           outfitId: OUTFIT,
@@ -114,7 +115,7 @@ const paths: [string, string, (actor: Actor) => Promise<unknown>][] = [
     'Calendar entry not found',
     (actor) => {
       vi.mocked(setEntryWorn).mockResolvedValue('not-found');
-      return markEntryWorn(db, actor, {
+      return markEntryWorn(deps, actor, {
         entryId: ENTRY,
         worn: true,
         at: new Date(),
@@ -144,7 +145,7 @@ const paths: [string, string, (actor: Actor) => Promise<unknown>][] = [
     (actor) => {
       vi.mocked(lockEntryToReplace).mockResolvedValue(undefined);
       return replaceEntryOutfit(
-        db,
+        deps,
         actor,
         target,
         { outfitId: OUTFIT },
@@ -156,6 +157,7 @@ const paths: [string, string, (actor: Actor) => Promise<unknown>][] = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  logs.clear();
 });
 
 describe("another user's entry is not found, whatever they share", () => {
@@ -166,6 +168,8 @@ describe("another user's entry is not found, whatever they share", () => {
       await expect(refused).rejects.toMatchObject({ statusCode: 404, message });
       expect(setEntryOutfit).not.toHaveBeenCalled();
       expect(deleteVariants).not.toHaveBeenCalled();
+      // A refusal is the error handler's line, never an operation's.
+      expect(logs.records).toEqual([]);
     });
   }
 
@@ -201,7 +205,7 @@ describe('a replace refuses with nothing changed', () => {
     vi.mocked(lockEntryToReplace).mockResolvedValue(unworn);
     vi.mocked(ownsOutfit).mockResolvedValue(false);
     await expect(
-      replaceEntryOutfit(db, owner, target, { outfitId: OUTFIT }, BY_PERSON),
+      replaceEntryOutfit(deps, owner, target, { outfitId: OUTFIT }, BY_PERSON),
     ).rejects.toMatchObject({
       statusCode: 404,
       message: 'Outfit not found',
@@ -213,7 +217,7 @@ describe('a replace refuses with nothing changed', () => {
   it('refuses a worn entry before it looks at the choice (409)', async () => {
     vi.mocked(lockEntryToReplace).mockResolvedValue({ ...unworn, worn: true });
     await expect(
-      replaceEntryOutfit(db, owner, target, { outfitId: OUTFIT }, BY_PERSON),
+      replaceEntryOutfit(deps, owner, target, { outfitId: OUTFIT }, BY_PERSON),
     ).rejects.toMatchObject({ statusCode: 409 });
     expect(ownsOutfit).not.toHaveBeenCalled();
   });
@@ -223,10 +227,10 @@ describe('a replace refuses with nothing changed', () => {
     vi.mocked(ownsOutfit).mockResolvedValue(true);
     vi.mocked(entryOf).mockResolvedValue({ id: 41, occasion: 'evening' });
     await expect(
-      replaceEntryOutfit(db, owner, target, { outfitId: OUTFIT }, BY_PERSON),
+      replaceEntryOutfit(deps, owner, target, { outfitId: OUTFIT }, BY_PERSON),
     ).rejects.toMatchObject({
       statusCode: 409,
-      message: expect.stringContaining('Evening'),
+      message: expect.stringContaining('Evening') as string,
     });
     expect(setEntryOutfit).not.toHaveBeenCalled();
   });
@@ -236,13 +240,14 @@ describe('the entry path for its owner', () => {
   it("answers a day still to come for each surface's own word", async () => {
     vi.mocked(setEntryWorn).mockResolvedValue('future');
     await expect(
-      markEntryWorn(db, owner, {
+      markEntryWorn(deps, owner, {
         entryId: ENTRY,
         worn: true,
         at: new Date(),
         today: DAY,
       }),
     ).resolves.toBe('future');
+    expect(logs.records).toEqual([]);
   });
 
   it('deletes the selfie bytes only after the entry is gone', async () => {
@@ -259,8 +264,24 @@ describe('the entry path for its owner', () => {
     });
     await removeEntry(deps, owner, ENTRY);
     expect(deleteVariants).toHaveBeenCalledOnce();
-    expect(logInfo).toHaveBeenCalledWith(
-      `Calendar entry ${ENTRY} deleted by user ${OWNER} with its selfie abc.jpg`,
-    );
+    expect(logs.ops('calendar.entry.deleted')).toEqual([
+      expect.objectContaining({
+        userId: OWNER,
+        surface: 'page',
+        entryId: ENTRY,
+        changed: true,
+        selfies: ['abc.jpg'],
+        oneOffOutfitRemoved: null,
+      }),
+    ]);
+  });
+
+  it('asking first deletes nothing and writes no op line', async () => {
+    vi.mocked(deleteEntry).mockResolvedValue('needs-confirmation');
+    await expect(
+      removeEntry(deps, owner, ENTRY, { asksFirst: true }),
+    ).resolves.toBe('needs-confirmation');
+    expect(deleteVariants).not.toHaveBeenCalled();
+    expect(logs.ops('calendar.entry.deleted')).toEqual([]);
   });
 });

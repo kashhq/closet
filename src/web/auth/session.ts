@@ -13,7 +13,11 @@ import {
   shareToReadAhead,
 } from '../sharing/access';
 import { type AccountRow, findSessionAccount } from './queries';
-import { SESSION_LIFETIME_SECONDS, type SessionTokens } from './tokens';
+import {
+  SESSION_LIFETIME_SECONDS,
+  type SessionStamp,
+  type SessionTokens,
+} from './tokens';
 
 /** The signed-in user as every route and page sees it: never the hash. */
 export interface SessionUser {
@@ -33,34 +37,35 @@ export interface AuthContext {
 type CookieVerdict =
   | {
       auth: AuthContext;
-      fingerprint: string;
+      stamp: SessionStamp;
       account?: AccountRow;
       share?: ShareReadAhead;
     }
   | { rejected: string };
 
 /**
- * The password fingerprint each request's session was judged by (its
- * token's `pwf`, equal to the row's when it was read), by request: kept off
+ * The stamp each request's session was judged by (its token's `pwf` and
+ * `sv`, equal to the row's when it was read), by request: kept off
  * `request.auth` with the hash, as accountsWithHash.
  */
-const sessionFingerprints = new WeakMap<FastifyRequest, string>();
+const sessionStamps = new WeakMap<FastifyRequest, SessionStamp>();
 
 /**
- * The fingerprint the request's session was opened with, for a write that
- * must not outlive the session: it rechecks it under the user's row lock,
- * which a new password's writer takes too (upsertDevice, updatePasswordHash),
- * since the session lookup read the row before that lock. Calling it on a
- * request without a session is a programming error.
+ * The stamp the request's session was opened with, for a write that must
+ * not outlive the session: it rechecks it under the user's row lock
+ * (sessionStillOpenSql), which a new password's writer and Sign out
+ * everywhere take too (upsertDevice, createInvite; updatePasswordHash,
+ * endOtherSessions), since the session lookup read the row before that
+ * lock. Calling it on a request without a session is a programming error.
  */
-export function sessionFingerprint(request: FastifyRequest): string {
-  const fingerprint = sessionFingerprints.get(request);
-  if (fingerprint === undefined) {
+export function sessionStamp(request: FastifyRequest): SessionStamp {
+  const stamp = sessionStamps.get(request);
+  if (stamp === undefined) {
     throw new Error(
-      `sessionFingerprint() on ${request.method} ${loggableUrl(request)}, which has no session`,
+      `sessionStamp() on ${request.method} ${loggableUrl(request)}, which has no session`,
     );
   }
-  return fingerprint;
+  return stamp;
 }
 
 /**
@@ -90,7 +95,7 @@ export function sessionAccount(request: FastifyRequest): AccountRow {
 
 /**
  * Resolves a request's session once: cookie -> JWT -> user row -> password
- * fingerprint. The root preValidation hook in app.ts calls it for every
+ * fingerprint, restore epoch and session version. The root preValidation hook in app.ts calls it for every
  * non-static request and stores the result as `request.auth`;
  * requireSession, sessionUserId() and the page context only read that.
  *
@@ -106,7 +111,8 @@ export function sessionAccount(request: FastifyRequest): AccountRow {
  * it arrives (endSession: the cookie cleared, Clear-Site-Data sent). That
  * covers every way a session ends away from this device: a password changed
  * on another one or by `user:set-password` (the fingerprint), a database
- * restore (`maintenance:after-restore`'s epoch bump: `sep`, #908), the
+ * restore (`maintenance:after-restore`'s epoch bump: `sep`, #908), Sign out
+ * everywhere and a new password (the session version's bump: `sv`, #700), the
  * account deleted elsewhere (no row), a rotated ACCESS_TOKEN_SECRET or a garbled
  * token (the signature), and expiry. This is the one place such a device is
  * noticed, so it is where it drops the account's HTTP cache (selfies,
@@ -150,10 +156,15 @@ export function createSessionResolver(deps: {
         rejected: `issued before the database was restored, for user ${row.id}`,
       };
     }
+    if (claims.sv !== row.sessionVersion) {
+      return {
+        rejected: `session version ${claims.sv}, now ${row.sessionVersion} (signed out everywhere or a new password), for user ${row.id}`,
+      };
+    }
     const user = { id: row.id, email: row.email };
     return {
       auth: { user },
-      fingerprint: claims.pwf,
+      stamp: { fingerprint: claims.pwf, version: claims.sv },
       account:
         row.password === undefined
           ? undefined
@@ -161,6 +172,7 @@ export function createSessionResolver(deps: {
               ...user,
               password: row.password,
               sessionEpoch: row.sessionEpoch,
+              sessionVersion: row.sessionVersion,
             },
       share:
         shareOf === undefined
@@ -178,7 +190,7 @@ export function createSessionResolver(deps: {
 
     const verdict = await judge(token, request);
     if ('auth' in verdict) {
-      sessionFingerprints.set(request, verdict.fingerprint);
+      sessionStamps.set(request, verdict.stamp);
       if (verdict.account) accountsWithHash.set(request, verdict.account);
       if (verdict.share) rememberShareReadAhead(request, verdict.share);
       return verdict.auth;
@@ -192,19 +204,35 @@ export function createSessionResolver(deps: {
 }
 
 /**
- * The session cookie. httpOnly (no script reads it), SameSite=Lax (not sent
- * on cross-site POSTs; the same-origin hook is the other half of the CSRF
- * defence), and deliberately not Secure: the HTTP twin is plain HTTP
- * by design, and a Secure cookie would never be stored there (AGENTS.md,
- * Conventions). Max-Age is in seconds (@fastify/cookie passes it through as
- * the attribute) and matches the token's own expiry.
+ * The attributes of every cookie this module sets or clears (the session's
+ * and the cache-clear marker), derived per request: httpOnly (no script
+ * reads them), SameSite=Lax (not sent on cross-site POSTs; the same-origin
+ * hook is the other half of the CSRF defence), and Secure exactly when this
+ * request arrived over https (#700). `request.protocol` reads
+ * X-Forwarded-Proto only from a TRUSTED_PROXIES peer (Fastify trustProxy),
+ * so a direct caller cannot claim https, and the HTTP twin and the dev
+ * server, plain http, get no Secure: a Secure cookie is never stored over
+ * http, and login there would break (AGENTS.md, Conventions). A clear
+ * carries the same attributes as its set.
+ */
+function sessionCookieOptions(request: FastifyRequest) {
+  return {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: request.protocol === 'https',
+  } as const;
+}
+
+/**
+ * The session cookie (sessionCookieOptions). Max-Age is in seconds
+ * (@fastify/cookie passes it through as the attribute) and matches the
+ * token's own expiry.
  */
 export function setSessionCookie(reply: FastifyReply, token: string): void {
   reply.setCookie(SESSION_COOKIE, token, {
-    path: '/',
+    ...sessionCookieOptions(reply.request),
     maxAge: SESSION_LIFETIME_SECONDS,
-    httpOnly: true,
-    sameSite: 'lax',
   });
 }
 
@@ -255,17 +283,12 @@ function clearHttpCache(reply: FastifyReply): void {
 
 /**
  * The cache-clear relay's marker (#244): "this browser still owes itself a
- * Clear-Site-Data". httpOnly, SameSite=Lax and never Secure, like the
- * session cookie (setSessionCookie); a minute is ample for a redirect chain
- * to land, and an unconsumed marker costs at most one needless clear.
+ * Clear-Site-Data", with the session cookie's attributes
+ * (sessionCookieOptions); a minute is ample for a redirect chain to land,
+ * and an unconsumed marker costs at most one needless clear.
  */
 const CACHE_CLEAR_PENDING_COOKIE = 'cache_clear_pending';
 const CACHE_CLEAR_PENDING_SECONDS = 60;
-const CACHE_CLEAR_PENDING_OPTIONS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'lax',
-} as const;
 
 /**
  * Whether an answer is a whole HTML document a load ends on: a page, a
@@ -329,7 +352,7 @@ export function createCacheClearRelay(logger: Logger) {
           clearHttpCache(reply);
           reply.clearCookie(
             CACHE_CLEAR_PENDING_COOKIE,
-            CACHE_CLEAR_PENDING_OPTIONS,
+            sessionCookieOptions(request),
           );
           logger.info(
             `Clear-Site-Data relayed to the landing page ${loggableUrl(request)} (${reply.statusCode})`,
@@ -337,7 +360,7 @@ export function createCacheClearRelay(logger: Logger) {
         }
       } else if (reply.hasHeader(CLEAR_SITE_DATA)) {
         reply.setCookie(CACHE_CLEAR_PENDING_COOKIE, '1', {
-          ...CACHE_CLEAR_PENDING_OPTIONS,
+          ...sessionCookieOptions(request),
           maxAge: CACHE_CLEAR_PENDING_SECONDS,
         });
         logger.debug(
@@ -358,11 +381,7 @@ export function createCacheClearRelay(logger: Logger) {
  * another account signing in over it (startSession).
  */
 export function endSession(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-  });
+  reply.clearCookie(SESSION_COOKIE, sessionCookieOptions(reply.request));
   clearHttpCache(reply);
   reply.header(SESSION_ENDED_HEADER, '1');
 }

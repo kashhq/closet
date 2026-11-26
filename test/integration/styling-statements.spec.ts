@@ -208,8 +208,8 @@ describe('Styling statements (#163)', () => {
       expect(record.statements).toBe(2);
       const page = (await get(`/styling?outfit=${outfitId}`)).body;
       // Thirteen tops, newest first: the oldest is the 13th, past the first
-      // window of 10, and the strip reaches it.
-      expect(stripOf(page, 'top')).toEqual([...tops].reverse());
+      // window of 10, and the strip reaches it with the 10 before it (#996).
+      expect(stripOf(page, 'top')).toEqual(tops.slice(0, 11).reverse());
       expect((await get('/styling?outfit=999999')).statusCode).toBe(404);
     });
 
@@ -316,7 +316,7 @@ describe('Styling statements (#163)', () => {
       const record = await statementsOf(`/styling/row?${query}`);
       expect(record.statements).toBe(2);
       const rows = (await get(`/styling/row?${query}`)).body;
-      expect(stripOf(rows, 'top')).toEqual([...tops].reverse());
+      expect(stripOf(rows, 'top')).toEqual(tops.slice(0, 11).reverse());
       // A garment posted in another role's row is dropped from it, and its
       // own strip is not stretched to reach it.
       const misplaced = rowsQuery([['bottom', tops[0], false]]);

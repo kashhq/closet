@@ -2,9 +2,9 @@ import * as bcrypt from 'bcryptjs';
 import { PASSWORD_HASH_ROUNDS_PRODUCTION } from '../../config';
 import type { Db } from '../../db/client';
 import { markSecretChecked } from '../../metrics/request-timing';
-import type { StringKey } from '../i18n';
+import type { CopyKey } from '../i18n';
 import {
-  type PasswordChange,
+  type SessionsEnded,
   type PasswordChangeKeeps,
   updatePasswordHash,
 } from './queries';
@@ -70,8 +70,8 @@ export async function verifyPassword(
  * change-password form and `npm run user:set-password`. Each problem is the
  * t() key of the message shown under the field.
  */
-export function passwordProblems(password: string): StringKey[] {
-  const problems: StringKey[] = [];
+export function passwordProblems(password: string): CopyKey[] {
+  const problems: CopyKey[] = [];
   if (password.length < 8) problems.push('validation.MIN_PASSWORD_LENGTH');
   if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
     problems.push('validation.PASSWORD_MUST_CONTAIN');
@@ -95,6 +95,6 @@ export async function setPassword(
   userId: number,
   password: string,
   keep?: PasswordChangeKeeps,
-): Promise<PasswordChange> {
+): Promise<SessionsEnded> {
   return updatePasswordHash(db, userId, await hashPassword(password), keep);
 }

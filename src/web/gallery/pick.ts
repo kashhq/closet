@@ -1,14 +1,9 @@
+import { t } from '../i18n';
 import type { FastifyReply } from 'fastify';
 import type { OutfitOrigin } from '../../wardrobe/outfit-origin';
 import type { IsoDate } from '../../calendar-date';
-import type { Db } from '../../db/client';
-import type { Logger } from '../../logger';
 import type { Occasion } from '../../wardrobe/occasions';
-import {
-  type EntryTarget,
-  replaceEntryOutfit,
-  replaceMessage,
-} from '../calendar/replace';
+import { type EntryTarget, replaceEntryOutfit } from '../calendar/replace';
 import { HttpError } from '../errors';
 import { garmentsGoneError } from '../outfits/gone-garments';
 import {
@@ -21,6 +16,7 @@ import type { TripOutfitAdded } from '../trips/queries';
 import { pickIdeaForTrip } from '../trips/trip-actions';
 import { tripUrl } from '../trips/urls';
 import { pickIdea, type PickResult } from '../outfits/pick';
+import type { ActionDeps } from '../op-log';
 import type { Actor } from '../sharing/access';
 import { alreadySavedParam } from './urls';
 import { BY_PERSON, type WriteOrigin } from '../write-origin';
@@ -44,16 +40,12 @@ import { BY_PERSON, type WriteOrigin } from '../write-origin';
  * it is reused, and the redirect says so (ALREADY_SAVED_FLAG). `name`
  * names a new outfit; without it pickIdea names it for its garments.
  * pickGarments is every branch but `replace` without the redirect: the
- * API's pick (POST /outfit-picks) calls it.
+ * API's pick (POST /outfit-picks) calls it. pickToPath is pickTo without
+ * the reply: Styling's Save (styling-actions.ts) calls it.
  */
 
 /** The most garments a card holds: a template, a layer and a locked piece or two. */
 export const MAX_PICKED = 8;
-
-export interface PickDeps {
-  db: Db;
-  logger: Logger;
-}
 
 /** Who picked, for the log line: a gallery card, or Styling's Save. */
 export type PickSource = 'idea' | 'styling';
@@ -79,21 +71,59 @@ function pickOrigin(
   return madeBy.agentTokenId === null ? 'person' : 'agent';
 }
 
-export function pickTo(
-  deps: PickDeps,
+export async function pickTo(
+  deps: ActionDeps,
   reply: FastifyReply,
   actor: Actor,
   destination: OutfitDestination,
   garmentIds: number[],
   options: { source: PickSource; name?: string },
 ): Promise<FastifyReply> {
+  const path = await pickToPath(deps, actor, destination, garmentIds, options);
+  return reply.redirect(path, 303);
+}
+
+/**
+ * pickTo without the reply: the pick made, answering the path it lands on.
+ * Styling's Save (styling-actions.ts) calls it, so it needs no Fastify.
+ */
+export function pickToPath(
+  deps: ActionDeps,
+  actor: Actor,
+  destination: OutfitDestination,
+  garmentIds: number[],
+  options: { source: PickSource; name?: string },
+): Promise<string> {
   // A gallery card or Styling's Save: the person's (pickOrigin).
   if (destination.kind === 'day' && destination.replace !== undefined) {
     const { replace: entryId, day, occasion } = destination;
     const target = { entryId, day, occasion };
-    return pickInPlace(deps, reply, actor, target, garmentIds, options);
+    return pickInPlace(deps, actor, target, garmentIds, options);
   }
-  return pickAndRedirect(deps, reply, actor, destination, garmentIds, options);
+  return pickAndLand(deps, actor, destination, garmentIds, options);
+}
+
+/**
+ * Where a saved outfit lands: the week of the day it was planned on, else
+ * the outfit, flagged when it was saved already (a double tap, a retried
+ * post: a success too, which the page it lands on says). A pick's, and
+ * Styling's Save with Include picks on.
+ */
+export function savedOutfitPath(
+  outfit: { id: number } & SavedFlags,
+  day: IsoDate | undefined,
+): string {
+  if (day) return weekPath(day, outfit);
+  const flag = alreadySavedParam(outfit);
+  return `/outfits/${outfit.id}${flag && `?${flag}`}`;
+}
+
+type SavedFlags = Parameters<typeof alreadySavedParam>[0];
+
+/** The week of `day`, flagged when the outfit planned on it was saved already. */
+function weekPath(day: IsoDate, saved: SavedFlags): string {
+  const flag = alreadySavedParam(saved);
+  return `/calendar?week=${day}${flag && `&${flag}`}`;
 }
 
 /**
@@ -112,24 +142,23 @@ export function postedDestination(body: {
     body.for !== undefined &&
     (destination.kind === 'none' || destinationTarget(destination) !== body.for)
   ) {
-    throw new HttpError(400, 'body/for must be a real day or trip');
+    throw new HttpError(400, t('refusal.form.forNotADayOrTrip'));
   }
   if (body.replace !== undefined && destination.kind !== 'day') {
-    throw new HttpError(400, 'body/replace needs a day');
+    throw new HttpError(400, t('refusal.form.replaceNeedsDay'));
   }
   return destination;
 }
 
 async function pickInPlace(
-  { db, logger }: PickDeps,
-  reply: FastifyReply,
+  deps: ActionDeps,
   actor: Actor,
-  target: EntryTarget,
+  target: EntryTarget & { day: IsoDate },
   garmentIds: number[],
   options: { source: PickSource; name?: string },
-): Promise<FastifyReply> {
+): Promise<string> {
   const replaced = await replaceEntryOutfit(
-    db,
+    deps,
     actor,
     target,
     {
@@ -139,12 +168,7 @@ async function pickInPlace(
     },
     BY_PERSON,
   );
-  logger.info(replaceMessage(actor.userId, target, replaced));
-  const flag = alreadySavedParam(replaced);
-  return reply.redirect(
-    `/calendar?week=${target.day}${flag && `&${flag}`}`,
-    303,
-  );
+  return weekPath(target.day, replaced);
 }
 
 /**
@@ -172,13 +196,13 @@ export type Picked =
 
 /**
  * The garments become an outfit (or are found one already) where the
- * destination says, refused whole and logged: pickIdea for a day or none,
- * pickIdeaForTrip for a trip. pickTo's (the gallery's pick, Styling's
+ * destination says, refused whole and logged: pickIdea for a day or none
+ * (logged here), pickIdeaForTrip for a trip (which logs itself). pickTo's (the gallery's pick, Styling's
  * Save) and the API's POST /outfit-picks (#193c), so the surfaces never
  * differ in what a pick does; `via` marks the API's log lines.
  */
 export async function pickGarments(
-  { db, logger }: PickDeps,
+  deps: ActionDeps,
   actor: Actor,
   destination: PickDestination,
   garmentIds: readonly number[],
@@ -190,6 +214,7 @@ export async function pickGarments(
     madeBy: WriteOrigin;
   },
 ): Promise<Picked> {
+  const { db, logger } = deps;
   const via = options.via ?? '';
   const { madeBy } = options;
   const origin = pickOrigin(
@@ -200,7 +225,7 @@ export async function pickGarments(
   const who = `${PICKED[options.source]} by user ${actor.userId}`;
   if (destination.kind === 'trip') {
     const { tripId, day, occasion } = destination;
-    const { outfit, added } = await pickIdeaForTrip(db, actor, {
+    const { outfit, added } = await pickIdeaForTrip(deps, actor, {
       tripId,
       day,
       occasion,
@@ -209,9 +234,6 @@ export async function pickGarments(
       origin,
       madeBy,
     });
-    logger.info(
-      `${who} for trip ${tripId}${via}: ${outfit.alreadySaved ? 'existing ' : ''}outfit ${outfit.id} of garments ${garmentIds.join(', ')}, ${added === 'added' ? 'added' : 'already on the trip'} (${day ?? 'any day'}${occasion ? `, ${occasion}` : ''})`,
-    );
     return { kind: 'trip', outfit, tripId, added };
   }
   const plan =
@@ -232,30 +254,19 @@ export async function pickGarments(
   return { kind: 'saved', outfit, plan };
 }
 
-async function pickAndRedirect(
-  deps: PickDeps,
-  reply: FastifyReply,
+async function pickAndLand(
+  deps: ActionDeps,
   actor: Actor,
   destination: PickDestination,
   garmentIds: number[],
   options: { source: PickSource; name?: string },
-): Promise<FastifyReply> {
+): Promise<string> {
   const picked = await pickGarments(deps, actor, destination, garmentIds, {
     ...options,
     madeBy: BY_PERSON,
   });
-  if (picked.kind === 'trip') {
-    return reply.redirect(tripUrl(picked.tripId, '?picked=1'), 303);
-  }
-  // A pick of an outfit that exists (a double tap, a retried post) is a
-  // success too; the page it lands on says so.
-  const flag = alreadySavedParam(picked.outfit);
-  return reply.redirect(
-    picked.plan
-      ? `/calendar?week=${picked.plan.day}${flag && `&${flag}`}`
-      : `/outfits/${picked.outfit.id}${flag && `?${flag}`}`,
-    303,
-  );
+  if (picked.kind === 'trip') return tripUrl(picked.tripId, '?picked=1');
+  return savedOutfitPath(picked.outfit, picked.plan?.day);
 }
 
 function pickMessage(

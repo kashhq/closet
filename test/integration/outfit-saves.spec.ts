@@ -324,15 +324,9 @@ describe('outfit saves', () => {
         .from(weekPlanEntry)
         .where(eq(weekPlanEntry.entryId, entry.id));
       expect(batchRow.outfitCreated).toBe(false);
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((line) =>
-            line.includes(
-              `its garments are already outfit ${planned.id}, nothing created`,
-            ),
-          ),
-      ).toBe(true);
+      expect(t.logs.ops('outfit.created')).toContainEqual(
+        expect.objectContaining({ outfitId: planned.id, changed: false }),
+      );
     });
   });
 
@@ -429,9 +423,9 @@ describe('outfit saves', () => {
         .where(eq(outfitCalendar.outfitId, planned.id));
       await setGarmentStatus(t.db, top, t.owner.id, { event: 'archive' });
       const target = { entryId: entry.id, day, occasion: 'work' as const };
-      const actor = { userId: t.owner.id };
+      const actor = { userId: t.owner.id, surface: 'page' as const };
       const refusal: unknown = await replaceEntryOutfit(
-        t.db,
+        { db: t.db, logger: t.logger },
         actor,
         target,
         {
@@ -451,7 +445,7 @@ describe('outfit saves', () => {
       // A garment not theirs stays the unnamed 404.
       await expect(
         replaceEntryOutfit(
-          t.db,
+          { db: t.db, logger: t.logger },
           actor,
           target,
           {

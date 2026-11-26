@@ -1,5 +1,6 @@
 import { t } from '../i18n';
 import { FormPage } from '../layout/form-page';
+import { pageModule } from '../page-contract';
 import type { ViewContext } from '../view-context';
 import { INSPIRATION_TITLE_MAX } from './queries';
 import {
@@ -16,12 +17,6 @@ import {
   SHARED_URL_HEADER,
 } from './share-target';
 import { INSPIRATION_PATH } from './urls';
-
-// public/js/share-confirm.js, through the importmap: an inline module, so
-// it runs again on a page a boosted navigation brings. A fixed string with
-// nothing interpolated.
-const SHARE_CONFIRM_INIT = `import { confirmShare } from 'share-confirm';
-confirmShare(document.getElementById('share-confirm'));`;
 
 /**
  * GET /inspiration/share/confirm (#22d): a photo shared into the app,
@@ -46,15 +41,11 @@ export function ShareConfirmPage(props: { ctx: ViewContext }) {
       multipart
       submitLabel={t('inspiration.SAVE_SHARED')}
       submitDisabled
-      after={
-        <script
-          type="module"
-          dangerouslySetInnerHTML={{ __html: SHARE_CONFIRM_INIT }}
-        />
-      }
     >
+      {/* public/js/share-confirm.js, on every visit (page-mount.ts). */}
       <div
         id="share-confirm"
+        {...pageModule('share-confirm')}
         class="flex flex-col gap-3"
         data-stash-cache={SHARE_STASH_CACHE}
         data-stash-key-prefix={SHARE_STASH_KEY_PREFIX}
@@ -114,6 +105,7 @@ export function ShareConfirmPage(props: { ctx: ViewContext }) {
           type="file"
           name={SHARE_PHOTO_FIELD}
           accept="image/*"
+          // eslint-disable-next-line closet/no-hidden-control -- the module fills it from the stash; no one picks a file here
           class="hidden"
           tabindex={-1}
           aria-hidden="true"

@@ -1,20 +1,30 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { asc, inArray, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS_FOLDER } from '../../src/db/migrate';
 import {
+  file,
+  garment,
   GARMENT_WEAR_CLIENT_ID_UNIQUE,
+  inspiration,
   outfit,
   outfitCalendar,
   outfitSlot,
+  selfie,
+  styleProfile,
+  user,
   weekPlan,
   weekPlanEntry,
 } from '../../src/db/schema';
+import type { Queryable } from '../../src/db/client';
 import { SYNC_ROOTS } from '../../src/db/sync-tables';
 import { schemaDrift } from '../support/schema-drift';
 import { createGarment } from './garments';
+import { insertPhotoRow } from '../../src/web/files/queries';
+import { addOutfitRule, saveStyleProfile } from '../../src/web/style/queries';
+import { NO_MATCHER } from '../../src/web/style/validation';
 import { asFixture, createTestApp, TestApp, userIdOf } from './harness';
 
 /**
@@ -46,7 +56,6 @@ describe('migrations', () => {
     expect(rows.map((row) => row.name)).toEqual(
       expect.arrayContaining([
         // Share links and the watermark route look rows up by these.
-        'file_shareable_id_unique',
         'garment_shareable_id_unique',
         'outfit_shareable_id_unique',
         'file_created_by_id_index',
@@ -56,8 +65,12 @@ describe('migrations', () => {
         'garment_owner_id_status_id_index',
         'garment_replaces_garment_id_index',
         'garment_owner_id_category_id_index',
+        // The owner_id foreign key's, with the sync feed's keyset (#709: the
+        // single-column indexes beside them were dropped).
+        'outfit_owner_id_revision_index',
+        'garment_wear_owner_id_revision_index',
+        'week_plan_owner_id_revision_index',
         'garment_photo_id_unique',
-        'outfit_owner_id_index',
         // Also the index of outfit_slot.outfit_id.
         'outfit_slot_pkey',
         'outfit_slot_garment_id_index',
@@ -84,7 +97,6 @@ describe('migrations', () => {
         'garment_wear_garment_id_day_index',
         'garment_wear_outfit_calendar_id_garment_id_unique',
         'garment_wear_garment_id_day_single_unique',
-        'garment_wear_owner_id_index',
         // The generator reads an owner's avoided pairs (also the owner_id
         // foreign key's); each garment's foreign key has its own.
         'generator_avoid_pkey',
@@ -107,7 +119,6 @@ describe('migrations', () => {
         // the user_id foreign key's).
         'week_template_pkey',
         'week_template_user_id_weekday_day_unique',
-        'week_plan_owner_id_index',
         'week_plan_entry_week_plan_id_index',
         'week_replan_pkey',
         // Sizes (#24): one row per brand per user, any case (also the
@@ -148,6 +159,8 @@ describe('migrations', () => {
         'order_item_owner_id_product_url_unique',
         'order_item_order_email_id_index',
         'order_item_garment_id_index',
+        // The order mail's owner (#976): its user_id foreign key's.
+        'order_mail_owner_user_id_unique',
         // The quiet close of Muse's rounds (#337): each owner's newest
         // suggestion and proposal, read every minute; the latest round.
         'garment_owner_id_suggested_at_index',
@@ -375,4 +388,193 @@ describe('migrations', () => {
       .sort();
     expect(moved).toEqual(['planner', 'proposal']);
   });
+
+  // 0069's backfill is a synced write too (0053's reason): the file runs
+  // here with its function and triggers dropped first, on an owner whose
+  // rules came before any profile row, in a transaction holding no mark.
+  it('gives each owner of rules without a profile an empty one (0069) under the owner lock, and stamps rules after it', async () => {
+    const register = async (email: string) => {
+      await t.register(email);
+      return userIdOf(t, email);
+    };
+    const rulesOnly = await register('rules-backfill@example.com');
+    const profiled = await register('rules-profiled@example.com');
+    const rule = {
+      kind: 'never' as const,
+      a: { ...NO_MATCHER, color: 'red' as const },
+      b: { ...NO_MATCHER, color: 'green' as const },
+    };
+    await addOutfitRule(t.db, { userId: rulesOnly, surface: 'page' }, rule);
+    await saveStyleProfile(t.db, profiled, {
+      styles: ['classic'],
+      budget: null,
+      palette: null,
+      notes: null,
+    });
+    await addOutfitRule(t.db, { userId: profiled, surface: 'page' }, rule);
+    // As production is before 0069: the rule wrote no profile row.
+    await asFixture(t.db, (tx) =>
+      tx.delete(styleProfile).where(eq(styleProfile.userId, rulesOnly)),
+    );
+    const profileOf = async (userId: number) =>
+      (
+        await t.db
+          .select({
+            revision: styleProfile.revision,
+            styles: styleProfile.styles,
+          })
+          .from(styleProfile)
+          .where(eq(styleProfile.userId, userId))
+      )[0];
+    const revisionOf = async (userId: number) =>
+      (
+        await t.db
+          .select({ revision: user.revision })
+          .from(user)
+          .where(eq(user.id, userId))
+      )[0].revision;
+    const untouched = await profileOf(profiled);
+
+    await t.db.execute(sql`
+      drop trigger closet_sync_touch_insert on outfit_rule;
+      drop trigger closet_sync_touch_update on outfit_rule;
+      drop trigger closet_sync_touch_delete on outfit_rule;
+      drop function closet_sync_touch_or_create();`);
+    const migration = await readFile(
+      join(MIGRATIONS_FOLDER, '0069_outfit-rules-sync.sql'),
+      'utf8',
+    );
+    await t.db.transaction(async (tx) => {
+      for (const statement of migration.split('--> statement-breakpoint')) {
+        await tx.execute(sql.raw(statement));
+      }
+    });
+
+    expect(await profileOf(rulesOnly)).toEqual({
+      revision: await revisionOf(rulesOnly),
+      styles: null,
+    });
+    expect(await profileOf(profiled)).toEqual(untouched);
+    // The triggers are back: the next rule stamps the profile.
+    await addOutfitRule(
+      t.db,
+      { userId: profiled, surface: 'page' },
+      { ...rule, kind: 'always' },
+    );
+    expect((await profileOf(profiled)).revision).toBe(
+      await revisionOf(profiled),
+    );
+  });
+
+  // 0065 gives each photo row to the owner of the row showing it, then
+  // pairs every photo foreign key with its owner (#703). Before #40 a
+  // MANAGE grantee's upload made a file row of the grantee's; the file
+  // runs here on such rows, rebuilt with the constraints as they were, in
+  // a transaction holding no owner lock (it writes no synced row).
+  it('gives a legacy photo row to its garment, selfie or look owner (0065), refusing one shown by two owners', async () => {
+    const granteeEmail = 'legacy-grantee@example.com';
+    await t.register(granteeEmail);
+    const grantee = await userIdOf(t, granteeEmail);
+    const owner = t.owner.id;
+    const coat = await createGarment(t, { name: 'Legacy coat' });
+    await t.db.execute(sql.raw(PHOTO_FOREIGN_KEYS_BEFORE_0065));
+    const photoOf = (tx: Queryable) =>
+      insertPhotoRow(tx, {
+        fileName: `${randomUUID()}.webp`,
+        createdOn: new Date().toISOString(),
+        createdById: grantee,
+      });
+    const ids = await asFixture(t.db, async (tx) => {
+      const coatPhoto = await photoOf(tx);
+      await tx
+        .update(garment)
+        .set({ photoId: coatPhoto })
+        .where(eq(garment.id, coat));
+      const selfiePhoto = await photoOf(tx);
+      await tx
+        .insert(selfie)
+        .values({ ownerId: owner, day: t.today(), photoId: selfiePhoto });
+      const lookPhoto = await photoOf(tx);
+      await tx
+        .insert(inspiration)
+        .values({ ownerId: owner, photoId: lookPhoto });
+      // The grantee's own look: already theirs, left alone.
+      const ownPhoto = await photoOf(tx);
+      await tx
+        .insert(inspiration)
+        .values({ ownerId: grantee, photoId: ownPhoto });
+      return { coatPhoto, selfiePhoto, lookPhoto, ownPhoto };
+    });
+    const [{ revision: coatRevision }] = await t.db
+      .select({ revision: garment.revision })
+      .from(garment)
+      .where(eq(garment.id, coat));
+    const migration = await readFile(
+      join(MIGRATIONS_FOLDER, '0065_photo-belongs-to-its-owner.sql'),
+      'utf8',
+    );
+    const runMigration = () =>
+      t.db.transaction(async (tx) => {
+        for (const statement of migration.split('--> statement-breakpoint')) {
+          await tx.execute(sql.raw(statement));
+        }
+      });
+
+    // A photo shown by two owners' rows has no owner to give it: the boot
+    // aborts, the batch rolled back.
+    const [{ id: shared }] = await asFixture(t.db, (tx) =>
+      tx
+        .insert(selfie)
+        .values({ ownerId: grantee, day: t.today(), photoId: ids.coatPhoto })
+        .returning({ id: selfie.id }),
+    );
+    await expect(runMigration()).rejects.toMatchObject({
+      cause: {
+        message: `file rows shown by rows of different owners: ${ids.coatPhoto}`,
+      },
+    });
+    await asFixture(t.db, (tx) =>
+      tx.delete(selfie).where(eq(selfie.id, shared)),
+    );
+
+    await runMigration();
+    const owners = await t.db
+      .select({ id: file.id, createdById: file.createdById })
+      .from(file)
+      .where(inArray(file.id, Object.values(ids)));
+    expect(
+      Object.fromEntries(
+        Object.entries(ids).map(([key, id]) => [
+          key,
+          owners.find((row) => row.id === id)?.createdById,
+        ]),
+      ),
+    ).toEqual({
+      coatPhoto: owner,
+      selfiePhoto: owner,
+      lookPhoto: owner,
+      ownPhoto: grantee,
+    });
+    // No synced field moved: the feed has nothing to re-send.
+    const [after] = await t.db
+      .select({ revision: garment.revision })
+      .from(garment)
+      .where(eq(garment.id, coat));
+    expect(after.revision).toBe(coatRevision);
+    expect(await schemaDrift(t.db)).toEqual([]);
+  });
 });
+
+/**
+ * The photo foreign keys as 0065 found them (drizzle/0000, 0020, 0049),
+ * with its own constraints gone: the shape its spec runs it on.
+ */
+const PHOTO_FOREIGN_KEYS_BEFORE_0065 = `
+  ALTER TABLE garment DROP CONSTRAINT garment_photo_id_owner_id_foreign;
+  ALTER TABLE selfie DROP CONSTRAINT selfie_photo_id_owner_id_foreign;
+  ALTER TABLE inspiration DROP CONSTRAINT inspiration_photo_id_owner_id_foreign;
+  ALTER TABLE file DROP CONSTRAINT file_id_created_by_id_unique;
+  ALTER TABLE garment ADD CONSTRAINT garment_photo_id_foreign FOREIGN KEY (photo_id) REFERENCES file(id) ON DELETE set null ON UPDATE cascade;
+  ALTER TABLE selfie ADD CONSTRAINT selfie_photo_id_foreign FOREIGN KEY (photo_id) REFERENCES file(id) ON DELETE cascade ON UPDATE cascade;
+  ALTER TABLE inspiration ADD CONSTRAINT inspiration_photo_id_foreign FOREIGN KEY (photo_id) REFERENCES file(id) ON DELETE cascade ON UPDATE cascade;
+`;

@@ -2,18 +2,23 @@ import { expect, test } from './support/fixtures';
 import {
   addPhotographedGarment,
   createGarment,
+  createOutfit,
   createOutfitOf,
 } from './support/e2e-data';
 import { expectCollagePiecesInsidePlinths } from './support/collage-fit';
 import { E2E_PASSWORD, SAME_ORIGIN, signIn } from './support/e2e-session';
+import { householdToday } from './support/household-today';
+import { addDays } from '../src/calendar-date';
 import { pageErrors } from './support/page-errors';
+import { OUTFIT_PAGE_SIZE as PAGE_SIZE } from '../src/web/outfits/page-size';
 
 /**
  * Planning an outfit on the calendar from its page: the plan sheet (htmx,
- * an inline handler for the occasion) posts and the app lands on that week;
+ * actions.ts checks the occasion) posts and the app lands on that week;
  * then "Plan my week", after which Saved still opens on the person's outfit
  * (#659) and the planner's are one tab away; a layered outfit's collage
- * stays inside its cell (#663).
+ * stays inside its cell (#663); and Saved loads its next page as it is
+ * scrolled (#660).
  * The calendar's own behaviour is test/integration/calendar.spec.ts.
  */
 
@@ -34,7 +39,11 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
   const sheet = page.locator('#outfit-plan-sheet');
   await expect(sheet).toBeVisible();
-  await sheet.locator('input[name="date"]').fill('2030-10-10');
+  // The day starts at today, set by the page's script (#708: the page
+  // names no today, so it keeps its ETag across days).
+  const day = sheet.locator('input[name="date"]');
+  await expect(day).toHaveValue(householdToday());
+  await day.fill('2030-10-10');
   await sheet.getByRole('radio', { name: 'Evening' }).check();
   await sheet.getByRole('button', { name: 'Plan it' }).click();
 
@@ -68,14 +77,14 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   const tiles = page.locator('#saved-outfits li');
   await expect(tiles).toHaveCount(1);
   await expect(tiles.first()).toContainText('Sheet outfit');
-  await page.getByRole('tab', { name: 'Worn and planned' }).click();
+  await page.getByRole('link', { name: 'Worn and planned' }).click();
   await expect(page).toHaveURL(/show=one-offs/);
   await expect(tiles.first()).toBeVisible();
   await expect(tiles.first()).not.toContainText('Sheet outfit');
 
   // #663: a layer over a top in the plan's cells never spills out of the
   // plinth: the month's 48 px cells and the week's rows at 390 px, the
-  // week's columns at 1280 px.
+  // week's columns and the month's desktop step (#1064) at 1280 px.
   const coat = await addPhotographedGarment(page, 'Fit coat', 'outerwear');
   // The top has no photo: its hanger placeholder must fit the cell too.
   const tee = await createGarment(page, 'Fit tee', 'tops');
@@ -90,19 +99,127 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/calendar/month?month=2030-10');
-  await expect(page.locator('[data-collage="cell"] img')).toHaveCount(1);
+  await expect(page.locator('[data-collage="month"] img')).toHaveCount(1);
   await expectCollagePiecesInsidePlinths(page);
   await page.goto('/calendar?week=2030-10-10');
   await expect(page.locator('[data-collage="cell"] img')).toHaveCount(1);
   await expectCollagePiecesInsidePlinths(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await expectCollagePiecesInsidePlinths(page);
+  await page.goto('/calendar/month?month=2030-10');
+  await expectCollagePiecesInsidePlinths(page);
+
+  // #1070: from lg a month cell's date, chip, dot and "+N" are a column
+  // beside the collage; a forecast day with no outfit keeps its chip under
+  // the date, where a planned day has it, not in the collage's column.
+  const home = await page.request.post('/weather/home', {
+    form: { name: 'Brooklyn', latitude: '40.69', longitude: '-73.97' },
+    headers: SAME_ORIGIN,
+  });
+  expect(home.ok()).toBe(true);
+  const planned = addDays(householdToday(), 1);
+  const empty = addDays(planned, 1);
+  const plan = await page.request.post('/calendar', {
+    form: { date: planned, outfitId: `${layered}` },
+    headers: SAME_ORIGIN,
+  });
+  expect(plan.ok()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // What the chip looked like in the task that inserted it, before htmx's
+  // settle: a MutationObserver's callback runs in that task, ahead of the
+  // settle delay's timer. The chip used to arrive in its slot's classes and
+  // take its own only after the delay, so a measure between the two found
+  // the date column at the wrong width.
+  await page.addInitScript(() => {
+    const arrivals: Record<
+      string,
+      { date: number; chip: number; width: number }
+    > = {};
+    const settled: Record<string, boolean> = {};
+    Object.assign(window, { chipArrivals: arrivals, chipSettled: settled });
+    const centre = (box: DOMRect) => box.x + box.width / 2;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          // A chip arrives itself or inside an inserted wrapper, one or many.
+          const chips = [
+            ...(node.matches('[data-weather-day]') ? [node] : []),
+            ...node.querySelectorAll<HTMLElement>('[data-weather-day]'),
+          ];
+          for (const chipNode of chips) {
+            const day = chipNode.dataset.weatherDay;
+            const date = chipNode
+              .closest('[data-month-day]')
+              ?.querySelector('span');
+            if (!day || !date) continue;
+            const chip = chipNode.getBoundingClientRect();
+            arrivals[day] = {
+              date: centre(date.getBoundingClientRect()),
+              chip: centre(chip),
+              width: chip.width,
+            };
+          }
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+    document.addEventListener('htmx:afterSettle', (event) => {
+      const day = (event.target as HTMLElement).dataset?.weatherDay;
+      if (day) settled[day] = true;
+    });
+  });
+  const chipPlace = async (day: string) => {
+    await page.goto(`/calendar/month?month=${day.slice(0, 7)}`);
+    const cell = page.locator(`[data-month-day="${day}"]`);
+    const chip = cell.locator(`[data-weather-day="${day}"]`);
+    await expect(chip).toBeVisible();
+    await page.waitForFunction(
+      (d) =>
+        (window as unknown as { chipSettled: Record<string, boolean> })
+          .chipSettled[d],
+      day,
+    );
+    const date = (await cell.locator('span').first().boundingBox())!;
+    const box = (await chip.boundingBox())!;
+    const arrived = await page.evaluate(
+      (d) =>
+        (
+          window as unknown as {
+            chipArrivals: Record<
+              string,
+              { date: number; chip: number; width: number }
+            >;
+          }
+        ).chipArrivals[d],
+      day,
+    );
+    expect(
+      arrived,
+      `the chip for ${day} was never seen arriving: it came in the first HTML or outside a month cell`,
+    ).toBeDefined();
+    const dateCentre = date.x + date.width / 2;
+    const chipCentre = box.x + box.width / 2;
+    // Centred under the date: the chip's width follows its temperature. And
+    // drawn so from its first frame: the settle moves neither.
+    return {
+      below: box.y >= date.y + date.height - 1,
+      centred: Math.abs(chipCentre - dateCentre) <= 1,
+      settleMoved:
+        Math.abs(arrived.width - box.width) > 0.5 ||
+        Math.abs(arrived.chip - chipCentre) > 0.5 ||
+        Math.abs(arrived.date - dateCentre) > 0.5,
+    };
+  };
+  const underDate = { below: true, centred: true, settleMoved: false };
+  expect(await chipPlace(planned)).toEqual(underDate);
+  expect(await chipPlace(empty)).toEqual(underDate);
 
   // #822: an agent's entry wears its token's name as a badge, and a long
   // name stays inside the row at phone width.
   const tokenName = 'Laptop Claude on the long walk home';
   const minted = await page.request.post('/auth/tokens', {
-    data: { name: tokenName, currentPassword: E2E_PASSWORD },
+    // "Can make changes": a token is read-only unless ticked (#701).
+    data: { name: tokenName, currentPassword: E2E_PASSWORD, writes: 'on' },
     headers: SAME_ORIGIN,
   });
   expect(minted.ok()).toBe(true);
@@ -176,7 +293,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await staleRow.getByText('Change', { exact: true }).click();
   await staleRow.getByRole('button', { name: 'Remove from calendar' }).click();
   await expect(staleSheet).toBeVisible();
-  await expect(staleSheet).toContainText('Remove this scheduled outfit?');
+  await expect(staleSheet).toContainText('Take this outfit off the calendar?');
   await expect(status).not.toContainText('That did not go through');
   await staleSheet.locator('[data-confirm-accept]').click();
   await expect(staleRow).toHaveCount(0);
@@ -192,9 +309,7 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
   await menu.click();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirmSheet).toBeVisible();
-  await expect(confirmSheet).toContainText(
-    'Are you sure you want to delete this?',
-  );
+  await expect(confirmSheet).toContainText('Delete this for good?');
   await expect(
     confirmSheet.getByRole('button', { name: 'Cancel' }).first(),
   ).toBeFocused();
@@ -210,5 +325,26 @@ test('the outfit page plans the outfit from its sheet and lands on that week; Pl
     .getByRole('button', { name: 'Delete', exact: true })
     .click();
   await expect(page).toHaveURL(/\/outfits(\?|$)/);
+
+  // #660: Saved loads a page at a time; scrolled to its end at 390 px, the
+  // sentinel brings the rest (Layered and these 31: one page and two).
+  // Each outfit has a garment of its own (the same garments make one outfit)
+  // and the pairs run together: 62 sequential posts took ~21 s of the
+  // test's 30 s, and a run on a busy host timed out inside the sentinel's
+  // assertions, which read as a Saved bug.
+  await Promise.all(
+    Array.from({ length: PAGE_SIZE + 1 }, async (_, n) => {
+      const top = await createGarment(page, `Page tee ${n}`, 'tops');
+      await createOutfit(page, `Page outfit ${n}`, top);
+    }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/outfits');
+  const savedTiles = page.locator('#saved-outfits a[data-outfit-id]');
+  await expect(savedTiles).toHaveCount(PAGE_SIZE);
+  await page.locator('[data-saved-more]').scrollIntoViewIfNeeded();
+  await expect(savedTiles).toHaveCount(PAGE_SIZE + 2);
+  await expect(page.locator('[data-saved-more]')).toHaveCount(0);
+  await expect(savedTiles.last()).toContainText('Layered');
   expect(errors).toEqual([]);
 });

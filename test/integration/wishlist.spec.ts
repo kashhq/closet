@@ -255,7 +255,7 @@ describe('the wishlist', () => {
       expect(body).toContain(`href="/wardrobe/${charcoal}/bought"`);
       // A tab of the Wardrobe: its tabs, Wishlist the active one.
       expect(body).toMatch(
-        /<a role="tab" href="\/wardrobe\/wishlist" class="tab tab-active"/,
+        /<a href="\/wardrobe\/wishlist" class="tab tab-active" aria-current="page"/,
       );
       expect(body).toContain('href="/wardrobe/new?to=wishlist"');
       expect(body).toContain('href="/wardrobe/new/from-link?to=wishlist"');
@@ -292,8 +292,13 @@ describe('the wishlist', () => {
       const id = await createWishlistItem(t, { name: 'Linen shirt' });
       const saved = await get(`/wardrobe/${id}`);
       expect(saved.body).toContain('Linen shirt');
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `Garment ${id} created (wishlist) by user ${ownerId} in wardrobe ${ownerId}`,
+      expect(t.logs.ops('garment.created')).toContainEqual(
+        expect.objectContaining({
+          garmentId: id,
+          userId: ownerId,
+          ownerId,
+          destination: 'wishlist',
+        }),
       );
     });
 
@@ -308,7 +313,7 @@ describe('the wishlist', () => {
       const form = await get(`/wardrobe/new?to=wishlist&replaces=${merino}`);
       expect(form.statusCode).toBe(200);
       expect(form.body).toContain(`<option value="${merino}" selected="">`);
-      expect(form.body).toMatch(/name="category"[^>]*value="tops"/);
+      expect(form.body).toMatch(/name="category"[^>]*value="Tops"/);
       // What belonged to the old one is not carried over.
       expect(form.body).not.toContain('value="Grey merino"');
       // A garment outside the wardrobe is a 404 like an unknown one.
@@ -508,8 +513,13 @@ describe('the wishlist', () => {
       expect(bought.statusCode).toBe(303);
       expect(await statusOf(charcoal)).toBe('closet');
       expect(await statusOf(merino)).toBe('archived');
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `Garment ${charcoal} bought (wishlist -> closet) by user ${ownerId} in wardrobe ${ownerId}; garment ${merino} it replaces archived`,
+      expect(t.logs.ops('garment.bought')).toContainEqual(
+        expect.objectContaining({
+          garmentId: charcoal,
+          userId: ownerId,
+          ownerId,
+          archivedReplaced: merino,
+        }),
       );
       // Now a closet read, and the old one is not.
       const grid = await get('/wardrobe');

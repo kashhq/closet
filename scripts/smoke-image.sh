@@ -173,6 +173,16 @@ grep -q 'SIL OPEN FONT LICENSE' "$notices" || fail "THIRD-PARTY-NOTICES.txt carr
 grep -q '^htmx.org  (' "$notices" || fail "THIRD-PARTY-NOTICES.txt has no entry for htmx.org"
 log "ok: /THIRD-PARTY-NOTICES.txt served with the OFL text"
 
+# The licence ships with the code (#1225): the MIT text at /app/LICENSE, and the image's labels say
+# the same, point at the source and name the build that /health/ready reports.
+docker exec "$NAME" grep -q '^MIT License$' /app/LICENSE || fail "/app/LICENSE is missing or not the MIT licence"
+label() { docker image inspect -f "{{ index .Config.Labels \"org.opencontainers.image.$1\" }}" "$IMAGE"; }
+[ "$(label licenses)" = MIT ] || fail "the image's licenses label is '$(label licenses)', not MIT"
+[ "$(label source)" = https://github.com/kashhq/closet ] || fail "the image's source label is '$(label source)'"
+[ "$(label revision)" = "$(label version)" ] && [ -n "$(label revision)" ] \
+  || fail "the image's revision label '$(label revision)' is not its version '$(label version)'"
+log "ok: /app/LICENSE is MIT; labels licenses=MIT, source and revision=$(label revision)"
+
 # The observability contract (observability.md; src/logger.ts, src/request-context.ts,
 # src/metrics/, src/web/health/), asserted by devkit's probe the way every app's smoke asserts
 # it: /health/live answers 200; /health/ready is the contract's up|down body with every check
@@ -244,7 +254,7 @@ while [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" = true ]; do
   sleep 1
 done
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" != 0 ] || fail "a root-owned /app/data: the boot exited 0"
-log_has -F "DATA_PATH /app/data is not writable by this process (EACCES): chown -R $APP_UID:$APP_GID the host directory mounted at /app/data; docs/operations.md#permissions" \
+log_has -F "DATA_PATH /app/data is not writable by this process (EACCES): chown -R $APP_UID:$APP_GID the host directory mounted at DATA_PATH; docs/operations.md#permissions" \
   || fail "a root-owned /app/data: the boot log does not name the chown"
 log "ok: a root-owned /app/data ends the boot with the chown named"
 
@@ -262,7 +272,7 @@ until [ "$(curl -s -o "$health" -w '%{http_code}' "$BASE/health/ready")" = 503 ]
   sleep 1
 done
 fix=$(jq -r '.checks.storage.fix' "$health")
-[ "$fix" = "chown -R $APP_UID:$APP_GID the host directory mounted at /app/models; docs/operations.md#permissions" ] \
+[ "$fix" = "chown -R $APP_UID:$APP_GID the host directory mounted at MODELS_PATH; docs/operations.md#permissions" ] \
   || fail "a root-owned /app/models: storage's fix is '$fix'"
 [ "$(jq -r '.checks.database.status' "$health")" = up ] || fail "a root-owned /app/models: the database check is down too"
 log "ok: a root-owned /app/models is 503, storage down: $fix"
@@ -277,7 +287,7 @@ awk '/<!-- smoke:quickstart -->/ {on=1} on && /^```yaml$/ {inblock=1; next} inbl
   "$(dirname "$0")/../README.md" >"$COMPOSE_FILE"
 [ -s "$COMPOSE_FILE" ] || fail "README.md has no yaml block after <!-- smoke:quickstart -->"
 sed -i.bak \
-  -e "s#ghcr.io/kashhq/closet:latest#$IMAGE#" \
+  -e "s#ghcr.io/kashhq/closet:[A-Za-z0-9._-]*#$IMAGE#" \
   -e "s#'3000:3000'#'$PORT:3000'#" \
   -e "s#<secret>#smoke-test-access-token-secret-not-for-deployment#" \
   -e "s#<password>#smoke-readme-password#" "$COMPOSE_FILE"

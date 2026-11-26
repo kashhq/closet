@@ -29,13 +29,29 @@ import {
   actionBusyAttributes,
   createTurns,
   discardStuck,
+  discardAtSignOut,
+  DISCARD_HOLD_MS,
+  type Exclusively,
+  heldForDiscard,
+  releasedFromDiscard,
+  sendable,
+  type SignOutDiscardStore,
   retryStuck,
   type StuckActionStore,
   isStuck,
-  unstuck,
+  settledRecord,
+  UNSTUCK,
   retryDelayMs,
   routesThroughOutbox,
   showsQueuedWrite,
+  showsSyncedWrite,
+  intentEnding,
+  regionEnd,
+  discardedRecord,
+  droppedRecord,
+  atDrop,
+  DISCARD_TOMBSTONE_MS,
+  tombstoneExpired,
   type StoredRecord,
   syncedWritePaths,
   takesDay,
@@ -133,23 +149,20 @@ describe('tapInstant and instantOnDay', () => {
 describe('queuedTarget', () => {
   it('keys each kind so that only the same intent collapses', () => {
     expect([
-      queuedTarget('wear', 41, '2026-11-12'),
+      queuedTarget('wear', 41),
       queuedTarget('wash', 41),
       queuedTarget('entry', 88),
       queuedTarget('packed', 7, 41),
       queuedTarget('item', 7, 3),
     ]).toEqual([
-      { key: 'wear:41:2026-11-12', path: '/wardrobe/41/wear' },
+      // The outbox adds the page's day to a wear's (#708).
+      { key: 'wear:41', path: '/wardrobe/41/wear' },
       { key: 'wash:41', path: '/wardrobe/41/washed' },
       { key: 'entry:88', path: '/calendar/88/worn' },
       { key: 'packed:7:41', path: '/trips/7/packed' },
       { key: 'item:7:3', path: '/trips/7/items/packed' },
     ]);
-    // A wear on another day, or another trip's tick of the same garment,
-    // is another record.
-    expect(queuedTarget('wear', 41, '2026-11-11').key).not.toBe(
-      queuedTarget('wear', 41, '2026-11-12').key,
-    );
+    // Another trip's tick of the same garment is another record.
     expect(queuedTarget('packed', 8, 41).key).not.toBe(
       queuedTarget('packed', 7, 41).key,
     );
@@ -305,6 +318,10 @@ describe('replayVerdict', () => {
   it.each([
     [204, 'changed', { verdict: 'saved', changed: true }],
     [204, 'unchanged', { verdict: 'saved', changed: false }],
+    // A captive portal's or a proxy's 204 (#731): no outcome of the
+    // contract, so not saved; retried without counting toward stuck.
+    [204, null, { verdict: 'retry', cause: 'unreachable' }],
+    [204, 'too-old', { verdict: 'retry', cause: 'unreachable' }],
     [401, null, { verdict: 'signed-out' }],
     // The login redirect, opaque under `redirect: 'manual'`: kept for the
     // sign-in, never failed.
@@ -367,9 +384,12 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
         sent.push(record.id);
         return Promise.resolve(answers(record.id));
       },
+      // As the page's settle: the change onto the copy stored now.
       settle(record, step) {
+        const current = stored.get(record.id);
+        if (!current) return Promise.resolve(false);
         if (step.step === 'saved') stored.delete(record.id);
-        else stored.set(record.id, step.record);
+        else stored.set(record.id, settledRecord(current, step.change));
         return Promise.resolve(true);
       },
     };
@@ -563,12 +583,10 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
   });
 
   it('Try again: unstuck clears the count so the record is judged afresh', () => {
-    const cleared = unstuck({
-      ...row('bad'),
-      attempts: 7,
-      serverErrors: 4,
-      stuckAt: 5,
-    });
+    const cleared = settledRecord(
+      { ...row('bad'), attempts: 7, serverErrors: 4, stuckAt: 5 },
+      UNSTUCK,
+    );
     expect(isStuck(cleared)).toBe(false);
     expect(cleared).toMatchObject({ attempts: 0 });
     expect(cleared.serverErrors).toBeUndefined();
@@ -599,10 +617,17 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
     const actions = (w: ReturnType<typeof world>) => {
       const store: StuckActionStore<Row> = {
         find: (id) => Promise.resolve(w.stored.get(id)),
-        settle(record, next) {
-          if (!w.stored.has(record.id)) return Promise.resolve(false);
-          if (next) w.stored.set(record.id, next);
+        settle(record, change) {
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          if (change) w.stored.set(record.id, settledRecord(current, change));
           else w.stored.delete(record.id);
+          return Promise.resolve(true);
+        },
+        discard(record) {
+          const current = w.stored.get(record.id);
+          if (!current) return Promise.resolve(false);
+          w.stored.set(record.id, discardedRecord(current, w.clock.now));
           return Promise.resolve(true);
         },
       };
@@ -634,7 +659,7 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       expect(w.stored.size).toBe(0);
     });
 
-    it('Discard after a replay that failed again deletes the record and nothing resends it', async () => {
+    it('Discard after a replay that failed again leaves its tombstone, and nothing resends it', async () => {
       const w = world([stuckRow()], () => SERVER, { now: STUCK_RETRY_MS });
       const gate = held(w);
       const turn = createTurns();
@@ -644,7 +669,8 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       gate.release(SERVER);
       await Promise.all([drain, discard]);
       expect((await discard)?.id).toBe('bad');
-      expect(w.stored.size).toBe(0);
+      expect(w.stored.get('bad')).toMatchObject({ state: 'discarded' });
+      await w.drain();
       expect(w.sent).toEqual(['bad']);
     });
 
@@ -704,6 +730,180 @@ describe('replayQueue: a 5xx never fails a record, it makes it stuck', () => {
       expect(await retryStuck(actions(w), turn, 'fresh')).toBeUndefined();
       expect(await discardStuck(actions(w), turn, 'nope')).toBeUndefined();
     });
+
+    /**
+     * Sign-out's store over the world's rows: hold and release as the page's
+     * rewrite does, the drop as dropQueuedWrites (the named unsent ones to
+     * tombstones).
+     */
+    const signOutIn = (w: ReturnType<typeof world>): SignOutDiscardStore => {
+      const rewrite = (
+        ids: readonly string[],
+        change: (r: Row) => Row | undefined,
+      ) => {
+        for (const id of ids) {
+          const stored = w.stored.get(id);
+          const next = stored && change(stored);
+          if (next) w.stored.set(id, next);
+        }
+        return Promise.resolve();
+      };
+      return {
+        hold: (ids, now) => rewrite(ids, (r) => heldForDiscard(r, now)),
+        release: (ids) => rewrite(ids, releasedFromDiscard),
+        drop(goes) {
+          let dropped = 0;
+          for (const r of w.stored.values()) {
+            if (r.state === 'discarded' || !goes(r)) continue;
+            w.stored.set(r.id, discardedRecord(r, w.clock.now));
+            dropped += 1;
+          }
+          return Promise.resolve({ dropped });
+        },
+      };
+    };
+    /** A tab's drain reads the store before each send, as outbox.ts's skip does. */
+    const readsTheStore = (w: ReturnType<typeof world>) => {
+      w.driver.skip = (record) =>
+        Promise.resolve(!sendable(w.stored.get(record.id), w.clock.now));
+    };
+    /** A tab's `exclusively`: its own turns, then the lock every tab shares. */
+    const tabOf = (lock: Exclusively): Exclusively => {
+      const turns = createTurns();
+      return (task) => turns(() => lock(task));
+    };
+    const now = (w: ReturnType<typeof world>) => () => w.clock.now;
+
+    it('sign-out’s discard waits for the replay in flight: one that lands is not tombstoned, the rest are', async () => {
+      const w = world([row('landing'), row('left')], (id) =>
+        id === 'landing' ? OK : SERVER,
+      );
+      readsTheStore(w);
+      const gate = held(w);
+      const turn = createTurns();
+      const drain = turn(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(
+        turn,
+        ['landing', 'left'],
+        signOutIn(w),
+        now(w),
+      );
+      await Promise.resolve();
+      // Nothing is tombstoned while the replay is still out.
+      expect([...w.stored.values()].map((r) => r.state)).toEqual([
+        'pending',
+        'pending',
+      ]);
+      gate.release(OK);
+      await drain;
+      expect(await discard).toBe(1);
+      expect(w.sent).toEqual(['landing']);
+      expect(w.stored.has('landing')).toBe(false);
+      expect(w.stored.get('left')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('sign-out’s discard tombstones a replay in flight that fails', async () => {
+      const w = world([row('failing')], () => SERVER);
+      readsTheStore(w);
+      const gate = held(w);
+      const turn = createTurns();
+      const drain = turn(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(turn, ['failing'], signOutIn(w), now(w));
+      gate.release(SERVER);
+      await drain;
+      expect(await discard).toBe(1);
+      expect(w.stored.get('failing')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('a discard in one tab holds the other tab’s drain to its replay in flight; the rest are tombstoned unsent (#1157)', async () => {
+      const w = world([row('first'), row('second'), row('third')], () => OK);
+      readsTheStore(w);
+      const gate = held(w);
+      // navigator.locks: one lock across the tabs, each with its own turns.
+      const lock = createTurns();
+      const draining = tabOf(lock);
+      const signingOut = tabOf(lock);
+      const drain = draining(() => w.drain());
+      await gate.started;
+      const discard = discardAtSignOut(
+        signingOut,
+        ['first', 'second', 'third'],
+        signOutIn(w),
+        now(w),
+      );
+      gate.release(OK);
+      await drain;
+      expect(await discard).toBe(2);
+      expect(w.sent).toEqual(['first']);
+      expect(w.stored.has('first')).toBe(false);
+      expect(w.stored.get('second')).toMatchObject({ state: 'discarded' });
+      expect(w.stored.get('third')).toMatchObject({ state: 'discarded' });
+    });
+
+    it('a turn refused before the drop releases the hold, so a later drain still sends them', async () => {
+      const w = world([row('a'), row('b')], () => OK);
+      readsTheStore(w);
+      const refused: Exclusively = () => Promise.reject(new Error('lock'));
+      await expect(
+        discardAtSignOut(refused, ['a', 'b'], signOutIn(w), now(w)),
+      ).rejects.toThrow('lock');
+      expect([...w.stored.values()].map((r) => r.heldForDiscardAt)).toEqual([
+        undefined,
+        undefined,
+      ]);
+      await w.drain();
+      expect(w.sent).toEqual(['a', 'b']);
+    });
+
+    it('a hold its tab never released lapses after DISCARD_HOLD_MS, and one from a clock moved back is lapsed', () => {
+      const pending = row('a');
+      expect(sendable(heldForDiscard(pending, 1_000), 1_000)).toBe(false);
+      expect(
+        sendable(heldForDiscard(pending, 1_000), 1_000 + DISCARD_HOLD_MS),
+      ).toBe(true);
+      expect(sendable(heldForDiscard(pending, 1_000), 999)).toBe(true);
+      expect(heldForDiscard(discardedRecord(pending, 0), 1)).toBeUndefined();
+    });
+
+    it('a hold placed while the replay is in flight survives its 5xx answer, and no drain sends the record again (#1161)', async () => {
+      const w = world([row('bad')], () => SERVER, { now: 1_000 });
+      readsTheStore(w);
+      const gate = held(w);
+      const drain = w.drain();
+      await gate.started;
+      await signOutIn(w).hold(['bad'], w.clock.now);
+      gate.release(SERVER);
+      await drain;
+      expect(w.stored.get('bad')).toMatchObject({
+        heldForDiscardAt: 1_000,
+        attempts: 1,
+        serverErrors: 1,
+      });
+      await w.drain();
+      expect(w.sent).toEqual(['bad']);
+    });
+
+    it('Try again keeps a hold stored between its read and its write, so the drain after it sends nothing (#1161)', async () => {
+      const w = world([stuckRow()], () => OK, { now: 1_000 });
+      readsTheStore(w);
+      const store = actions(w);
+      const find = store.find.bind(store);
+      store.find = async (id) => {
+        const copy = await find(id);
+        await signOutIn(w).hold([id], w.clock.now);
+        return copy;
+      };
+      expect(await retryStuck(store, createTurns(), 'bad')).toMatchObject({
+        id: 'bad',
+      });
+      const left = w.stored.get('bad');
+      expect(left).toMatchObject({ heldForDiscardAt: 1_000, attempts: 0 });
+      expect(left && isStuck(left)).toBe(false);
+      await w.drain();
+      expect(w.sent).toEqual([]);
+    });
   });
 
   it('stops for a sign-in', async () => {
@@ -758,6 +958,202 @@ describe('after a sync, the worker’s refetch', () => {
         expect(showsQueuedWrite(write, page), page).toBe(false);
     },
   );
+});
+
+describe('showsSyncedWrite', () => {
+  it('asks for the server copy of a page that draws any saved write, and of no other', () => {
+    const saved = ['/wardrobe/41/wear', '/trips/7/packed'];
+    expect(showsSyncedWrite(saved, '/trips/7')).toBe(true);
+    expect(showsSyncedWrite(saved, '/laundry')).toBe(true);
+    expect(showsSyncedWrite(saved, '/wardrobe/4')).toBe(false);
+    expect(showsSyncedWrite([], '/trips/7')).toBe(false);
+  });
+});
+
+describe('intentEnding', () => {
+  it('leaves a region that never showed the intent alone, whatever ended it (#876)', () => {
+    for (const end of ['saved', 'failed', 'discarded'] as const) {
+      expect(intentEnding(undefined, end), end).toBe('none');
+      expect(intentEnding('', end), end).toBe('none');
+    }
+  });
+
+  it('puts a failed or discarded intent back, and keeps a saved one as the server’s', () => {
+    for (const mark of ['flipped', 'ticked']) {
+      expect(intentEnding(mark, 'failed'), mark).toBe('revert');
+      expect(intentEnding(mark, 'discarded'), mark).toBe('revert');
+      expect(intentEnding(mark, 'saved'), mark).toBe('confirm');
+    }
+  });
+});
+
+describe('regionEnd: a Discard is never read as a save (#900)', () => {
+  const record = (
+    state: StoredRecord['state'],
+    key = 'packed:7:41',
+  ): StoredRecord => ({ account: '1', key, state });
+  const discard = (): ReplayRecord =>
+    discardedRecord(
+      { ...record('pending'), attempts: 3, serverErrors: 3, stuckAt: 0 },
+      1_000,
+    );
+  /**
+   * A region showing a tick through a sequence of store reads, as
+   * renderRegions draws it: what each read did to it.
+   */
+  function drawn(reads: StoredRecord[][]): string[] {
+    let mark: string | undefined = 'ticked';
+    const done: string[] = [];
+    for (const records of reads) {
+      const end = regionEnd('1', 'packed:7:41', records);
+      if (end === 'pending') {
+        mark = 'ticked';
+        continue;
+      }
+      done.push(intentEnding(mark, end));
+      mark = undefined;
+    }
+    return done;
+  }
+
+  it('reads each state from the store, and saved only from a record gone', () => {
+    expect(regionEnd('1', 'packed:7:41', [record('pending')])).toBe('pending');
+    expect(regionEnd('1', 'packed:7:41', [record('failed')])).toBe('failed');
+    expect(regionEnd('1', 'packed:7:41', [discard()])).toBe('discarded');
+    expect(regionEnd('1', 'packed:7:41', [record('pending', 'other')])).toBe(
+      'saved',
+    );
+    expect(regionEnd('1', 'packed:7:41', [])).toBe('saved');
+  });
+
+  it('reverts once and never confirms, whether a tab reads before the Discard commits or after', () => {
+    // Another tab's refresh lands before the commit and its message's
+    // re-read after it, or (the race) the refresh reads after the commit,
+    // before the message arrives: every read after the commit sees the
+    // tombstone, so none can take the vanished record for a save.
+    const before = [record('pending')];
+    const after = [discard()];
+    expect(drawn([before, after])).toEqual(['revert']);
+    expect(drawn([after, after])).toEqual(['revert', 'none']);
+  });
+
+  it('a tombstone is no pending, failed or stuck record, and is pruned after DISCARD_TOMBSTONE_MS', () => {
+    const tombstone = discard();
+    expect(tombstone).toMatchObject({ state: 'discarded', discardedAt: 1_000 });
+    expect(isStuck(tombstone)).toBe(false);
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS - 1)).toBe(
+      false,
+    );
+    expect(tombstoneExpired(tombstone, 1_000 + DISCARD_TOMBSTONE_MS)).toBe(
+      true,
+    );
+    expect(tombstoneExpired(tombstone, 0)).toBe(false);
+    expect(tombstoneExpired(record('failed'), Infinity)).toBe(false);
+  });
+
+  it('a newer tap on the key replaces the tombstone: pending again', async () => {
+    const rows: StoredRecord[] = [discard()];
+    const store: OutboxStore<StoredRecord> = {
+      records: () => Promise.resolve(rows),
+      putCollapsed(records) {
+        const keys = new Set(records.map((r) => r.key));
+        rows.splice(0, rows.length, ...rows.filter((o) => !keys.has(o.key)));
+        rows.push(...records);
+        return Promise.resolve();
+      },
+    };
+    expect(await routesThroughOutbox(store, '1', false, ['packed:7:41'])).toBe(
+      false,
+    );
+    await enqueue(store, '1', [record('pending')]);
+    expect(regionEnd('1', 'packed:7:41', rows)).toBe('pending');
+  });
+});
+
+describe('atDrop: a session or account drop leaves tombstones (#1042)', () => {
+  const pending = {
+    account: '7',
+    key: 'packed:7:41',
+    state: 'pending' as StoredRecord['state'],
+    attempts: 3,
+    serverErrors: 3,
+    stuckAt: 0,
+    label: 'Navy chinos',
+  };
+  /** The store after a drop, as dropQueuedWrites applies atDrop to each row. */
+  const dropped = (rows: (typeof pending)[], goes: boolean, now: number) =>
+    rows.flatMap((row) => {
+      const step = atDrop(row, goes, now);
+      if (step === 'prune') return [];
+      return [step === 'tombstone' ? droppedRecord(row, now) : row];
+    });
+
+  it('replaces an unsent record it names with a label-free tombstone, never deleting it', () => {
+    expect(atDrop(pending, true, 1_000)).toBe('tombstone');
+    expect(atDrop({ ...pending, state: 'failed' }, true, 1_000)).toBe(
+      'tombstone',
+    );
+    expect(atDrop(pending, false, 1_000)).toBe('keep');
+    expect(droppedRecord(pending, 1_000)).toEqual({
+      account: '7',
+      key: 'packed:7:41',
+      state: 'discarded',
+      discardedAt: 1_000,
+      attempts: 0,
+      serverErrors: undefined,
+      stuckAt: undefined,
+      label: '',
+    });
+  });
+
+  it('a tab still open on the dropped account reverts its tick instead of confirming it', () => {
+    // Before #1042 the drop deleted the record and this read said saved.
+    const after = dropped([pending], true, 1_000);
+    expect(regionEnd('7', 'packed:7:41', after)).toBe('discarded');
+    expect(intentEnding('ticked', 'discarded')).toBe('revert');
+  });
+
+  it('keeps a fresh tombstone of any account for the tabs still to read it, and prunes an expired one', () => {
+    const tombstone = droppedRecord(pending, 1_000);
+    for (const goes of [true, false]) {
+      expect(atDrop(tombstone, goes, 1_000 + DISCARD_TOMBSTONE_MS - 1)).toBe(
+        'keep',
+      );
+      expect(atDrop(tombstone, goes, 1_000 + DISCARD_TOMBSTONE_MS)).toBe(
+        'prune',
+      );
+    }
+    // A second drop re-stamps nothing: the prune clock is the first one's.
+    expect(dropped([tombstone], true, 5_000)).toEqual([tombstone]);
+  });
+
+  it('another account’s tick on the same key of a shared trip reads its own state, never the dropped account’s tombstone', async () => {
+    // Account 7 queued a tick on shared trip 7 offline; account 8 signs in
+    // on the device, its claim drops 7's record to a tombstone, and 8 ticks
+    // the same item. The store, unfiltered, holds both under one key.
+    let rows: StoredRecord[] = dropped([pending], true, 1_000);
+    const store: OutboxStore<StoredRecord> = {
+      records: () => Promise.resolve(rows),
+      putCollapsed(incoming) {
+        const replaced = (r: StoredRecord) =>
+          incoming.some((n) => n.account === r.account && n.key === r.key);
+        rows = [...rows.filter((r) => !replaced(r)), ...incoming];
+        return Promise.resolve();
+      },
+    };
+    await enqueue(store, '8', [
+      { account: '8', key: 'packed:7:41', state: 'pending' },
+    ]);
+    expect(rows.map((r) => [r.account, r.state])).toEqual([
+      ['7', 'discarded'],
+      ['8', 'pending'],
+    ]);
+    expect(regionEnd('8', 'packed:7:41', rows)).toBe('pending');
+    // 8's tick saves (its record goes); 7's tombstone stays for its tabs.
+    rows = rows.filter((r) => r.account !== '8');
+    expect(regionEnd('8', 'packed:7:41', rows)).toBe('saved');
+    expect(regionEnd('7', 'packed:7:41', rows)).toBe('discarded');
+  });
 });
 
 describe('queuedWritesGoneAtClaim', () => {
@@ -832,6 +1228,16 @@ describe('packedCount', () => {
 
   it('ignores a queued record that agrees with the server', () => {
     expect(packedCount(1, [{ served: true, queued: true }])).toBe(1);
+  });
+
+  it('keeps a saved tick’s line once it is folded into the served count (#823)', () => {
+    const waiting = [{ served: false, queued: true }];
+    expect(packedCount(1, waiting)).toBe(2);
+    // endIntent's confirm: the row's served state and the counter's number
+    // take the saved tick; with nothing pending the line stays 2, not 1.
+    const served = packedCount(1, waiting);
+    expect(packedCount(served, [{ served: true, queued: undefined }])).toBe(2);
+    expect(packedCount(1, [{ served: true, queued: undefined }])).toBe(1);
   });
 });
 

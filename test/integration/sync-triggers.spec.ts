@@ -3,11 +3,17 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Queryable } from '../../src/db/client';
 import { ownerLockCte, ownerLocked } from '../../src/db/owner-lock';
-import { garment, syncTombstone, user } from '../../src/db/schema';
+import {
+  garment,
+  outfitRule,
+  styleProfile,
+  syncTombstone,
+  user,
+} from '../../src/db/schema';
 import {
   SYNC_CHILDREN,
   SYNC_ROOTS,
-  WEEK_TEMPLATE_TABLE,
+  SYNC_STAMPS,
 } from '../../src/db/sync-tables';
 import { deleteAccount } from '../../src/web/auth/account';
 import { deleteOutfit } from '../../src/web/outfits/queries';
@@ -16,6 +22,13 @@ import { insertEntry } from '../../src/web/calendar/queries';
 import { setWoreToday } from '../../src/web/wears/queries';
 import { deleteGarment } from '../../src/web/wardrobe/queries';
 import { saveWeekTemplate } from '../../src/web/week-plan/template';
+import {
+  addOutfitRule,
+  deleteOutfitRule,
+  type NewOutfitRule,
+  saveStyleProfile,
+} from '../../src/web/style/queries';
+import { NO_MATCHER } from '../../src/web/style/validation';
 import { addDays } from '../../src/calendar-date';
 import { createGarment } from './garments';
 import { asFixture, createTestApp, type TestApp, userIdOf } from './harness';
@@ -84,31 +97,51 @@ describe('the sync triggers', () => {
       .from(syncTombstone)
       .where(eq(syncTombstone.ownerId, ownerId));
 
-  it('are on every synced table, and only there', async () => {
-    const { rows } = await t.db.execute<{ relation: string; name: string }>(
-      sql`select c.relname as relation, tg.tgname as name
+  it('are on every synced table, and only there, each calling its function', async () => {
+    const { rows } = await t.db.execute<{
+      relation: string;
+      name: string;
+      fn: string;
+    }>(
+      sql`select c.relname as relation, tg.tgname as name, p.proname as fn
           from pg_trigger tg join pg_class c on c.oid = tg.tgrelid
+          join pg_proc p on p.oid = tg.tgfoid
           where not tg.tgisinternal and tg.tgname like 'closet_sync%'`,
     );
     const expected = [
-      ['user', 'closet_sync_owner_gone'],
+      ['user', 'closet_sync_owner_gone', 'closet_sync_owner_gone'],
       ...SYNC_ROOTS.flatMap((root) => [
-        [root.table, 'closet_sync_stamp'],
-        [root.table, 'closet_sync_tombstone'],
+        [root.table, 'closet_sync_stamp', 'closet_sync_stamp'],
+        [root.table, 'closet_sync_tombstone', 'closet_sync_tombstone'],
       ]),
-      // A photo counts only on update (its version, its cutout).
-      ...SYNC_CHILDREN.flatMap((child) =>
-        (child.table === 'file'
-          ? ['update']
-          : ['insert', 'update', 'delete']
-        ).map((event) => [child.table, `closet_sync_touch_${event}`]),
+      // A photo counts only on update (its version, its cutout); a child
+      // that may come before its parent row creates it (0069).
+      ...SYNC_CHILDREN.flatMap((child) => {
+        if (child.table === 'file') {
+          return [
+            ['file', 'closet_sync_touch_update', 'closet_sync_touch_photo'],
+          ];
+        }
+        const fn =
+          'createsParent' in child
+            ? 'closet_sync_touch_or_create'
+            : 'closet_sync_touch';
+        return ['insert', 'update', 'delete'].map((event) => [
+          child.table,
+          `closet_sync_touch_${event}`,
+          fn,
+        ]);
+      }),
+      // A stamp's table is its resource's (the week template's).
+      ...SYNC_STAMPS.flatMap((stamp) =>
+        ['insert', 'update', 'delete'].map((event) => [
+          stamp.resource,
+          `closet_sync_week_template_${event}`,
+          'closet_sync_week_template',
+        ]),
       ),
-      ...['insert', 'update', 'delete'].map((event) => [
-        WEEK_TEMPLATE_TABLE,
-        `closet_sync_week_template_${event}`,
-      ]),
     ];
-    expect(rows.map((row) => [row.relation, row.name]).sort()).toEqual(
+    expect(rows.map((row) => [row.relation, row.name, row.fn]).sort()).toEqual(
       expected.sort(),
     );
   });
@@ -190,8 +223,8 @@ describe('the sync triggers', () => {
     // A garment's photo: a new version stamps the garment, a lease does not.
     const photo = await asFixture(t.db, async (tx) => {
       const { rows } = await tx.execute<{ id: number }>(
-        sql`insert into file (shareable_id, file_name, created_on, created_by_id, cutout_status)
-            values (${randomUUID()}, ${`${randomUUID()}.webp`}, '2026-11-13', ${t.owner.id}, 'pending')
+        sql`insert into file (file_name, created_on, created_by_id, cutout_status)
+            values (${`${randomUUID()}.webp`}, '2026-11-13', ${t.owner.id}, 'pending')
             returning id`,
       );
       await tx
@@ -226,6 +259,146 @@ describe('the sync triggers', () => {
       .from(user)
       .where(eq(user.id, t.owner.id));
     expect(owner.weekTemplate).toBe(owner.revision);
+  });
+
+  describe("an outfit rule stamps its owner's style profile (#716)", () => {
+    const colours = (
+      a: 'red' | 'blue',
+      b: 'green' | 'black',
+    ): NewOutfitRule => ({
+      kind: 'never',
+      a: { ...NO_MATCHER, color: a },
+      b: { ...NO_MATCHER, color: b },
+    });
+
+    const profileOf = async (userId: number) =>
+      (
+        await t.db
+          .select({
+            revision: styleProfile.revision,
+            styles: styleProfile.styles,
+          })
+          .from(styleProfile)
+          .where(eq(styleProfile.userId, userId))
+      )[0];
+
+    const newUser = async (email: string) => {
+      await t.register(email);
+      return userIdOf(t, email);
+    };
+
+    it('creates the profile row a rule comes before, and moves it on every add and delete', async () => {
+      const userId = await newUser('rules-first@example.com');
+      expect(await profileOf(userId)).toBeUndefined();
+
+      const id = await addOutfitRule(
+        t.db,
+        { userId, surface: 'page' },
+        colours('red', 'green'),
+      );
+      if (id === 'duplicate') throw new Error('duplicate');
+      const added = await profileOf(userId);
+      expect(added).toEqual({
+        revision: await revisionOf(userId),
+        styles: null,
+      });
+
+      await deleteOutfitRule(t.db, { userId, surface: 'page' }, id);
+      const removed = await profileOf(userId);
+      expect(removed.revision).toBe(await revisionOf(userId));
+      expect(removed.revision).toBeGreaterThan(added.revision);
+    });
+
+    it("goes with a garment's delete, the profile in its one revision", async () => {
+      const cookie = await t.register('rules-garment@example.com');
+      const userId = await userIdOf(t, 'rules-garment@example.com');
+      const coat = await createGarment(t, { name: 'Rule coat', cookie });
+      expect(
+        await addOutfitRule(
+          t.db,
+          { userId, surface: 'page' },
+          {
+            kind: 'never',
+            a: { ...NO_MATCHER, garmentId: coat },
+            b: { ...NO_MATCHER, color: 'black' },
+          },
+        ),
+      ).toEqual(expect.any(Number));
+      const before = await revisionOf(userId);
+
+      expect(await deleteGarment(t.db, coat, userId)).toMatchObject({
+        ok: true,
+      });
+      expect(await revisionOf(userId)).toBe(before + 1);
+      expect((await profileOf(userId)).revision).toBe(before + 1);
+      expect(
+        await t.db.$count(outfitRule, eq(outfitRule.ownerId, userId)),
+      ).toBe(0);
+    });
+
+    it('goes with its account, the profile too, stamping and tombstoning nothing', async () => {
+      const userId = await newUser('rules-gone@example.com');
+      await saveStyleProfile(t.db, userId, {
+        styles: ['classic'],
+        budget: null,
+        palette: null,
+        notes: null,
+      });
+      await addOutfitRule(
+        t.db,
+        { userId, surface: 'page' },
+        colours('blue', 'black'),
+      );
+
+      await deleteAccount(
+        { db: t.db, photos: t.photos, logger: t.logger },
+        userId,
+      );
+      expect(await profileOf(userId)).toBeUndefined();
+      expect(
+        await t.db.$count(outfitRule, eq(outfitRule.ownerId, userId)),
+      ).toBe(0);
+      expect(await tombstonesOf(userId)).toEqual([]);
+    });
+
+    // The rule's insert creates the profile row its trigger stamps; a
+    // profile save upserts the same row. Both take the owner lock first, so
+    // either order queues the second behind the first, never a deadlock.
+    it.each([
+      ['a rule, then a profile save', true],
+      ['a profile save, then a rule', false],
+    ])(
+      '%s for a user without a profile: the second waits on the owner lock, both land',
+      async (_name, ruleFirst) => {
+        const userId = await newUser(
+          `rules-race-${String(ruleFirst)}@example.com`,
+        );
+        const rule = (db: Queryable) =>
+          addOutfitRule(
+            db,
+            { userId, surface: 'page' },
+            colours('red', 'black'),
+          );
+        const save = (db: Queryable) =>
+          saveStyleProfile(db, userId, {
+            styles: ['minimal'],
+            budget: null,
+            palette: null,
+            notes: null,
+          });
+        await (ruleFirst
+          ? interleave(t.db, rule, () => save(t.db))
+          : interleave(t.db, save, () => rule(t.db)));
+
+        expect(await profileOf(userId)).toEqual({
+          revision: await revisionOf(userId),
+          styles: ['minimal'],
+        });
+        expect(
+          await t.db.$count(outfitRule, eq(outfitRule.ownerId, userId)),
+        ).toBe(1);
+      },
+    );
   });
 
   it('tombstone every deleted root with its client id, a cascade in its deleting revision', async () => {

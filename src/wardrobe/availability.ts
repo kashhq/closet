@@ -100,11 +100,34 @@ export function wearsSinceWash(
 function wornSinceWash(wear: WearInstant, lastWash: LastWash | null): boolean {
   if (lastWash === null || wear.day > lastWash.day) return true;
   return (
-    wear.day === lastWash.day &&
-    wear.wornAt !== null &&
-    lastWash.washedAt !== null &&
-    wear.wornAt > lastWash.washedAt
+    wear.day === lastWash.day && knownAfter(wear.wornAt, lastWash.washedAt)
   );
+}
+
+/**
+ * The one ordering of two records on the same day (#676, #793): one is after
+ * the other only when both instants are known and it is later. A null
+ * instant is "some time that day", so it is never known to be before or
+ * after anything: SQL's `a > b` with its null, which a filter reads as
+ * false, is the same rule.
+ */
+function knownAfter(later: number | null, earlier: number | null): boolean {
+  return later !== null && earlier !== null && later > earlier;
+}
+
+/**
+ * Whether a wash on `next` replaces the stored last wash (markWashed's
+ * `moves`, its SQL twin; WASH_MOVE_CASES in test/support/wash-cases.ts holds
+ * both to one table). A wash never moves back: a later day always moves it,
+ * with its instant or none; the same day only when known after it
+ * (knownAfter). So a timeless replay never erases a known wash (the wear
+ * after it would be uncounted), and a known one never replaces a timeless
+ * one (#793): that one may have been at 21:00, and a 09:00 instant would
+ * count the 19:00 wear after it.
+ */
+export function washMoves(stored: LastWash | null, next: LastWash): boolean {
+  if (stored === null || next.day > stored.day) return true;
+  return next.day === stored.day && knownAfter(next.washedAt, stored.washedAt);
 }
 
 export interface WashState {

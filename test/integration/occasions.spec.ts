@@ -118,8 +118,15 @@ describe('occasions', () => {
         { outfitId: dinner, occasion: 'evening' },
         { outfitId: brunch, occasion: 'all-day' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${dinner} scheduled on ${day} (evening) by user ${t.owner.id}`,
+      expect(t.logs.ops('calendar.entry.planned')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          surface: 'page',
+          outfitId: dinner,
+          day,
+          occasion: 'evening',
+          changed: true,
+        }),
       );
     });
 
@@ -136,9 +143,14 @@ describe('occasions', () => {
       expect(await entriesOn(day)).toEqual([
         { outfitId: outfit, occasion: 'work' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${outfit} already scheduled on ${day} for user ${t.owner.id}; evening not added`,
-      );
+      // The occasion it kept, not the one asked.
+      expect(t.logs.ops('calendar.entry.planned').at(-1)).toMatchObject({
+        outfitId: outfit,
+        day,
+        occasion: 'work',
+        changed: false,
+        adopted: false,
+      });
     });
 
     it('refuses an occasion the app does not have with a 400, writing nothing', async () => {
@@ -227,16 +239,17 @@ describe('occasions', () => {
       await plan({ outfitId: String(desk), date: day, occasion: 'work' });
 
       let res: Awaited<ReturnType<typeof t.inject>> | undefined;
-      // #165: the session, then the saved outfits and the day's entries
-      // together; the day's entries bare (which outfits, for which
-      // occasion), with no collage or selfie the page does not draw.
+      // #165, #660: the session, then a page of the saved outfits and the
+      // day's entries in one statement (planContext); the day's entries
+      // bare (which outfits, for which occasion), with no collage or
+      // selfie the page does not draw.
       const read = await recordQueries(async () => {
         res = await t.inject({
           method: 'GET',
           url: `/calendar/plan?for=day:${day}&occasion=evening`,
         });
       });
-      expect(read.statements).toBe(3);
+      expect(read.statements).toBe(2);
       expect(read.sql.join('\n')).not.toMatch(/"selfie"/);
       expectFullPage(res!);
       expectNativePostForms(res!);
@@ -374,12 +387,14 @@ describe('occasions', () => {
         { outfitId: evening, occasion: 'evening' },
         { outfitId: cached, occasion: 'all-day' },
       ]);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Outfit ${evening} created by user \\d+: 0 row\\(s\\), scheduled on ${day} \\(evening\\)$`,
-          ),
-        ),
+      expect(t.logs.ops('outfit.created')).toContainEqual(
+        expect.objectContaining({
+          outfitId: evening,
+          changed: true,
+          slots: 0,
+          day,
+          schedule: 'scheduled',
+        }),
       );
     });
 

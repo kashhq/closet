@@ -1,6 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './support/fixtures';
-import { createGarment } from './support/e2e-data';
+import { createGarment, createOutfitOf } from './support/e2e-data';
 import { SAME_ORIGIN, signIn } from './support/e2e-session';
 import { blockingScrollListeners } from './support/scroll-listeners';
 import { pageErrors } from './support/page-errors';
@@ -117,6 +117,26 @@ function keysInFlight(
     },
     { keys, after },
   );
+}
+
+/** A `desktop="grid"` strip at 1440: a grid of at least four tracks that scrolls nothing (SnapStrip, #1065). */
+async function expectIdeaGrid(strip: Locator) {
+  await expect(strip).toHaveAttribute('data-snap-desktop', 'grid');
+  const box = await strip.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      display: style.display,
+      overflowX: style.overflowX,
+      scrolls: el.scrollWidth > el.clientWidth,
+      tracks: style.gridTemplateColumns.split(' ').length,
+    };
+  });
+  expect(box).toMatchObject({
+    display: 'grid',
+    overflowX: 'visible',
+    scrolls: false,
+  });
+  expect(box.tracks).toBeGreaterThanOrEqual(4);
 }
 
 async function wardrobe(page: Page) {
@@ -310,7 +330,7 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     await page.goto('/');
     await page.goto('/styling');
 
-    const bar = page.locator('[data-styling-bar]');
+    const bar = page.locator('#styling-aside');
     const layerSlot = bar.locator('#styling-preview [data-preview-slot="0"]');
     const fit = bar.locator('#styling-fit-line');
     // Opens empty (#665): the bar says so and judges nothing; choosing the
@@ -391,6 +411,381 @@ test('style an outfit: swipe, tap, lock, shuffle and save through the sheet', as
     expect((await bar.boundingBox())!.y).toBeGreaterThanOrEqual(
       appBar.y + appBar.height - 1,
     );
+  });
+
+  await test.step('a strip opened deep in its cycle loads the newer garments as it scrolls back (#996)', async () => {
+    // Twelve socks: the oldest's window is the ten newer than it, so the
+    // newest is behind the strip's leading sentinel.
+    const socks: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      socks.push(await createGarment(page, `Sock ${i}`, 'accessories'));
+    }
+    await test.step('from lg every row has one tile size and one origin (#732), the regular tile (#1073)', async () => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`/styling?with=${socks[0]}`);
+      await expect(row(page, 'accessory')).toBeVisible();
+      // The first item's place in its strip does not move with the scroll
+      // (offsetLeft), so a row centred differently shows here.
+      const firstTiles = await page
+        .locator('[data-styling-row] .styling-strip')
+        .evaluateAll((strips) =>
+          strips.map((strip) => {
+            const first = strip.querySelector<HTMLElement>('[data-snap-item]')!;
+            return {
+              left: first.offsetLeft,
+              width: first.offsetWidth,
+              strip: strip.getBoundingClientRect().left,
+            };
+          }),
+        );
+      expect(firstTiles.length).toBeGreaterThanOrEqual(4);
+      expect(new Set(firstTiles.map((tile) => tile.left)).size).toBe(1);
+      expect(new Set(firstTiles.map((tile) => tile.width))).toEqual(
+        new Set([112]),
+      );
+      expect(new Set(firstTiles.map((tile) => tile.strip)).size).toBe(1);
+    });
+    await test.step('from lg the outfit is the panel beside the rows, in view at their end, and follows a choice (#1073)', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/styling');
+      const aside = page.locator('#styling-aside');
+      await expect(row(page, 'accessory')).toBeVisible();
+      await expect(aside).toBeVisible();
+      // One task, so both boxes are of the same layout.
+      const { rowsBox, asideBox } = await page.evaluate(() => {
+        const box = (selector: string) =>
+          document
+            .querySelector(selector)!
+            .getBoundingClientRect()
+            .toJSON() as DOMRect;
+        return {
+          rowsBox: box('#styling-rows'),
+          asideBox: box('#styling-aside'),
+        };
+      });
+      expect(asideBox.left).toBeGreaterThanOrEqual(rowsBox.right);
+      expect(asideBox.top).toBeLessThan(rowsBox.bottom);
+      const save = aside.getByRole('button', { name: 'Save', exact: true });
+      await expect(save).toBeInViewport();
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      await expect(aside.locator('#styling-preview')).toBeInViewport();
+      await expect(save).toBeInViewport();
+      await tap(page, row(page, 'accessory'), String(socks[11]));
+      await expect(
+        aside.locator(`[data-preview-garment="${socks[11]}"]`),
+      ).toBeVisible();
+
+      // An outfit taller than a short window: the preview scrolls inside
+      // the aside, whose cap it never pushes past, and Shuffle and Save
+      // stay in view.
+      const layered = await createOutfitOf(page, 'Layered', [
+        ...[g.oldTee, g.newTee, await createGarment(page, 'Cami', 'tops')].map(
+          (id) => ({ id, category: 'tops' }),
+        ),
+        { id: await createGarment(page, 'Vest', 'tops'), category: 'tops' },
+        { id: g.jeans, category: 'bottoms' },
+        { id: g.boots, category: 'footwear' },
+      ]);
+      await page.setViewportSize({ width: 1440, height: 700 });
+      await page.goto(`/styling?outfit=${layered}`);
+      const details = aside.locator('[data-preview-toggle]');
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeVisible();
+      const scrolls = await page.evaluate(() => {
+        const of = (el: Element) => ({
+          overflow: el.scrollHeight - el.clientHeight,
+        });
+        return {
+          details: of(document.querySelector('[data-preview-toggle]')!),
+          aside: of(document.querySelector('#styling-aside')!),
+        };
+      });
+      expect(scrolls.details.overflow).toBeGreaterThan(0);
+      expect(scrolls.aside.overflow).toBeLessThanOrEqual(1);
+      const shuffle = aside.locator('[data-styling-shuffle]');
+      const saveChanges = aside.getByRole('button', { name: 'Save changes' });
+      await expect(shuffle).toBeInViewport({ ratio: 1 });
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
+      await details.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await expect(
+        details.locator(`[data-preview-garment="${g.boots}"]`),
+      ).toBeInViewport();
+      await expect(saveChanges).toBeInViewport({ ratio: 1 });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const accessories = row(page, 'accessory');
+    const strip = accessories.locator('.styling-strip');
+    const sock = (i: number) =>
+      strip.locator(`[data-snap-value="${socks[i]}"]`);
+    const newer = /\/styling\/garments\?.*\bafter=/;
+    /** Opens on the oldest sock ("Style this", locked), unlocked to scroll, then swipes fast back to the window's first: the sentinel before it comes into view. */
+    const swipeBackFromOldest = async () => {
+      await page.goto(`/styling?with=${socks[0]}`);
+      await expect(chosen(accessories)).toHaveValue(String(socks[0]));
+      await expect(sock(11)).toHaveCount(0);
+      await accessories.locator('label.swap').click();
+      // No re-snap: Chromium's puts a pushed snap target back after layout
+      // and would hide a late anchor; WebKit's does not. Only snap-strip.js
+      // keeps the chosen sock in place here.
+      await strip.evaluate((el) => {
+        el.style.scrollSnapType = 'none';
+      });
+      await sock(10).evaluate((el) =>
+        el.scrollIntoView({ inline: 'center', block: 'nearest' }),
+      );
+      await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    };
+
+    // The newer page is held until the strip has stopped on its choice, so
+    // it lands on a still strip, as it does after a swipe's response. On
+    // the context: the service worker's fetch is what reaches the network.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let requested!: () => void;
+    const asked = new Promise<void>((resolve) => (requested = resolve));
+    await page.context().route(newer, async (route) => {
+      requested();
+      await held;
+      await route.continue();
+    });
+    await swipeBackFromOldest();
+    await asked;
+    // One step on, so the page pushes the choice far enough that sock 10,
+    // which the observer watches, would slide into the middle.
+    await settled(strip);
+    await sock(10).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
+    await settled(strip);
+    // Every choose from here, and what sits on the centre line once the
+    // page has landed and the strip is rescanned: a fresh observer's first
+    // look comes after the strip's own has seen the same layout.
+    await strip.evaluate((el) => {
+      const chooses: string[] = [];
+      el.addEventListener('snap-strip:choose', (event) => {
+        const { item } = (event as CustomEvent<{ item: HTMLElement }>).detail;
+        chooses.push(item.dataset.snapValue!);
+      });
+      (el as HTMLElement & { landed?: Promise<string[]> }).landed = new Promise(
+        (resolve) => {
+          el.addEventListener(
+            'snap-strip:watch',
+            () => {
+              const look = new IntersectionObserver(
+                (entries) => {
+                  look.disconnect();
+                  const middle = entries.find((entry) => entry.isIntersecting)
+                    ?.target as HTMLElement | undefined;
+                  resolve([...chooses, `centred ${middle?.dataset.snapValue}`]);
+                },
+                { root: el, rootMargin: '0px -50% 0px -50%', threshold: 0 },
+              );
+              for (const item of el.querySelectorAll('[data-snap-item]')) {
+                look.observe(item);
+              }
+            },
+            { once: true },
+          );
+        },
+      );
+    });
+    release();
+    // The newest sock lands before the choice, which no choose touched and
+    // which stays centred (snap-strip.js's anchor, put back at the swap).
+    expect(
+      await strip.evaluate(
+        (el) => (el as HTMLElement & { landed?: Promise<string[]> }).landed,
+      ),
+    ).toEqual([`centred ${socks[9]}`]);
+    await expect(sock(11)).toHaveCount(1);
+    await expect(accessories.locator('[data-strip-more]')).toHaveCount(0);
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
+    // And the loaded sock is a step away like any other.
+    await page.keyboard.press('ArrowLeft');
+    await expect(chosen(accessories)).toHaveValue(String(socks[10]));
+    await settled(strip);
+    await page.keyboard.press('ArrowLeft');
+    await expect(chosen(accessories)).toHaveValue(String(socks[11]));
+    await page.context().unroute(newer);
+
+    // An empty answer (the newer garments gone meanwhile) only removes the
+    // sentinel. The chosen sock stays put, and no anchor outlives the
+    // request: a rescan moves nothing and the next swipe still chooses.
+    await page
+      .context()
+      .route(newer, (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
+      );
+    await swipeBackFromOldest();
+    await expect(accessories.locator('[data-strip-more]')).toHaveCount(0);
+    await expect(sock(11)).toHaveCount(0);
+    expect(
+      await strip.evaluate((el) => {
+        const before = el.scrollLeft;
+        el.dispatchEvent(new CustomEvent('htmx:load', { bubbles: true }));
+        return el.scrollLeft - before;
+      }),
+    ).toBe(0);
+    await sock(10).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(chosen(accessories)).toHaveValue(String(socks[9]));
+    await page.context().unroute(newer);
+  });
+
+  await test.step('from lg Today and Ideas lay their cards out as a grid, and Ideas pages as its last row scrolls in (#1065)', async () => {
+    // Three more bottoms: a dozen tops and bottoms, past one page of six.
+    for (const name of ['Chinos', 'Cords', 'Shorts']) {
+      await createGarment(page, name, 'bottoms');
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await expectIdeaGrid(
+      page.locator('[data-today-row="ideas"] [data-snap-strip]'),
+    );
+    // A short window, so the grid's last row (with the sentinel) starts
+    // below the fold: these cards have no photos and two rows fit in 900.
+    await page.setViewportSize({ width: 1440, height: 480 });
+    await page.goto('/outfits/ideas');
+    const strip = page.locator('#idea-strip');
+    await expectIdeaGrid(strip);
+    const cards = strip.locator('[data-idea]');
+    await expect(cards).toHaveCount(6);
+    await expect(strip.locator('[data-ideas-more]')).not.toBeInViewport();
+    const firstRow = await cards.evaluateAll(
+      (all) =>
+        all.filter(
+          (card) =>
+            card.getBoundingClientRect().top ===
+            all[0].getBoundingClientRect().top,
+        ).length,
+    );
+    expect(firstRow).toBeGreaterThanOrEqual(4);
+    // The page's own scroll brings the sentinel in: the grid itself never
+    // scrolls.
+    await page.mouse.wheel(0, 4000);
+    await expect.poll(() => cards.count()).toBeGreaterThan(6);
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
+  await test.step('Goes-with is a row from lg: steps page it, arrows move focus, nothing is chosen, and crossing lg switches its mode (#1065)', async () => {
+    for (const name of ['Polo', 'Henley']) {
+      await createGarment(page, name, 'tops');
+    }
+    const wanted = await createGarment(page, 'Wanted tee', 'tops', {
+      to: 'wishlist',
+      wishlist: '1',
+      replaces: '',
+      product: '1',
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/wardrobe/${wanted}`);
+    const strip = page.locator('[data-goes-with-strip]');
+    const items = strip.locator('[data-snap-item]');
+    await expect(strip).toHaveAttribute('data-snap-desktop', 'row');
+    expect(await items.count()).toBeGreaterThan(2);
+    const selected = () =>
+      items.evaluateAll((all) =>
+        all.findIndex((item) => item.hasAttribute('data-selected')),
+      );
+    expect(await selected()).toBe(0);
+    const frame = strip.locator('xpath=..');
+    const next = frame.locator('[data-snap-step="1"]');
+    const previous = frame.locator('[data-snap-step="-1"]');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await expect(next).toHaveAttribute('aria-disabled', 'false');
+
+    // The next button pages by the visible width; the buttons re-sync from
+    // the scroll position when the scroll ends, until the end disables Next.
+    const scrollEnd = () =>
+      strip.evaluate(
+        (el) =>
+          new Promise<void>((resolve) =>
+            el.addEventListener('scrollend', () => resolve(), { once: true }),
+          ),
+      );
+    for (let paged = 0; paged < 10; paged += 1) {
+      if ((await next.getAttribute('aria-disabled')) === 'true') break;
+      const ended = scrollEnd();
+      // The spec's context is a touch one, where CSS hides the buttons
+      // (`fine:` only); the document's click handler serves them all the same.
+      await next.evaluate((button: HTMLElement) => button.click());
+      await ended;
+    }
+    expect(await strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(previous).toHaveAttribute('aria-disabled', 'false');
+    expect(await selected()).toBe(0);
+
+    // Arrow keys move focus item to item and choose nothing.
+    await strip.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(items.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(items.nth(0)).toBeFocused();
+    expect(await selected()).toBe(0);
+
+    // In strip mode a choice lands only after the centring scroll, so a tap
+    // is judged once the strip has stopped moving (a steady scrollLeft over
+    // ten frames) and the observer has had its frame.
+    const settled = () =>
+      strip.evaluate(
+        (el) =>
+          new Promise<void>((resolve) => {
+            let last = NaN;
+            let steady = 0;
+            const frame = () => {
+              steady = el.scrollLeft === last ? steady + 1 : 0;
+              last = el.scrollLeft;
+              if (steady >= 10) resolve();
+              else requestAnimationFrame(frame);
+            };
+            requestAnimationFrame(frame);
+          }),
+      );
+
+    // A tap on a neighbour is the tile's own, not a choice.
+    await items.nth(1).click();
+    await settled();
+    expect(await selected()).toBe(0);
+
+    // Below lg the same strip is a strip again: a tap centres and chooses.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await items.nth(1).click();
+    await expect.poll(selected).toBe(1);
+    // And back at lg a tap chooses nothing.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await items.nth(2).click();
+    await settled();
+    expect(await selected()).toBe(1);
+
+    // A window resized within lg re-syncs the steps from the strip's box,
+    // with no scroll to end (#1117). The page's row overflows at every lg
+    // width (its column is capped), so two tiles are sized to fit the strip
+    // at 1440 and not at 1024: narrower, Next comes on; wide again, the row
+    // stops overflowing and both steps are disabled.
+    await strip.evaluate((el) => {
+      const tiles = [...el.querySelectorAll<HTMLElement>('[data-snap-item]')];
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const width = (el.clientWidth - 24 - gap) / 2;
+      tiles.forEach((tile, index) => {
+        if (index < 2) tile.style.width = `${width}px`;
+        else tile.style.display = 'none';
+      });
+      el.scrollTo({ left: 0, behavior: 'instant' });
+    });
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(next).toHaveAttribute('aria-disabled', 'false');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(previous).toHaveAttribute('aria-disabled', 'true');
   });
 
   expect(errors, errors.join('\n')).toEqual([]);

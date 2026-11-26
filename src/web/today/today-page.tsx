@@ -2,30 +2,30 @@ import type { Child } from 'hono/jsx';
 import type { Idea } from '../../wardrobe/generator';
 import type { Occasion } from '../../wardrobe/occasions';
 import { AgentBadge } from '../agent-badge';
-import { PostForm } from '../auth/form';
+import { Card } from '../card';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { type CalendarEntry, entryPieces } from '../calendar/calendar-view';
 import { dayLabel, occasionLabel } from '../date-labels';
 import { ideaName, type IdeasWeather } from '../gallery/ideas';
 import { adviceChips, ChipList } from '../gallery/chips';
+// eslint-disable-next-line closet/no-foreign-page-import -- Today draws Ideas' Reasons chips; they move to a shared view piece (#718)
 import { Reasons } from '../gallery/ideas-page';
 import type { PoolGarment } from '../gallery/queries';
 import { ideasUrl } from '../gallery/urls';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
-import { AppBar } from '../layout/app-bar';
 import { AwayLink } from '../trips/away-link';
-import { Dock } from '../layout/dock';
-import { PAIR_GRID } from '../layout/columns';
-import { PageMain } from '../layout/page-main';
-import { Layout } from '../layout/layout';
+import { IDEA_GRID } from '../layout/columns';
+import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
+import { sheetOpener } from '../layout/sheet';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import type { NeedsToDecide } from '../wishlist/inbox';
 import { roundReviewPath, roundWhat } from '../wishlist/round-text';
 import type { MuseRound } from '../wishlist/rounds';
 import { WISHLIST_PATH } from '../wardrobe/urls';
-import { AddSheet, OPEN_ADD_SHEET } from '../wardrobe/wardrobe-header';
+import { ADD_SHEET_ID, AddSheet } from '../wardrobe/wardrobe-header';
 import { EntrySelfie } from '../selfies/views';
 import { WornControl } from '../wears/worn-control';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
@@ -77,67 +77,94 @@ export function TodayPage(props: {
     ? props.wore
     : undefined;
   return (
-    <Layout ctx={ctx} title={t('today.TITLE')}>
-      <AppBar ctx={ctx} title={dayLabel(model.today)} />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-4">
-        {firstRun && <FirstRunCard stage={firstRun} />}
-        {model.weather && firstRun !== 'empty' && (
-          <UserWeatherLine
-            weather={model.weather}
-            timeZone={props.timeZone}
-            now={props.now}
-          />
-        )}
-        {model.away.map((trip) => (
-          <AwayLink trip={trip} class="self-start" />
-        ))}
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t('today.OFFLINE')}
-        </p>
-        <MuseCard round={model.round} needs={model.needs} />
-        {model.rows.length > 0 && (
-          <div class={PAIR_GRID}>
-            {model.rows.map((row) =>
-              row.kind === 'planned' ? (
-                <PlannedRowView row={row} today={model.today} wore={wore} />
-              ) : (
-                <IdeasRowView row={row} today={model.today} />
-              ),
-            )}
-          </div>
-        )}
-        <SnapStripsInit />
-        {!firstRun && (
-          <div class="flex flex-wrap items-center gap-2">
-            <a
-              href={`/calendar/plan?for=day:${model.today}`}
-              class="btn btn-ghost btn-sm"
-            >
-              + {t('today.PLAN_ANOTHER')}
-            </a>
-            {/* The week ahead (#16): lands on the calendar with what it planned. */}
-            <PlanWeekForm small />
-          </div>
-        )}
-      </PageMain>
-      {firstRun && (
-        <AddSheet
-          tab="closet"
-          viewOwner={undefined}
-          canEdit
-          newCapsule={false}
+    <PageShell
+      ctx={ctx}
+      name="today"
+      title={t('today.TITLE')}
+      bar={{ title: dayLabel(model.today) }}
+      width="wide"
+      body={{ gap: 4 }}
+      overlays={
+        <>
+          {firstRun && (
+            <AddSheet
+              tab="closet"
+              viewOwner={undefined}
+              canEdit
+              newCapsule={false}
+            />
+          )}
+          {wore !== undefined && (
+            <SavedToast id="wore-toast" text={t('wear.status.WORN')} />
+          )}
+          <StripFlags names={[WORE_FLAG]} />
+        </>
+      }
+    >
+      {firstRun && <FirstRunCard stage={firstRun} />}
+      <WeatherRow model={model} timeZone={props.timeZone} now={props.now} />
+      {model.away.map((trip) => (
+        <AwayLink trip={trip} class="self-start" />
+      ))}
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t('today.OFFLINE')}
+      </p>
+      <MuseCard round={model.round} needs={model.needs} />
+      {model.rows.map((row) =>
+        row.kind === 'planned' ? (
+          <PlannedRowView row={row} today={model.today} wore={wore} />
+        ) : (
+          <IdeasRowView row={row} today={model.today} />
+        ),
+      )}
+      <SnapStripsInit />
+      {!firstRun && (
+        <div class="flex flex-wrap items-center gap-2">
+          <a
+            href={`/calendar/plan?for=day:${model.today}`}
+            class="btn btn-ghost btn-sm"
+          >
+            + {t('today.PLAN_ANOTHER')}
+          </a>
+          {/* The week ahead (#16): lands on the calendar with what it
+                planned. From lg it is the one beside the weather. */}
+          <PlanWeekForm small class="lg:hidden" />
+        </div>
+      )}
+    </PageShell>
+  );
+}
+
+/**
+ * The weather line (the city once a garment is in, on the first-run path)
+ * and, from lg, "Plan my week" beside it. Below lg that button stays in the
+ * foot's row, the phone's place for it: the server cannot know the width,
+ * so it renders both and CSS shows one, rather than reordering the DOM
+ * (a phone's focus order follows what it sees). `max-lg:contents`: below
+ * lg the row draws no box, so the line is the body's own child as before
+ * and no gap is added when it renders nothing.
+ */
+function WeatherRow(props: { model: TodayModel; timeZone: string; now: Date }) {
+  const firstRun = props.model.firstRun ?? null;
+  const weather = firstRun === 'empty' ? null : props.model.weather;
+  if (!weather && firstRun) return null;
+  return (
+    <div class="max-lg:contents lg:flex lg:items-start lg:gap-4">
+      {weather && (
+        <UserWeatherLine
+          weather={weather}
+          timeZone={props.timeZone}
+          now={props.now}
         />
       )}
-      {wore !== undefined && (
-        <SavedToast id="wore-toast" text={t('wear.status.WORN')} />
+      {!firstRun && (
+        <PlanWeekForm small class="hidden lg:block lg:ml-auto lg:shrink-0" />
       )}
-      <StripFlags names={[WORE_FLAG]} />
-      <Dock ctx={ctx} />
-    </Layout>
+    </div>
   );
 }
 
@@ -150,34 +177,33 @@ export function TodayPage(props: {
 function FirstRunCard({ stage }: { stage: FirstRun }) {
   const empty = stage === 'empty';
   return (
-    <section
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="section"
+      variant="content"
+      bodyClass="p-4 gap-3 items-center text-center"
       data-first-run={stage}
       aria-labelledby="first-run-title"
     >
-      <div class="card-body p-4 gap-3 items-center text-center">
-        <HangerIcon class="size-12 text-muted" strokeWidth="1.5" />
-        <h2 id="first-run-title" class="card-title">
-          {t(
-            empty
-              ? 'today.firstRun.WELCOME_TITLE'
-              : 'today.firstRun.INCOMPLETE_TITLE',
-          )}
-        </h2>
-        <p class="text-sm text-muted">
-          {t(empty ? 'today.firstRun.WELCOME' : 'today.firstRun.INCOMPLETE')}
-        </p>
-        <button
-          type="button"
-          class="btn btn-primary"
-          aria-haspopup="dialog"
-          onclick={OPEN_ADD_SHEET}
-          data-first-run-add=""
-        >
-          {t(empty ? 'today.firstRun.ADD_FIRST' : 'today.firstRun.ADD_MORE')}
-        </button>
-      </div>
-    </section>
+      <HangerIcon class="size-12 text-muted" strokeWidth="1.5" />
+      <h2 id="first-run-title" class="card-title">
+        {t(
+          empty
+            ? 'today.firstRun.WELCOME_TITLE'
+            : 'today.firstRun.INCOMPLETE_TITLE',
+        )}
+      </h2>
+      <p class="text-sm text-muted">
+        {t(empty ? 'today.firstRun.WELCOME' : 'today.firstRun.INCOMPLETE')}
+      </p>
+      <button
+        type="button"
+        class="btn btn-primary"
+        {...sheetOpener(ADD_SHEET_ID)}
+        data-first-run-add=""
+      >
+        {t(empty ? 'today.firstRun.ADD_FIRST' : 'today.firstRun.ADD_MORE')}
+      </button>
+    </Card>
   );
 }
 
@@ -196,30 +222,27 @@ function MuseCard(props: Pick<TodayModel, 'round' | 'needs'>) {
  */
 function RoundCard({ round }: { round: MuseRound }) {
   return (
-    <article
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 flex-row items-center gap-3"
       data-muse-round={String(round.id)}
     >
-      <div class="card-body p-3 flex-row items-center gap-3">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold break-words">
-            {t('muse.round.CARD', {
-              agent: museName(round.agent),
-              what: roundWhat(round),
-            })}
-          </p>
-          {round.summary && (
-            <p class="text-sm text-muted line-clamp-1">{round.summary}</p>
-          )}
-        </div>
-        <a
-          href={roundReviewPath(round)}
-          class="btn btn-primary btn-sm shrink-0"
-        >
-          {t('muse.REVIEW')}
-        </a>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold break-words">
+          {t('muse.round.CARD', {
+            agent: museName(round.agent),
+            what: roundWhat(round),
+          })}
+        </p>
+        {round.summary && (
+          <p class="text-sm text-muted line-clamp-1">{round.summary}</p>
+        )}
       </div>
-    </article>
+      <a href={roundReviewPath(round)} class="btn btn-primary btn-sm shrink-0">
+        {t('muse.REVIEW')}
+      </a>
+    </Card>
   );
 }
 
@@ -231,27 +254,28 @@ function RoundCard({ round }: { round: MuseRound }) {
 function NeedsCard({ needs }: { needs: NeedsToDecide }) {
   const params = { agent: museName(needs.agent), count: needs.count };
   return (
-    <article
-      class="card bg-base-100 shadow-sm"
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 flex-row items-center gap-3"
       data-muse-needs={String(needs.count)}
     >
-      <div class="card-body p-3 flex-row items-center gap-3">
-        <p class="text-sm flex-1 min-w-0 break-words">
-          {needs.count === 1
-            ? t('muse.TODAY_CARD_ONE', params)
-            : t('muse.TODAY_CARD', params)}
-        </p>
-        <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
-          {t('muse.REVIEW')}
-        </a>
-      </div>
-    </article>
+      <p class="text-sm flex-1 min-w-0 break-words">
+        {needs.count === 1
+          ? t('muse.TODAY_CARD_ONE', params)
+          : t('muse.TODAY_CARD', params)}
+      </p>
+      <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
+        {t('muse.REVIEW')}
+      </a>
+    </Card>
   );
 }
 
+/** An occasion's heading and its Refresh: at the row's far edge on a phone, beside the heading from lg, where the edge is a screen away. */
 function RowHeading(props: { occasion: Occasion; children?: Child }) {
   return (
-    <div class="flex items-center justify-between gap-2 px-2">
+    <div class="flex items-center justify-between gap-2 px-2 lg:justify-start lg:gap-4">
       <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
         {occasionLabel(props.occasion)}
       </h2>
@@ -273,14 +297,18 @@ function PlannedRowView(props: {
       data-occasion={row.occasion}
     >
       <RowHeading occasion={row.occasion} />
-      {row.entries.map((entry, index) => (
-        <PlannedCard
-          entry={entry}
-          today={today}
-          eager={index === 0}
-          focused={entry.id === props.wore}
-        />
-      ))}
+      {/* The ideas' tracks from lg, so a planned card is an idea card's
+            size; below lg the section's own stack. */}
+      <div class={`flex flex-col gap-2 ${IDEA_GRID}`}>
+        {row.entries.map((entry, index) => (
+          <PlannedCard
+            entry={entry}
+            today={today}
+            eager={index === 0}
+            focused={entry.id === props.wore}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -296,59 +324,62 @@ function PlannedCard(props: {
   const name = entry.outfit.name || t('UNTITLED_OUTFIT');
   const pieces = entryPieces(entry, today);
   return (
-    <article class="card bg-base-100 shadow-sm" data-entry={entry.id}>
-      <div class="card-body p-3 gap-3">
-        <a
-          href={`/outfits/${entry.outfit.id}`}
-          aria-label={outfitLabel(name, pieces)}
-        >
-          <OutfitCollage garments={pieces} eager={props.eager} />
-        </a>
-        <div class="flex items-center gap-2">
-          <h3 class="font-semibold text-sm line-clamp-2 flex-1">{name}</h3>
-          <AgentBadge agent={entry.agent} />
-          {/* The mirror photo, or the camera to take it: taking one marks
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
+      data-entry={entry.id}
+    >
+      <a
+        href={`/outfits/${entry.outfit.id}`}
+        aria-label={outfitLabel(name, pieces)}
+      >
+        <OutfitCollage garments={pieces} eager={props.eager} />
+      </a>
+      <div class="flex items-center gap-2">
+        <h3 class="font-semibold text-sm line-clamp-2 flex-1">{name}</h3>
+        <AgentBadge agent={entry.agent} />
+        {/* The mirror photo, or the camera to take it: taking one marks
               the entry worn (#19). */}
-          <EntrySelfie
-            entryId={entry.id}
-            day={today}
-            selfie={entry.selfie}
-            canTake
-            returnTo={TODAY_PATH}
-            size="card"
-          />
-        </div>
-        <div class="flex items-center gap-2">
-          <WornControl
-            entryId={entry.id}
-            worn={entry.worn}
-            label={name}
-            size="button"
-            returnTo={TODAY_PATH}
-            autofocus={props.focused}
-          />
-          {/* The gallery for this entry's place: a pick changes its outfit
+        <EntrySelfie
+          entryId={entry.id}
+          day={today}
+          selfie={entry.selfie}
+          canTake
+          returnTo={TODAY_PATH}
+          size="card"
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <WornControl
+          entryId={entry.id}
+          worn={entry.worn}
+          label={name}
+          size="button"
+          returnTo={TODAY_PATH}
+          autofocus={props.focused}
+        />
+        {/* The gallery for this entry's place: a pick changes its outfit
               rather than adding one (#69). Not once worn: a worn entry is
               that day's record. */}
-          {!entry.worn && (
-            <a
-              href={ideasUrl({
-                destination: {
-                  kind: 'day',
-                  day: today,
-                  occasion: entry.occasion,
-                  replace: entry.id,
-                },
-              })}
-              class="btn btn-ghost btn-sm"
-              data-change-entry={entry.id}
-            >
-              {t('today.CHANGE')}
-            </a>
-          )}
-        </div>
+        {!entry.worn && (
+          <a
+            href={ideasUrl({
+              destination: {
+                kind: 'day',
+                day: today,
+                occasion: entry.occasion,
+                replace: entry.id,
+              },
+            })}
+            class="btn btn-ghost btn-sm"
+            data-change-entry={entry.id}
+          >
+            {t('today.CHANGE')}
+          </a>
+        )}
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -360,8 +391,10 @@ function PlannedCard(props: {
 export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
   const { row, today } = props;
   return (
+    // Refresh is a btn-xs over the strip, which paints later: a phone's gap
+    // leaves its 44 px area room (main.css, Touch hit areas; #1210).
     <section
-      class="flex flex-col gap-2 lg:only:col-span-full"
+      class="flex flex-col gap-2 pointer-coarse:gap-2.5"
       data-today-row="ideas"
       data-occasion={row.occasion}
       data-page={row.page}
@@ -376,7 +409,7 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
             hx-swap="outerHTML"
             aria-label={t('today.REFRESH_LABEL')}
           >
-            ⤮ {t('today.REFRESH')}
+            <span aria-hidden="true">⤮</span> {t('today.REFRESH')}
           </button>
         )}
       </RowHeading>
@@ -386,8 +419,8 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
           size="peek"
           label={t('today.STRIP_LABEL')}
           listbox={false}
+          desktop="grid"
           tapThrough
-          frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
           class="pb-2"
         >
           {row.ideas.map((idea, index) => (
@@ -408,11 +441,13 @@ export function IdeasRowView(props: { row: IdeasRow; today: IsoDate }) {
         </p>
       )}
       {row.ideas.length > 0 && (
+        // Its margin keeps its 44 px area clear of + Plan another below it
+        // on a phone (#1210).
         <a
           href={ideasUrl({
             destination: { kind: 'day', day: today, occasion: row.occasion },
           })}
-          class="link link-hover text-sm px-2 self-start"
+          class="link link-hover text-sm px-2 self-start pointer-coarse:mb-2"
         >
           {t('today.MORE_IDEAS')}
         </a>
@@ -430,32 +465,33 @@ function IdeaCard(props: {
   const { idea } = props;
   const ideaKey = idea.garments.map((g) => g.id).join(',');
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
       {...snapItem({
         value: ideaKey,
         selected: props.eager,
         size: 'peek',
         listbox: false,
-        class: 'card bg-base-100 shadow-sm',
+        desktop: 'grid',
       })}
       data-idea={ideaKey}
     >
-      <div class="card-body p-3 gap-3">
-        <OutfitCollage garments={idea.garments} eager={props.eager} />
-        <h3 class="font-semibold text-sm line-clamp-2">
-          {ideaName(idea.garments)}
-        </h3>
-        <Reasons idea={idea} weather={props.weather} />
-        <PostForm action={WEAR_THIS_PATH} class="mt-auto">
-          {idea.garments.map((g) => (
-            <input type="hidden" name="garmentId" value={String(g.id)} />
-          ))}
-          <input type="hidden" name="occasion" value={props.occasion} />
-          <button type="submit" class="btn btn-primary w-full">
-            {t('today.WEAR_THIS')}
-          </button>
-        </PostForm>
-      </div>
-    </article>
+      <OutfitCollage garments={idea.garments} eager={props.eager} />
+      <h3 class="font-semibold text-sm line-clamp-2">
+        {ideaName(idea.garments)}
+      </h3>
+      <Reasons idea={idea} weather={props.weather} />
+      <PostForm action={WEAR_THIS_PATH} class="mt-auto">
+        {idea.garments.map((g) => (
+          <input type="hidden" name="garmentId" value={String(g.id)} />
+        ))}
+        <input type="hidden" name="occasion" value={props.occasion} />
+        <button type="submit" class="btn btn-primary w-full">
+          {t('today.WEAR_THIS')}
+        </button>
+      </PostForm>
+    </Card>
   );
 }

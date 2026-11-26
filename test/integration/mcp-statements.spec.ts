@@ -19,6 +19,13 @@ import {
   saveInspiration,
 } from '../../src/web/inspiration/queries';
 import { createOptionGroup } from '../../src/web/wishlist/decisions';
+import { MCP_WRITES } from '../../src/web/api/operations';
+import {
+  FULL_SCOPE,
+  type TokenScope,
+} from '../../src/web/auth/personal-tokens';
+import { mcpTools } from '../../src/web/mcp/tools';
+import { recordStatements } from '../support/query-recorder';
 import {
   STUB_WEATHER_NOW,
   startWeatherStub,
@@ -38,7 +45,7 @@ import {
   productShot,
   startLinkSites,
 } from './link-sites';
-import { callTool, mcpRequest } from './mcp';
+import { callTool, mcpRequest, mintToken, scopeFields } from './mcp';
 
 /**
  * What each MCP tool costs in statements (#172): production reaches
@@ -49,7 +56,10 @@ import { callTool, mcpRequest } from './mcp';
  * counts its repeat and a forecast is warm. Every count includes the
  * token's own read (authenticateToken). The tools' behaviour is mcp.spec,
  * mcp-muse.spec and mcp-photos.spec's; this one pins
- * the statements, and proves the reads #172 dropped are gone.
+ * the statements, and proves the reads #172 dropped are gone. With every
+ * tool's arguments at hand it also holds the token scopes (#701): a
+ * read-only token's reads write nothing, an own-wardrobe-only token is
+ * refused every shared wardrobe.
  */
 
 const DEMO_EMAIL = 'demo@closet.invalid';
@@ -137,7 +147,11 @@ describe('MCP statements per tool (#172)', () => {
       const res = await t.inject({
         method: 'POST',
         url: '/auth/tokens',
-        payload: { name: `Statements ${i}`, currentPassword: DEMO_PASSWORD },
+        payload: {
+          name: `Statements ${i}`,
+          currentPassword: DEMO_PASSWORD,
+          ...scopeFields(FULL_SCOPE),
+        },
         headers: { cookie },
       });
       expect(res.statusCode).toBe(200);
@@ -427,6 +441,218 @@ describe('MCP statements per tool (#172)', () => {
       .json<{ result: { tools: { name: string }[] } }>()
       .result.tools.map((tool) => tool.name);
     expect(new Set(cases.map(([name]) => name))).toEqual(new Set(listed));
+  });
+
+  /**
+   * Token scope (#701), here for the fixture: every tool's arguments
+   * (`cases`) and a MANAGE share (Dana's, the seed's) to refuse.
+   */
+  describe('a scoped token (#701)', () => {
+    let readOnly: { id: number; token: string };
+    let ownOnly: { id: number; token: string };
+    let danaGarment: number;
+
+    /** Through the writer: four page mints already spent ACCOUNT_LIMIT's minute. */
+    const mint = async (name: string, scope: TokenScope) => {
+      const created = await mintToken(t, ids.theo, name, 'mcp', scope);
+      if (!created.created) throw new Error(`No ${name} token`);
+      return { id: created.id, token: created.token };
+    };
+
+    beforeAll(async () => {
+      readOnly = await mint('Read only', {
+        readOnly: true,
+        ownWardrobeOnly: false,
+      });
+      ownOnly = await mint('Own only', {
+        readOnly: false,
+        ownWardrobeOnly: true,
+      });
+      const [first] = await t.db
+        .select({ id: garment.id })
+        .from(garment)
+        .where(and(eq(garment.ownerId, ids.dana), isNotNull(garment.photoId)))
+        .orderBy(asc(garment.id))
+        .limit(1);
+      danaGarment = first.id;
+    });
+
+    /**
+     * Every table's rows as one digest each, in one statement: what a call
+     * changed, revisions and `updated_at` included. Left out: the location
+     * caches (weather_forecast, weather_normals: no user's rows, refreshed
+     * by any read of the weather) and the token's own last-use mark.
+     */
+    async function tableDigests(): Promise<Record<string, string>> {
+      const { rows: tables } = await t.db.execute<{ name: string }>(sql`
+        select table_name as name from information_schema.tables
+        where table_schema = 'public' and table_type = 'BASE TABLE'
+          and table_name not in ('weather_forecast', 'weather_normals')
+        order by 1`);
+      const digests = tables.map(
+        ({ name }) => sql`select ${name} as name, count(*) || ':' ||
+          coalesce(md5(string_agg(r::text, '|' order by r::text)), '') as digest
+          from (select to_jsonb(x) - 'last_used_at' as r
+                from ${sql.identifier(name)} x) rows`,
+      );
+      const { rows } = await t.db.execute<{ name: string; digest: string }>(
+        sql.join(digests, sql` union all `),
+      );
+      return Object.fromEntries(rows.map((row) => [row.name, row.digest]));
+    }
+
+    /** The tables a statement writes, `for update` locks aside. */
+    const writtenTables = (statement: string) =>
+      [
+        ...statement
+          .replace(/\bfor (no key )?update( of "\w+")?/gi, '')
+          .matchAll(/\b(?:insert into|update|delete from)\s+"(\w+)"/gi),
+      ].map((match) => match[1]);
+    const WEATHER_CACHES = new Set(['weather_forecast', 'weather_normals']);
+    /** The token's last-use mark (authenticateToken), and nothing else of its row. */
+    const LAST_USE_MARK =
+      /^update "personal_access_token" set "last_used_at" = \$1 where "personal_access_token"\."id" = \$2$/;
+
+    // The read tools, by their flag, each with the arguments its statement
+    // case calls it with.
+    const readCases = cases.filter(([name]) => !(name in MCP_WRITES));
+
+    it('runs every tool marked writes: false, and only those', () => {
+      expect(new Set(readCases.map(([name]) => name))).toEqual(
+        new Set(
+          mcpTools({ weather: true })
+            .filter((listed) => listed.writes === false)
+            .map((listed) => listed.name),
+        ),
+      );
+    });
+
+    it.each(readCases)(
+      'a read-only token’s %s writes nothing but a location cache, on a cold cache, and wakes no job',
+      async (name, args) => {
+        // Cold: the forecast and the normals fetched again, the one write
+        // a read may make (get_weather, get_today, get_calendar, get_trip).
+        await t.db.execute(sql`delete from weather_forecast`);
+        await t.db.execute(sql`delete from weather_normals`);
+        const wake = vi.spyOn(t.cutouts, 'wake');
+        const before = await tableDigests();
+        const { statements } = await recordStatements(async () => {
+          const answer = await callTool(t, readOnly.token, name, args());
+          expect(answer.isError, JSON.stringify(answer.value)).toBe(false);
+          await t.weather!.settled();
+        });
+        expect(await tableDigests()).toEqual(before);
+        const writes = statements
+          .filter(
+            (statement) =>
+              !LAST_USE_MARK.test(statement.sql) &&
+              writtenTables(statement.sql).some(
+                (table) => !WEATHER_CACHES.has(table),
+              ),
+          )
+          .map((statement) => statement.sql);
+        expect(writes).toEqual([]);
+        expect(wake).not.toHaveBeenCalled();
+        wake.mockRestore();
+      },
+    );
+
+    it('a read-only token’s use is marked once its last mark is a minute old, and nothing else is written', async () => {
+      const stale = new Date(Date.now() - 61_000);
+      await t.db
+        .update(personalAccessToken)
+        .set({ lastUsedAt: stale })
+        .where(eq(personalAccessToken.id, readOnly.id));
+      const before = await tableDigests();
+      const { statements } = await recordStatements(() =>
+        callTool(t, readOnly.token, 'get_suggestion_feedback'),
+      );
+      expect(await tableDigests()).toEqual(before);
+      expect(statements.filter((s) => writtenTables(s.sql).length > 0)).toEqual(
+        [
+          expect.objectContaining({
+            sql: expect.stringMatching(LAST_USE_MARK),
+          }),
+        ],
+      );
+      const [row] = await t.db
+        .select({
+          lastUsedAt: personalAccessToken.lastUsedAt,
+          feedbackReadAt: personalAccessToken.feedbackReadAt,
+        })
+        .from(personalAccessToken)
+        .where(eq(personalAccessToken.id, readOnly.id));
+      expect(row.lastUsedAt!.getTime()).toBe(Date.now());
+      // A read leaves the cursor where it was: only finish_round moves it.
+      expect(row.feedbackReadAt).toBeNull();
+    });
+
+    it('an own-wardrobe-only token is refused a MANAGE-shared wardrobe by every tool that takes an ownerId, as an unknown one, writing nothing', async () => {
+      const shared = {
+        get_wardrobe: {},
+        search_garments: {},
+        get_garment: { id: danaGarment },
+        get_garment_photo: { id: danaGarment },
+        update_garment: { id: danaGarment, name: 'Injected' },
+        add_garment_copy: { id: danaGarment },
+        list_wishlist: {},
+        add_garment_from_link: { url: sites.url('/products/tee') },
+        list_capsules: {},
+        get_capsule: { id: ids.danaCapsule },
+        set_capsule_membership: { id: ids.danaCapsule, add: [danaGarment] },
+        mark_worn: { garmentId: danaGarment },
+        mark_washed: { garmentIds: [danaGarment] },
+        compare_with_shared_wardrobe: {},
+      } satisfies Record<string, Record<string, unknown>>;
+      expect(Object.keys(shared).sort()).toEqual(
+        mcpTools({ weather: true })
+          .filter((listed) => 'ownerId' in listed.input.shape)
+          .map((listed) => listed.name)
+          .sort(),
+      );
+      // The share is real: a full token reads Dana's garment.
+      const full = tokens[0];
+      expect(
+        await callTool(t, full, 'get_garment', {
+          id: danaGarment,
+          ownerId: ids.dana,
+        }),
+      ).toMatchObject({ isError: false });
+
+      const unknownOwner = 2_000_000_000;
+      const before = await tableDigests();
+      for (const [name, args] of Object.entries(shared)) {
+        const refused = await callTool(t, ownOnly.token, name, {
+          ...args,
+          ownerId: ids.dana,
+        });
+        expect(refused, name).toEqual({
+          value: { error: 'Wardrobe not found' },
+          isError: true,
+        });
+        expect(
+          await callTool(t, ownOnly.token, name, {
+            ...args,
+            ownerId: unknownOwner,
+          }),
+          name,
+        ).toEqual(refused);
+      }
+      expect(await tableDigests()).toEqual(before);
+
+      // No share is listed to it, while a full token's lists Dana's.
+      expect(await callTool(t, ownOnly.token, 'list_shared_wardrobes')).toEqual(
+        { value: { wardrobes: [] }, isError: false },
+      );
+      const listed = await callTool(t, full, 'list_shared_wardrobes');
+      expect(listed.value.wardrobes).toEqual([
+        expect.objectContaining({ ownerId: ids.dana, permission: 'MANAGE' }),
+      ]);
+      // Its own wardrobe answers as ever.
+      expect(
+        await callTool(t, ownOnly.token, 'get_garment', { id: ids.garment }),
+      ).toMatchObject({ isError: false });
+    });
   });
 
   describe('the reads #172 dropped', () => {

@@ -10,16 +10,14 @@ import { renderFragment, renderPage } from '../render';
 import { RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
 import { viewContext } from '../view-context';
+import { brandSizeFor, brandSizesOf, findMeasurements } from './queries';
 import {
-  addBrandSize,
-  brandSizeFor,
-  brandSizesOf,
-  deleteBrandSize,
-  findMeasurements,
-  saveMeasurements,
-  setLengthUnit,
-  updateBrandSize,
-} from './queries';
+  changeBrandSize,
+  createBrandSize,
+  removeBrandSize,
+  saveBodyMeasurements,
+  setBodyLengthUnit,
+} from './size-actions';
 import {
   BRAND_SIZE_HINT_PATH,
   BRAND_SIZES_PATH,
@@ -107,10 +105,10 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     SIZES_UNIT_PATH,
     { schema: { body: LengthUnitBody } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
-      await setLengthUnit(db, userId, request.body.unit);
-      logger.info(
-        `Measurement unit set to ${request.body.unit} by user ${userId}`,
+      await setBodyLengthUnit(
+        { db, logger },
+        actorOf(request),
+        request.body.unit,
       );
       return reply.redirect(SIZES_PATH, 303);
     },
@@ -139,10 +137,10 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           400,
         );
       }
-      await saveMeasurements(db, userId, form.lengths);
-      const set = MEASUREMENTS.filter((m) => form.lengths[m] !== null);
-      logger.info(
-        `Measurements saved by user ${userId}: ${set.length} of ${MEASUREMENTS.length} set`,
+      await saveBodyMeasurements(
+        { db, logger },
+        actorOf(request),
+        form.lengths,
       );
       return reply.redirect(sizesSavedUrl('measurements'), 303);
     },
@@ -163,11 +161,14 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           400,
         );
       if (!form.ok) return refuse(form.errors);
-      const id = await addBrandSize(db, userId, form.fields);
+      const id = await createBrandSize(
+        { db, logger },
+        actorOf(request),
+        form.fields,
+      );
       if (id === 'brand-taken') {
         return refuse({ brand: [t('sizes.BRAND_TAKEN')] });
       }
-      logger.info(`Brand size ${id} added by user ${userId}`);
       return reply.redirect(sizesSavedUrl('brand'), 303);
     },
   );
@@ -188,8 +189,8 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           400,
         );
       if (!form.ok) return refuse(form.errors);
-      const updated = await updateBrandSize(
-        db,
+      const updated = await changeBrandSize(
+        { db, logger },
         actorOf(request),
         id,
         form.fields,
@@ -197,7 +198,6 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       if (updated === 'brand-taken') {
         return refuse({ brand: [t('sizes.BRAND_TAKEN')] });
       }
-      logger.info(`Brand size ${id} changed by user ${userId}`);
       return reply.redirect(sizesSavedUrl('brand'), 303);
     },
   );
@@ -210,8 +210,7 @@ export const sizesRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      await deleteBrandSize(db, actor, id);
-      logger.info(`Brand size ${id} removed by user ${actor.userId}`);
+      await removeBrandSize({ db, logger }, actor, id);
       return reply.redirect(sizesSavedUrl('removed'), 303);
     },
   );

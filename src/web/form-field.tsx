@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import { t } from './i18n';
+import { FIELD_ROW } from './layout/columns';
 
 /**
  * A post form's labelled field: the garment, capsule, trip, "Bought it",
@@ -69,6 +70,17 @@ export function FormField(props: {
 }
 
 /**
+ * Two short FormFields side by side from lg (the garment form's brand and
+ * size; docs/plans/2026-11-16-desktop-layout.md §3.7), stacked below it
+ * exactly as two fields in the form's column are. A pair that fits a phone
+ * side by side (a trip's dates, a repair's day and cost) is `FIELD_GRID`
+ * at every size instead.
+ */
+export function FieldRow(props: { children: Child }) {
+  return <div class={FIELD_ROW}>{props.children}</div>;
+}
+
+/**
  * A field's messages, under FormField's control or, for a control no
  * `<label for>` can name (the garment form's colour dropdown), under it.
  */
@@ -101,7 +113,7 @@ export function ChipGroup(props: {
         <span class="label-text">{props.label}</span>
       </span>
       {props.hint && <p class="text-xs text-muted mb-1">{props.hint}</p>}
-      <div class="flex flex-wrap gap-2">{props.children}</div>
+      <div class="chip-row">{props.children}</div>
     </div>
   );
 }

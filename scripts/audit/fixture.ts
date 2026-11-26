@@ -75,8 +75,13 @@ const DIST = join(PROJECT_ROOT, 'dist');
 export const PERSONA_PASSWORD = 'Closet-demo-1';
 /** The password of every account newAccount() registers. */
 export const ACCOUNT_PASSWORD = 'Audit-pass-1';
-/** The demo persona's login: Theo, whom the walk signs in as. */
-const THEO_EMAIL = 'demo@closet.invalid';
+/**
+ * The persona the walk signs in as (Theo): demo's 83 garments, or the scale
+ * persona's 500 (src/seed/scale.ts). Dana (sparse) shares her wardrobe with
+ * either.
+ */
+export const AUDIT_PERSONAS = ['demo', 'scale'] as const;
+export type AuditPersona = (typeof AUDIT_PERSONAS)[number];
 
 /** The dist modules the audit drives, typed from their sources. */
 interface Build {
@@ -105,7 +110,7 @@ interface Build {
 
 // The build, not src/: the audit measures what the image ships.
 async function loadBuild(): Promise<Build> {
-  const load = <T>(path: string) => import(join(DIST, path)) as Promise<T>;
+  const load = <T>(path: string): Promise<T> => import(join(DIST, path));
   return {
     app: await load('app.js'),
     buildInfo: await load('build-info.js'),
@@ -168,6 +173,12 @@ interface SeedIds {
   otherGarmentId: number;
   /** The grid's second page starts before this id (GRID_PAGE_SIZE newest first). */
   secondPageBefore: number;
+  /**
+   * The Saved tab's deep page starts before this id: SAVED_DEEP_PAGE pages
+   * down at scale, the oldest outfit where there are fewer (demo's 26 fit
+   * one page, so its tiles answer is the last one, empty).
+   */
+  savedPageBefore: number;
   /**
    * Its photo: what its URLs name (imageUrl's, signed by the build's own
    * module, so the steps request what a page renders).
@@ -264,6 +275,9 @@ const ORDER_MAIL_TOKEN = 'fmu1-page-audit-stand-in';
 const ORDER_REVIEW_ITEMS = 6;
 /** The grid's page (GRID_PAGE_SIZE, src/web/wardrobe). */
 const GRID_PAGE_SIZE = 48;
+/** The Saved tab's page (OUTFIT_PAGE_SIZE, src/web/outfits), and how deep its deep-page step scrolls. */
+const OUTFIT_PAGE_SIZE = 30;
+const SAVED_DEEP_PAGE = 15;
 /** Where the shop stand-in serves the seed photo its product pages name. */
 const TEE_IMAGE_PATH = '/img/tee.jpg';
 
@@ -355,12 +369,14 @@ async function startShop(photo: Buffer): Promise<LinkSites> {
 }
 
 export async function createFixture(options: {
+  persona: AuditPersona;
   /** The JPEG every upload posts and the shop serves. */
   photo: Buffer;
   /** Where the app's log goes (kept: a failed step's story is there). */
   appLog: string;
 }): Promise<Fixture> {
   const build = await loadBuild();
+  const theoEmail = `${options.persona}@closet.invalid`;
   stubPushServices();
   const database = await createScratchDatabase('closet_audit', {
     migrated: true,
@@ -386,7 +402,7 @@ export async function createFixture(options: {
       SENTRY_DSN: bugsink.dsn,
       ORDER_MAIL_JMAP_TOKEN: ORDER_MAIL_TOKEN,
       ORDER_MAIL_SENDERS: ORDER_SENDER,
-      ORDER_MAIL_OWNER: THEO_EMAIL,
+      ORDER_MAIL_OWNER: theoEmail,
     },
     envFiles: [],
   });
@@ -414,6 +430,25 @@ export async function createFixture(options: {
 
   let closet: AppModule.ClosetApp;
   try {
+    // The personas first, on a boot without the order mail: ORDER_MAIL_OWNER
+    // must name an account before the boot that resolves it (#706), as in
+    // production, where the owner signs up before setting the token.
+    const seeding = await build.app.createApp(
+      { ...config, ORDER_MAIL_JMAP_TOKEN: '' },
+      logger,
+      { weather: weatherStub.options, outboundFetch: shop.outboundFetch },
+    );
+    try {
+      await seedPersonas(
+        build,
+        seeding,
+        logger,
+        options.persona,
+        config.APP_TIMEZONE,
+      );
+    } finally {
+      await seeding.app.close();
+    }
     closet = await build.app.createApp(config, logger, {
       weather: weatherStub.options,
       outboundFetch: shop.outboundFetch,
@@ -515,10 +550,12 @@ export async function createFixture(options: {
     if (!row) throw new Error(`No account ${id}`);
     return build.tokens.createToken(
       { db: closet.db, logger },
+      { userId: id, surface: 'cli' },
       {
-        userId: id,
         kind: 'mcp',
         name,
+        // The audit calls every tool, writes included.
+        scope: build.tokens.FULL_SCOPE,
         verifiedPassword: row.password,
       },
     );
@@ -546,8 +583,7 @@ export async function createFixture(options: {
   };
 
   try {
-    await seedPersonas(build, closet, logger, config.APP_TIMEZONE);
-    const theoId = await userId(THEO_EMAIL);
+    const theoId = await userId(theoEmail);
     const review = await seedOrderReview(
       build,
       closet.db,
@@ -561,8 +597,8 @@ export async function createFixture(options: {
     await closet.db.execute(sql`analyze`);
     theo = {
       id: theoId,
-      email: THEO_EMAIL,
-      cookie: await login(THEO_EMAIL, PERSONA_PASSWORD),
+      email: theoEmail,
+      cookie: await login(theoEmail, PERSONA_PASSWORD),
     };
     let delivered = 0;
     const ids = await findSeedIds(build, closet.db, theo.id);
@@ -703,18 +739,19 @@ async function seedOrderReview(
   return { emailId: email.id, addItemId: items[0].id };
 }
 
-/** Theo (demo) and Dana (sparse), who shares her wardrobe with him. */
+/** Theo (the persona) and Dana (sparse), who shares her wardrobe with him. */
 async function seedPersonas(
   build: Build,
   closet: AppModule.ClosetApp,
   logger: LoggerModule.Logger,
+  persona: AuditPersona,
   timeZone: string,
 ): Promise<void> {
   let output = '';
   const out = new PassThrough();
   out.on('data', (chunk: Buffer) => (output += chunk.toString()));
   const status = await build.seed.runSeed({
-    args: ['--persona', 'demo', '--persona', 'sparse', '--password-stdin'],
+    args: ['--persona', persona, '--persona', 'sparse', '--password-stdin'],
     db: closet.db,
     photos: closet.photos,
     logger: logger.child({ logger: 'Seed' }),
@@ -833,6 +870,17 @@ async function findSeedIds(
       .limit(1),
     'second grid page',
   );
+  const outfitIds = await db
+    .select({ id: s.outfit.id })
+    .from(s.outfit)
+    .where(eq(s.outfit.ownerId, theoId))
+    .orderBy(desc(s.outfit.id));
+  const savedPageBefore = one(
+    outfitIds.slice(
+      Math.min(outfitIds.length, OUTFIT_PAGE_SIZE * SAVED_DEEP_PAGE) - 1,
+    ),
+    'outfit',
+  ).id;
   const wish = one(
     await db
       .select({ id: s.garment.id })
@@ -958,6 +1006,7 @@ async function findSeedIds(
     garmentId: repaired.garmentId,
     otherGarmentId: other.id,
     secondPageBefore: secondPage.id,
+    savedPageBefore,
     photo: {
       fileName: repaired.fileName,
       version: repaired.version,

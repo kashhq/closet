@@ -14,11 +14,18 @@ import {
   type WardrobeInsights,
 } from '../../wardrobe/insights';
 import {
+  RECAP_MIN_WEARS,
   type RecapPeriod,
   yearRecap,
   type YearRecap,
 } from '../../wardrobe/recap';
-import { addDays, type IsoDate } from '../../calendar-date';
+import {
+  addDays,
+  dateParts,
+  formatIsoDate,
+  type IsoDate,
+} from '../../calendar-date';
+import { recapPeriod } from './recap-period';
 import { repairCostSql } from '../wardrobe/repairs';
 import { type GarmentScope, inScope } from '../wardrobe/status';
 
@@ -41,7 +48,7 @@ import { type GarmentScope, inScope } from '../wardrobe/status';
  * everything owned now or once (a recap looks back, and a garment archived
  * since was still worn that year).
  */
-export interface InsightsWindow {
+interface InsightsWindow {
   from: IsoDate;
   to: IsoDate;
   scope: Exclude<GarmentScope, 'wishlist'>;
@@ -151,7 +158,7 @@ async function wornPairs(
  * Concurrent, so one round trip after the session's; they share no rows,
  * so they could be one statement (#169).
  */
-export async function readInsightRows(
+async function readInsightRows(
   db: Db,
   ownerId: number,
   window: InsightsWindow,
@@ -194,4 +201,56 @@ export async function readRecap(
     scope: 'owned',
   });
   return yearRecap(garments, pairs, period);
+}
+
+/**
+ * The latest year before `year` with at least RECAP_MIN_WEARS wears (the
+ * recap's unit: distinct garment-days, over every garment owned now or
+ * once), or null. One statement, run only when the current year is still
+ * the empty state. It counts by hand what `yearRecap` counts as `enough`
+ * (RECAP_MIN_WEARS is the shared threshold), so `readDefaultRecap` checks the
+ * chosen year's own `enough`; recap.spec.ts holds the two rules together.
+ */
+export async function latestRecapYearBefore(
+  db: Db,
+  ownerId: number,
+  year: number,
+): Promise<number | null> {
+  const result = await db.execute<{ year: number }>(sql`
+    select extract(year from worn.day)::int as year
+    from (
+      select distinct ${garmentWear.garmentId} as garment_id, ${garmentWear.day} as day
+      from ${garmentWear}
+      join ${garment} on ${garment.id} = ${garmentWear.garmentId}
+      where ${garmentWear.ownerId} = ${ownerId}
+        and ${garment.ownerId} = ${ownerId}
+        and ${inScope('owned')}
+        and ${lte(garmentWear.day, formatIsoDate(year - 1, 12, 31))}
+    ) worn
+    group by 1
+    having count(*) >= ${RECAP_MIN_WEARS}
+    order by 1 desc
+    limit 1`);
+  return result.rows[0]?.year ?? null;
+}
+
+/**
+ * What GET /wardrobe/recap opens on without `?year=`: this year's recap, or
+ * while it is still the empty state (January, a closet new to wearing) the
+ * latest earlier year that has enough wears, so the page does not greet
+ * the day people open it with nothing (#733). With no such year, this
+ * year's empty state. The extra read happens only then.
+ */
+export async function readDefaultRecap(
+  db: Db,
+  ownerId: number,
+  today: IsoDate,
+): Promise<YearRecap<SignablePhotoRef>> {
+  const current = dateParts(today).year;
+  const recap = await readRecap(db, ownerId, recapPeriod(current, today));
+  if (recap.enough) return recap;
+  const earlier = await latestRecapYearBefore(db, ownerId, current);
+  if (earlier === null) return recap;
+  const fallback = await readRecap(db, ownerId, recapPeriod(earlier, today));
+  return fallback.enough ? fallback : recap;
 }

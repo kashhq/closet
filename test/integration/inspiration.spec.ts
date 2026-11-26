@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { readdir, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -12,11 +13,15 @@ import {
   pendingPhoto,
 } from '../../src/db/schema';
 import { reconcileStorage } from '../../src/maintenance/reconcile';
-import { updateInspirationPiece } from '../../src/web/inspiration/queries';
+import {
+  setInspirationPhoto,
+  updateInspirationPiece,
+} from '../../src/web/inspiration/queries';
 import {
   SHARE_BODY_MAX_BYTES,
   SHARE_PHOTO_MAX_BYTES,
 } from '../../src/web/inspiration/share-target';
+import { LOOK_PAGE_SIZE } from '../../src/web/inspiration/page-size';
 import { variantFileName } from '../../src/web/files/image-variant';
 import { t as text } from '../../src/web/i18n';
 import { createGarment, jpegPhoto, photoRow } from './garments';
@@ -121,7 +126,9 @@ describe('inspiration', () => {
       `/inspiration/photo/thumb/${second.fileName}?v=1`,
       `/inspiration/photo/thumb/${first.fileName}?v=1`,
     ]);
-    expect(list.body).toContain('role="tab"');
+    expect(list.body).toMatch(
+      /<a href="\/inspiration" class="tab tab-active" aria-current="page"/,
+    );
     expect(list.body).toContain(text('gallery.TAB_INSPIRATION'));
 
     for (const url of [
@@ -148,6 +155,52 @@ describe('inspiration', () => {
         ),
       ),
     );
+  });
+
+  // #528: the tab loaded every look. A page is LOOK_PAGE_SIZE, a sentinel
+  // names the rest, and the sentinel's page is the remainder.
+  it('pages the tab: one page of looks and a sentinel, then the rest from the sentinel', async () => {
+    const email = 'look-pager@example.com';
+    const cookie = await t.register(email);
+    const userId = await userIdOf(t, email);
+    const total = LOOK_PAGE_SIZE + 2;
+    await t.db.insert(inspiration).values(
+      Array.from({ length: total }, (_, index) => ({
+        ownerId: userId,
+        sourceUrl: `https://example.com/look-${index}`,
+      })),
+    );
+    const ids = (body: string) =>
+      [...body.matchAll(/data-inspiration-id="(\d+)"/g)].map((m) =>
+        Number(m[1]),
+      );
+
+    const first = await t.inject({
+      method: 'GET',
+      url: '/inspiration',
+      headers: { cookie },
+    });
+    const firstIds = ids(first.body);
+    expect(firstIds).toHaveLength(LOOK_PAGE_SIZE);
+    const last = firstIds[firstIds.length - 1];
+    expect(first.body).toContain(`hx-get="/inspiration/tiles?before=${last}"`);
+
+    const rest = await t.inject({
+      method: 'GET',
+      url: `/inspiration/tiles?before=${last}`,
+      headers: { cookie },
+    });
+    expect(rest.statusCode).toBe(200);
+    expect(ids(rest.body)).toHaveLength(total - LOOK_PAGE_SIZE);
+    expect(ids(rest.body).every((id) => id < last)).toBe(true);
+    expect(rest.body).not.toContain('data-inspiration-more');
+
+    const bad = await t.inject({
+      method: 'GET',
+      url: '/inspiration/tiles?before=abc',
+      headers: { cookie },
+    });
+    expect(bad.statusCode).toBe(400);
   });
 
   it('saves a pasted page with its title and its photo, the pending photo claimed', async () => {
@@ -393,9 +446,7 @@ describe('inspiration', () => {
       url: String(saved.headers.location),
     });
     expect(page.body).toContain('href="https://shop.test/look?a=1"');
-    expect(page.body).toContain(
-      "import { forgetSavedShare } from 'share-saved';",
-    );
+    expect(page.body).toContain('<template data-page-module="share-saved">');
     const blank = await post({ url: '', title: '' });
     expect(await lookRow(lookIdOf(blank.headers.location))).toMatchObject({
       sourceUrl: null,
@@ -446,7 +497,7 @@ describe('inspiration', () => {
       body.indexOf('type="file"'),
     );
     expect(body).toContain('data-stash-cache="shares-v1"');
-    expect(body).toContain("import { confirmShare } from 'share-confirm';");
+    expect(body).toMatch(/id="share-confirm" data-page-module="share-confirm"/);
     expect(body).toContain(text('inspiration.SAVE_SHARED'));
   });
 
@@ -532,6 +583,33 @@ describe('inspiration', () => {
     expect(await photoRow(t, firstName)).toBeUndefined();
     expect(await stored()).not.toContain(firstName);
     expect(await stored()).toContain(secondName);
+  });
+
+  // The second upload waits on the look's lock while the first replaces the
+  // photo; once it holds the lock the look's photo is the first's, and that
+  // is the file row its DELETE must answer (a name read before the wait is
+  // the old photo's, or null, and the first's bytes would stay on disk).
+  it('answers the photo each of two overlapping uploads replaced, so no bytes are orphaned', async () => {
+    const email = 'look-photo-race@example.com';
+    const cookie = await t.register(email);
+    const userId = await userIdOf(t, email);
+    const { id, fileName: original } = await addLook(t, photo, cookie);
+    const newRow = () => ({
+      fileName: `${randomUUID()}.webp`,
+      shareableId: randomUUID(),
+      createdOn: new Date().toISOString(),
+      createdById: userId,
+    });
+    const [firstRow, secondRow] = [newRow(), newRow()];
+    const [first, second] = await interleave(
+      t.db,
+      (tx) => setInspirationPhoto(tx, id, userId, firstRow),
+      () => setInspirationPhoto(t.db, id, userId, secondRow),
+    );
+    expect(first).toEqual({ replaced: original });
+    expect(second).toEqual({ replaced: firstRow.fileName });
+    expect(await lookPhotoName(t, id)).toBe(secondRow.fileName);
+    expect(await photoRow(t, firstRow.fileName)).toBeUndefined();
   });
 
   it('deletes a look with its photo, row and bytes', async () => {
@@ -745,12 +823,12 @@ describe('inspiration', () => {
     expect(tagged).not.toContain(hintFor('layer/blazer'));
     expect(tagged).toContain(hintFor('top/t-shirt'));
     expect(tagged).toContain(`href="/inspiration/${id}/recreate"`);
-    expect(t.logs.messages('info')).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^Inspiration ${id} piece 0 \\(layer/blazer\\) added by user \\d+$`,
-        ),
-      ),
+    expect(t.logs.ops('inspiration.piece.added')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        position: 0,
+        kind: 'layer/blazer',
+      }),
     );
 
     // The piece's autosave: answered with the status line.
@@ -919,8 +997,13 @@ describe('inspiration', () => {
       .where(eq(outfitSlot.outfitId, outfitId));
     expect(slots).toEqual([{ garmentId: blackJacket }]);
     expect(await matchedOf(id)).toEqual([blackJacket, null, null]);
-    expect(t.logs.messages('info')).toContainEqual(
-      `Inspiration ${id} saved as outfit ${outfitId} by user ${await userIdOf(t, 'look-saver@example.com')} with 1 garment(s)`,
+    expect(t.logs.ops('inspiration.outfit.saved')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        outfitId,
+        garments: 1,
+        changed: true,
+      }),
     );
 
     // The page centres the choice made, not the closest.
@@ -1203,8 +1286,14 @@ describe('inspiration', () => {
         and(eq(garment.ownerId, userId), eq(garment.status, 'wishlist')),
       ),
     ).toBe(1);
-    expect(t.logs.messages('info')).toContainEqual(
-      `Inspiration ${id} piece 2 already on the wishlist of user ${userId} as garment ${item.id}, nothing created`,
+    expect(t.logs.ops('inspiration.piece.found')).toContainEqual(
+      expect.objectContaining({
+        inspirationId: id,
+        position: 2,
+        userId,
+        garmentId: item.id,
+        changed: false,
+      }),
     );
     // An unknown piece is a 404, writing nothing.
     const unknown = await t.inject({

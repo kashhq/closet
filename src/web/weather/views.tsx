@@ -1,11 +1,12 @@
 import type { IsoDate } from '../../calendar-date';
 import { hourIn, todayIn } from '../../calendar-date';
-import { t, tKey } from '../i18n';
+import { t, tKey, type Translated } from '../i18n';
 import type { ViewContext } from '../view-context';
 import type { Condition } from '../../weather/forecast';
 import type { TemperatureUnit } from '../../weather/temperature';
 import type { UserWeather } from './service';
 import { type DayChip, type TodayLine, todayLine } from './summary';
+import { WEATHER_SETTINGS_PATH } from './urls';
 
 /**
  * The weather's pieces on other pages (#14). A page renders WeatherSlot in
@@ -141,7 +142,7 @@ export function ConditionIcon({ condition }: { condition: Condition }) {
 }
 
 /** "3 pm". */
-export function hourLabel(hour: number): string {
+export function hourLabel(hour: number): Translated {
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
   return hour < 12
     ? t('weather.HOUR_AM', { hour: twelve })
@@ -264,9 +265,12 @@ export function UserWeatherLine(props: {
 
 /** No location yet: the line is the way to set one. */
 function WeatherPrompt() {
+  // mb-5, not the line's mb-3: on a phone the link's 44 px hit area reaches
+  // 12 px under this 20 px line, and a btn-sm's 4.4 px above it, so the
+  // calendar's Plan my week button under it needs the room (#1210).
   return (
-    <p id={WEATHER_LINE_ID} class="mb-3 px-2 text-sm">
-      <a class="link link-hover text-muted" href="/auth/profile#weather">
+    <p id={WEATHER_LINE_ID} class="mb-5 px-2 text-sm">
+      <a class="link link-hover text-muted" href={WEATHER_SETTINGS_PATH}>
         {t('weather.SET_LOCATION')}
       </a>
     </p>

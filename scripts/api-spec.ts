@@ -6,10 +6,10 @@ import { pino } from 'pino';
 import { PROJECT_ROOT } from '../src/project-root';
 import { DEVICE_TOKEN_SCHEME } from '../src/web/api/contract';
 import { type ApiOptions, registerApi } from '../src/web/api/plugin';
+import { createSignInLimits } from '../src/web/auth/sign-in';
 import {
   BEARER_REFUSAL_LIMIT,
   LINK_IMPORT_LIMIT,
-  SIGN_IN_LIMIT,
 } from '../src/web/security/rate-limit';
 import { assignSurface } from '../src/web/surface';
 
@@ -70,7 +70,7 @@ export async function generateApiSpec(): Promise<unknown> {
             type: 'http',
             scheme: 'bearer',
             description:
-              'A device token from POST /api/v1/auth/token, valid until revoked.',
+              'A device token from POST /api/v1/auth/token, valid until revoked or unused for 90 days.',
           },
         },
       },
@@ -81,7 +81,7 @@ export async function generateApiSpec(): Promise<unknown> {
   app.addHook('onRoute', assignSurface);
   await registerApi(app, {
     ...unservedOptions(),
-    signInLimit: app.createRateLimit(SIGN_IN_LIMIT),
+    signInLimits: createSignInLimits(app),
     bearerRefusalLimit: app.createRateLimit(BEARER_REFUSAL_LIMIT),
     linkImportLimit: app.createRateLimit(LINK_IMPORT_LIMIT),
     inspirationLinkLimit: app.createRateLimit(LINK_IMPORT_LIMIT),
@@ -90,7 +90,309 @@ export async function generateApiSpec(): Promise<unknown> {
   const spec: unknown = app.swagger();
   await app.close();
   markOptionalBodies(spec);
+  nameSchemas(spec);
   return spec;
+}
+
+const SCHEMA_REF = '#/components/schemas/';
+
+/**
+ * JSON Schema's applicators, the only keywords whose values are subschemas:
+ * 2020-12's, plus draft-07's tuple form that TypeBox's `Type.Tuple` emits
+ * (`items: [...]` with `additionalItems`) and `dependencies`. The walk descends through these
+ * alone, so everything else (`default`, `examples`, `const`, `enum`, an
+ * unknown keyword) is data by construction: a titled object inside it is
+ * never hoisted (#1197).
+ */
+const SUBSCHEMA_KEYWORDS = new Set([
+  'additionalProperties',
+  'additionalItems',
+  'not',
+  'if',
+  'then',
+  'else',
+  'contains',
+  'propertyNames',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+  'contentSchema',
+]);
+const SUBSCHEMA_LIST_KEYWORDS = new Set([
+  'prefixItems',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+/** A schema (2020-12, and a draft-07 list) or a draft-07 tuple's list of schemas. */
+const SUBSCHEMA_OR_LIST_KEYWORDS = new Set(['items']);
+/** Their values map user-chosen names to schemas (a property may be called `default`). */
+const SUBSCHEMA_MAP_KEYWORDS = new Set([
+  'properties',
+  'patternProperties',
+  '$defs',
+  'definitions',
+  'dependentSchemas',
+]);
+/** Draft-07's `dependencies`: a map whose values are a schema or, left alone, an array of property names. */
+const SUBSCHEMA_MAP_OR_NAMES_KEYWORDS = new Set(['dependencies']);
+
+/** The component kinds the emitter writes; a new kind may hold schemas this walk would miss, so the emit fails until it learns it. */
+const KNOWN_COMPONENTS = new Set(['schemas', 'securitySchemes']);
+
+const HTTP_METHODS = new Set([
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+]);
+
+/**
+ * What a client generator needs and TypeBox's inlining withholds (#714):
+ * every titled schema becomes one component, named by its title and
+ * referenced where it was copied; an `anyOf` of single-value literals of one
+ * type is one `enum`; a union of objects that each carry a literal `resource`
+ * is a `oneOf` discriminated by it, with the mapping. Emitter-only: the routes still
+ * serialize through the inline schemas, so no response changes.
+ *
+ * The walk goes by structure, never by key name (#1197): the OpenAPI
+ * document's schema positions, then inside a schema only its subschema
+ * keywords. A response called `default` or a component called `example` is
+ * a name like any other.
+ *
+ * Two shapes under one title would make one name mean two types, so the
+ * emit fails and the title gets renamed at its source.
+ */
+export function nameSchemas(spec: unknown): void {
+  if (!isRecord(spec) || !isRecord(spec.paths)) return;
+  refuseUnwalkedPositions(spec);
+  const components = isRecord(spec.components) ? spec.components : {};
+  const registered: Record<string, unknown> = {};
+  const shapeOf = new Map<string, string>();
+
+  const visitSchema = (node: unknown, hoist = true): unknown => {
+    if (!isRecord(node)) return node;
+    const visited: Record<string, unknown> = {};
+    for (const [keyword, value] of Object.entries(node)) {
+      visited[keyword] = visitSubschemas(keyword, value, visitSchema);
+    }
+    const schema = discriminated(
+      collapseEnums(visited),
+      (ref) => registered[ref.slice(SCHEMA_REF.length)],
+    );
+    const { title } = schema;
+    if (!hoist || typeof title !== 'string' || '$ref' in schema) return schema;
+    const shape = canonical(schema);
+    const known = shapeOf.get(title);
+    if (known !== undefined && known !== shape) {
+      throw new Error(
+        `The title "${title}" names two schemas in the API spec; titles name components, so rename one.`,
+      );
+    }
+    shapeOf.set(title, shape);
+    registered[title] = schema;
+    return { $ref: `${SCHEMA_REF}${title}` };
+  };
+
+  // The shared schemas (Problem, named by its $id) keep their names, titled
+  // or not; only what is inside them is processed.
+  for (const [name, shared] of Object.entries(
+    isRecord(components.schemas) ? components.schemas : {},
+  )) {
+    const processed = visitSchema(shared, false);
+    registered[name] = processed;
+    shapeOf.set(name, canonical(processed));
+  }
+  // The OpenAPI objects are updated in place: only their `schema` changes.
+  for (const holder of schemaHolders(spec.paths)) {
+    holder.schema = visitSchema(holder.schema);
+  }
+  spec.components = { ...components, schemas: registered };
+}
+
+/**
+ * Fails closed: a schema position the walk does not visit would keep its
+ * titled schemas inline, so the emit stops naming it until the walk learns
+ * it. The emitter writes none of these today.
+ */
+function unwalked(position: string): Error {
+  return new Error(
+    `The API spec has ${position}, which nameSchemas does not walk; teach it where the schemas there are.`,
+  );
+}
+
+/** The document-level positions: `webhooks`, and component kinds other than KNOWN_COMPONENTS. */
+function refuseUnwalkedPositions(spec: Record<string, unknown>): void {
+  if ('webhooks' in spec) throw unwalked('webhooks');
+  const kinds = Object.keys(isRecord(spec.components) ? spec.components : {});
+  const unknown = kinds.filter((kind) => !KNOWN_COMPONENTS.has(kind));
+  if (unknown.length > 0) {
+    throw unwalked(`components (${unknown.join(', ')})`);
+  }
+}
+
+/** A keyword's value with its subschemas visited; any other keyword's value is data and stays as it is. */
+function visitSubschemas(
+  keyword: string,
+  value: unknown,
+  visitSchema: (schema: unknown) => unknown,
+): unknown {
+  const list =
+    SUBSCHEMA_LIST_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword);
+  if (list && Array.isArray(value)) {
+    return value.map((subschema) => visitSchema(subschema));
+  }
+  if (
+    SUBSCHEMA_KEYWORDS.has(keyword) ||
+    SUBSCHEMA_OR_LIST_KEYWORDS.has(keyword)
+  ) {
+    return visitSchema(value);
+  }
+  if (SUBSCHEMA_MAP_KEYWORDS.has(keyword) && isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, subschema]) => [
+        name,
+        visitSchema(subschema),
+      ]),
+    );
+  }
+  if (SUBSCHEMA_MAP_OR_NAMES_KEYWORDS.has(keyword) && isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, dependency]) => [
+        name,
+        Array.isArray(dependency) ? dependency : visitSchema(dependency),
+      ]),
+    );
+  }
+  return value;
+}
+
+/**
+ * Every object under `paths` whose `schema` is a schema, in document order
+ * (the components' order follows it): path and operation parameters, request
+ * and response media types, response headers and their media types.
+ */
+function schemaHolders(paths: unknown): Record<string, unknown>[] {
+  const holders: Record<string, unknown>[] = [];
+  const content = (mediaTypes: unknown): void => {
+    for (const media of recordsIn(mediaTypes)) {
+      if (recordsIn(media.encoding).some((part) => 'headers' in part)) {
+        throw unwalked('encoding headers');
+      }
+      holders.push(media);
+    }
+  };
+  // A parameter or a header: a `schema`, or a `content` map.
+  const parameter = (holder: Record<string, unknown>): void => {
+    holders.push(holder);
+    content(holder.content);
+  };
+  const operation = (fields: Record<string, unknown>): void => {
+    for (const [field, value] of Object.entries(fields)) {
+      if (field === 'callbacks') throw unwalked('operation callbacks');
+      if (field === 'parameters') recordsIn(value).forEach(parameter);
+      else if (field === 'requestBody' && isRecord(value)) {
+        content(value.content);
+      } else if (field === 'responses') {
+        for (const response of recordsIn(value)) {
+          content(response.content);
+          recordsIn(response.headers).forEach(parameter);
+        }
+      }
+    }
+  };
+  for (const pathItem of recordsIn(paths)) {
+    for (const [field, value] of Object.entries(pathItem)) {
+      if (field === 'parameters') recordsIn(value).forEach(parameter);
+      else if (HTTP_METHODS.has(field) && isRecord(value)) operation(value);
+    }
+  }
+  return holders.filter((holder) => 'schema' in holder);
+}
+
+/** The objects among a map's values or a list's items. */
+function recordsIn(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  return isRecord(value) ? Object.values(value).filter(isRecord) : [];
+}
+
+/** A schema as text with its keys sorted: two copies differing only in key order are one shape. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, nested: unknown) =>
+    isRecord(nested)
+      ? Object.fromEntries(
+          Object.entries(nested).sort(([a], [b]) => a.localeCompare(b)),
+        )
+      : nested,
+  );
+}
+
+const LITERAL_TYPES = ['string', 'number', 'integer', 'boolean'];
+
+/** A branch that is exactly one literal: `{ type, enum: [value] }`. */
+function singleLiteral(
+  branch: unknown,
+): { type: string; value: unknown } | undefined {
+  if (!isRecord(branch) || Object.keys(branch).length !== 2) return undefined;
+  const { type, enum: values } = branch;
+  if (typeof type !== 'string' || !LITERAL_TYPES.includes(type)) {
+    return undefined;
+  }
+  if (!Array.isArray(values) || values.length !== 1) return undefined;
+  return { type, value: values[0] };
+}
+
+/** `anyOf: [{ type: 'number', enum: [1] }, ...]` as one `enum` of that type. */
+function collapseEnums(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const { anyOf, ...rest } = schema;
+  if (!Array.isArray(anyOf) || anyOf.length === 0) return schema;
+  const literals = anyOf.map(singleLiteral);
+  const [first] = literals;
+  if (!first || literals.some((l) => l?.type !== first.type)) return schema;
+  return {
+    ...rest,
+    type: first.type,
+    enum: literals.map((literal) => literal?.value),
+  };
+}
+
+/** The one string a union branch's `resource` property allows, if it is one. */
+function resourceLiteral(target: unknown): string | undefined {
+  if (!isRecord(target) || !isRecord(target.properties)) return undefined;
+  const literal = singleLiteral(target.properties.resource);
+  return typeof literal?.value === 'string' ? literal.value : undefined;
+}
+
+/**
+ * A union whose every branch is a component carrying one literal `resource`
+ * becomes a discriminated `oneOf` (generators honour a discriminator only
+ * there; the literals make the branches mutually exclusive).
+ */
+function discriminated(
+  schema: Record<string, unknown>,
+  resolve: (ref: string) => unknown,
+): Record<string, unknown> {
+  const { anyOf, ...rest } = schema;
+  if (!Array.isArray(anyOf) || anyOf.length < 2) return schema;
+  const mapping: Record<string, string> = {};
+  for (const branch of anyOf) {
+    if (!isRecord(branch) || typeof branch.$ref !== 'string') return schema;
+    const value = resourceLiteral(resolve(branch.$ref));
+    if (value === undefined) return schema;
+    mapping[value] = branch.$ref;
+  }
+  if (Object.keys(mapping).length !== anyOf.length) return schema;
+  return {
+    ...rest,
+    oneOf: anyOf,
+    discriminator: { propertyName: 'resource', mapping },
+  };
 }
 
 /**

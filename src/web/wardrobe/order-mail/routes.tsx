@@ -29,7 +29,7 @@ const HOUSEHOLD_CURRENCY = 'USD';
 
 /**
  * "From your orders" (#25): the review list of what the order mail's poll
- * found (poll.ts), for ORDER_MAIL_OWNER's account only: anyone else, and
+ * found (poll.ts), for the order mail's owner only: anyone else, and
  * everyone with the order mail off, gets a 404 like a route that does not
  * exist. Registered either way, so the static path always wins over
  * /wardrobe/:id (whose id check would answer "orders" with a 400).
@@ -43,19 +43,22 @@ const HOUSEHOLD_CURRENCY = 'USD';
  * item out of the list. Both are native posts (PostForm).
  */
 export const orderReviewRoutes: FastifyPluginCallbackTypebox<
-  WebOptions & { orderMailOwner: string | undefined }
+  WebOptions & { orderMailOwnerId: number | undefined }
 > = (app, options, done) => {
-  const { db, logger, photos, fetcher, orderMailOwner } = options;
+  const { db, logger, photos, fetcher, orderMailOwnerId } = options;
   const importDeps = { db, fetcher, photos, logger };
   const addLimit = app.createRateLimit(LINK_IMPORT_LIMIT);
 
   // Off (no owner), or not the order account's owner: the app's own 404
   // (its not-found handler), as a route that is not there. A request
   // concern, so a hook: after the schema, before every handler, as the
-  // check each handler made first.
+  // check each handler made first. By id, resolved at boot (#706): an
+  // account that takes the owner's old address is still anyone else.
   app.addHook('preHandler', (request, reply, done) => {
-    const email = request.auth?.user.email?.toLowerCase();
-    if (orderMailOwner === undefined || email !== orderMailOwner) {
+    if (
+      orderMailOwnerId === undefined ||
+      request.auth?.user.id !== orderMailOwnerId
+    ) {
       reply.callNotFound();
       return;
     }

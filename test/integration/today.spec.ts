@@ -8,6 +8,7 @@ import {
   weekPlanEntry,
 } from '../../src/db/schema';
 import { addDays, dateParts, type IsoDate } from '../../src/calendar-date';
+import { dayOfStamp, dayText } from '../../src/page-day';
 import { setTripDestination } from '../../src/web/trips/queries';
 import { dayColumns } from './calendar-page';
 import { createGarment, createWishlistItem } from './garments';
@@ -273,15 +274,20 @@ describe.each(ZONES)('"today" in $zone', ({ zone, instants }) => {
       expect(await lastWashedOn(hamper)).toBe(today);
     });
 
-    it("the garment page writes its acquired date in today's year without the year", async () => {
+    // The page's script words it against the copy's stamp (#708,
+    // src/page-day.ts): the household's date of that instant, not UTC's.
+    it("the garment page's acquired date reads in the stamp's household year, without the year", async () => {
       const id = await createGarment(t, { name: `Acquired ${at}`, cookie });
       await asFixture(t.db, (tx) =>
         tx.update(garment).set({ acquiredOn: today }).where(eq(garment.id, id)),
       );
       const page = unescapeHtml((await get(`/wardrobe/${id}`)).body);
-      expect(page).toMatch(
-        new RegExp(`>Date Acquired</dt>\\s*<dd[^>]*>${label}</dd>`),
+      expect(page).toContain(
+        `<time datetime="${today}" data-day-label="date">`,
       );
+      const pageDay = dayOfStamp(String(Date.now()), t.timeZone);
+      expect(pageDay).toBe(today);
+      expect(dayText(today, pageDay!, 'date', 'en')).toBe(label);
     });
 
     it('insights count days from today: a wear today was 0 days ago', async () => {
@@ -643,7 +649,7 @@ describe.each(ZONES)('"today" in $zone', ({ zone, instants }) => {
       ).toBe(409);
     });
 
-    it("Profile's Devices (#189) writes a device's last use as the household's day", async () => {
+    it("Profile › Devices (#189) writes a device's last use as the household's day", async () => {
       const minted = await mintToken(
         t,
         await userIdOf(t, OWNER_EMAIL),
@@ -655,7 +661,7 @@ describe.each(ZONES)('"today" in $zone', ({ zone, instants }) => {
         .update(personalAccessToken)
         .set({ lastUsedAt: new Date(at) })
         .where(eq(personalAccessToken.id, minted.id));
-      const page = unescapeHtml((await get('/auth/profile')).body);
+      const page = unescapeHtml((await get('/auth/devices')).body);
       expect(page).toContain(`last used ${today}`);
     });
   });

@@ -1,20 +1,20 @@
+import { Card } from '../card';
 import {
   type PackingRow,
   type PackingWarning,
   wearableToday,
 } from '../../wardrobe/packing';
 import { AgentBadge } from '../agent-badge';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { AutosaveForm } from '../autosave';
 import { ShownId } from '../checklist';
 import type { IsoDate } from '../../calendar-date';
 import { occasionLabel } from '../date-labels';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
+import { OUTFIT_ROW_GRID } from '../layout/columns';
 import { DayHeading } from '../layout/day-heading';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import {
   type OfflineNotice,
@@ -25,7 +25,7 @@ import {
 import { collagePieces, OutfitCollage } from '../outfits/collage';
 import { OutboxPending, outboxRegion } from '../outbox';
 import type { ViewContext } from '../view-context';
-import { PLACE_QUERY_MAX, PLACE_QUERY_MIN } from '../weather/place-picker';
+import { PLACE_QUERY_MAX, PLACE_QUERY_MIN } from '../weather/place-input';
 import { WornControl } from '../wears/worn-control';
 import { phaseLabel, tripDates } from './labels';
 import { roleGroupLabel } from '../wardrobe/labels';
@@ -38,28 +38,47 @@ import {
   tripUrl,
 } from './urls';
 import { TRIP_ITEM_MAX } from './validation';
+import { needsNetwork } from '../page-contract';
 
 /**
- * GET /trips/:id (#10): a trip, phone first. The header (dates,
- * destination), the destination's weather (a fragment loaded after the page,
- * GET /trips/:id/weather, with the search that finds the place on the map),
- * a section per day with its outfits (and "Any day"), each with "+ Add" (a
- * saved outfit) and Ideas (the gallery for that day, with the destination's
- * forecast), "Wore it" (and its Undo) while the trip is on, the packing list
+ * GET /trips/:id (#10): a trip, phone first, a `panel` page (#1071). The
+ * body: the header (dates, destination), the destination's weather (a
+ * fragment loaded after the page, GET /trips/:id/weather, with the search
+ * that finds the place on the map), a section per day with its outfits (and
+ * "Any day"; from lg as many to a row as fit), each with "+ Add" (a saved
+ * outfit) and Ideas (the gallery for that day, with the destination's
+ * forecast), "Wore it" (and its Undo) while the trip is on. The aside, after
+ * the outfits on a phone and sticky beside them from lg: the packing list
  * (the garments by role with the copies to pack and warnings, checkboxes
- * saved on change) and the extras (checkboxes, add, copy from a previous
- * trip). Network first like every page but the tab roots; offline the
+ * saved on change), the extras (checkboxes, add, copy from a previous trip)
+ * and the notes. Every swap there is by id (the summaries out of band) and
+ * the outbox finds a tick's counter by its `section`, so neither knows the
+ * region. Network first like every page but the tab roots; offline the
  * worker's copy shows with its writes disabled.
  */
 
 export interface TripPageModel extends TripModel {
   /** The owner's other trips with extras, for "Copy extras from". */
   copyFrom: { id: number; name: string; extras: number }[];
-  created: boolean;
+  /** Just created (`?created=`). */
+  created: CreatedFlag | undefined;
   /** An idea from the gallery was just added (`?picked=1`). */
   picked: boolean;
   /** Extras copied just now (`?copied=N`). */
   copied: number | undefined;
+}
+
+/**
+ * `?created=` after a create: `1`, or `later` when its picked place was
+ * dropped because the destination budget was spent (#863), so the toast
+ * says why the trip has no forecast yet. Anything else is none.
+ */
+export type CreatedFlag = '1' | 'later';
+
+export function createdNotice(
+  flag: string | undefined,
+): CreatedFlag | undefined {
+  return flag === '1' || flag === 'later' ? flag : undefined;
 }
 
 const PACKED_SUMMARY_ID = 'trip-packed-summary';
@@ -88,59 +107,94 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
   const { ctx, model } = props;
   const { trip } = model;
   return (
-    <Layout ctx={ctx} title={trip.name}>
-      <AppBar
-        ctx={ctx}
-        title={trip.name}
-        back={TRIPS_PATH}
-        actions={
+    <PageShell
+      ctx={ctx}
+      name="trip"
+      bar={{
+        title: trip.name,
+        back: TRIPS_PATH,
+        actions: (
           <a href={tripUrl(trip.id, '/edit')} class="btn btn-ghost btn-sm">
             {t('trips.EDIT_SHORT')}
           </a>
-        }
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-6">
-        <div>
-          <p class="text-sm text-base-content/70">
-            {tripDates(trip)} · {phaseLabel(model.phase)}
-          </p>
-          {trip.destination && (
-            <p class="text-sm text-muted">{trip.destination}</p>
+        ),
+      }}
+      layout="panel"
+      aside={<PackingAside model={model} />}
+      asideLabel={t('trips.PACKING_AND_NOTES')}
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {model.created && (
+            <SavedToast
+              id="trip-created"
+              text={t(
+                model.created === 'later'
+                  ? 'trips.CREATED_PLACE_LATER'
+                  : 'trips.CREATED',
+              )}
+            />
           )}
-        </div>
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t(NOTICE_TEXT[offlineNotice(queuedKinds(model))])}
+          {model.picked && (
+            <SavedToast id="trip-picked" text={t('trips.PICKED')} />
+          )}
+          {model.copied !== undefined && (
+            <SavedToast
+              id="trip-copied"
+              text={t('trips.COPIED', { count: model.copied })}
+            />
+          )}
+          <StripFlags names={FLAGS} />
+        </>
+      }
+    >
+      <div>
+        <p class="text-sm text-base-content/70">
+          {tripDates(trip)} · {phaseLabel(model.phase)}
         </p>
-        {ctx.weatherEnabled && <TripWeatherSection model={model} />}
-        <OutfitsSection model={model} />
-        <PackingSection model={model} />
-        <ExtrasSection model={model} />
-        {trip.notes && (
-          <section>
-            <h2 class="text-xs font-semibold uppercase tracking-wide text-muted mb-1">
-              {t('NOTES')}
-            </h2>
-            <p class="text-sm whitespace-pre-line">{trip.notes}</p>
-          </section>
+        {trip.destination && (
+          <p class="text-sm text-muted">{trip.destination}</p>
         )}
-      </main>
-      {model.created && (
-        <SavedToast id="trip-created" text={t('trips.CREATED')} />
+      </div>
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t(NOTICE_TEXT[offlineNotice(queuedKinds(model))])}
+      </p>
+      {ctx.weatherEnabled && <TripWeatherSection model={model} />}
+      <OutfitsSection model={model} />
+    </PageShell>
+  );
+}
+
+/**
+ * What to pack, beside the outfits that need it from lg (`panel`'s aside,
+ * sticky; docs/plans/2026-11-16-desktop-layout.md §4) and after them on a
+ * phone, in the body's flow. The notes come with it: the phone has always
+ * shown them last, and the aside follows the body, so they are the aside's.
+ * The landmark's name says both (`trips.PACKING_AND_NOTES`, #1147), and
+ * each section is labelled by its own heading.
+ */
+function PackingAside({ model }: { model: TripPageModel }) {
+  const { notes } = model.trip;
+  return (
+    <>
+      <PackingSection model={model} />
+      <ExtrasSection model={model} />
+      {notes && (
+        <section aria-labelledby="trip-notes-heading">
+          <h2
+            id="trip-notes-heading"
+            class="text-xs font-semibold uppercase tracking-wide text-muted mb-1"
+          >
+            {t('NOTES')}
+          </h2>
+          <p class="text-sm whitespace-pre-line">{notes}</p>
+        </section>
       )}
-      {model.picked && <SavedToast id="trip-picked" text={t('trips.PICKED')} />}
-      {model.copied !== undefined && (
-        <SavedToast
-          id="trip-copied"
-          text={t('trips.COPIED', { count: model.copied })}
-        />
-      )}
-      <StripFlags names={FLAGS} />
-      <Dock ctx={ctx} />
-    </Layout>
+    </>
   );
 }
 
@@ -176,7 +230,7 @@ function TripWeatherSection({ model }: { model: TripPageModel }) {
             hx-get={tripUrl(trip.id, '/places')}
             hx-target="#trip-places"
             hx-swap="innerHTML"
-            data-needs-network=""
+            {...needsNetwork()}
           >
             <input
               type="search"
@@ -243,10 +297,10 @@ function DayBlock(props: {
   return (
     <div
       id={dayAnchor(day)}
-      class="flex flex-col gap-2 scroll-mt-20"
+      class="flex flex-col gap-3 scroll-mt-under-bar"
       data-trip-day={day ?? 'any'}
     >
-      <div class="flex items-baseline justify-between gap-2">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
         {day ? (
           <DayHeading as="h3" date={day} isToday={day === model.today} />
         ) : (
@@ -268,9 +322,13 @@ function DayBlock(props: {
       {outfits.length === 0 && day !== null && (
         <p class="text-xs text-muted">{t('trips.DAY_EMPTY')}</p>
       )}
-      {outfits.map((outfit) => (
-        <TripOutfitRow model={model} outfit={outfit} />
-      ))}
+      {outfits.length > 0 && (
+        <div class={OUTFIT_ROW_GRID}>
+          {outfits.map((outfit) => (
+            <TripOutfitRow model={model} outfit={outfit} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -315,7 +373,12 @@ function TripOutfitRow(props: {
   const name = outfit.name || t('UNTITLED_OUTFIT');
   const worn = tripWornControl(model, outfit);
   return (
-    <article class="card bg-base-200 gap-2 p-2" data-trip-outfit={outfit.id}>
+    <Card
+      as="article"
+      variant="content"
+      class="gap-3 p-2"
+      data-trip-outfit={outfit.id}
+    >
       <div class="flex items-start gap-2">
         {/* The picture links too, but the name's link is the one assistive tech reads. */}
         <a
@@ -363,7 +426,7 @@ function TripOutfitRow(props: {
           </span>
         )}
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -424,7 +487,7 @@ function PackingSection({ model }: { model: TripPageModel }) {
           >
             <div class="flex flex-col gap-3">
               {packing.groups.map((group) => (
-                <fieldset data-role={group.role}>
+                <fieldset data-role={group.role} class="min-w-0">
                   <legend class="text-xs text-muted mb-1">
                     {roleGroupLabel(group.role)}
                   </legend>
@@ -453,11 +516,11 @@ function PackingRowView(props: {
   const name = garment.name ?? t('trips.UNNAMED_GARMENT');
   return (
     <li
-      class="py-1.5"
       data-packing-garment={garment.id}
       {...outboxRegion(queuedTarget('packed', props.tripId, garment.id), name)}
     >
-      <label class="flex items-center gap-3 cursor-pointer">
+      {/* The row's padding is the label's, so the whole row is the tap. */}
+      <label class="flex items-center gap-3 py-1.5 cursor-pointer">
         <input
           type="checkbox"
           name="packed"
@@ -565,7 +628,7 @@ function ExtrasSection({ model }: { model: TripPageModel }) {
   return (
     <section
       id="extras"
-      class="flex flex-col gap-2 scroll-mt-20"
+      class="flex flex-col gap-2 scroll-mt-under-bar"
       aria-labelledby="trip-extras-heading"
     >
       <SectionHeading id="trip-extras-heading">
@@ -582,14 +645,17 @@ function ExtrasSection({ model }: { model: TripPageModel }) {
             <ul class="flex flex-col">
               {items.map((item) => (
                 <li
-                  class="flex items-center gap-3 py-1"
+                  class="flex items-center gap-3"
                   data-trip-item={item.id}
                   {...outboxRegion(
                     queuedTarget('item', trip.id, item.id),
                     item.label,
                   )}
                 >
-                  <label class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                  {/* A row a finger runs down: the label's padding makes it
+                      44 px, the whole row its tap, and keeps the ×es' hit
+                      areas from meeting (#1210). */}
+                  <label class="flex items-center gap-3 py-3 flex-1 min-w-0 cursor-pointer">
                     <input
                       type="checkbox"
                       name="packed"

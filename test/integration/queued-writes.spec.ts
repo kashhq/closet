@@ -187,8 +187,16 @@ describe('queued writes', () => {
     expect(outcome(await replay(url, wear))).toEqual([204, 'changed']);
     expect(outcome(await replay(url, wear))).toEqual([204, 'unchanged']);
     expect(await wearDays(shirt)).toEqual([day]);
+    expect(t.logs.ops('garment.worn')).toContainEqual(
+      expect.objectContaining({
+        garmentId: shirt,
+        day,
+        userId: t.owner.id,
+        changed: true,
+      }),
+    );
     expect(t.logs.messages('info', 'Web')).toContain(
-      `Garment ${shirt} worn on ${day} by user ${t.owner.id} (replayed, key 1a2b3c4d)`,
+      `Queued wear replayed for user ${t.owner.id} (replayed, key 1a2b3c4d)`,
     );
     // Last write wins: the undo queued after it unwears that day.
     expect(outcome(await replay(url, { worn: '0', day }))).toEqual([
@@ -271,6 +279,7 @@ describe('queued writes', () => {
 
   it('refuses a day outside the window, 409 with its reason, nothing written', async () => {
     const url = `/wardrobe/${shirt}/wear`;
+    t.logs.clear();
     expect(outcome(await replay(url, { worn: '1', day: daysAgo(8) }))).toEqual([
       409,
       'too-old',
@@ -280,6 +289,10 @@ describe('queued writes', () => {
     ).toEqual([409, 'future']);
     expect(await wearDays(shirt)).toEqual([]);
     expect(await lastWashed(shirt)).toBeNull();
+    // Refused, so never logged as replayed.
+    expect(
+      t.logs.messages('info', 'Web').filter((m) => m.includes('replayed')),
+    ).toEqual([]);
   });
 
   it('never moves a wash back: a late replay of an older one is unchanged', async () => {
@@ -663,19 +676,21 @@ describe('queued writes', () => {
         (await post(`/wardrobe/${tee}/wear`, { worn: '1' })).statusCode,
       ).toBe(303);
 
-      // The garment page: worn today, so Undo shows and Wore today waits.
+      // The garment page names no day (#708): Wore today shows, its undo
+      // waits, and the last wear's day and kind tell the page's script
+      // (views/assets/outbox.ts, showPageDay) to show the undo on that day.
       const garmentPage = await page(`/wardrobe/${tee}`);
-      const wear = queuedTarget('wear', tee, today);
+      const wear = queuedTarget('wear', tee);
       expect(regionTag(garmentPage, wear.key)).toContain(
-        `data-outbox-path="${wear.path}" data-outbox-label="Marked tee" data-outbox-day="${today}"`,
+        `data-outbox-path="${wear.path}" data-outbox-label="Marked tee" data-worn-on="${today}" data-worn-by="single"`,
       );
       const wore = states(garmentPage, wear.key);
       expect(wore.shown).toMatch(
-        /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="0"\/>/,
-      );
-      expect(wore.shown).toContain('Undo');
-      expect(wore.alternate).toMatch(
         /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="1"\/>/,
+      );
+      expect(wore.alternate).toContain('Undo');
+      expect(wore.alternate).toMatch(
+        /data-offline-queue="wear"[^>]*><input type="hidden" name="worn" value="0"\/>/,
       );
       expect(wore.chip).toContain('Waiting to sync');
       const wash = states(garmentPage, queuedTarget('wash', tee).key);
@@ -770,7 +785,7 @@ describe('queued writes', () => {
         'data-text-outbox-not-saved="{label}, {action}: not saved, {reason}."',
       );
       expect(signedIn).toMatch(
-        /<script type="module" src="\/js\/outbox\.js\?v=[^"]+"><\/script>/,
+        /<script type="module" src="\/js\/gen\/outbox\.js\?v=[^"]+"><\/script>/,
       );
       expect(signedIn).toContain('id="outbox-notice"');
 
@@ -779,7 +794,7 @@ describe('queued writes', () => {
       for (const absent of [
         'data-account=',
         'data-text-outbox-',
-        '/js/outbox.js',
+        '/js/gen/outbox.js',
         'id="outbox-banner"',
       ]) {
         expect(signedOut).not.toContain(absent);

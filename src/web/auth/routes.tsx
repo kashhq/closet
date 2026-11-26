@@ -6,13 +6,9 @@ import { LOGIN_PATH } from './login-path';
 import { t } from '../i18n';
 import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
-import { requestOrigin } from '../security/origin';
 import { ACCOUNT_LIMIT, SIGN_IN_LIMIT } from '../security/rate-limit';
 import { viewContext } from '../view-context';
-import { parseRefusal } from '../sharing/pages';
 import { sharesOf } from '../sharing/queries';
-import { SHARE_ERROR_PARAM } from '../sharing/urls';
-import { brandSizesOf, findMeasurements } from '../sizes/queries';
 import { findWeatherSettings } from '../weather/queries';
 import { deleteAccount } from './account';
 import { InlineErrors } from './form';
@@ -20,10 +16,10 @@ import { LOGOUT_PATH } from './logout';
 import {
   checkSignIn,
   failedSignInFor,
-  type SignInLimit,
-  signInGate,
+  type SignInLimits,
+  signInGuards,
 } from './sign-in';
-import { PROFILE_PATH, revokeNotice } from './urls';
+import { PROFILE_PATH, SIGN_OUT_EVERYWHERE_PATH } from './urls';
 import { loginUrl, REGISTER_PATH, signInReturnTo } from './return-to';
 import {
   ChangePasswordPage,
@@ -33,12 +29,18 @@ import {
   ProfilePage,
   REGISTER_FIELDS,
   RegisterPage,
+  SignOutEverywherePage,
   UPDATE_EMAIL_FIELDS,
   UpdateEmailPage,
 } from './pages';
 import { hashPassword, setPassword, verifyPassword } from './passwords';
 import { listTokens } from './personal-tokens';
-import { insertUser, normalizeEmail, updateEmail } from './queries';
+import {
+  endOtherSessions,
+  insertUser,
+  normalizeEmail,
+  updateEmail,
+} from './queries';
 import { sessionUserId } from './require-session';
 import { findWeekTemplate } from '../week-plan/template';
 import {
@@ -49,6 +51,7 @@ import {
 } from './session';
 import {
   ChangePasswordBody,
+  SignOutEverywhereBody,
   DeleteAccountBody,
   type FieldErrors,
   hasErrors,
@@ -61,17 +64,12 @@ import {
   validateRegistration,
 } from './validation';
 
-// Navigation state: one-shot flags and a refusal code, each shown or not;
-// no value is a 400.
+// Navigation state: one-shot flags, each shown or not; no value is a 400.
+// The settings' own flags (a saved week, a refused invite, a revoked
+// device) are their pages' since #728.
 const ProfileQuery = Type.Object({
   passwordChanged: Type.Optional(Type.String()),
-  // Profile › Devices' revoke redirect (1: signed out, 0: nothing to sign
-  // out); anything else shows nothing.
-  deviceRevoked: Type.Optional(Type.String()),
-  // The week template's saved toast (#16, src/web/week-plan).
-  weekSaved: Type.Optional(Type.String()),
-  // Why an invite could not be accepted (Sharing, src/web/sharing).
-  [SHARE_ERROR_PARAM]: Type.Optional(Type.String()),
+  signedOutEverywhere: Type.Optional(Type.String()),
 });
 
 // The login and registration pages' URL state: the page to return to after
@@ -109,10 +107,10 @@ const replacedNote = (replaced: number | undefined) =>
  * POST (see form.tsx); a refusal re-renders its page with a 4xx.
  */
 export const authRoutes: FastifyPluginCallbackTypebox<
-  WebOptions & SignInLimit
+  WebOptions & SignInLimits
 > = (
   app,
-  { config, db, tokens, photos, logger, weather, signInLimit },
+  { config, db, tokens, photos, logger, weather, signInLimits },
   done,
 ) => {
   // DISABLE_REGISTRATION: every registration route sends the visitor to the
@@ -145,8 +143,9 @@ export const authRoutes: FastifyPluginCallbackTypebox<
     '/auth/login',
     {
       config: { public: true },
-      // SIGN_IN_LIMIT, shared with the API's device sign-in (sign-in.ts).
-      onRequest: signInGate(signInLimit, logger),
+      // SIGN_IN_LIMIT and SIGN_IN_ACCOUNT_LIMIT, each one budget with the
+      // API's device sign-in (sign-in.ts).
+      ...signInGuards(signInLimits, logger),
       schema: { body: LoginBody },
     },
     async (request, reply) => {
@@ -284,49 +283,34 @@ export const authRoutes: FastifyPluginCallbackTypebox<
       ),
   );
 
-  // Profile: the signed-in user's own settings, whoever asks; no route
-  // here reads another user's.
+  // Profile: the signed-in user's own settings index, whoever asks; no
+  // route here reads another user's. Each read is a row's summary (the
+  // shares also the new password's notice); the settings themselves are
+  // read by their own pages (#728).
   app.get(
     PROFILE_PATH,
     { schema: { querystring: ProfileQuery } },
     async (request, reply) => {
       const id = sessionUserId(request);
       const { query } = request;
-      const [slots, weatherSettings, shares, tokenList, measurements, brands] =
-        await Promise.all([
-          findWeekTemplate(db, id),
-          weather && findWeatherSettings(db, id),
-          sharesOf(db, id),
-          // Both kinds in one statement: Agent Access and Devices split it.
-          listTokens(db, id),
-          findMeasurements(db, id),
-          brandSizesOf(db, id),
-        ]);
+      const [slots, weatherSettings, shares, tokenList] = await Promise.all([
+        findWeekTemplate(db, id),
+        weather && findWeatherSettings(db, id),
+        sharesOf(db, id),
+        // Both kinds in one statement: Agent Access and Devices split it.
+        listTokens(db, id),
+      ]);
       return renderPage(
         reply,
         <ProfilePage
           ctx={viewContext(reply)}
           passwordChanged={query.passwordChanged === '1'}
-          week={{ slots, saved: query.weekSaved === '1' }}
-          weather={
-            weatherSettings && {
-              settings: weatherSettings,
-              timeZone: config.timeZone,
-              now: new Date(),
-            }
-          }
-          sharing={{
-            ...shares,
-            origin: requestOrigin(request),
-            refusal: parseRefusal(query[SHARE_ERROR_PARAM]),
-          }}
+          signedOutEverywhere={query.signedOutEverywhere === '1'}
+          week={slots}
+          weather={weatherSettings}
+          sharing={shares}
           tokens={tokenList.filter((token) => token.kind === 'mcp')}
-          devices={{
-            tokens: tokenList.filter((token) => token.kind === 'device'),
-            timeZone: config.timeZone,
-            notice: revokeNotice(query.deviceRevoked),
-          }}
-          sizes={{ measurements, brands }}
+          devices={tokenList.filter((token) => token.kind === 'device')}
         />,
       );
     },
@@ -440,6 +424,47 @@ export const authRoutes: FastifyPluginCallbackTypebox<
         `Password changed for user ${id}: other sessions, ${revokedTokens.mcp} MCP tokens, ${revokedTokens.device} device tokens, ${revokedDevices} other push devices and ${revokedInvites} unanswered invites revoked`,
       );
       return reply.redirect(`${PROFILE_PATH}?passwordChanged=1`, 302);
+    },
+  );
+
+  app.get(SIGN_OUT_EVERYWHERE_PATH, async (_request, reply) =>
+    renderPage(reply, <SignOutEverywherePage ctx={viewContext(reply)} />),
+  );
+
+  // Sign out everywhere (#700): every other session, device token and push
+  // subscription ends (endOtherSessions); this one continues on a cookie
+  // issued from the bump's own row. Behind the password (step-up rule).
+  app.post(
+    SIGN_OUT_EVERYWHERE_PATH,
+    {
+      config: { rateLimit: ACCOUNT_LIMIT, checksPassword: true },
+      schema: { body: SignOutEverywhereBody },
+    },
+    async (request, reply) => {
+      const id = sessionUserId(request);
+      const { password } = sessionAccount(request);
+      if (!(await verifyPassword(request.body.currentPassword, password))) {
+        logger.info(
+          `Sign out everywhere refused for user ${id}: wrong current password`,
+        );
+        return renderPage(
+          reply,
+          <SignOutEverywherePage ctx={viewContext(reply)} wrongPassword />,
+          { status: 400 },
+        );
+      }
+      const {
+        account: bumped,
+        revokedTokens,
+        revokedDevices,
+      } = await endOtherSessions(db, id, {
+        endpoint: request.body.pushEndpoint || undefined,
+      });
+      setSessionCookie(reply, tokens.issue(bumped));
+      logger.info(
+        `User ${id} signed out everywhere: sessions before version ${bumped.sessionVersion}, ${revokedTokens.device} device tokens and ${revokedDevices} other push devices revoked`,
+      );
+      return reply.redirect(`${PROFILE_PATH}?signedOutEverywhere=1`, 302);
     },
   );
 

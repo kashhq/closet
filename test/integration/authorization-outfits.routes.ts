@@ -36,6 +36,27 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    // The Saved grid's next page (#660): the requester's own outfits below
+    // the cursor, whatever ownerId says; below the shared outfit's id + 1,
+    // it starts with it.
+    name: 'GET /outfits/tiles',
+    kind: 'read',
+    ok: 200,
+    secret: outfitName,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/outfits/tiles${q ? `${q}&` : '?'}before=${f.outfitId + 1}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
     // Styling (#42) from a capsule: the addressed wardrobe's capsule. A
     // grantee styles the owner's through `?ownerId=` (browsing only); by
     // itself the capsule is not in their wardrobe.
@@ -223,6 +244,99 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    // A new outfit's body names its garments (#704): the owner's alone. A
+    // set the fixture's outfit is not, which would answer the saved one.
+    name: 'POST /outfits',
+    kind: 'write',
+    ok: 302,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'POST',
+      url: `/outfits${q}`,
+      payload: {
+        name: 'Made from ids',
+        category: ['shirt'],
+        garmentId: [String(f.inspirationTeeId)],
+      },
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 201,
+      request: (f, q) => ({
+        method: 'POST',
+        url: `/api/v1/outfits${q}`,
+        payload: {
+          name: 'Made from ids',
+          slots: [{ category: 'shirt', garmentId: f.inspirationTeeId }],
+        },
+      }),
+    },
+  },
+  {
+    // The Ideas strip's next page for a capsule (#704): the requester's own
+    // capsule; a grantee's `?ownerId=` is not an address here.
+    name: 'GET /outfits/ideas/more?capsule=',
+    kind: 'read',
+    ok: 200,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/outfits/ideas/more${q ? `${q}&` : '?'}capsule=${f.capsuleId}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f, q) => ({
+        method: 'GET',
+        url: `/api/v1/ideas${q ? `${q}&` : '?'}capsuleId=${f.capsuleId}`,
+      }),
+    },
+  },
+  {
+    // "Wear this" (#704): saves, plans and wears an outfit of the garments
+    // named in the body.
+    name: 'POST /today/wear',
+    kind: 'write',
+    ok: 303,
+    secret: garmentName,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'POST',
+      url: `/today/wear${q}`,
+      payload: { garmentId: [String(f.garmentId)], occasion: 'evening' },
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f, q) => ({
+        method: 'POST',
+        url: `/api/v1/outfit-wears${q}`,
+        payload: {
+          garmentIds: [f.garmentId],
+          day: f.today,
+          occasion: 'evening',
+        },
+      }),
+    },
+  },
+  {
     name: 'GET /outfits/:id',
     kind: 'read',
     ok: 200,
@@ -380,7 +494,8 @@ export const ROUTES: Route[] = [
       },
     }),
   ),
-  // The public link (#669): outfits are the owner's alone. No API twin yet (#959).
+  // The public link (#669): outfits are the owner's alone; its API twin PUT
+  // or DELETE .../share (#959).
   ...(['share', 'share/stop'] as const).map(
     (verb): Route => ({
       name: `POST /outfits/:id/${verb}`,
@@ -397,6 +512,13 @@ export const ROUTES: Route[] = [
         manager: 'notFound',
         viewer: 'notFound',
         stranger: 'notFound',
+      },
+      api: {
+        ok: verb === 'share' ? 200 : 204,
+        request: (f, q) => ({
+          method: verb === 'share' ? 'PUT' : 'DELETE',
+          url: `/api/v1/outfits/${f.outfitId}/share${q}`,
+        }),
       },
     }),
   ),
@@ -464,16 +586,38 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    // The plan page lists the requester's own outfits to plan (#13).
+    // The plan page lists the requester's own outfits to plan (#13), a
+    // page at a time (#660): the writes' fixtures push the shared outfit
+    // past the first, so the page shows it as the entry being changed.
     name: 'GET /calendar/plan',
     kind: 'read',
     ok: 200,
     secret: outfitName,
     shows: true,
     vias: BOTH,
-    request: (_, q) => ({
+    request: (f, q) => ({
       method: 'GET',
-      url: `/calendar/plan${q ? `${q}&` : '?'}for=day:2030-10-09&occasion=evening`,
+      url: `/calendar/plan${q ? `${q}&` : '?'}for=day:${f.today}&occasion=all-day&replace=${f.entryId}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
+    },
+  },
+  {
+    // The plan page's next page of outfits (#660), the requester's own:
+    // the page below the shared outfit's id + 1 starts with it.
+    name: 'GET /calendar/plan/more',
+    kind: 'read',
+    ok: 200,
+    secret: outfitName,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/calendar/plan/more${q ? `${q}&` : '?'}for=day:2030-10-09&occasion=evening&before=${f.outfitId + 1}`,
     }),
     expect: {
       owner: 'ok',
@@ -792,12 +936,14 @@ export const ROUTES: Route[] = [
   // Saved looks (#22) are the owner's like the style profile: the list is
   // anyone's own, every refusal of a look a 404 that stores nothing (an
   // upload is refused before its body is read), and `?ownerId=` is ignored.
+  // The tab is paged (#528) and the matrix's own writes add looks beside the
+  // fixture's, which can fall past the first page: only /tiles, below the
+  // fixture look's id + 1, is asked to show it.
   {
     name: 'GET /inspiration',
     kind: 'read',
     ok: 200,
     secret: inspirationTitle,
-    shows: true,
     vias: BOTH,
     request: (_, q) => ({ method: 'GET', url: `/inspiration${q}` }),
     expect: {
@@ -809,6 +955,24 @@ export const ROUTES: Route[] = [
     api: {
       ok: 200,
       request: (_, q) => ({ method: 'GET', url: `/api/v1/looks${q}` }),
+    },
+  },
+  {
+    name: 'GET /inspiration/tiles',
+    kind: 'read',
+    ok: 200,
+    secret: inspirationTitle,
+    shows: true,
+    vias: BOTH,
+    request: (f, q) => ({
+      method: 'GET',
+      url: `/inspiration/tiles${q ? `${q}&` : '?'}before=${f.inspirationId + 1}`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'hidden',
+      viewer: 'hidden',
+      stranger: 'hidden',
     },
   },
   {
@@ -1135,8 +1299,30 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
+  // The share preview is a capability URL: a shared garment's or outfit's
+  // own id opens it for everyone, whoever they are (#669).
+  ...(['garment', 'outfit'] as const).map(
+    (kind): Route => ({
+      name: `GET /file/watermark/:shareableId of a shared ${kind}`,
+      kind: 'read',
+      ok: 200,
+      secret: kind === 'garment' ? garmentName : outfitName,
+      vias: ['own'],
+      request: (f) => ({
+        method: 'GET',
+        url: `/file/watermark/${kind === 'garment' ? f.garmentShareId : f.outfitShareId}`,
+      }),
+      expect: {
+        owner: 'ok',
+        manager: 'ok',
+        viewer: 'ok',
+        stranger: 'ok',
+      },
+      anonymous: 'ok',
+    }),
+  ),
   // The public image routes serve garment photos by unguessable name to
-  // anyone; a selfie's name or share id is a 404 to everyone, its owner
+  // anyone; a selfie's name is a 404 to everyone, its owner
   // included (their pages use /selfies/).
   ...(['', 'thumb/', 'nobg/'] as const).map(
     (variant): Route => ({
@@ -1158,22 +1344,4 @@ export const ROUTES: Route[] = [
       anonymous: 'notFound',
     }),
   ),
-  {
-    name: 'GET /file/watermark/:shareableId of a selfie',
-    kind: 'read',
-    ok: 200,
-    secret: selfieName,
-    vias: ['own'],
-    request: (f) => ({
-      method: 'GET',
-      url: `/file/watermark/${f.selfieShareableId}`,
-    }),
-    expect: {
-      owner: 'notFound',
-      manager: 'notFound',
-      viewer: 'notFound',
-      stranger: 'notFound',
-    },
-    anonymous: 'notFound',
-  },
 ];

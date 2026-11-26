@@ -1,12 +1,13 @@
+import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import { type Static, Type } from '@sinclair/typebox';
 import { sessionUserId } from '../auth/require-session';
 import { parseIsoDate, todayIn } from '../../calendar-date';
 import { pickDestination } from '../calendar/day-choice';
 import { HttpError } from '../errors';
 import type { WebOptions } from '../plugin';
-import { navigateTo, renderPage } from '../render';
+import { navigateTo, renderFragment, renderPage } from '../render';
 import { DEFAULT_OCCASION } from '../../wardrobe/occasions';
 import { IsoDateSchema, OccasionSchema, RowId } from '../schemas';
 import { alreadySavedOf, alreadySavedParam } from '../gallery/urls';
@@ -17,29 +18,34 @@ import {
   type OutfitDestination,
   parseDestination,
 } from './destination';
-import { OutfitsPage } from './list-page';
+import { OutfitsPage, SavedTiles } from './list-page';
+import { OUTFIT_PAGE_SIZE } from './page-size';
 import { OutfitListQuery, parseOutfitList } from './outfit-list';
 import {
   editOutfit,
   reactToProposal,
   removeOutfit,
   requireOutfitPage,
+  saveOutfit,
   setOutfitPublicShare,
 } from './outfit-actions';
 import { savedContext } from './page-context';
 import {
-  createOutfit,
-  type CreateResult,
+  FIRST_OUTFIT_PAGE,
   OUTFIT_NAME_MAX,
   OUTFIT_NOTES_MAX,
   OUTFIT_SLOTS_MAX,
   type OutfitInput,
   outfitText,
-  type SaveResult,
 } from './queries';
-import { DECLINE_NOTE_MAX, OutfitParams, SlotCategory } from './schemas';
+import {
+  DECLINE_NOTE_MAX,
+  OutfitCursor,
+  OutfitParams,
+  SlotCategory,
+} from './schemas';
 import { OutfitPage } from './show-page';
-import { outfitUrl } from './urls';
+import { outfitUrl, SAVED_TILES_PATH } from './urls';
 import type { OutfitReaction } from './reactions';
 import { OUTFIT_DISMISS_REASONS } from '../../wardrobe/suggestions';
 import { actorOf } from '../sharing/access';
@@ -98,6 +104,15 @@ const SavedQuery = Type.Object({
   [DECISION_FLAG]: Type.Optional(Type.String({ maxLength: 16 })),
 });
 
+// The Saved grid's next page (#660): the page's own navigation state, and
+// the keyset cursor its sentinel names (a malformed one is a 400: only our
+// sentinel builds it).
+const SavedTilesQuery = Type.Object({
+  ...DestinationQuery,
+  ...OutfitListQuery,
+  before: OutfitCursor,
+});
+
 // The gallery's pick lands here with `alreadySaved=1` when the outfit
 // existed (a one-shot flag: anything else is no toast); a reaction with
 // its toast (`decided=`).
@@ -150,10 +165,7 @@ function outfitInput(body: OutfitForm): Omit<OutfitInput, 'origin' | 'madeBy'> {
   const categories = body.category ?? [];
   const garmentIds = body.garmentId ?? [];
   if (categories.length !== garmentIds.length) {
-    throw new HttpError(
-      400,
-      'Each outfit row needs a category and a garment id (empty for none)',
-    );
+    throw new HttpError(400, t('refusal.form.outfitRows'));
   }
   return {
     name: outfitText(body.name),
@@ -222,34 +234,6 @@ function afterSave(
   return `/outfits/${id}${flag && `?${flag}`}`;
 }
 
-function describeSave(result: SaveResult, plan: OutfitInput['plan']): string {
-  const parts = [`${result.slots} row(s)`];
-  if (plan && result.schedule === 'scheduled') {
-    parts.push(`scheduled on ${plan.day} (${plan.occasion})`);
-  }
-  if (plan && result.schedule === 'already-scheduled') {
-    parts.push(`already scheduled on ${plan.day}`);
-  }
-  if (result.entriesClaimed) {
-    parts.push(`${result.entriesClaimed} planned entry(ies) now the user's`);
-  }
-  return parts.join(', ');
-}
-
-/** The outfit form's create log line: a new outfit, or the one its garments already were. */
-function createMessage(
-  ownerId: number,
-  result: CreateResult,
-  plan: OutfitInput['plan'],
-): string {
-  const saved = describeSave(result, plan);
-  if (!result.alreadySaved) {
-    return `Outfit ${result.id} created by user ${ownerId}: ${saved}`;
-  }
-  const takenOver = result.adopted ? '; taken over from the week planner' : '';
-  return `Outfit form by user ${ownerId}: its garments are already outfit ${result.id}, nothing created (${saved})${takenOver}`;
-}
-
 /**
  * /outfits: the list, the detail page, the writes, and the builder's old
  * addresses, now redirects into Styling (src/web/styling). Outfits are the signed-in user's own:
@@ -275,12 +259,13 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       }
       const day = destination.kind === 'day' ? destination : undefined;
       const list = parseOutfitList(request.query.show);
-      const { outfits, activity, choice, muse } = await savedContext(
+      const { page, activity, choice, muse } = await savedContext(
         db,
         ownerId,
         today,
         day,
         list,
+        FIRST_OUTFIT_PAGE,
       );
       if (day?.replace !== undefined && !choice?.replacing) {
         logger.debug(
@@ -292,7 +277,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         <OutfitsPage
           ctx={viewContext(reply)}
           model={{
-            outfits,
+            ...page,
             list,
             activity,
             muse,
@@ -302,6 +287,48 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
                 ? { destination: pickDestination(day, choice), choice }
                 : undefined,
           }}
+        />,
+      );
+    },
+  );
+
+  // The Saved grid's sentinel (hx-trigger="revealed", #660): the page below
+  // `before` of the same list, picking for the same day, and the next
+  // sentinel. Always a fragment; one statement after the session, as the tab.
+  app.get(
+    SAVED_TILES_PATH,
+    { schema: { querystring: SavedTilesQuery } },
+    async (request, reply) => {
+      const ownerId = sessionUserId(request);
+      const today = todayIn(config.timeZone, new Date());
+      const destination = parseDestination(request.query);
+      const day = destination.kind === 'day' ? destination : undefined;
+      const list = parseOutfitList(request.query.show);
+      const { before } = request.query;
+      const { page, activity, choice } = await savedContext(
+        db,
+        ownerId,
+        today,
+        day,
+        list,
+        { before, limit: OUTFIT_PAGE_SIZE },
+      );
+      logger.debug(
+        `GET ${SAVED_TILES_PATH}: ${page.outfits.length} ${list} outfits of user ${ownerId} below ${before}${page.next === null ? ', the last page' : ''}`,
+      );
+      return renderFragment(
+        reply,
+        <SavedTiles
+          model={{
+            ...page,
+            list,
+            activity,
+            picking:
+              day && choice
+                ? { destination: pickDestination(day, choice), choice }
+                : undefined,
+          }}
+          firstPage={false}
         />,
       );
     },
@@ -347,7 +374,6 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ctx={viewContext(reply)}
           outfit={found.outfit}
           entries={found.entries}
-          today={today}
           alreadySaved={alreadySavedOf(request.query.alreadySaved)}
           toast={decisionToastOf(request.query[DECISION_FLAG])}
         />,
@@ -374,14 +400,12 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     '/outfits',
     { schema: { body: OutfitBody } },
     async (request, reply) => {
-      const ownerId = sessionUserId(request);
       const input = outfitInput(request.body);
-      const result = await createOutfit(db, ownerId, {
+      const result = await saveOutfit({ db, logger }, actorOf(request), {
         ...input,
         origin: 'person',
         madeBy: BY_PERSON,
       });
-      logger.info(createMessage(ownerId, result, input.plan));
       return reply.redirect(afterSave(request.body, result.id, result), 302);
     },
   );
@@ -393,10 +417,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const actor = actorOf(request);
       const { id } = request.params;
       const input = outfitInput(request.body);
-      const result = await editOutfit(db, actor, id, input);
-      logger.info(
-        `Outfit ${id} updated by user ${actor.userId}: ${describeSave(result, input.plan)}`,
-      );
+      await editOutfit({ db, logger }, actor, id, input);
       return reply.redirect(afterSave(request.body, id), 302);
     },
   );
@@ -413,10 +434,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ): Promise<FastifyReply> {
     const actor = actorOf(request);
     const { id } = request.params;
-    await setOutfitPublicShare(db, actor, id, shared);
-    logger.info(
-      `Outfit ${id} ${shared ? 'shared publicly' : 'no longer shared publicly'} by user ${actor.userId}`,
-    );
+    await setOutfitPublicShare({ db, logger }, actor, id, shared);
     return navigateTo(reply, outfitUrl(id));
   }
 
@@ -439,10 +457,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      const deleted = await removeOutfit(db, actor, id);
-      logger.info(
-        `Outfit ${id} deleted by user ${actor.userId} (${deleted.wearsKept} wears kept as day-level wears)`,
-      );
+      await removeOutfit({ db, logger }, actor, id);
       return navigateTo(reply, '/outfits');
     },
   );
@@ -461,10 +476,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   ) {
     const { id } = request.params;
     const actor = actorOf(request);
-    const outcome = await reactToProposal(db, actor, id, change);
-    logger.info(
-      `Outfit ${id} ${outcome.from} -> ${outcome.to} by user ${actor.userId}${change.event === 'decline' ? ` (${change.reason})` : ''}`,
-    );
+    const outcome = await reactToProposal({ db, logger }, actor, id, change);
     // Save once complete: the same move, said as what it did.
     const said = toast === 'love' && outcome.complete ? 'save' : toast;
     return reply.redirect(

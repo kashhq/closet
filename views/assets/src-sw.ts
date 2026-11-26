@@ -1,11 +1,10 @@
 import { cacheNames, clientsClaim, copyResponse } from 'workbox-core';
-import type { WorkboxPlugin } from 'workbox-core/types';
+import type { RouteMatchCallback, WorkboxPlugin } from 'workbox-core/types';
 import * as navigationPreload from 'workbox-navigation-preload';
 import { PrecacheController, PrecacheRoute } from 'workbox-precaching';
-import { warmStrategyCache } from 'workbox-recipes';
-import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
-import { ExpirationPlugin } from 'workbox-expiration';
+import { registerRoute, setCatchHandler } from 'workbox-routing';
+import { CacheExpiration, ExpirationPlugin } from 'workbox-expiration';
 import {
   CacheFirst,
   NetworkFirst,
@@ -17,23 +16,23 @@ import {
   pageUrlOfCacheKey,
 } from '../../src/htmx/fragment-request';
 import {
+  backoffAfter,
   bypassesWorker,
   CACHED_AT_HEADER,
-  CACHED_AT_TIMING_NAME,
   cachedAt,
+  conditionalVerdict,
+  confirmedHeaders,
   endedSession,
   forbidsStorage,
   type FreshPage,
-  isBackingOff,
   navigationPostAnswer,
-  nextRefreshBackoff,
   pageAccount,
   parseRefreshBackoff,
+  planRefresh,
   parseRefreshedRecord,
   type RefreshBackoff,
   refreshDue,
   type RefreshedRecord,
-  refreshedRecord,
   refetchInTurn,
   type RefetchStep,
   type RefetchVerdict,
@@ -41,9 +40,12 @@ import {
   renderedAccount,
   type Revalidation,
   revalidationOutcome,
+  revalidationTag,
   sentToLogin,
   serverUnavailable,
   servesStaleWhileRevalidate,
+  stampedServerTiming,
+  walkRecord,
   PAGES_CACHE,
 } from '../../src/web/page-cache';
 import {
@@ -57,6 +59,10 @@ import {
   type WarmList,
 } from '../../src/web/shell/offline-warm';
 import { WARM_REQUEST_HEADER } from '../../src/warm-request';
+import {
+  createStoreFlights,
+  dropCacheAndRows,
+} from '../../src/web/shell/cache-drop';
 import {
   ACTIVATED_KEY,
   answerContentHashed,
@@ -76,22 +82,27 @@ import {
   SHARE_STASH_CACHE,
 } from '../../src/web/inspiration/share-target';
 import {
-  OUTBOX_SYNCED,
-  PAGES_RENEWED,
   queuedWritesGoneAtClaim,
   showsQueuedWrite,
   syncedWritePaths,
 } from '../../src/offline-writes';
+import { PAGE_MESSAGES, WORKER_MESSAGES } from '../../src/worker-messages';
 import {
+  dropQueuedWrites,
   openOutboxChannel,
   outbox,
   type OutboxChange,
 } from './outbox-store';
+import {
+  activateThenSweep,
+  pruneOrphanRows,
+  SWEEP_DEADLINE_MS,
+} from './expiration-rows';
 import { openNotification } from '../../src/web/push/notification-click';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 
 /**
- * Caching model (public/js/pwa.js and public/js/freshness.js are the page
+ * Caching model (views/assets/page/pwa.ts and views/assets/page/freshness.ts are the page
  * side):
  *  - App shell files under public/ are precached by content hash
  *    (scripts/generate-sw.ts), one precache per static build, so a repeat
@@ -138,12 +149,17 @@ import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
  * the worker's only logs.
  */
 
-declare const self: ServiceWorkerGlobalScope;
+// The worker global, typed as the service worker it is (the WebWorker lib
+// types `self` as a plain worker).
+declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
-// https://developer.chrome.com/docs/workbox/modules/workbox-core#clients_claim
-// Top level on purpose: once the user accepts an update (SKIP_WAITING below)
+// clientsClaim (workbox-core) at the top level, on purpose.
+// Once the user accepts an update (SKIP_WAITING below)
 // the new worker must take the open pages so `controlling` fires and
-// pwa.js can reload.
+// pwa.js can reload. It claims only pages already running: one whose
+// navigation started while the first worker installed commits after this
+// claim and is skipped (still a reserved client), so pwa.js asks for its
+// own (CLAIM_CLIENTS below, #1140).
 clientsClaim();
 
 // https://developer.chrome.com/docs/workbox/modules/workbox-navigation-preload
@@ -190,7 +206,7 @@ async function answerShare(request: Request): Promise<Response> {
   return response;
 }
 
-const FALLBACK_HTML_URL = '/offline.html';
+const OFFLINE_PAGE_URL = '/offline.html';
 // v2 since 2026-09-28 (#226): dropped with the session. images-v1 outlived
 // every sign-out, so it may hold a previous account's photos; it is retired
 // on activate.
@@ -206,6 +222,75 @@ const IMAGES_CACHE = 'images-v2';
  * is no strategy's, but is the signed-in person's: it goes too.
  */
 const SESSION_CACHES = [PAGES_CACHE, IMAGES_CACHE, SHARE_STASH_CACHE];
+
+// Pages a user visits beyond a warmed wardrobe: shared wardrobes, filtered
+// grids, other weeks, wishlist items, the other tabs' pages.
+const VISITED_PAGES = 100;
+// Cutouts and photos a user opens beyond a warm's thumbs.
+const VISITED_IMAGES = 200;
+
+/**
+ * The caps of the two caches an ExpirationPlugin fills: sized for a warm at
+ * its caps (WARM_PAGE_CAP, WARM_IMAGE_CAP, #286) and what is visited
+ * besides, so a warm never evicts what the user opened.
+ */
+const PAGE_ENTRIES = WARM_PAGE_CAP + VISITED_PAGES;
+const IMAGE_ENTRIES = WARM_IMAGE_CAP + VISITED_IMAGES;
+const MAX_ENTRIES: Readonly<Record<string, number>> = {
+  [PAGES_CACHE]: PAGE_ENTRIES,
+  [IMAGES_CACHE]: IMAGE_ENTRIES,
+};
+
+/**
+ * Deletes a cache and Workbox's expiration rows for it (`cache-drop.ts`:
+ * rows, cache, rows, then a row for every entry stored meanwhile). Every
+ * whole-cache delete in this worker goes through here.
+ * Not ExpirationPlugin.deleteCacheAndMetadata: it forgets only the caches
+ * its plugin touched since this worker started, so a cold worker's drop
+ * would forget nothing. CacheExpiration asks for a limit (asserted in
+ * development builds); delete() reads none, so a retired cache's is nominal.
+ */
+async function deleteCacheAndMetadata(name: string): Promise<boolean> {
+  const { deleted, adopted } = await dropCacheAndRows(
+    self.caches,
+    name,
+    new CacheExpiration(name, { maxEntries: MAX_ENTRIES[name] ?? 1 }),
+    // A stale image store's cacheDidUpdate deletes its entry: no row for it.
+    (url) => outsideExpiration(url) || imageFlights.endedStore(url, generation),
+  );
+  if (adopted > 0) {
+    console.info(
+      `[sw] ${name}: ${adopted} entr(ies) stored during the drop given their expiration row`,
+    );
+  }
+  return deleted;
+}
+
+/**
+ * Once per activate, after it (activateThenSweep): the expiration rows
+ * whose entry is gone (#1155, expiration-rows.ts), above all a stale image
+ * imageStore deleted after its row was written. A failure only logs; the
+ * next activate sweeps again.
+ */
+async function pruneExpirationRows(): Promise<void> {
+  for (const name of Object.keys(MAX_ENTRIES)) {
+    try {
+      const pruned = await pruneOrphanRows(
+        self.indexedDB,
+        self.caches,
+        name,
+        Date.now,
+      );
+      if (pruned > 0) {
+        console.info(
+          `[sw] ${name}: ${pruned} expiration row(s) without an entry deleted`,
+        );
+      }
+    } catch (error) {
+      console.warn(`[sw] ${name}: could not sweep its expiration rows`, error);
+    }
+  }
+}
 
 // One precache per static build (#656, src/static-build.ts, src/web/shell/updates.md), named
 // by the content id of its manifest: the id src/build-info.ts makes every page's `?v=`, so a page
@@ -257,24 +342,22 @@ self.addEventListener('install', (event) => {
 // only that one (answerVersionedAsset); without it, the network, stored
 // nowhere. Above the precache's route, which would answer with this build's
 // bytes whatever `v` named.
-registerRoute(
-  ({ url, request }) =>
-    request.method === 'GET' &&
-    assetBuildOf(url, self.location.origin) !== undefined,
-  ({ url, request }) =>
-    answerVersionedAsset(url, self.location.origin, self.caches, () =>
-      fetch(request),
-    ),
+const isVersionedAsset: RouteMatchCallback = ({ url, request }) =>
+  request.method === 'GET' &&
+  assetBuildOf(url, self.location.origin) !== undefined;
+registerRoute(isVersionedAsset, ({ url, request }) =>
+  answerVersionedAsset(url, self.location.origin, self.caches, () =>
+    fetch(request),
+  ),
 );
 
 // The fonts bundle.css names by content hash, no `?v=`: this build's copy,
 // else a kept older build's (answerContentHashed, #780), whose page offline
 // names fonts this build may have dropped.
-registerRoute(
-  ({ url, request }) =>
-    request.method === 'GET' && isContentHashed(url, self.location.origin),
-  ({ url, request }) =>
-    answerContentHashed(url, self.caches, PRECACHE, () => fetch(request)),
+const isHashedFont: RouteMatchCallback = ({ url, request }) =>
+  request.method === 'GET' && isContentHashed(url, self.location.origin);
+registerRoute(isHashedFont, ({ url, request }) =>
+  answerContentHashed(url, self.caches, PRECACHE, () => fetch(request)),
 );
 
 // Every other precached public/ file is this build's. One a page names with
@@ -306,6 +389,16 @@ const REFRESHED_AT_KEY = 'https://page-cache.invalid/refreshed-at';
 const REFRESH_BACKOFF_PREFIX =
   'https://page-cache.invalid/refresh-backoff?key=';
 
+/**
+ * The pages cache's entries no ExpirationPlugin stores: the records above
+ * (off-origin keys) and the offline page (offlinePage, kept out of the
+ * expiration so no warm evicts it). A drop never gives one a row.
+ */
+function outsideExpiration(url: string): boolean {
+  const { origin, pathname } = new URL(url);
+  return origin !== self.location.origin || pathname === OFFLINE_PAGE_URL;
+}
+
 async function readRecord(key: string): Promise<string | undefined> {
   const cache = await self.caches.open(PAGES_CACHE);
   return (await cache.match(key))?.text();
@@ -322,6 +415,8 @@ interface RevalidationResult {
   fetchedAt: number;
   /** The server's page, when it differs from the cached copy. */
   html?: string;
+  /** Its ETag: freshness.js sends it back after a sync, so an unchanged page answers 304 (#900). */
+  etag?: string;
 }
 
 /**
@@ -351,6 +446,13 @@ const runOf = new WeakMap<Request, number>();
 function generationFor(request: Request): number {
   return runOf.get(request) ?? generation;
 }
+
+/**
+ * The image stores in flight (imageStore), so a drop's restamp gives no
+ * expiration row to an entry an ended generation's store is about to
+ * delete (cache-drop.ts, createStoreFlights).
+ */
+const imageFlights = createStoreFlights();
 
 /** The generation a request recorded in its handlerWillStart. */
 function startedIn(state: { generation?: unknown } | undefined): number {
@@ -403,24 +505,55 @@ async function emptySessionCaches(
   event: ExtendableEvent,
   reason: string,
 ): Promise<void> {
-  await Promise.all(SESSION_CACHES.map((name) => self.caches.delete(name)));
+  await Promise.all(SESSION_CACHES.map(deleteCacheAndMetadata));
   console.info(
     `[sw] ${reason}: ${SESSION_CACHES.join(', ')} dropped (generation ${generation})`,
   );
   event.waitUntil(rewarmOfflinePage(event));
 }
 
-async function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
-  try {
-    await Promise.all(
-      offlinePage.handleAll({
-        event,
-        request: new Request(FALLBACK_HTML_URL),
-      }),
-    );
-  } catch (error) {
-    console.warn('[sw] could not re-warm the offline page', error);
-  }
+// The offline page's warm in flight, and the generation it is for: a drop
+// starts its own (its account's chrome), and a claim finding the page
+// missing meanwhile joins it rather than fetching it twice.
+let offlineWarm: { generation: number; done: Promise<void> } | undefined;
+
+function rewarmOfflinePage(event: ExtendableEvent): Promise<void> {
+  if (offlineWarm?.generation === generation) return offlineWarm.done;
+  const done = (async () => {
+    try {
+      await Promise.all(
+        offlinePage.handleAll({
+          event,
+          request: new Request(OFFLINE_PAGE_URL),
+        }),
+      );
+    } catch (error) {
+      console.warn('[sw] could not re-warm the offline page', error);
+    }
+  })();
+  const warm = { generation, done };
+  offlineWarm = warm;
+  void done.finally(() => {
+    if (offlineWarm === warm) offlineWarm = undefined;
+  });
+  return done;
+}
+
+/**
+ * Warms the offline page again when the pages cache lacks it. A quota error
+ * makes the ExpirationPlugins purge their caches whole (purgeOnQuotaError),
+ * the offline page, the owner and the other records of pages-v2 with them,
+ * and only the install and a drop warmed it: until the next sign-in or
+ * update an uncached navigation offline was the browser's error page
+ * (#731). The next page stored online claims the cache with no owner on
+ * record, which calls this.
+ */
+async function ensureOfflinePage(event: ExtendableEvent): Promise<void> {
+  if (offlineWarm?.generation === generation) return offlineWarm.done;
+  const cache = await self.caches.open(PAGES_CACHE);
+  if (await cache.match(OFFLINE_PAGE_URL)) return;
+  console.info('[sw] the offline page is missing: warming it again');
+  await rewarmOfflinePage(event);
 }
 
 /**
@@ -447,6 +580,12 @@ function claimPageCache(
     if (isStale(since, path)) return false;
     const owner = await readRecord(OWNER_KEY);
     if (owner === account) return true;
+    // No owner on record: a fresh install, a drop, or a quota purge, which
+    // took the offline page too. Not awaited under the lock: its own store
+    // claims the cache through here.
+    if (owner === undefined && path !== OFFLINE_PAGE_URL) {
+      event.waitUntil(ensureOfflinePage(event));
+    }
     // A new owner, whether the cache held another account's pages or none
     // (a sign-in drops it first): every other account's queued writes go
     // unsent (queuedWritesGoneAtClaim). Not awaited under the lock: the
@@ -454,7 +593,7 @@ function claimPageCache(
     const gone = queuedWritesGoneAtClaim(owner, account);
     if (gone) {
       event.waitUntil(
-        deleteQueuedWrites('a page for another account arrived', gone),
+        dropQueuedWritesOf('a page for another account arrived', gone),
       );
     }
     if (owner !== undefined) {
@@ -508,7 +647,7 @@ const pageStore: WorkboxPlugin = {
     if (account === undefined) return null;
     const claimed = await claimPageCache(account, since, path, event);
     if (!claimed || forbidsStorage(response.headers)) return null;
-    return copyResponse(response, (init) => {
+    return stampedCopy(response, (init) => {
       const headers = new Headers(init.headers);
       // A landing page's Clear-Site-Data (#244, createCacheClearRelay) was a
       // one-time instruction to the browser, not part of the page: a copy
@@ -520,17 +659,39 @@ const pageStore: WorkboxPlugin = {
       // A document's own script cannot read this header directly, only
       // Server-Timing (page-cache.ts's CACHED_AT_TIMING_NAME): freshness.js
       // reads it back through Navigation Timing and asks for
-      // REVALIDATE_PAGE itself once it does.
-      const timing = headers.get('Server-Timing');
-      const cacheEntry = `${CACHED_AT_TIMING_NAME};desc="${cachedAtMs}"`;
+      // REVALIDATE_PAGE itself once it does. A copy stored again on a 304
+      // (PageRefresh) has its earlier stamp replaced, never a second one.
       headers.set(
         'Server-Timing',
-        timing ? `${timing}, ${cacheEntry}` : cacheEntry,
+        stampedServerTiming(headers.get('Server-Timing'), cachedAtMs),
       );
       return { ...init, headers };
     });
   },
 };
+
+/**
+ * The response to store, through `modifier`. A network answer goes through
+ * Workbox's copyResponse, which refuses one of another origin. A copy this
+ * cache already holds, stored again on a confirming 304 (PageRefresh), has
+ * no URL (Cache Storage keeps none for a response built by copyResponse),
+ * which copyResponse would take for another origin's: it is ours, by key.
+ */
+function stampedCopy(
+  response: Response,
+  modifier: (init: ResponseInit) => ResponseInit,
+): Promise<Response> | Response {
+  if (!confirmedResponses.has(response)) {
+    return copyResponse(response, modifier);
+  }
+  const copy = response.clone();
+  const init = modifier({
+    headers: new Headers(copy.headers),
+    status: copy.status,
+    statusText: copy.statusText,
+  });
+  return new Response(copy.body, init);
+}
 
 // A copy is only read back for the account that owns the cache. Workbox
 // writes an answer after cacheWillUpdate has claimed for it, so a drop can
@@ -587,6 +748,10 @@ async function isOwned(copy: Response, path: string): Promise<boolean> {
   return false;
 }
 
+// Only a 200 is ever stored: a redirect, an error page or an opaque answer
+// would be served back as if it were the page.
+const okResponsesOnly = new CacheableResponsePlugin({ statuses: [200] });
+
 // Every page the cache holds follows these: the key rule (a fragment `|hx`
 // never answers a page and the other way round), the store and read rules.
 const pageRules: WorkboxPlugin[] = [
@@ -594,24 +759,16 @@ const pageRules: WorkboxPlugin[] = [
     cacheKeyWillBeUsed: async ({ request }) =>
       pageCacheKey(request.url, request.headers),
   },
-  new CacheableResponsePlugin({ statuses: [200] }),
+  okResponsesOnly,
   pageStore,
   servedCopies,
 ];
 
-// Pages a user visits beyond a warmed wardrobe: shared wardrobes, filtered
-// grids, other weeks, wishlist items, the other tabs' pages.
-const VISITED_PAGES = 100;
-
 // Shared by both page strategies, which share the cache: the rules and one
-// expiration, sized for a warm at its caps (WARM_PAGE_CAP, #286) and the
-// pages visited besides, so a warm never evicts what the user opened.
+// expiration (PAGE_ENTRIES).
 const pagePlugins: WorkboxPlugin[] = [
   ...pageRules,
-  new ExpirationPlugin({
-    maxEntries: WARM_PAGE_CAP + VISITED_PAGES,
-    purgeOnQuotaError: true,
-  }),
+  new ExpirationPlugin({ maxEntries: PAGE_ENTRIES, purgeOnQuotaError: true }),
 ];
 
 /**
@@ -643,16 +800,20 @@ class ServerFirstPages extends NetworkFirst {
   }
 }
 
+// How long a page waits on the server before the cached copy answers.
+const PAGE_NETWORK_WAIT_SECONDS = 3;
+
 const pages = new ServerFirstPages({
   cacheName: PAGES_CACHE,
-  networkTimeoutSeconds: 3,
+  networkTimeoutSeconds: PAGE_NETWORK_WAIT_SECONDS,
   plugins: pagePlugins,
 });
 
 // The offline page is stored by the page rules alone, never the expiration:
 // ExpirationPlugin only expires what it saw stored, so the fallback, written
-// at install and before any warm, is never the oldest entry it evicts. Only
-// the install and a drop's re-warm write it.
+// at install and before any warm, is never the oldest entry it evicts. The
+// install, a drop's re-warm and a claim that finds it missing (a quota
+// purge, ensureOfflinePage) write it.
 const offlinePage = new NetworkFirst({
   cacheName: PAGES_CACHE,
   plugins: pageRules,
@@ -663,12 +824,70 @@ const offlinePage = new NetworkFirst({
  * filter, the generation and owner checks, the stamp), never the cached
  * one: a warm wants a fresh copy or a failure it can stop on, where
  * NetworkFirst would answer an unreachable server with the old copy.
+ *
+ * Conditional (#708): a stored copy of the cache's owner sends its ETag
+ * (revalidationTag), and a 304 confirming it (confirmsCopy) stores the
+ * copy again through the same plugins, its body kept and its headers
+ * updated from the 304 (confirmedHeaders: the release, Cache-Control, the
+ * account), so an unchanged page costs its headers. A copy whose updated
+ * headers forbid storage is deleted instead. The answer is then that copy,
+ * a 200, so every caller reads a page as before; `confirmedCopies` says it
+ * was one. A 304 it may not keep is asked again unconditionally
+ * (conditionalVerdict, #991).
+ * Set explicitly, If-None-Match also keeps the browser's HTTP cache out of
+ * it (Fetch: the request's cache mode becomes no-store), so the 304 is ours.
  */
 class PageRefresh extends Strategy {
-  protected _handle(request: Request, handler: StrategyHandler) {
-    return handler.fetchAndCachePut(request);
+  protected async _handle(
+    request: Request,
+    handler: StrategyHandler,
+  ): Promise<Response> {
+    // Owner-checked on the way out (servedCopies), and read again below.
+    const copy = await handler.cacheMatch(request);
+    const tag = revalidationTag(copy, await readRecord(OWNER_KEY));
+    if (!copy || !tag) return handler.fetchAndCachePut(request);
+    const headers = new Headers(request.headers);
+    headers.set('If-None-Match', tag);
+    const answer = await handler.fetch(new Request(request, { headers }));
+    if (answer.status !== 304) {
+      await handler.cachePut(request, answer.clone());
+      return answer;
+    }
+    const path = new URL(request.url).pathname;
+    await lastDrop;
+    const owner = await readRecord(OWNER_KEY);
+    if (conditionalVerdict(answer, copy, owner) === 'unconditional') {
+      console.warn(`[sw] ${path}: a 304 for another copy, asking again`);
+      return handler.fetchAndCachePut(request);
+    }
+    const confirmed = new Response(copy.body, {
+      status: copy.status,
+      statusText: copy.statusText,
+      headers: confirmedHeaders(copy.headers, answer.headers),
+    });
+    if (forbidsStorage(confirmed.headers)) {
+      // Under its cache key (pageRules' cacheKeyWillBeUsed), as stored.
+      await (
+        await self.caches.open(PAGES_CACHE)
+      ).delete(pageCacheKey(request.url, request.headers));
+      console.info(`[sw] ${path}: confirmed, but now no-store; copy deleted`);
+      return confirmed;
+    }
+    const again = confirmed.clone();
+    confirmedResponses.add(again);
+    if (!(await handler.cachePut(request, again))) {
+      console.info(`[sw] ${path}: confirmed, but refused storage`);
+      return confirmed;
+    }
+    confirmedCopies.add(request);
+    return confirmed;
   }
 }
+
+/** The requests a PageRefresh answered with its copy, confirmed by a 304. */
+const confirmedCopies = new WeakSet<Request>();
+/** Those copies as handed to the page plugins to store again (stampedCopy). */
+const confirmedResponses = new WeakSet<Response>();
 
 const pageWarmer = new PageRefresh({
   cacheName: PAGES_CACHE,
@@ -695,8 +914,10 @@ async function revalidate(
 ): Promise<RevalidationResult> {
   const path = new URL(request.url).pathname;
   let fresh: FreshPage | undefined;
+  let etag: string | undefined;
   try {
     const response = await handler.fetch(request);
+    etag = response.headers.get('ETag') ?? undefined;
     await handler.cachePut(request, response.clone());
     fresh = {
       status: response.status,
@@ -721,6 +942,7 @@ async function revalidate(
     outcome,
     fetchedAt: Date.now(),
     html: outcome === 'updated' ? fresh?.body : undefined,
+    etag: outcome === 'updated' ? etag : undefined,
   };
 }
 
@@ -730,7 +952,7 @@ async function revalidate(
  * stored before this worker activated (#2): online the server's page
  * answers, and the older build's copy only when the server cannot.
  *
- * Nothing here starts a revalidation: public/js/freshness.js reads the
+ * Nothing here starts a revalidation: views/assets/page/freshness.ts reads the
  * served-from-cache stamp itself, through Navigation Timing (Server-Timing,
  * CACHED_AT_TIMING_NAME in page-cache.ts), and asks for REVALIDATE_PAGE
  * itself, the same request a reconnect makes (#240). A worker that instead
@@ -775,7 +997,7 @@ const isPageRequest = ({ request, url }: { request: Request; url: URL }) =>
 // permission stays). Here only for a session the worker's own fetch found
 // ended (endFetchedSession); a sign-out, an account deletion or a session
 // ended elsewhere lands on the signed-out login page, which drops the
-// subscription itself (<push-signed-out>, public/js/push.js).
+// subscription itself (<push-signed-out>, views/assets/page/push.ts).
 async function dropPushSubscription(): Promise<void> {
   try {
     const subscription = await self.registration.pushManager.getSubscription();
@@ -788,39 +1010,34 @@ async function dropPushSubscription(): Promise<void> {
 }
 
 // The outbox's records (#178, views/assets/outbox-store.ts): only ever
-// deleted here, never sent. The open tabs re-read the store on the channel's
+// dropped here, never sent. The open tabs re-read the store on the channel's
 // message and draw what is left.
 const outboxChannel = openOutboxChannel();
 
 /**
- * Deletes the queued writes whose `account` field `goes` accepts. Never
- * throws: a store that cannot be opened (private mode) holds nothing to
- * delete, and a session boundary must not fail on it.
+ * Drops the queued writes whose `account` field `goes` accepts, each to its
+ * tombstone (dropQueuedWrites, #1042: a tab still open on that account
+ * reverts the intent rather than showing it saved). Never throws: a store
+ * that cannot be opened (private mode) holds nothing to drop, and a session
+ * boundary must not fail on it.
  */
-async function deleteQueuedWrites(
+async function dropQueuedWritesOf(
   reason: string,
   goes: (recordAccount: unknown) => boolean,
 ): Promise<void> {
   try {
-    let deleted = 0;
-    await outbox.transact('readwrite', (store) => {
-      const cursor = store.openCursor();
-      cursor.onsuccess = () => {
-        const row = cursor.result;
-        if (!row) return;
-        const { account } = row.value as { account?: unknown };
-        if (goes(account)) {
-          row.delete();
-          deleted += 1;
-        }
-        row.continue();
-      };
-    });
-    if (deleted === 0) return;
+    const { dropped, pruned } = await dropQueuedWrites(
+      (mode, work) => outbox.transact(mode, work),
+      (record) => goes(record.account),
+      Date.now(),
+    );
+    if (dropped + pruned === 0) return;
     outboxChannel?.postMessage({ drain: false } satisfies OutboxChange);
-    console.info(`[sw] ${reason}: ${deleted} queued change(s) deleted unsent`);
+    console.info(
+      `[sw] ${reason}: ${dropped} queued change(s) dropped unsent, ${pruned} tombstone(s) pruned`,
+    );
   } catch (error) {
-    console.warn('[sw] could not delete the queued changes', error);
+    console.warn('[sw] could not drop the queued changes', error);
   }
 }
 
@@ -839,12 +1056,20 @@ registerRoute(isPageRequest, pages);
 // deletes it with the cache.
 const imageStore: WorkboxPlugin = {
   handlerWillStart: async ({ request, state }) => {
-    if (state) state.generation = generationFor(request);
+    if (!state) return;
+    state.generation = generationFor(request);
+    imageFlights.begin(state, request.url, startedIn(state));
+  },
+  handlerDidComplete: async ({ state }) => {
+    if (state) imageFlights.end(state);
   },
   cacheWillUpdate: async ({ request, response, state }) =>
     isStale(startedIn(state), new URL(request.url).pathname) ? null : response,
   cacheDidUpdate: async ({ cacheName, request, state }) => {
     if (startedIn(state) === generation) return;
+    // The ExpirationPlugin after this one still writes the URL's row, which
+    // Workbox cannot delete alone: the next activate sweeps it
+    // (pruneExpirationRows, #1155).
     const cache = await self.caches.open(cacheName);
     await cache.delete(request);
     console.info(
@@ -852,9 +1077,6 @@ const imageStore: WorkboxPlugin = {
     );
   },
 };
-
-// Cutouts and photos a user opens beyond a warm's thumbs.
-const VISITED_IMAGES = 200;
 
 const CUTOUT_PREFIX = '/file/nobg/';
 const THUMB_PREFIX = '/file/thumb/';
@@ -886,26 +1108,19 @@ const cutoutStandIn: WorkboxPlugin = {
 // routed here, so a watermark preview fetched by a share scraper never
 // fills the quota; a warm's thumbs go through images.handleAll. Outfit selfies (/selfies/**,
 // their owner's alone) match no route: the worker never stores one.
+const imageExpiry = new ExpirationPlugin({ maxEntries: IMAGE_ENTRIES, purgeOnQuotaError: true });
 const images = new CacheFirst({
   cacheName: IMAGES_CACHE,
-  plugins: [
-    new CacheableResponsePlugin({ statuses: [200] }),
-    imageStore,
-    cutoutStandIn,
-    new ExpirationPlugin({
-      maxEntries: WARM_IMAGE_CAP + VISITED_IMAGES,
-      purgeOnQuotaError: true,
-    }),
-  ],
+  // Over the quota the browser may empty this cache first: every image in
+  // it can be fetched again.
+  plugins: [okResponsesOnly, imageStore, cutoutStandIn, imageExpiry],
 });
 
-registerRoute(
-  ({ url, request }) =>
-    url.origin === self.location.origin &&
-    url.pathname.startsWith('/file/') &&
-    request.destination === 'image',
-  images,
-);
+const isStoredImage: RouteMatchCallback = ({ url, request }) =>
+  request.destination === 'image' &&
+  url.origin === self.location.origin &&
+  url.pathname.startsWith('/file/');
+registerRoute(isStoredImage, images);
 
 // Caches nothing reads any more: the in-browser background-removal model's
 // (its runtime and ~42 MB of model and WASM, filled by workers before
@@ -925,7 +1140,8 @@ const RETIRED_CACHES = [
 ];
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
+  void activateThenSweep(
+    (promise) => event.waitUntil(promise),
     (async () => {
       // Every copy stamped before this moment is an older build's: never
       // opened stale-first (StaleTabRoot), and due for the activation
@@ -933,8 +1149,9 @@ self.addEventListener('activate', (event) => {
       // awaited here, where it would hold the activation, and every
       // navigation waiting on it, for the whole refetch.
       await writeRecord(ACTIVATED_AT_KEY, String(Date.now()));
+      // With their expiration rows: images-v1's are earlier accounts' URLs.
       const deleted = await Promise.all(
-        RETIRED_CACHES.map((name) => self.caches.delete(name)),
+        RETIRED_CACHES.map(deleteCacheAndMetadata),
       );
       const count = deleted.filter(Boolean).length;
       if (count > 0) console.info(`[sw] dropped ${count} retired cache(s)`);
@@ -948,30 +1165,42 @@ self.addEventListener('activate', (event) => {
         `[sw] build ${STATIC_BUILD} active: keeping precache(s) ${kept.join(', ')}, ${dropped.length} dropped`,
       );
     })(),
+    pruneExpirationRows,
+    SWEEP_DEADLINE_MS,
+    () =>
+      console.info(
+        `[sw] expiration sweep given up after ${SWEEP_DEADLINE_MS / 1000} s`,
+      ),
   );
 });
 
 // The offline page is a rendered view, not a public/ file, so it cannot be
 // precached; warm it into the pages cache at install instead.
-warmStrategyCache({ urls: [FALLBACK_HTML_URL], strategy: offlinePage });
+self.addEventListener('install', (event) => {
+  const [, stored] = offlinePage.handleAll({
+    event,
+    request: new Request(OFFLINE_PAGE_URL),
+  });
+  event.waitUntil(stored);
+});
 
-// https://developer.chrome.com/docs/workbox/managing-fallback-responses
-// Runs when a matched route's handler fails: for a page (navigation or a
+// Workbox's catch handler: runs when a matched route's handler fails: for a page (navigation or a
 // boosted link, which swaps the whole body) serve the offline page; a
 // fragment request fails instead, which htmx reports as htmx:sendError and
-// public/js/connectivity.js turns into the offline banner.
+// views/assets/page/connectivity.ts turns into the offline banner.
 setCatchHandler(async ({ request }) => {
   const wantsPage =
     request.mode === 'navigate' || request.headers.get('HX-Boosted') === 'true';
-  if (wantsPage) {
-    const cache = await self.caches.open(PAGES_CACHE);
-    const fallback = await cache.match(FALLBACK_HTML_URL);
-    if (fallback && (await isOwned(fallback, FALLBACK_HTML_URL))) {
-      return fallback;
-    }
-  }
-  return Response.error();
+  const offline = wantsPage ? await ownOfflinePage() : undefined;
+  return offline ?? Response.error();
 });
+
+// The cached offline page, if it is this session's to show.
+async function ownOfflinePage(): Promise<Response | undefined> {
+  const cache = await self.caches.open(PAGES_CACHE);
+  const page = await cache.match(OFFLINE_PAGE_URL);
+  return page && (await isOwned(page, OFFLINE_PAGE_URL)) ? page : undefined;
+}
 
 // URL.canParse is Safari 17+; the installed app still meets iOS 16.
 function isOwnUrl(value: string): boolean {
@@ -1036,11 +1265,10 @@ async function revalidateForPage(
  * the copy, as a warm's does. Marked as the worker's (WARM_REQUEST_HEADER):
  * no person waits on it.
  *
- * Renewing a copy makes a later REVALIDATE_PAGE of it find nothing new, so
- * the worker itself tells every tab it controls which copies changed
- * (PAGES_RENEWED, with the server's markup): a tab showing one swaps it in
- * as a revalidation's (freshness.js). Nothing is told after a drop: those
- * copies are gone, and a session change reloads its pages.
+ * The tabs are told nothing: a page on screen that shows a saved write
+ * fetches its own server copy (outbox:synced, freshness.js), which also
+ * covers the pages this walk cannot renew (never cached, no worker, the
+ * walk stopped; #900).
  */
 async function refetchSyncedPages(
   event: ExtendableMessageEvent,
@@ -1055,52 +1283,18 @@ async function refetchSyncedPages(
       writes.some((write) => showsQueuedWrite(write, url.pathname))
     );
   });
-  const renewed: RenewedPage[] = [];
-  let unchanged = 0;
   const walk = await refetchInTurn(
     due,
-    async (key) => {
-      // Read before the fetch: the refetch's store replaces it.
-      const before = await (await cache.match(key))?.text();
-      const refetched = await refetchCachedPage(event, key, run, 'refetch');
-      if (refetched.verdict === 'stored') {
-        const html = await refetched.answer.text();
-        if (html === before) unchanged += 1;
-        else {
-          renewed.push({
-            url: refetched.url,
-            fragment: refetched.fragment,
-            html,
-            fetchedAt: Date.now(),
-          });
-        }
-      }
-      return refetched;
-    },
+    (key) => refetchCachedPage(event, key, run, 'refetch'),
     () => generation !== run,
   );
-  const told =
-    renewed.length > 0 && generation === run
-      ? await tellRenewedPages(renewed)
-      : 0;
   const summary =
     `${writes.length} synced write(s): ${due.length} cached page(s), ` +
-    `${renewed.length} renewed (${told} tab(s) told), ${unchanged} unchanged, ` +
-    `${walk.removed} removed, ${walk.kept} kept, ${walk.failed} failed`;
+    `${walk.stored} renewed, ${walk.removed} removed, ${walk.kept} kept, ` +
+    `${walk.failed} failed`;
   if (walk.stop) console.info(`[sw] ${summary}, stopped: ${walk.stop}`);
   else console.info(`[sw] ${summary}`);
 }
-
-// What refetchCachedPage tells its walk (refetchInTurn); a stored page
-// carries the answer, for a sync's comparison.
-type Refetched =
-  | {
-      verdict: 'stored';
-      answer: Response;
-      url: string;
-      fragment: boolean;
-    }
-  | Exclude<RefetchStep, { verdict: 'stored' }>;
 
 /**
  * A cached page or `|hx` fragment fetched again by the worker itself (the
@@ -1119,7 +1313,7 @@ async function refetchCachedPage(
   key: Request,
   run: number,
   what: string,
-): Promise<Refetched> {
+): Promise<RefetchStep> {
   const url = pageUrlOfCacheKey(key.url);
   const fragment = url !== key.url;
   const headers: Record<string, string> = { [WARM_REQUEST_HEADER]: '1' };
@@ -1127,7 +1321,7 @@ async function refetchCachedPage(
   const request = new Request(url, { headers });
   runOf.set(request, run);
   const strategy =
-    new URL(url).pathname === FALLBACK_HTML_URL
+    new URL(url).pathname === OFFLINE_PAGE_URL
       ? offlinePageRefresh
       : pageWarmer;
   let answer: Response;
@@ -1141,7 +1335,7 @@ async function refetchCachedPage(
   const verdict: RefetchVerdict = refetchVerdict(answer);
   switch (verdict) {
     case 'stored':
-      return { verdict, answer, url, fragment };
+      return { verdict };
     case 'deleted':
       return {
         verdict,
@@ -1163,26 +1357,6 @@ async function refetchCachedPage(
       await endFetchedSession(event, run, `${new URL(url).pathname} (${what})`);
       return { verdict, stop: 'signed out' };
   }
-}
-
-/** A copy the refetch renewed, as PAGES_RENEWED carries it. */
-interface RenewedPage {
-  url: string;
-  /** The `|hx` copy: what a URL-pushing fragment's display asks for. */
-  fragment: boolean;
-  html: string;
-  /** When the server's answer arrived (epoch ms). */
-  fetchedAt: number;
-}
-
-/**
- * Every tab this worker controls gets the whole list; each finds what it
- * shows (freshness.js). Returns how many were told.
- */
-async function tellRenewedPages(pages: RenewedPage[]): Promise<number> {
-  const tabs = await self.clients.matchAll({ type: 'window' });
-  for (const tab of tabs) tab.postMessage({ type: PAGES_RENEWED, pages });
-  return tabs.length;
 }
 
 /**
@@ -1214,6 +1388,8 @@ interface WarmTally {
   images: number;
   /** Already cached and young enough: not fetched. */
   fresh: number;
+  /** Asked again and confirmed by a 304: re-stamped, no body (#708). */
+  unchanged: number;
   /** Pages of garments and outfits gone from the list. */
   removed: number;
   /** Answered 404: deleted since the list was made. */
@@ -1274,20 +1450,24 @@ async function refreshOlderBuildPages(
     if (copy && isFromAnOlderBuild(copy, since)) due.push(key);
   }
   const startedAt = Date.now();
-  const previous = new Map<string, RefreshBackoff>();
-  const waiting: RefreshBackoff[] = [];
-  const asked: Request[] = [];
-  for (const key of due) {
-    const record = backoffKeyOf(key.url);
-    const backoff = backoffRecords.has(record)
-      ? parseRefreshBackoff(await (await cache.match(record))?.text(), since)
-      : undefined;
-    if (isBackingOff(backoff, startedAt)) waiting.push(backoff);
-    else {
-      asked.push(key);
-      if (backoff) previous.set(key.url, backoff);
-    }
-  }
+  const { asked, waiting, previous } = planRefresh(
+    await Promise.all(
+      due.map(async (key) => {
+        const record = backoffKeyOf(key.url);
+        const recorded = backoffRecords.has(record);
+        const text = recorded
+          ? await (await cache.match(record))?.text()
+          : undefined;
+        return {
+          key,
+          url: key.url,
+          recorded,
+          backoff: parseRefreshBackoff(text, since),
+        };
+      }),
+    ),
+    startedAt,
+  );
   // Each asked key's backoff after this run: the next one for a failure,
   // none (the record deleted) for any other answer. A key the walk never
   // reached (it stopped) keeps its record as it was.
@@ -1296,17 +1476,14 @@ async function refreshOlderBuildPages(
     asked,
     async (key) => {
       const step = await refetchCachedPage(event, key, run, 'refresh');
-      if (step.verdict === 'failed') {
-        after.set(
-          key.url,
-          nextRefreshBackoff(previous.get(key.url), Date.now(), since),
-        );
-      } else if (
-        !('stop' in step) &&
-        backoffRecords.has(backoffKeyOf(key.url))
-      ) {
-        after.set(key.url, undefined);
-      }
+      const change = backoffAfter(
+        step,
+        previous.get(key.url),
+        backoffRecords.has(backoffKeyOf(key.url)),
+        Date.now(),
+        since,
+      );
+      if (change) after.set(key.url, change.backoff);
       return step;
     },
     () => generation !== run,
@@ -1315,12 +1492,12 @@ async function refreshOlderBuildPages(
   // nobody's backoff.
   const dueRecords = new Set(due.map((key) => backoffKeyOf(key.url)));
   const orphans = [...backoffRecords].filter((url) => !dueRecords.has(url));
-  const record = walk.stop
-    ? undefined
-    : refreshedRecord(Date.now(), [
-        ...waiting,
-        ...[...after.values()].filter((backoff) => backoff !== undefined),
-      ]);
+  const record = walkRecord(
+    walk.stop !== undefined,
+    Date.now(),
+    waiting,
+    after,
+  );
   await recordRefresh(run, after, orphans, record);
   const summary =
     `${walk.stored} of ${due.length} older-build page(s) in ` +
@@ -1436,6 +1613,7 @@ async function runWarm(event: ExtendableMessageEvent): Promise<void> {
     pages: 0,
     images: 0,
     fresh: 0,
+    unchanged: 0,
     removed: 0,
     refused: 0,
     failed: 0,
@@ -1452,6 +1630,7 @@ async function runWarm(event: ExtendableMessageEvent): Promise<void> {
   const summary =
     `${tally.pages} pages, ${tally.images} images in ` +
     `${((Date.now() - startedAt) / 1000).toFixed(1)} s (${tally.fresh} fresh, ` +
+    `${tally.unchanged} unchanged, ` +
     `${tally.removed} removed, ${tally.refused} refused, ` +
     `${tally.failed} failed, added ${formatBytes(usage - usageAtStart)}, ` +
     `usage ${formatBytes(usage)} of ${formatBytes(quota)})`;
@@ -1697,7 +1876,8 @@ async function drainWarm(
           }
           return;
         }
-        if (answer.ok) tally[job.tally] += 1;
+        if (confirmedCopies.has(job.request)) tally.unchanged += 1;
+        else if (answer.ok) tally[job.tally] += 1;
         else if (answer.status === 404) {
           tally.refused += 1;
           // Deleted since the list was made: the 200-only plugin keeps the
@@ -1745,22 +1925,99 @@ function formatBytes(bytes: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
 }
 
+/** How long a page has to answer BUILD_QUERY before it counts as of no known build. */
+const BUILD_QUERY_MS = 3_000;
+
+/**
+ * The build an uncontrolled page was rendered with, asked of it now
+ * (BUILD_QUERY, answered by pwa.js on the port), or undefined when it does
+ * not answer in time (a page without pwa.js, or one too busy).
+ */
+function askBuild(client: Client): Promise<unknown> {
+  const channel = new MessageChannel();
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      channel.port1.close();
+      resolve(undefined);
+    }, BUILD_QUERY_MS);
+    channel.port1.onmessage = (event: MessageEvent<{ build?: unknown }>) => {
+      clearTimeout(deadline);
+      channel.port1.close();
+      resolve(event.data.build);
+    };
+    client.postMessage({ type: WORKER_MESSAGES.buildQuery }, [channel.port2]);
+  });
+}
+
+/** The window clients this worker does not control, by id. */
+async function uncontrolledWindows(): Promise<Client[]> {
+  const [windows, controlled] = await Promise.all([
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+    self.clients.matchAll({ type: 'window' }),
+  ]);
+  const controlledIds = new Set(controlled.map((client) => client.id));
+  return windows.filter((client) => !controlledIds.has(client.id));
+}
+
+/**
+ * Claims the uncontrolled pages only when every one of them says, asked
+ * now, that it is of this worker's build. `clients.claim()` takes every
+ * uncontrolled page in scope, so one of another build (a hard reload after a
+ * deploy, holding the next build's assets) or of no known build holds back
+ * the claim of all: the update flow takes it, never this worker. Nothing is
+ * kept between requests, so a worker stopped between two pages' requests
+ * still claims both on the second (#1140). Reserved clients (navigations not
+ * committed) are not in `matchAll`; each asks once it runs. A page that
+ * became a client while the others answered was not asked: the claim waits
+ * for its own request.
+ */
+async function claimOwnBuildPages(): Promise<void> {
+  const uncontrolled = await uncontrolledWindows();
+  if (uncontrolled.length === 0) return;
+  const builds = await Promise.all(uncontrolled.map(askBuild));
+  const foreign = builds.filter((build) => build !== STATIC_BUILD);
+  if (foreign.length > 0) {
+    console.info(
+      `[sw] CLAIM_CLIENTS: nothing claimed, ${foreign.length} of ${uncontrolled.length} ` +
+        `uncontrolled page(s) not of build ${STATIC_BUILD} ` +
+        `(${foreign.map((build) => (build === undefined ? 'no answer' : String(build))).join(', ')})`,
+    );
+    return;
+  }
+  const asked = new Set(uncontrolled.map((client) => client.id));
+  if ((await uncontrolledWindows()).some((client) => !asked.has(client.id))) {
+    console.info(
+      '[sw] CLAIM_CLIENTS: a page opened meanwhile, nothing claimed',
+    );
+    return;
+  }
+  await self.clients.claim();
+  console.info(
+    `[sw] CLAIM_CLIENTS: claimed ${uncontrolled.length} uncontrolled page(s) of build ${STATIC_BUILD}`,
+  );
+}
+
 // Update flow: pwa.js shows a toast when a new worker is waiting and sends
 // SKIP_WAITING when the user taps Reload. No skipWaiting() on install: a
 // worker that seizes control mid-session leaves pages holding stale asset
 // URLs, which is the black-screen bug the old hard-navigate hack papered over.
-// The page's own questions come from public/js/freshness.js, each with a
-// MessagePort for the answer; WARM_PAGES and SESSION_ENDING from
-// public/js/pwa.js and OUTBOX_SYNCED from outbox.js want none. Only this
+// The page's own questions come from views/assets/page/freshness.ts, each with a
+// MessagePort for the answer; WARM_PAGES, SESSION_ENDING and CLAIM_CLIENTS
+// from views/assets/page/pwa.ts and OUTBOX_SYNCED from outbox.js want none. The
+// worker asks pages too: BUILD_QUERY (claimOwnBuildPages). Only this
 // site's own pages can post here (a page reaches a worker only through its
 // own origin's registration).
 self.addEventListener('message', (event) => {
   const type: unknown = event.data?.type;
   const [port] = event.ports;
-  if (type === 'SKIP_WAITING') {
+  if (type === PAGE_MESSAGES.skipWaiting) {
     console.log('[sw] SKIP_WAITING received');
     void self.skipWaiting();
-  } else if (type === 'REVALIDATE_PAGE' && port) {
+  } else if (type === PAGE_MESSAGES.claimClients) {
+    // A page this active worker does not control (pwa.js): left out of the
+    // activation's claim, it would stay out of the worker until a reload.
+    event.waitUntil(claimOwnBuildPages());
+  } else if (type === PAGE_MESSAGES.revalidatePage && port) {
     event.waitUntil(
       revalidateForPage(
         event,
@@ -1769,16 +2026,16 @@ self.addEventListener('message', (event) => {
         port,
       ),
     );
-  } else if (type === 'WARM_PAGES') {
+  } else if (type === PAGE_MESSAGES.warmPages) {
     event.waitUntil(warmPages(event));
-  } else if (type === 'SESSION_ENDING') {
+  } else if (type === PAGE_MESSAGES.sessionEnding) {
     // A sign-in, a registration, a sign-out or an account deletion is
     // leaving one of our pages (#542, data-ends-session): whatever session
     // this device had ends with it, so its caches go before the landing
     // page is asked for. A post that then fails costs a refetch. Held by
     // waitUntil, so the drop outlives the page that asked.
     event.waitUntil(dropSession(event, 'a sign-in or sign-out was posted'));
-  } else if (type === OUTBOX_SYNCED) {
+  } else if (type === PAGE_MESSAGES.outboxSynced) {
     const writes = syncedWritePaths(event.data.paths);
     if (writes.length > 0) {
       event.waitUntil(
@@ -1793,21 +2050,20 @@ self.addEventListener('message', (event) => {
 // Web Push. The payload is PushPayload (src/web/push/payload.ts), the shape
 // the server's sender writes; anything else is dropped with a warning (a
 // browser may then show its own "updated in the background" notice).
-// https://web.dev/articles/push-notifications-handling-messages
 self.addEventListener('push', (event) => {
   const payload = readPushPayload(event.data);
-  if (!payload) {
-    console.warn('[sw] push message without a readable payload, ignored');
-    return;
-  }
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      tag: payload.tag,
-      data: { url: payload.url },
-    }),
-  );
+  if (payload) event.waitUntil(showPush(payload));
+  else console.warn('[sw] push message without a readable payload, ignored');
 });
+
+// The notification's tap opens payload.url (the notificationclick below).
+function showPush(payload: PushPayload): Promise<void> {
+  return self.registration.showNotification(payload.title, {
+    body: payload.body,
+    tag: payload.tag,
+    data: { url: payload.url },
+  });
+}
 
 function readPushPayload(
   data: PushMessageData | null,

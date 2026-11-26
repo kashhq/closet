@@ -13,7 +13,7 @@ import {
   toCentimetres,
 } from '../../wardrobe/measurements';
 import type { FieldErrors } from '../auth/validation';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { normalizeSize } from '../wardrobe/garment';
 import { BRAND_MAX, SIZE_MAX } from '../wardrobe/garment-input';
 
@@ -91,7 +91,7 @@ export function readMeasurementsForm(
 function readLength(
   typed: string,
   unit: LengthUnit,
-): number | { message: string } {
+): number | { message: Translated } {
   if (!LENGTH.test(typed)) return { message: t('sizes.LENGTH_INVALID') };
   const cm = toCentimetres(Number(typed.replace(',', '.')), unit);
   if (cm < LENGTH_MIN_CM || cm > LENGTH_MAX_CM) {

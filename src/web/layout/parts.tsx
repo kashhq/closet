@@ -1,3 +1,4 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import {
   type SignablePhotoRef,
@@ -5,8 +6,9 @@ import {
   type PlinthPhoto,
 } from '../files/image-url';
 import { categoryRole, type GarmentRole } from '../../wardrobe/properties';
-import { jsonForScript } from '../html';
 import { t } from '../i18n';
+import { historyBack, pageModule, STRIP_FLAGS } from '../page-contract';
+import { Icon } from './icon';
 
 /**
  * Small pieces the garment, outfit and share pages have in common: the
@@ -15,22 +17,13 @@ import { t } from '../i18n';
  */
 
 /**
- * The hanger's paths (hugeicons' hanger-stroke-rounded), drawn in the
- * text's colour: the dock's Wardrobe tab and HangerIcon, one drawing.
+ * The hanger (hugeicons' hanger-stroke-rounded): the dock's Wardrobe tab
+ * and HangerIcon, one drawing.
  */
-export const HANGER_PATHS = (
-  <>
-    <path
-      d="M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path
-      d="M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5"
-      stroke-linecap="round"
-    />
-  </>
-);
+export const HANGER_PATHS = [
+  'M4.12572 15.3668L10.1284 11.9903C10.7234 11.6556 11.3252 11.5 12 11.5C12.6748 11.5 13.2766 11.6556 13.8716 11.9903L19.8743 15.3668C20.5697 15.7579 21 16.4937 21 17.2916C21 18.5113 20.0113 19.5 18.7916 19.5H5.20841C3.98874 19.5 3 18.5113 3 17.2916C3 16.4937 3.43034 15.7579 4.12572 15.3668Z',
+  'M10 6.40476C10 5.35279 10.8954 4.5 12 4.5C13.1046 4.5 14 5.35279 14 6.40476C14 7.12453 13.5808 7.75106 12.9623 8.07498C12.473 8.33119 12 8.75724 12 9.30952V11.5',
+] as const;
 
 /**
  * The hanger: a garment in general (EmptyState, the first-run card) and
@@ -38,17 +31,7 @@ export const HANGER_PATHS = (
  */
 export function HangerIcon(props: { class: string; strokeWidth: string }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width={props.strokeWidth}
-      stroke="currentColor"
-      class={props.class}
-      aria-hidden="true"
-    >
-      {HANGER_PATHS}
-    </svg>
+    <Icon paths={HANGER_PATHS} class={props.class} weight={props.strokeWidth} />
   );
 }
 
@@ -84,72 +67,35 @@ export function GarmentSilhouette(props: {
     return <HangerIcon class={props.class} strokeWidth={props.strokeWidth} />;
   }
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke-width={props.strokeWidth}
-      stroke="currentColor"
+    <Icon
+      paths={SILHOUETTES[role]}
       class={props.class}
-      aria-hidden="true"
-      data-silhouette={role}
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d={SILHOUETTES[role]}
-      />
-    </svg>
-  );
-}
-
-/**
- * The frame of a Heroicons outline icon (24 box, 1.5 stroke in the text's
- * colour), decorative: the control it sits in carries the name.
- */
-function OutlineIcon(props: { class: string; children: Child }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      class={props.class}
-      aria-hidden="true"
-    >
-      {props.children}
-    </svg>
+      weight={props.strokeWidth}
+      data={{ 'data-silhouette': role }}
+    />
   );
 }
 
 /** Waiting: a queued write's "Waiting to sync" (src/web/outbox.tsx). */
 export function ClockIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      class={props.class}
+    />
   );
 }
 
 /** Taking a photo with the camera: the garment photo form, outfit selfies. */
 export function CameraIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-      />
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths={[
+        'M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.174C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-6.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z',
+        'M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z',
+      ]}
+      class={props.class}
+    />
   );
 }
 
@@ -161,28 +107,13 @@ export function CameraIcon(props: { class: string }) {
 export const PHOTO_ACCEPT =
   'image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif';
 
-/**
- * The `onchange` of a file input that uploads as soon as a photo is chosen
- * (the garment page's photo sheet, outfit selfies): the photo is prepared
- * on the phone first (photo-input.js: a 24 MP photo becomes a 1600 px JPEG
- * of a few hundred KB, HEIC left for the server), then its form submitted;
- * nothing is posted when the choice came back empty. A dynamic import from
- * the handler, so the module loads only when a photo is chosen, and no page
- * script has to run again after a boosted navigation or an htmx swap.
- */
-export const PREPARE_AND_SUBMIT_PHOTO =
-  "import('photo-input').then((m) => m.preparePhoto(this)).then((file) => { if (file) this.form.requestSubmit(); })";
-
 /** Choosing a photo already taken (the library): the photo sheet, outfit selfies. */
 export function PhotoLibraryIcon(props: { class: string }) {
   return (
-    <OutlineIcon class={props.class}>
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
-      />
-    </OutlineIcon>
+    <Icon
+      paths="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+      class={props.class}
+    />
   );
 }
 
@@ -190,12 +121,14 @@ export function PhotoLibraryIcon(props: { class: string }) {
 export function GarmentThumb(props: {
   garment: { name: string | null; photo: SignablePhotoRef | null };
   class: string;
+  /** Beside the garment's name in the same link: the alt would repeat it. */
+  decorative?: boolean;
 }) {
   const { garment } = props;
   return garment.photo ? (
     <img
       src={imageUrl(garment.photo, 'thumb')}
-      alt={garment.name ?? ''}
+      alt={props.decorative ? '' : (garment.name ?? '')}
       class={`size-20 object-cover ${props.class}`}
       width="80"
       height="80"
@@ -286,7 +219,7 @@ export function PlinthImage(props: {
 /**
  * A back arrow to `href`. With `historyBack` (the app bar's) it goes back in
  * history instead whenever the page before is in the app, and follows
- * `href` only on a cold entry (public/js/back.js); without, it is a plain
+ * `href` only on a cold entry (views/assets/page/back.ts); without, it is a plain
  * link to a fixed place (a Styling or Ideas destination's way back to it).
  */
 export function BackLink(props: { href: string; historyBack?: boolean }) {
@@ -295,28 +228,19 @@ export function BackLink(props: { href: string; historyBack?: boolean }) {
       href={props.href}
       class="btn btn-ghost btn-sm btn-circle"
       aria-label={t('BACK')}
-      data-history-back={props.historyBack ? '' : undefined}
+      {...historyBack(props.historyBack === true)}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-        stroke="currentColor"
+      <Icon
+        paths="M3 12h18M3 12l7.5-7.5M3 12l7.5 7.5"
         class="size-4"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-        />
-      </svg>
+        weight="2"
+      />
     </a>
   );
 }
 
 /**
- * A form page's Cancel: a back arrow in words (public/js/back.js). It goes
+ * A form page's Cancel: a back arrow in words (views/assets/page/back.ts). It goes
  * back to the page the form was opened from, as history holds it, and to
  * `href` (the app bar's `back`) only on a cold entry; either way the form
  * is left done, so the page reached never goes back into it.
@@ -326,7 +250,7 @@ export function CancelLink(props: { href: string; class?: string }) {
     <a
       href={props.href}
       class={`btn btn-ghost${props.class ? ` ${props.class}` : ''}`}
-      data-history-back=""
+      {...historyBack()}
     >
       {t('CANCEL')}
     </a>
@@ -381,27 +305,25 @@ export function SavedToast(props: { id: string; text: string }) {
 
 /**
  * Drops one-shot flags from the address bar once the page has read them,
- * so a reload or a copied URL does not replay their toast. `names` are the
- * page's own constants; jsonForScript keeps them inert in the script anyway.
+ * so a reload or a copied URL does not replay their toast (page-mount.ts's
+ * `strip-flags`, on every visit the marker arrives with). `names` are the
+ * page's own constants, query parameter names without spaces.
  */
 export function StripFlags(props: { names: readonly string[] }) {
-  const script = `(() => {
-  const names = ${jsonForScript(props.names)};
-  const url = new URL(window.location.href);
-  if (names.some((name) => url.searchParams.has(name))) {
-    for (const name of names) url.searchParams.delete(name);
-    window.history.replaceState({}, '', url);
-  }
-})();`;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  return (
+    <template
+      {...pageModule('strip-flags')}
+      {...{ [STRIP_FLAGS]: props.names.join(' ') }}
+    />
+  );
 }
 
 /**
- * One section of Profile (src/web/auth/pages.tsx): an anchor other pages
- * link to (`/auth/profile#weather`), its heading and its content. Each
- * feature renders its own (the sharing, weather, notifications and week
- * sections); `scroll-mt-20` keeps the heading clear of the fixed app bar
- * when the anchor is followed.
+ * One card of Profile (src/web/auth/pages.tsx): Account, Export, Sign out,
+ * an anchor their pages go back to (`/auth/profile#sign-out`), its heading
+ * and its content. A feature's settings have their own page since #728
+ * (layout/settings-page.tsx), never a section here. `scroll-mt-under-bar` keeps
+ * the heading clear of the fixed app bar when the anchor is followed.
  */
 export function ProfileSection(props: {
   id: string;
@@ -410,17 +332,18 @@ export function ProfileSection(props: {
 }) {
   const headingId = `${props.id}-heading`;
   return (
-    <section
+    <Card
+      as="section"
+      variant="content"
+      class="w-full scroll-mt-under-bar"
+      bodyClass="gap-3"
       id={props.id}
-      class="card bg-base-200 w-full scroll-mt-20"
       aria-labelledby={headingId}
     >
-      <div class="card-body gap-3">
-        <h2 id={headingId} class="card-title">
-          {props.heading}
-        </h2>
-        {props.children}
-      </div>
-    </section>
+      <h2 id={headingId} class="card-title">
+        {props.heading}
+      </h2>
+      {props.children}
+    </Card>
   );
 }

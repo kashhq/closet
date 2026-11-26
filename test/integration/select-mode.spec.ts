@@ -93,7 +93,7 @@ describe('select mode verbs', () => {
     expectNativePostForms(page);
     // Still select mode, the same three checked, the bar counting them.
     expect(checkedIds(page.body).sort()).toEqual([...tops].sort());
-    expect(page.body).toMatch(/data-select-count-value="true">3</);
+    expect(page.body).toMatch(/id="selected-count"[^>]*>3</);
     expect(page.body).toContain('Set on 3 garments');
 
     const formality = await post('/wardrobe/bulk?category=tops', {
@@ -106,6 +106,38 @@ describe('select mode verbs', () => {
     );
     for (const top of await rows(tops)) {
       expect([top.warmth, top.formality]).toEqual([2, 3]);
+    }
+  });
+
+  it('a filter swap brings the bar exactly when the body has tiles, its Save on the answer’s form', async () => {
+    // The fragment GET the scope row's search sends (PageFragment).
+    const filter = async (query: string) => {
+      const res = await t.inject({
+        method: 'GET',
+        url: `/wardrobe?pick=${capsuleId}&${query}`,
+        headers: { 'hx-request': 'true' },
+      });
+      expect(res.statusCode).toBe(200);
+      const html = unescapeHtml(res.body);
+      // The actions region always rides out of band, so it is never stale.
+      expect(html).toMatch(/<div id="wardrobe-actions"[^>]*hx-swap-oob="true"/);
+      return html;
+    };
+    const bar = (html: string) => html.includes('class="action-bar"');
+    for (const [query, tiles] of [
+      ['keyword=nothing-matches', false],
+      ['category=tops', true],
+      ['keyword=nothing-matches', false],
+    ] as const) {
+      const html = await filter(query);
+      expect({ query, bar: bar(html) }).toEqual({ query, bar: tiles });
+      if (!tiles) {
+        expect(html).toMatch(/<div id="wardrobe-actions" hidden=""/);
+        continue;
+      }
+      // Save submits the picker's form in this same answer.
+      expect(html).toMatch(/<button type="submit" form="pick-form"/);
+      expect(html).toContain('<form id="pick-form"');
     }
   });
 
@@ -137,7 +169,7 @@ describe('select mode verbs', () => {
       coats.length - GRID_PAGE_SIZE,
     );
     expect(back).toMatch(
-      new RegExp(`data-select-count-value="true">${coats.length}<`),
+      new RegExp(`id="selected-count"[^>]*>${coats.length}<`),
     );
     // Later pages arrive checked: the sentinel's tiles carry the selection.
     const tilesUrl = /hx-get="([^"]*\/wardrobe\/tiles[^"]*)"/.exec(
@@ -277,6 +309,65 @@ describe('select mode verbs', () => {
     const [closet, archived] = await rows([kept.id, shelved.id]);
     expect(closet.lastWashedOn).toBe(t.today());
     expect(archived.lastWashedOn).toBeNull();
+  });
+
+  // #819: the skipped were every id not washed, so a garment deleted in
+  // another tab, or a hand-built post's foreign, wishlist or repeated id,
+  // read as "archived skipped".
+  it('Mark washed counts as skipped only the archived, never another id it did not wash', async () => {
+    await t.register('bulk-wash-stranger@example.com');
+    const strangerId = await userIdOf(t, 'bulk-wash-stranger@example.com');
+    const made = await asFixture(t.db, (tx) =>
+      tx
+        .insert(garment)
+        .values(
+          (
+            [
+              [ownerId, 'closet'],
+              [ownerId, 'archived'],
+              [ownerId, 'wishlist'],
+              [strangerId, 'closet'],
+              [ownerId, 'closet'],
+            ] as const
+          ).map(([owner, status]) => ({
+            shareableId: randomUUID(),
+            ownerId: owner,
+            name: `Skip ${status}`,
+            category: 'tops',
+            status,
+          })),
+        )
+        .returning({ id: garment.id }),
+    );
+    const [kept, shelved, wanted, foreign, deleted] = made.map((row) => row.id);
+    await asFixture(t.db, (tx) =>
+      tx.delete(garment).where(eq(garment.id, deleted)),
+    );
+    const res = await post('/wardrobe/bulk/washed', {
+      ids: [kept, kept, shelved, wanted, foreign, deleted],
+    });
+    const flags = new URL(res.headers.location!, 'http://x').searchParams;
+    expect(
+      ['bulkWashed', 'bulkSkipped', 'bulkWishlist', 'bulkUnseen'].map((flag) =>
+        flags.get(flag),
+      ),
+    ).toEqual(['1', '1', '1', '2']);
+    // Each skip by its reason; another's and a deleted id are one count,
+    // so nothing tells them apart.
+    const toast = unescapeHtml((await get(res.headers.location!)).body);
+    expect(toast).toContain(
+      '1 garment marked washed · 1 archived skipped · 1 on the wishlist skipped · 2 not found skipped',
+    );
+    expect(t.logs.ops('garments.washed').at(-1)).toMatchObject({
+      asked: 6,
+      washed: 1,
+      archived: 1,
+      wishlist: 1,
+      unseen: 2,
+    });
+    expect(
+      (await rows(made.map((row) => row.id))).map((r) => r.lastWashedOn),
+    ).toEqual([t.today(), null, null, null]);
   });
 
   it('pluralizes every toast through i18n', async () => {

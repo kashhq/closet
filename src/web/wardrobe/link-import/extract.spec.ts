@@ -23,6 +23,7 @@ const NOTHING: ExtractedProduct = {
   materials: [],
   fabricWeight: null,
   warmth: null,
+  sleeve: null,
   images: [],
 };
 
@@ -48,6 +49,7 @@ describe('extractProduct', () => {
       fabricWeight: 240,
       // A stated weight leaves warmth to the form's presets.
       warmth: null,
+      sleeve: null,
       images: [
         'https://acme-supply.test/cdn/shop/files/pocket-tee-navy-front.jpg?v=1712345678&width=1920',
         'https://acme-supply.test/cdn/shop/files/pocket-tee-navy-back.jpg?v=1712345678&width=1920',
@@ -72,6 +74,7 @@ describe('extractProduct', () => {
       materials: ['cotton', 'denim'],
       fabricWeight: 475,
       warmth: null,
+      sleeve: null,
       images: [
         'https://irondenim.test/wp-content/uploads/2026/03/selvedge-jeans.jpg',
       ],
@@ -93,6 +96,7 @@ describe('extractProduct', () => {
       materials: ['merino'],
       fabricWeight: null,
       warmth: null,
+      sleeve: null,
       images: [
         'https://cdn.knitwear.test/assets/images/merino-crew-charcoal.jpg',
         'https://cdn.knitwear.test/assets/images/merino-crew-detail.jpg',
@@ -250,6 +254,11 @@ describe('extractProduct', () => {
     ['https://www.uniqlo.com/p/1', 'Uniqlo'],
     ['https://shop.example.co.uk/p/1', 'Example'],
     ['http://127.0.0.2/p/1', null],
+    // A shop on a hosting platform is its subdomain, never the platform (#799).
+    ['https://acme.myshopify.com/products/tee', 'Acme'],
+    ['https://shop.acme.myshopify.com/products/tee', 'Acme'],
+    ['https://acme-goods.squarespace.com/shop/tee', 'Acme-goods'],
+    ['https://myshopify.com/', null],
   ])('falls back from a missing brand to the domain: %s', (url, brand) => {
     const html = page('<title>Tee | Shop</title>');
     expect(extractProduct(html, new URL(url)).brand).toBe(brand);

@@ -1,15 +1,14 @@
+import { Card } from '../card';
 import type { Idea } from '../../wardrobe/generator';
 import type { ActivewearGap, Occasion } from '../../wardrobe/occasions';
 import { displayTemperature } from '../../weather/temperature';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel, occasionLabel } from '../date-labels';
 import type { CapsuleRef } from '../capsules/queries';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageSentinel } from '../page-sentinel';
+import { PageShell } from '../layout/page-shell';
 import { BackLink, EmptyState } from '../layout/parts';
 import { OutfitCollage } from '../outfits/collage';
 import {
@@ -20,7 +19,7 @@ import {
   DayDestinationLine,
   destinationPickLabel,
 } from '../outfits/destination-views';
-import { OutfitTabs } from '../outfits/outfit-tabs';
+import { outfitTabs } from '../outfits/outfit-tabs';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import { brokenRuleLabels } from '../style/labels';
 import { tripUrl } from '../trips/urls';
@@ -38,12 +37,14 @@ import {
 import { ideaName, type IdeasWeather, shuffledSeed } from './ideas';
 import type { PoolGarment } from './queries';
 import { type GalleryState, ideasUrl } from './urls';
+import { dismiss, dismissable, needsNetwork } from '../page-contract';
 
 /**
  * The Outfits page's Ideas tab (#9): generated outfits as full-width cards
- * in a horizontal scroll-snap strip. Swiping is the browser's own
- * scrolling (no carousel library, no touch handlers); the strip's last
- * child is a sentinel that loads the next page when it scrolls into view
+ * in a horizontal scroll-snap strip, from `lg` a grid (`desktop="grid"`).
+ * Swiping is the browser's own scrolling (no carousel library, no touch
+ * handlers); the strip's last child is a sentinel that loads the next page
+ * when it scrolls into view (the strip's end, or the grid's last row)
  * and replaces itself (GET /outfits/ideas/more), as the wardrobe grid's
  * does. A card's primary action follows `?for=` (OutfitDestination): plan
  * it on that day (or, with `&replace=`, put it in that entry's place, #69),
@@ -73,58 +74,58 @@ export function IdeasPage(props: { ctx: ViewContext; model: IdeasPageModel }) {
   const { state, cards } = model;
   const shuffle = ideasUrl({ ...state, seed: shuffledSeed(state.seed) });
   return (
-    <Layout ctx={ctx} title={t('gallery.TITLE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('OUTFITS')}
-        actions={
+    <PageShell
+      ctx={ctx}
+      name="ideas"
+      title={t('gallery.TITLE')}
+      bar={{
+        title: t('OUTFITS'),
+        actions: (
           <a href={shuffle} class="btn btn-ghost btn-sm" data-shuffle="">
             ⤮ {t('gallery.SHUFFLE')}
           </a>
-        }
-      />
-      <PageMain width="wide" class="p-4 pt-20 pb-24 flex flex-col gap-3">
-        <OutfitTabs
-          active="ideas"
-          destination={
-            state.destination.kind === 'day' ? state.destination : undefined
-          }
-        />
-        <Scope model={model} />
-        {cards.weather && <WeatherNote weather={cards.weather} />}
-        <ChipList chips={adviceChips(cards.weather)} />
-        <p
-          data-offline-note=""
-          class="alert alert-warning alert-soft py-2 text-sm"
-          role="note"
-        >
-          {t('gallery.OFFLINE')}
-        </p>
-        {cards.ideas.length > 0 ? (
-          <>
-            <SnapStrip
-              size="page"
-              label={t('gallery.STRIP_LABEL')}
-              listbox={false}
-              tapThrough
-              frameClass="lg:w-full lg:max-w-3xl lg:mx-auto"
-              class="pb-2"
-              attributes={{ id: 'idea-strip' }}
-            >
-              <IdeaCards model={cards} />
-            </SnapStrip>
-            <SnapStripsInit />
-          </>
-        ) : (
-          <EmptyState message={emptyMessage(model)}>
-            <a href="/wardrobe" class="btn btn-primary btn-sm">
-              {t('gallery.EMPTY_ACTION')}
-            </a>
-          </EmptyState>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+        ),
+        tabs: outfitTabs(
+          'ideas',
+          state.destination.kind === 'day' ? state.destination : undefined,
+        ),
+      }}
+      width="wide"
+      body={{ gap: 3 }}
+    >
+      <Scope model={model} />
+      {cards.weather && <WeatherNote weather={cards.weather} />}
+      <ChipList chips={adviceChips(cards.weather)} />
+      <p
+        data-offline-note=""
+        class="alert alert-warning alert-soft py-2 text-sm"
+        role="note"
+      >
+        {t('gallery.OFFLINE')}
+      </p>
+      {cards.ideas.length > 0 ? (
+        <>
+          <SnapStrip
+            size="page"
+            label={t('gallery.STRIP_LABEL')}
+            listbox={false}
+            desktop="grid"
+            tapThrough
+            class="pb-2"
+            attributes={{ id: 'idea-strip' }}
+          >
+            <IdeaCards model={cards} />
+          </SnapStrip>
+          <SnapStripsInit />
+        </>
+      ) : (
+        <EmptyState message={emptyMessage(model)}>
+          <a href="/wardrobe" class="btn btn-primary btn-sm">
+            {t('gallery.EMPTY_ACTION')}
+          </a>
+        </EmptyState>
+      )}
+    </PageShell>
   );
 }
 
@@ -147,7 +148,9 @@ function Scope({ model }: { model: IdeasPageModel }) {
   const { state, planning, trip, capsule, capsules, styled } = model;
   const { destination } = state;
   return (
-    <div class="flex flex-col gap-2 px-2">
+    // The trip line's Back (btn-sm) sits over the capsule chip's row: a
+    // phone's gap leaves both 44 px areas room (main.css, chip-row; #1210).
+    <div class="flex flex-col gap-2 pointer-coarse:gap-2.5 px-2">
       {destination.kind === 'trip' && trip && (
         <div class="flex items-center gap-2" data-ideas-trip={trip.id}>
           <BackLink href={tripUrl(trip.id)} />
@@ -169,12 +172,12 @@ function Scope({ model }: { model: IdeasPageModel }) {
         {capsules.length > 0 && (
           <details class="dropdown">
             <summary class="btn btn-sm btn-outline rounded-full">
-              {capsule ? capsule.name : t('gallery.ALL_GARMENTS')} ▾
+              {capsule ? capsule.name : t('ALL_GARMENTS')} ▾
             </summary>
             <ul class="dropdown-content menu bg-base-100 rounded-box shadow-md z-20 w-56 mt-1">
               <li>
                 <a href={ideasUrl({ ...state, capsuleId: undefined })}>
-                  {t('gallery.ALL_GARMENTS')}
+                  {t('ALL_GARMENTS')}
                 </a>
               </li>
               {capsules.map((option) => (
@@ -265,21 +268,16 @@ export function IdeaCards({ model }: { model: IdeaCardsModel }) {
         />
       ))}
       {model.more && (
-        <div
+        <PageSentinel
+          as="div"
           class="snap-center shrink-0 w-16 flex items-center justify-center"
-          hx-get={ideasUrl(model.state, {
+          href={ideasUrl(model.state, {
             path: '/outfits/ideas/more',
             page: model.page + 1,
           })}
-          hx-trigger="intersect once"
-          hx-swap="outerHTML"
-          data-ideas-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </div>
+          trigger="intersect once"
+          marker="ideas"
+        />
       )}
     </>
   );
@@ -323,104 +321,98 @@ function IdeaCard(props: {
     idea.garments.slice(i + 1).map((b) => [a, b] as const),
   );
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-3"
       {...snapItem({
         value: ideaKey,
         selected,
         size: 'page',
         listbox: false,
-        class: 'card bg-base-100 shadow-sm',
+        desktop: 'grid',
       })}
       data-idea={ideaKey}
+      {...dismissable()}
     >
-      <div class="card-body p-3 gap-3">
-        <OutfitCollage garments={idea.garments} eager={props.eager} />
-        <h2 class="font-semibold text-sm line-clamp-2">{name}</h2>
-        <Reasons idea={idea} weather={model.weather} />
-        {/* One row: the pick, and "Not this" opening upward over the
+      <OutfitCollage garments={idea.garments} eager={props.eager} />
+      <h2 class="font-semibold text-sm line-clamp-2">{name}</h2>
+      <Reasons idea={idea} weather={model.weather} />
+      {/* One row: the pick, and "Not this" opening upward over the
             collage, so a whole card fits a phone screen above the dock. */}
-        <div class="flex items-start gap-2">
-          <PostForm action="/outfits/ideas/pick" class="flex-1">
-            {idea.garments.map((g) => (
-              <input type="hidden" name="garmentId" value={String(g.id)} />
-            ))}
-            <StateFields state={model.state} />
-            <button type="submit" class="btn btn-primary w-full">
-              {pickLabel(destination)}
-            </button>
-          </PostForm>
-          <details class="dropdown dropdown-top dropdown-end">
-            <summary class="btn btn-ghost">{t('gallery.NOT_THIS')}</summary>
-            <div class="dropdown-content bg-base-100 rounded-box shadow-md z-20 w-72 p-3 mb-1 flex flex-col gap-2">
-              <div class="flex flex-wrap gap-2">
-                {model.weather && (
-                  <PostForm action="/outfits/ideas/feedback" class="contents">
-                    <StateFields state={model.state} />
-                    <button
-                      type="submit"
-                      name="feeling"
-                      value="too-warm"
-                      class="btn btn-outline btn-xs"
-                    >
-                      {t('gallery.TOO_WARM')}
-                    </button>
-                    <button
-                      type="submit"
-                      name="feeling"
-                      value="too-cold"
-                      class="btn btn-outline btn-xs"
-                    >
-                      {t('gallery.TOO_COLD')}
-                    </button>
-                  </PostForm>
-                )}
-                {/* A dismissal only: nothing is stored. */}
-                <button
-                  type="button"
-                  class="btn btn-outline btn-xs"
-                  onclick="this.closest('[data-idea]').remove()"
-                >
-                  {t('gallery.NOT_TODAY')}
-                </button>
-              </div>
-              <p class="text-xs text-muted">{t('gallery.CLASHES_PROMPT')}</p>
-              <div class="flex flex-wrap gap-2">
-                {pairs.map(([a, b]) => (
-                  // htmx removes the card on success; without script the
-                  // same form posts natively and comes back to the gallery.
-                  <form
-                    method="post"
-                    action="/outfits/ideas/avoid"
-                    hx-post="/outfits/ideas/avoid"
-                    hx-target="closest [data-idea]"
-                    hx-swap="delete"
-                    data-needs-network=""
+      <div class="flex items-start gap-2">
+        <PostForm action="/outfits/ideas/pick" class="flex-1">
+          {idea.garments.map((g) => (
+            <input type="hidden" name="garmentId" value={String(g.id)} />
+          ))}
+          <StateFields state={model.state} />
+          <button type="submit" class="btn btn-primary w-full">
+            {pickLabel(destination)}
+          </button>
+        </PostForm>
+        <details class="dropdown dropdown-top dropdown-end">
+          <summary class="btn btn-ghost">{t('gallery.NOT_THIS')}</summary>
+          <div class="dropdown-content bg-base-100 rounded-box shadow-md z-20 w-72 p-3 mb-1 flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2">
+              {model.weather && (
+                <PostForm action="/outfits/ideas/feedback" class="contents">
+                  <StateFields state={model.state} />
+                  <button
+                    type="submit"
+                    name="feeling"
+                    value="too-warm"
+                    class="btn btn-outline btn-xs"
                   >
-                    <input
-                      type="hidden"
-                      name="garmentId"
-                      value={String(a.id)}
-                    />
-                    <input
-                      type="hidden"
-                      name="garmentId"
-                      value={String(b.id)}
-                    />
-                    <StateFields state={model.state} />
-                    <button type="submit" class="btn btn-outline btn-xs">
-                      {t('gallery.PAIR', {
-                        a: a.name ?? categoryLabel(a.category),
-                        b: b.name ?? categoryLabel(b.category),
-                      })}
-                    </button>
-                  </form>
-                ))}
-              </div>
+                    {t('gallery.TOO_WARM')}
+                  </button>
+                  <button
+                    type="submit"
+                    name="feeling"
+                    value="too-cold"
+                    class="btn btn-outline btn-xs"
+                  >
+                    {t('gallery.TOO_COLD')}
+                  </button>
+                </PostForm>
+              )}
+              {/* A dismissal only: nothing is stored. */}
+              <button
+                type="button"
+                class="btn btn-outline btn-xs"
+                {...dismiss()}
+              >
+                {t('gallery.NOT_TODAY')}
+              </button>
             </div>
-          </details>
-        </div>
+            <p class="text-xs text-muted">{t('gallery.CLASHES_PROMPT')}</p>
+            <div class="flex flex-wrap gap-2">
+              {pairs.map(([a, b]) => (
+                // htmx removes the card on success; without script the
+                // same form posts natively and comes back to the gallery.
+                <form
+                  method="post"
+                  action="/outfits/ideas/avoid"
+                  hx-post="/outfits/ideas/avoid"
+                  hx-target="closest [data-idea]"
+                  hx-swap="delete"
+                  {...needsNetwork()}
+                >
+                  <input type="hidden" name="garmentId" value={String(a.id)} />
+                  <input type="hidden" name="garmentId" value={String(b.id)} />
+                  <StateFields state={model.state} />
+                  <button type="submit" class="btn btn-outline btn-xs">
+                    {t('gallery.PAIR', {
+                      a: a.name ?? categoryLabel(a.category),
+                      b: b.name ?? categoryLabel(b.category),
+                    })}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        </details>
       </div>
-    </article>
+    </Card>
   );
 }
 

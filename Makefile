@@ -8,7 +8,7 @@ devkit/.devkit-materialized.mk: SHELL := /bin/sh
 devkit/.devkit-materialized.mk: .devkit-rev .devkit-bootstrap.sh devkit/.devkit-materialized ; @./.devkit-bootstrap.sh && touch $@
 devkit/.devkit-materialized: ;
 
-.PHONY: help ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check migration-check secrets-check actionlint-check install
+.PHONY: help lg-check-staged ci-deps ci-quick ci-guards ci-guards-staged devkit-check-staged ci-lint ci-typecheck secrets-staged ci-unit ci-db ci-e2e ci-image ci-smoke ci-metrics perf-compare metrics-snapshot metrics-tighten metrics-rebaseline screenshots gate pr merge review publish release devkit-sync devkit-check toolchain-check release-check workflows-check docs-check hooks-check layer-check guard-check plain-js-check lg-check migration-check secrets-check actionlint-check upstream-check install
 
 # Thin callers: the npm scripts in package.json stay the definitions of each check. These
 # targets add only what a clean machine needs around them (a throwaway Postgres, browsers,
@@ -51,14 +51,16 @@ E2E_BUDGET_SECONDS := 180
 # (boot 60 s, cutout 240 s) catch a hang, this catches a boot that slowly grew.
 SMOKE_BUDGET_SECONDS := 120
 UNIT_FLOOR := 1773
-DB_FLOOR := 5686
+DB_FLOOR := 7869
 E2E_FLOOR := 10
+E2E_VITEST_FLOOR := 9
 
 help:
 	@echo "make ci-deps          — npm ci (patches applied by postinstall)"
 	@echo "make install          — once per checkout or worktree: materialize devkit/, devkit-check, then point core.hooksPath at .githooks"
-	@echo "make ci-quick         — ci-guards, secrets-check, ci-lint, ci-typecheck (the two git hooks split it: scripts/ci/hooks.conf)"
-	@echo "make ci-guards        — devkit-check, toolchain-check, release-check, workflows-check, actionlint-check, docs-check, layer-check, guard-check, migration-check"
+	@echo "make perf-compare     — the page audit over the demo and scale personas against docs/perf/'s baselines; prints regressions"
+	@echo "make ci-quick        — ci-guards, secrets-check, ci-lint, ci-typecheck (the two git hooks split it: scripts/ci/hooks.conf)"
+	@echo "make ci-guards        — devkit-check, toolchain-check, release-check, workflows-check, actionlint-check, docs-check, layer-check, guard-check, plain-js-check, migration-check"
 	@echo "make ci-lint          — prettier format:check, eslint lint:check (both cached), then the changed-file rules"
 	@echo "make ci-typecheck     — tsc over the server (incremental) and views/assets"
 	@echo "make ci-unit          — the Vitest unit projects; no database. Budget $(UNIT_BUDGET_SECONDS) s, floor $(UNIT_FLOOR) tests"
@@ -76,19 +78,23 @@ help:
 	@echo "make review PR=<n>    — one local review round: claude -p over PR <n>'s diff, its record posted"
 	@echo "make merge PR=<n>     — squash-merge PR <n> once its review rounds allow it"
 	@echo "make publish          — the publisher host's timer only: move ghcr.io/kashhq/closet:latest to the newest green main"
+	@echo "make release          — name a shipped commit: VERSION=x.y.z [SHA=<commit>] [DRY_RUN=1]; git tag vX.Y.Z, GHCR X.Y.Z and X.Y, a GitHub Release (a person, at the checkout)"
 	@echo "make devkit-sync      — pin the latest kashhq/devkit in .devkit-rev (a one-line commit) and materialize it"
 	@echo "make devkit-check     — fail if the materialized devkit/ differs from .devkit-rev (part of ci-quick)"
 	@echo "make toolchain-check  — fail if a Dockerfile or workflow disagrees with the Node in .nvmrc (part of ci-quick)"
-	@echo "make release-check    — fail unless the image is APP_VERSION's only source (part of ci-quick)"
+	@echo "make release-check    — fail unless the image is APP_VERSION's only source and package.json/lock say 0.0.0 (devkit/bin/release_check.sh, scripts/ci/version_sources.sh; part of ci-quick)"
 	@echo "make workflows-check  — fail unless the workflows follow devkit's Actions rules (part of ci-quick)"
 	@echo "make actionlint-check — fail unless every .github/workflows file is valid to actionlint (scripts/ci/actionlint.sh; part of ci-quick)"
-	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index (part of ci-quick)"
+	@echo "make docs-check       — AGENTS.md real + CLAUDE.md symlink, size caps, the area index, the original project's name never back (part of ci-quick)"
 	@echo "make layer-check      — fail on an import in src/ that reaches up scripts/ci/layers.conf's layer stack (part of ci-quick)"
 	@echo "make guard-check      — fail on a code-structure rule in scripts/ci/guards.conf (devkit/bin/guard_check.py; part of ci-quick)"
+	@echo "make plain-js-check   — fail on a new plain-JS module in public/js/, or a converted one still listed in scripts/ci/plain_js.conf (part of ci-quick)"
+	@echo "make lg-check         — fail when a page file's lg: count grows past scripts/ci/lg_count.conf, or shrinks without lowering it (scripts/lg-check.ts, Tailwind's own scanner and compiler; its tests are scripts/lg-check.spec.ts in ci-unit; part of ci-quick)"
 	@echo "make migration-check  — fail on an edit to a shipped drizzle migration (devkit/bin/migration_check.py; part of ci-quick)"
 	@echo "make secrets-check    — fail on a credential committed in the tree (devkit/bin/secrets_check.sh; part of ci-quick)"
 	@echo "make secrets-staged   — the same scan over the staged paths only (the pre-commit hook's half)"
 	@echo "make ci-guards-staged — ci-guards with devkit-check reading the index (the pre-commit hook's half)"
+	@echo "make upstream-check   — fail while any substantive line in the tree was written by someone other than the owner, less scripts/ci/upstream_exempt.txt's facts (scripts/ci/upstream_lines.sh; minutes, in no tier)"
 	@echo "make hooks-check      — fail unless core.hooksPath is .githooks and both hooks are executable"
 
 ci-deps:
@@ -98,12 +104,12 @@ ci-deps:
 # (scripts/ci/hooks.conf), so a part added here must be added to a hook too.
 ci-quick: ci-guards secrets-check ci-lint ci-typecheck
 
-# Sub-second each and stdlib only: they run before npm ci. ci-guards-staged is the pre-commit
+# Sub-second each and stdlib only, except lg-check (Node, needs npm ci). ci-guards-staged is the pre-commit
 # hook's copy: devkit-check judges the staged gate_plan.sh (devkit #124 reads the working tree
 # by default, which let a bad staged plan through when only the disk copy was fixed).
-GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check migration-check
-ci-guards: devkit-check $(GUARDS_AFTER_DEVKIT)
-ci-guards-staged: devkit-check-staged $(GUARDS_AFTER_DEVKIT)
+GUARDS_AFTER_DEVKIT := toolchain-check release-check workflows-check actionlint-check docs-check layer-check guard-check plain-js-check migration-check
+ci-guards: devkit-check $(GUARDS_AFTER_DEVKIT) lg-check
+ci-guards-staged: devkit-check-staged $(GUARDS_AFTER_DEVKIT) lg-check-staged
 
 # Formatting is prettier's alone (format:check); eslint does not run prettier as a rule, which
 # read every file a second time (a third of a cold lint). Caches live in node_modules/.cache, so a
@@ -162,7 +168,7 @@ define e2e_server
 endef
 
 ci-e2e:
-	$(call e2e_server,$(TIER) e2e --budget $(E2E_BUDGET_SECONDS) --floor playwright=$(E2E_FLOOR) -- npx playwright test --project=chromium --reporter=list,ci-e2e)
+	$(call e2e_server,$(TIER) e2e --budget $(E2E_BUDGET_SECONDS) --floor playwright=$(E2E_FLOOR) --floor vitest=$(E2E_VITEST_FLOOR) -- npm run test:e2e:ci,ci-e2e)
 
 # Not a gate: 390 px (and a 1440 px block of) screenshots of the seed personas into screenshots/ (ci.yml's e2e job uploads
 # them). test/screenshots.spec.ts runs only with SEED_SCREENSHOTS, which playwright.config.ts
@@ -192,6 +198,19 @@ ci-smoke:
 # and origin/main fetched.
 ci-metrics:
 	devkit/bin/metrics_collect.sh check
+
+# The page audit over both personas against their committed baselines (docs/perf/README.md): prints
+# every step whose statements, rows or bytes changed and every time past the noise, and exits 0.
+# For a perf-sensitive PR and the publisher's occasional check: about 36 minutes for both, most of it
+# waiting out rate limits (scale's walk is about 18); `npm run audit:pages -- --only` times a few steps.
+# Output under scripts/results/ (gitignored), on a throwaway Postgres.
+perf-compare:
+	@$(PG) up $(PG_CONTAINER) >/dev/null
+	@trap '$(PG) down $(PG_CONTAINER)' EXIT INT TERM; \
+	  TEST_DATABASE_URL=$$($(PG) url $(PG_CONTAINER)) || exit 1; \
+	  export TEST_DATABASE_URL; \
+	  npm run audit:pages -- --persona demo --compare docs/perf/baseline.json --out scripts/results/audit-demo \
+	    && npm run audit:pages -- --persona scale --compare docs/perf/baseline-scale.json --out scripts/results/audit-scale
 
 metrics-snapshot:
 	devkit/bin/metrics_collect.sh snapshot
@@ -223,6 +242,12 @@ review: ; devkit/bin/pr_review.sh "$(PR)"
 publish:
 	devkit/bin/publish.sh .
 
+# A person at the checkout names an already-shipped commit (devkit README "Releases"; docs/decisions.md
+# 2026-11-25): make release VERSION=0.1.0 [SHA=<commit>] [DRY_RUN=1]. Never moves a build.
+release:
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=x.y.z [SHA=<commit>] [DRY_RUN=1]" >&2; exit 2; }
+	devkit/bin/release_tag.sh "$(VERSION)" $(SHA) $(if $(DRY_RUN),--dry-run)
+
 devkit-sync:
 	devkit/bin/devkit-sync.sh
 
@@ -237,6 +262,7 @@ toolchain-check:
 
 release-check:
 	devkit/bin/release_check.sh
+	scripts/ci/version_sources.sh
 
 workflows-check:
 	devkit/bin/workflows_check.sh
@@ -264,11 +290,32 @@ layer-check:
 guard-check:
 	python3 -I devkit/bin/guard_check.py
 
+# The page's plain-JS modules (public/js/*.js) only shrink: scripts/ci/plain_js.conf lists them,
+# a new one fails, a converted one fails until its line goes (#713). Reads the index, so the
+# pre-commit hook judges what is staged. Shell only, so it runs before npm ci.
+plain-js-check:
+	scripts/ci/plain-js-check.sh
+
+# Page-level `lg:` classes in src/web are counted per file against scripts/ci/lg_count.conf, which
+# only shrinks (#1066; the desktop layout plan's principle 7). Unlike its neighbours it needs
+# node_modules: it compiles each class with Tailwind (ci-quick runs after ci-deps).
+lg-check:
+	node -r ts-node/register/transpile-only scripts/lg-check.ts
+
+# The pre-commit hook's half: the conf, the file list and every file read from the index.
+lg-check-staged:
+	node -r ts-node/register/transpile-only scripts/lg-check.ts --staged
+
 # A migration on origin/main has run on the deployed database: never edit or delete it, fix forward
 # (the `migration-contract` label passes a deliberate edit). drizzle-kit's append to
 # drizzle/meta/_journal.json is not an edit. Stdlib only, like layer-check.
 migration-check:
 	python3 -I devkit/bin/migration_check.py --versions drizzle --kind drizzle
+
+# The MIT licence holds only while the owner wrote every line (#1225): blame over the whole tree,
+# which takes minutes, so it is in no tier. Run it on a change that brings in outside code.
+upstream-check:
+	scripts/ci/upstream_lines.sh
 
 # Committed credentials (scorecard T11): devkit's pattern scan over the tracked tree. Shell only,
 # so it runs before npm ci.

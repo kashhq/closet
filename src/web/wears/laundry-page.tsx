@@ -1,8 +1,8 @@
+import { cardClass } from '../card';
 import { queuedTarget } from '../../offline-writes';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import {
   EmptyState,
   GarmentThumb,
@@ -14,11 +14,18 @@ import { OutboxPending, outboxRegion } from '../outbox';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from '../wardrobe/garment';
 import { LAUNDRY_PATH } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import {
+  WardrobeAddSheet,
+  type WardrobeHeaderProps,
+  wardrobeBar,
+} from '../wardrobe/wardrobe-header';
 import type { LaundryItem } from './queries';
 
 /** The one-shot flag POST /laundry's redirect carries. */
 const LAUNDRY_FLAGS = ['washed'] as const;
+
+/** The hamper's form: Mark washed, in the page's action bar, submits it. */
+const LAUNDRY_FORM_ID = 'laundry-form';
 
 /**
  * GET /laundry, the Wardrobe's Laundry tab: the signed-in user's own hamper
@@ -44,61 +51,73 @@ export function LaundryPage(props: {
   // Back from Mark washed (#679): focus starts where the tap left it, on
   // the button, or on the way on once the hamper is empty.
   const landed = props.washed !== undefined;
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'laundry',
+    viewOwner: undefined,
+    sharedWardrobes: props.sharedWardrobes,
+    canEdit: true,
+  };
   return (
-    <Layout ctx={ctx} title={t('wear.LAUNDRY')}>
-      <WardrobeHeader
-        ctx={ctx}
-        tab="laundry"
-        viewOwner={undefined}
-        sharedWardrobes={props.sharedWardrobes}
-        canEdit
-      />
-      <div class="pt-16">
-        <WardrobeTabs active="laundry" viewOwner={undefined} />
-        <main class="p-4 pb-40 w-full max-w-lg mx-auto">
-          {items.length === 0 ? (
-            <EmptyState message={t('wear.LAUNDRY_EMPTY')}>
-              <a href="/wardrobe" class="btn btn-sm" autofocus={landed}>
-                {t('WARDROBE')}
-              </a>
-            </EmptyState>
-          ) : (
-            <PostForm
-              action={LAUNDRY_PATH}
-              class="flex flex-col gap-6"
-              offlineQueue="wash"
-            >
-              {due.length > 0 && (
-                <LaundryGroup title={t('wear.LAUNDRY_DUE')} items={due} />
-              )}
-              {worn.length > 0 && (
-                <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
-              )}
-              <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex justify-end">
+    <PageShell
+      ctx={ctx}
+      name="laundry"
+      title={t('wear.LAUNDRY')}
+      bar={wardrobeBar(header)}
+      actionBar={
+        items.length > 0
+          ? {
+              children: (
                 <button
                   type="submit"
+                  form={LAUNDRY_FORM_ID}
                   id="laundry-mark-washed"
                   class="btn btn-primary btn-sm"
                   autofocus={landed}
                 >
                   {t('wear.MARK_WASHED')}
                 </button>
-              </div>
-            </PostForm>
-          )}
-        </main>
-      </div>
-      {props.washed !== undefined && (
+              ),
+            }
+          : undefined
+      }
+      overlays={
         <>
-          <SavedToast
-            id="laundry-toast"
-            text={t('wear.LAUNDRY_WASHED', { count: props.washed })}
-          />
-          <StripFlags names={LAUNDRY_FLAGS} />
+          <WardrobeAddSheet {...header} />
+          {props.washed !== undefined && (
+            <>
+              <SavedToast
+                id="laundry-toast"
+                text={t('wear.LAUNDRY_WASHED', { count: props.washed })}
+              />
+              <StripFlags names={LAUNDRY_FLAGS} />
+            </>
+          )}
         </>
+      }
+    >
+      {items.length === 0 ? (
+        <EmptyState message={t('wear.LAUNDRY_EMPTY')}>
+          <a href="/wardrobe" class="btn btn-sm" autofocus={landed}>
+            {t('WARDROBE')}
+          </a>
+        </EmptyState>
+      ) : (
+        <PostForm
+          id={LAUNDRY_FORM_ID}
+          action={LAUNDRY_PATH}
+          class="flex flex-col gap-6"
+          offlineQueue="wash"
+        >
+          {due.length > 0 && (
+            <LaundryGroup title={t('wear.LAUNDRY_DUE')} items={due} />
+          )}
+          {worn.length > 0 && (
+            <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
+          )}
+        </PostForm>
       )}
-      <Dock ctx={ctx} />
-    </Layout>
+    </PageShell>
   );
 }
 
@@ -122,7 +141,10 @@ function LaundryRow({ item }: { item: LaundryItem }) {
   const name = item.name ?? categoryLabel(item.category);
   return (
     <label
-      class="flex items-center gap-3 rounded-box bg-base-100 shadow-sm p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-primary"
+      class={cardClass(
+        'content',
+        'flex-row items-center gap-3 p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-primary',
+      )}
       {...outboxRegion(queuedTarget('wash', item.id), name)}
     >
       <input

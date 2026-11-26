@@ -195,10 +195,12 @@ export interface DbOptions {
   max?: number;
   /**
    * Called each time the database is seen answering: a connection opened,
-   * or a connection given back after a query it answered (TimedPool). The
-   * server ends an outage with it (DatabaseOutage, createApp).
+   * or a connection given back after a query it answered (TimedPool), with
+   * when that connection or query began (performance.now()). The server
+   * ends an outage with it (DatabaseOutage, createApp), but only with an
+   * answer to something begun after the outage did (#842).
    */
-  onAnswer?: () => void;
+  onAnswer?: (startedAt: number) => void;
 }
 
 /**
@@ -285,7 +287,9 @@ class StatementCounter implements DrizzleLogger {
  * `onAnswer` hears the database answering: every connection opened, and
  * every connection given back with its last query answered (TimedClient), so
  * an outage ends with the first success whether or not the pool has to open
- * a connection for it (a full pool under steady load opens none).
+ * a connection for it (a full pool under steady load opens none). Each comes
+ * with when it began: a slow query sent before the outage and answered after
+ * its first failure says nothing of the database now (#842).
  */
 class TimedPool extends Pool {
   private readonly held = new WeakMap<
@@ -293,11 +297,15 @@ class TimedPool extends Pool {
     { timing: RequestTiming; since: number }
   >();
 
-  constructor(config: PoolConfig, onAnswer: () => void) {
+  constructor(config: PoolConfig, onAnswer: (startedAt: number) => void) {
     super({ ...config, Client: TimedClient });
-    this.on('connect', onAnswer);
+    this.on('connect', (client) => {
+      if (client instanceof TimedClient) onAnswer(client.openedAt);
+    });
     this.on('release', (_error, client) => {
-      if (client instanceof TimedClient && client.takeAnswered()) onAnswer();
+      const answered =
+        client instanceof TimedClient ? client.takeAnswered() : undefined;
+      if (answered !== undefined) onAnswer(answered);
       const hold = this.held.get(client);
       if (!hold) return;
       this.held.delete(client);
@@ -365,14 +373,18 @@ function connectFailure(error: unknown): Error {
  * (pool.query's is; a Drizzle transaction's is not).
  */
 class TimedClient extends Client {
-  private answered = false;
+  /** Taken as the connection's start: pg-pool connects the client it has just made. */
+  readonly openedAt = performance.now();
+  // When the last query began, if it was answered.
+  private answered: number | undefined;
 
   // Generic in its result so it stands in for each of the base's overloads.
   override query<R>(...args: unknown[]): R {
+    const startedAt = performance.now();
     const callback = args.at(-1);
     if (typeof callback === 'function') {
       args[args.length - 1] = (error: unknown, result: unknown) => {
-        this.settled(error);
+        this.settled(error, startedAt);
         Reflect.apply(callback, undefined, [error, result]);
       };
     }
@@ -380,24 +392,28 @@ class TimedClient extends Client {
     const result = base(...args);
     if (result instanceof Promise) {
       void result.then(
-        () => this.settled(undefined),
-        (error: unknown) => this.settled(error),
+        () => this.settled(undefined, startedAt),
+        (error: unknown) => this.settled(error, startedAt),
       );
     }
+    // eslint-disable-next-line closet/no-forged-copy -- R is the base's own result type; nothing here makes copy
     return result as R;
   }
 
-  /** Whether its last query was answered; read once per hold (TimedPool's release). */
-  takeAnswered(): boolean {
+  /**
+   * When its last query began, if that query was answered; read once per
+   * hold (TimedPool's release).
+   */
+  takeAnswered(): number | undefined {
     const answered = this.answered;
-    this.answered = false;
+    this.answered = undefined;
     return answered;
   }
 
   // The last query decides: a transaction that began, then lost its
   // connection, says nothing of the database being back.
-  private settled(error: unknown): void {
-    this.answered = !error;
+  private settled(error: unknown, startedAt: number): void {
+    this.answered = error ? undefined : startedAt;
     // pg's end() never rejects.
     if (isQueryReadTimeout(error)) void this.end();
   }

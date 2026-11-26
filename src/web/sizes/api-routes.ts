@@ -1,24 +1,29 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import { MEASUREMENTS } from '../../wardrobe/measurements';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { refusedBody } from '../api/refused-body';
+import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
 import {
-  addBrandSize,
+  BRAND_TAKEN,
   brandSizeFor,
   brandSizesOf,
-  deleteBrandSize,
   findMeasurements,
-  saveMeasurements,
-  setLengthUnit,
-  updateBrandSize,
 } from './queries';
 import {
+  changeBrandSize,
+  createBrandSize,
+  createBrandSizeOnce,
+  removeBrandSize,
+  saveBodyMeasurements,
+  setBodyLengthUnit,
+} from './size-actions';
+import {
   BrandSizeInput,
+  NewBrandSize,
   BrandSizeQuery,
   BrandSizeResource,
   MeasurementsInput,
@@ -42,6 +47,8 @@ const BrandSizeList = Type.Object(
     description: 'Your brand notes, by brand: never paged',
   },
 );
+
+const BRANDS_PATH = '/sizes/brands';
 
 /** A brand already noted, as the page's form refuses it: under `brand`. */
 const brandTaken = () =>
@@ -98,13 +105,8 @@ export const sizesApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const lengths = postedLengths(request.body);
-      await saveMeasurements(db, userId, lengths);
-      const set = MEASUREMENTS.filter((m) => lengths[m] !== null);
-      logger.info(
-        `Measurements saved by user ${userId} (API): ${set.length} of ${MEASUREMENTS.length} set`,
-      );
+      await saveBodyMeasurements({ db, logger }, actorOf(request), lengths);
       return toMeasurementsResource(lengths);
     },
   );
@@ -123,16 +125,14 @@ export const sizesApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { unit } = request.body;
-      await setLengthUnit(db, userId, unit);
-      logger.info(`Measurement unit set to ${unit} by user ${userId} (API)`);
+      await setBodyLengthUnit({ db, logger }, actorOf(request), unit);
       return { unit };
     },
   );
 
   app.get(
-    '/sizes/brands',
+    BRANDS_PATH,
     {
       schema: {
         operationId: 'listBrandSizes',
@@ -157,33 +157,51 @@ export const sizesApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   );
 
   app.post(
-    '/sizes/brands',
+    BRANDS_PATH,
     {
       schema: {
         operationId: 'addBrandSize',
         tags: ['sizes'],
         summary: 'Notes your size in a brand',
         description:
-          'A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}).',
-        body: BrandSizeInput,
-        response: apiResponses({ 201: BrandSizeResource }),
+          'A brand you have a note on already, in any case, is a 400 naming `body/brand`: change that one (PUT /sizes/brands/{id}). With a `clientId`, a retry answers the first note of that id (200, as it was saved) and creates nothing; the id of a note deleted since is a 410 `gone`.',
+        body: NewBrandSize,
+        response: apiResponses({
+          200: BrandSizeResource,
+          201: BrandSizeResource,
+        }),
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
-      const form = readBrandSizeForm(request.body);
+      const actor = actorOf(request);
+      const { clientId, ...body } = request.body;
+      const form = readBrandSizeForm(body);
       if (!form.ok) throw refusedBody(form.errors, POINTER_OF_BRAND_FIELD);
-      const id = await addBrandSize(db, userId, form.fields);
-      if (id === 'brand-taken') throw brandTaken();
-      logger.info(`Brand size ${id} added by user ${userId} (API)`);
+      if (!clientId) {
+        const id = await createBrandSize({ db, logger }, actor, form.fields);
+        if (id === BRAND_TAKEN) throw brandTaken();
+        return reply
+          .status(201)
+          .send(toBrandSizeResource({ id, ...form.fields }));
+      }
+      const added = await createBrandSizeOnce(
+        { db, logger },
+        actor,
+        form.fields,
+        clientId,
+      );
+      if (added === BRAND_TAKEN) throw brandTaken();
+      if (added === 'gone') throw new HttpError(410, t('sizes.BRAND_DELETED'));
+      // A retry answers the first row as stored, not this body: the id
+      // names the create, not its content.
       return reply
-        .status(201)
-        .send(toBrandSizeResource({ id, ...form.fields }));
+        .status(added.created ? 201 : 200)
+        .send(toBrandSizeResource(added.row));
     },
   );
 
   app.put(
-    '/sizes/brands/:id',
+    `${BRANDS_PATH}/:id`,
     {
       schema: {
         operationId: 'updateBrandSize',
@@ -203,15 +221,19 @@ export const sizesApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       // the same 400 whoever's id it names.
       const form = readBrandSizeForm(request.body);
       if (!form.ok) throw refusedBody(form.errors, POINTER_OF_BRAND_FIELD);
-      const updated = await updateBrandSize(db, actor, id, form.fields);
-      if (updated === 'brand-taken') throw brandTaken();
-      logger.info(`Brand size ${id} changed by user ${actor.userId} (API)`);
+      const updated = await changeBrandSize(
+        { db, logger },
+        actor,
+        id,
+        form.fields,
+      );
+      if (updated === BRAND_TAKEN) throw brandTaken();
       return toBrandSizeResource({ id, ...form.fields });
     },
   );
 
   app.delete(
-    '/sizes/brands/:id',
+    `${BRANDS_PATH}/:id`,
     {
       schema: {
         operationId: 'deleteBrandSize',
@@ -224,8 +246,7 @@ export const sizesApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      await deleteBrandSize(db, actor, id);
-      logger.info(`Brand size ${id} removed by user ${actor.userId} (API)`);
+      await removeBrandSize({ db, logger }, actor, id);
       return reply.status(204).send(null);
     },
   );

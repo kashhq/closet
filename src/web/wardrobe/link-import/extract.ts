@@ -1,6 +1,7 @@
 import type {
   GarmentCategory,
   Material,
+  Sleeve,
   Warmth,
 } from '../../../wardrobe/properties';
 import type { GarmentColor } from '../../../wardrobe/properties';
@@ -60,6 +61,8 @@ export interface ExtractedProduct {
   fabricWeight: number | null;
   /** Only from "heavyweight"/"lightweight" words without a stated weight. */
   warmth: Warmth | null;
+  /** Only where the name states it ("sports bra" is sleeveless); else the type's preset. */
+  sleeve: Sleeve | null;
   /** Absolute http(s) image URLs, best first, without duplicates. */
   images: string[];
 }
@@ -185,15 +188,35 @@ function metaText(
 // security decision, and the person reviews the form.
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'ac', 'gov']);
 
-/** "Uniqlo" from `www.uniqlo.com` or `shop.uniqlo.co.uk`; null for an IP. */
+// Platforms that host many shops under one domain: the shop is the label
+// left of the platform ("acme.myshopify.com" is "Acme"), never the platform
+// itself. An entry must have exactly that shape: <shop-name>.<platform>, the
+// subdomain naming the shop. Not wixsite.com (<account>.wixsite.com/<site>:
+// the subdomain is the account) nor mybigcommerce.com (<store-hash>), nor
+// webflow.io (staging projects). A shop on its own domain is not listed and
+// reads as before. Small on purpose, like SECOND_LEVEL: a miss gives the
+// platform's name, which the person corrects on the form (the page's brand
+// and og:site_name win before either).
+const HOSTING_DOMAINS = new Set([
+  'myshopify.com',
+  'squarespace.com',
+  'bigcartel.com',
+  'weebly.com',
+]);
+
+/**
+ * "Uniqlo" from `www.uniqlo.com` or `shop.uniqlo.co.uk`, "Acme" from
+ * `acme.myshopify.com`; null for an IP or a bare platform host.
+ */
 function registrableName(url: URL): string | null {
   const labels = url.hostname.split('.');
   if (labels.length < 2 || /^[\d.]+$|:/.test(url.hostname)) return null;
   const tld = labels.length - 1;
+  const hosted = HOSTING_DOMAINS.has(labels.slice(-2).join('.'));
+  const registry = hosted || SECOND_LEVEL.has(labels[tld - 1]);
   const name =
-    labels.length > 2 && SECOND_LEVEL.has(labels[tld - 1])
-      ? labels[tld - 2]
-      : labels[tld - 1];
+    registry && labels.length > 2 ? labels[tld - 2] : labels[tld - 1];
+  if (hosted && (labels.length === 2 || name === 'www')) return null;
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : null;
 }
 
@@ -260,7 +283,13 @@ function guessProperties(
   fields: MergedFields,
 ): Pick<
   ExtractedProduct,
-  'colors' | 'category' | 'type' | 'materials' | 'fabricWeight' | 'warmth'
+  | 'colors'
+  | 'category'
+  | 'type'
+  | 'sleeve'
+  | 'materials'
+  | 'fabricWeight'
+  | 'warmth'
 > {
   const hints = hintText(fields);
   const kind = kindOf(fields);
@@ -286,9 +315,11 @@ function hintText({ name, material, description }: MergedFields): string {
 
 function kindOf(
   fields: MergedFields,
-): Pick<ExtractedProduct, 'category' | 'type'> {
+): Pick<ExtractedProduct, 'category' | 'type' | 'sleeve'> {
   const kind = guessKind(fields.name ?? '') ?? guessKind(fields.category ?? '');
-  return kind ?? { category: null, type: null };
+  return kind
+    ? { category: kind.category, type: kind.type, sleeve: kind.sleeve ?? null }
+    : { category: null, type: null, sleeve: null };
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

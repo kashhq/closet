@@ -11,7 +11,7 @@ import type { HeicReply, HeicRequest } from './heic-worker';
  * 48 MP iPhone photo decodes in a few seconds; this is room for a queue of
  * them, and a ceiling on a container built to never finish.
  */
-export const HEIC_DEADLINE_MS = 30_000;
+const HEIC_DEADLINE_MS = 30_000;
 
 /**
  * Decodes queued behind the running one, each holding its container (up to
@@ -20,7 +20,7 @@ export const HEIC_DEADLINE_MS = 30_000;
  * 'busy', the caller's 503). An upload still sending holds no place: four
  * slow bodies cannot shut everyone else out.
  */
-export const HEIC_MAX_WAITING = 4;
+const HEIC_MAX_WAITING = 4;
 
 /** An idle thread exits after this: libheif's WASM heap never shrinks. */
 const IDLE_MS = 60_000;

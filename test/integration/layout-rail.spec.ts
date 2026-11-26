@@ -49,13 +49,15 @@ describe('the left rail', () => {
         .slice(0, DOCK_TABS.length)
         .map((match) => match[1]);
       expect(hrefs).toEqual(tabRoots);
-      // Exactly one tab is the current page, and no second navigation exists
-      // for the rail.
-      expect(body.match(/aria-current="page"/g)).toHaveLength(1);
+      // Exactly one dock tab is the current page (the page's own section
+      // tabs carry theirs, #726), and no second navigation exists for the rail.
+      expect(dock.match(/aria-current="page"/g)).toHaveLength(1);
       expect(body).not.toMatch(/class="([^"]* )?rail[ "]/);
-      // The page's own column comes from the layout's width tokens.
+      // The page's own column comes from the layout's width tokens: a
+      // `single` page's class, or a wide layout's frame, which main.css
+      // sizes (the Wardrobe's facets, #1067).
       expect(body).toMatch(
-        /<main [^>]*class="[^"]*\bmax-w-page-(narrow|wide)\b/,
+        /<main [^>]*class="[^"]*\bmax-w-page-(narrow|wide)\b|<main [^>]*data-layout="(split|panel|facets|index)"/,
       );
       expect(body).not.toMatch(/<main [^>]*\bmax-w-lg\b/);
     },

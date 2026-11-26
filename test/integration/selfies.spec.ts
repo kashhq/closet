@@ -184,7 +184,7 @@ describe('outfit selfies', () => {
 
   it('serves a selfie to its owner only, privately cached; never on the public /file routes', async () => {
     const { entryId } = await outfitOn('Private');
-    const { fileName, shareableId } = await takeSelfie(t, entryId);
+    const { fileName } = await takeSelfie(t, entryId);
 
     for (const url of [
       `/selfies/${fileName}?v=1`,
@@ -213,12 +213,11 @@ describe('outfit selfies', () => {
     expect(signedOut.statusCode).toBe(302);
 
     // The public routes serve by name alone: a selfie's name gets nothing,
-    // signed in or not, and its share id makes no preview.
+    // signed in or not.
     for (const url of [
       `/file/${fileName}`,
       `/file/thumb/${fileName}`,
       `/file/nobg/${fileName}`,
-      `/file/watermark/${shareableId}`,
     ]) {
       expect((await t.inject({ method: 'GET', url })).statusCode).toBe(404);
       expect(
@@ -376,9 +375,12 @@ describe('outfit selfies', () => {
     expect(await fileRow(fileName)).toBeUndefined();
     const files = await storedFiles();
     for (const name of variantsOf(fileName)) expect(files).not.toContain(name);
-    expect(t.logs.messages('info', 'Web')).toContain(
-      `Calendar entry ${entryId} deleted by user ${t.owner.id} with its selfie ${fileName}`,
-    );
+    expect(t.logs.ops('calendar.entry.deleted').at(-1)).toMatchObject({
+      userId: t.owner.id,
+      entryId,
+      changed: true,
+      selfies: [fileName],
+    });
   });
 
   it('deleting the outfit keeps its selfie as a look on its day, which can still be removed', async () => {

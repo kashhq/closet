@@ -45,9 +45,9 @@ describe('the Wardrobe header and tabs', () => {
   const sheetOf = (html: string) =>
     element(html, /<dialog id="add-sheet"[\s\S]*?<\/dialog>/);
   const tabsOf = (html: string) =>
-    element(html, /<div role="tablist"[^>]*id="wardrobe-tabs">[\s\S]*?<\/div>/);
+    element(html, /<nav [^>]*id="wardrobe-tabs">[\s\S]*?<\/nav>/);
   const activeTab = (html: string) =>
-    /class="tab tab-active" aria-selected="true">([^<]*)</.exec(html)?.[1];
+    /class="tab tab-active" aria-current="page">([^<]*)</.exec(html)?.[1];
 
   const share = async (permission: 'VIEW' | 'MANAGE', cookie: string) => {
     const invite = await t.inject({
@@ -97,6 +97,8 @@ describe('the Wardrobe header and tabs', () => {
       expect(tabsOf(html), path).toMatch(
         /href="\/wardrobe"[\s\S]*href="\/capsules"[\s\S]*href="\/laundry"[\s\S]*href="\/wardrobe\/wishlist"/,
       );
+      // The tab row is a labelled <nav> (a landmark), not loose links (#730).
+      expect(tabsOf(html), path).toContain('aria-label="Wardrobe sections"');
       expect(html, path).toContain('id="title-menu"');
       expect(menuOf(html), path).toBeDefined();
       expect(sheetOf(html), path).toBeDefined();
@@ -126,7 +128,7 @@ describe('the Wardrobe header and tabs', () => {
 
   it('gives a filtered grid’s fragment the ⋯ menu out of band, so Select keeps the new filters', async () => {
     const html = await get('/wardrobe?category=bottoms', undefined, true);
-    expect(html).toMatch(/^<main id="wardrobe-main"/);
+    expect(html).toMatch(/^<div id="wardrobe-body"/);
     const menu = menuOf(html)!;
     expect(menu).toContain('hx-swap-oob="true"');
     expect(menu).toContain('href="/wardrobe?category=bottoms&select=1"');
@@ -150,7 +152,7 @@ describe('the Wardrobe header and tabs', () => {
       viewer,
       true,
     );
-    expect(html).toMatch(/^<main id="wardrobe-main"/);
+    expect(html).toMatch(/^<div id="wardrobe-body"/);
     const menu = menuOf(html)!;
     expect(menu).toContain('hx-swap-oob="true"');
     expect(menu).not.toContain('select=1');
@@ -215,7 +217,6 @@ describe('the Wardrobe header and tabs', () => {
           .insert(file)
           .values({
             fileName: `${randomUUID()}.webp`,
-            shareableId: randomUUID(),
             createdOn: new Date().toISOString(),
             createdById: ownerId,
             cutoutStatus: status,

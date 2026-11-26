@@ -19,7 +19,7 @@ import { revokeAllPushDevices } from './revoke-push';
  * anyway: releasing frees the photo now, and a running server's own live
  * job keeps its lease.
  */
-export const DEAD_LEASE_MS = 2 * CUTOUT_TIMEOUT_MS;
+const DEAD_LEASE_MS = 2 * CUTOUT_TIMEOUT_MS;
 
 export interface AfterRestoreDeps {
   db: Db;
@@ -30,7 +30,7 @@ export interface AfterRestoreDeps {
 }
 
 /** A garment whose photo's original reconciliation did not find. */
-export interface MissingOriginalGarment {
+interface MissingOriginalGarment {
   garmentId: number;
   name: string | null;
   ownerId: number;
@@ -63,7 +63,7 @@ export interface AfterRestoreReport {
  *    history it already has), and every session cookie issued before it no
  *    longer opens a session (its `sep`, #908): the household signs in again.
  * 2. Every personal access token, agent and device, revoked through the
- *    statement a new password uses (revokeAllTokensStatement), and every
+ *    statement a new password uses (revokeTokensStatement), and every
  *    push subscription (#908): a restore brings back what was revoked after
  *    the dump (a lost phone's token), and nothing outside the database
  *    remembers it. Owners re-issue their tokens; each device turns

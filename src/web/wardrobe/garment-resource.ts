@@ -24,10 +24,11 @@ import {
   WARMTHS,
 } from '../../wardrobe/properties';
 import { GARMENT_STATUSES } from '../../wardrobe/status';
-import { literals, withoutNulls } from '../api/resource';
+import { asResource, literals } from '../api/resource';
 import { shownPhoto } from './cutout-shown';
 import { imageUrl } from '../files/image-url';
 import { IsoDateSchema } from '../schemas';
+import { PublicShareUrl, publicShareUrl } from '../share/urls';
 import type { GarmentContext } from './garment-context';
 import type {
   GarmentDetail,
@@ -48,8 +49,10 @@ import {
  * section 2), mapped from what the pages read: a list's summary
  * (searchGarments) and the garment in full (requireGarment and
  * garmentContext, the garment page's own reads). camelCase, null fields left
- * out, money a decimal string, a day `YYYY-MM-DD`. MCP's get_garment answers
- * the same facts in its own shape (nulls kept: an agent reads "null").
+ * out, money a decimal string, a day `YYYY-MM-DD`. Each resource is a
+ * record with its nulls kept (`garmentRecord`, `garmentListRecord`), which
+ * the API sends through asResource and MCP's garment tools project
+ * (nulls kept: an agent reads "null"; src/web/mcp/tools/garments.ts).
  */
 
 const Money = Type.String({
@@ -128,11 +131,12 @@ export const GarmentListItem = Type.Object(
 );
 type GarmentListItem = Static<typeof GarmentListItem>;
 
-export function toGarmentListItem(
+/** A list's garment, nulls kept: the API's GarmentListItem, search_garments' hits. */
+export function garmentListRecord(
   summary: GarmentSummary,
   cutoutsEnabled: boolean,
-): GarmentListItem {
-  return withoutNulls({
+) {
+  return {
     id: summary.id,
     name: summary.name,
     category: summary.category,
@@ -147,11 +151,22 @@ export function toGarmentListItem(
     photo:
       summary.photo &&
       toGarmentPhoto(shownPhoto(summary.photo, cutoutsEnabled)),
-    photoMissingSince: summary.photoMissingSince?.toISOString(),
+    photoMissingSince: summary.photoMissingSince?.toISOString() ?? null,
     type: summary.type,
     warmth: summary.warmth,
     formality: summary.formality,
-  });
+  };
+}
+export type GarmentListRecord = ReturnType<typeof garmentListRecord>;
+
+export function toGarmentListItem(
+  summary: GarmentSummary,
+  cutoutsEnabled: boolean,
+): GarmentListItem {
+  return asResource(
+    GarmentListItem,
+    garmentListRecord(summary, cutoutsEnabled),
+  );
 }
 
 const Properties = Type.Object(
@@ -234,6 +249,21 @@ const Repair = Type.Object(
   { title: 'Repair' },
 );
 
+/**
+ * A garment's public link as a reader is shown it (#959): only to whoever
+ * may stop it, the owner and a MANAGE grantee, as its page's "Shared
+ * publicly" panel; null while not shared.
+ */
+export function garmentShareUrl(
+  shareableId: string | null,
+  canManage: boolean,
+  siteUrl: string,
+): string | null {
+  return shareableId !== null && canManage
+    ? publicShareUrl(siteUrl, 'garment', shareableId)
+    : null;
+}
+
 /** A garment's stored fields beyond its identity: the page's and the feed's. */
 const recordFields = {
   ...identity,
@@ -248,6 +278,7 @@ const recordFields = {
   /** The owner's repair and alteration log: only on their own wardrobe. */
   repairs: Type.Optional(Type.Array(Repair)),
   agent: Type.Optional(AgentResource),
+  publicShareUrl: Type.Optional(PublicShareUrl),
 };
 
 export const Garment = Type.Object(
@@ -286,12 +317,17 @@ export const SyncedGarment = Type.Object(
   },
 );
 
-/** What a garment page's answer and the feed's share, nulls kept for withoutNulls. */
+/**
+ * What a garment page's answer and the feed's share, nulls kept. The
+ * owner's records are undefined where the reader read none (a grantee's),
+ * so no surface can answer them, not even as null.
+ */
 function recordOf(
   garment: GarmentDetail,
-  repairs: RepairEntry[] | null,
+  repairs: RepairEntry[] | undefined,
   agent: AgentLabel | null,
   cutoutsEnabled: boolean,
+  shareUrl: string | null,
 ) {
   return {
     id: garment.id,
@@ -308,13 +344,13 @@ function recordOf(
     photo:
       garment.photo &&
       toGarmentPhoto(shownPhoto(garment.photo, cutoutsEnabled)),
-    photoMissingSince: garment.photoMissingSince?.toISOString(),
+    photoMissingSince: garment.photoMissingSince?.toISOString() ?? null,
     notes: garment.notes,
     acquiredOn: garment.acquiredOn,
     replacesGarmentId: garment.replacesGarmentId,
     sourceUrl: garment.sourceUrl,
     conditionNote: garment.conditionNote,
-    properties: withoutNulls({
+    properties: {
       type: garment.type,
       warmth: garment.warmth,
       formality: garment.formality,
@@ -325,82 +361,107 @@ function recordOf(
       length: garment.length,
       fabricWeightGsm: garment.fabricWeight,
       waterResistant: garment.waterResistant,
-    }),
-    careLabel: withoutNulls({
+    },
+    careLabel: {
       wash: garment.careWash,
       bleach: garment.careBleach,
       dry: garment.careDry,
       iron: garment.careIron,
       dryClean: garment.careDryClean,
       notes: garment.washingDetails,
-    }),
-    repairs: repairs && repairs.map((entry) => withoutNulls({ ...entry })),
+    },
+    repairs,
     agent: toAgentResource(agent),
+    publicShareUrl: shareUrl,
   };
 }
 
 /**
- * The garment in full, from its page's reads: the owner's records only
- * where garmentContext read them (`own`: the owner of an owned garment),
- * so a grantee's answer cannot hold them.
+ * The garment in full, from its page's reads, nulls kept: the owner's
+ * records only where garmentContext read them (`own`: the owner of an
+ * owned garment), so a grantee's answer cannot hold them. `shareUrl` is
+ * the public link as the reader is shown it (garmentShareUrl). The API's
+ * Garment (toGarmentResource) and MCP's get_garment.
  */
-export function toGarmentResource(
+export function garmentRecord(
   garment: GarmentDetail,
   context: GarmentContext,
   cutoutsEnabled: boolean,
-): Garment {
+  shareUrl: string | null,
+) {
   const { own } = context;
-  return withoutNulls({
+  return {
     ...recordOf(
       garment,
-      own ? own.repairs.entries : null,
+      own?.repairs.entries,
       context.agent,
       cutoutsEnabled,
+      shareUrl,
     ),
     capsules: context.capsules
       .filter((capsule) => capsule.member)
       .map(({ id, name }) => ({ id, name })),
     care: own && ownerCare(garment, own.wear),
-  });
+  };
+}
+export type GarmentRecord = ReturnType<typeof garmentRecord>;
+
+export function toGarmentResource(
+  garment: GarmentDetail,
+  context: GarmentContext,
+  cutoutsEnabled: boolean,
+  shareUrl: string | null,
+): Garment {
+  return asResource(
+    Garment,
+    garmentRecord(garment, context, cutoutsEnabled, shareUrl),
+  );
 }
 
 /**
  * The feed's garment (garmentsByIds): the owner's records only where the
  * reader read them (`repairs`, null for a grantee's), so a grantee's
- * answer cannot hold them.
+ * answer cannot hold them; the public link only where they may manage it.
  */
 export function toSyncedGarment(
   garment: SyncedGarmentRow,
   cutoutsEnabled: boolean,
+  siteUrl: string,
 ): Static<typeof SyncedGarment> {
-  return withoutNulls({
-    ...recordOf(garment, garment.repairs, garment.agent, cutoutsEnabled),
+  return asResource(SyncedGarment, {
+    ...recordOf(
+      garment,
+      garment.repairs ?? undefined,
+      garment.agent,
+      cutoutsEnabled,
+      garmentShareUrl(garment.shareableId, garment.viewerManages, siteUrl),
+    ),
     care:
       garment.repairs === null
         ? null
-        : withoutNulls({
+        : {
             washAfterWears: garment.washAfterWears,
             lastWashedOn: garment.lastWashedOn,
-            washedAt: garment.washedAt?.toISOString(),
+            washedAt: garment.washedAt?.toISOString() ?? null,
             away: garment.away,
             awayNote: garment.awayNote,
-          }),
+          },
   });
 }
 
 function ownerCare(
   garment: GarmentDetail,
   wear: NonNullable<GarmentContext['own']>['wear'],
-): Static<typeof OwnerCare> {
+) {
   const cost = totalCost({
     price: garment.price,
     quantity: garment.quantity,
     repairCost: wear.repairCost,
   });
-  return withoutNulls({
+  return {
     washAfterWears: garment.washAfterWears,
     lastWashedOn: garment.lastWashedOn,
-    washedAt: garment.washedAt?.toISOString(),
+    washedAt: garment.washedAt?.toISOString() ?? null,
     away: garment.away,
     awayNote: garment.awayNote,
     worn: wear.worn,
@@ -408,7 +469,7 @@ function ownerCare(
     lastWorn: wear.lastWorn,
     cost,
     costPerWear: cost === null ? null : perWearCost(cost, wear.worn),
-  });
+  };
 }
 
 /*

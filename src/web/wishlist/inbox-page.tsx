@@ -1,14 +1,14 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import type { OutfitCount } from '../../wardrobe/goes-with';
 import { unlocksText } from '../gallery/goes-with';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
-import { CANDIDATE_GRID, PAIR_GRID } from '../layout/columns';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageColumn, PageMain } from '../layout/page-main';
+import { PageSentinel } from '../page-sentinel';
+import { CANDIDATE_GRID, OPTION_ROW, PAIR_GRID } from '../layout/columns';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState } from '../layout/parts';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { BrandSizeLookup } from '../sizes/queries';
 import { BrandSizeNote } from '../sizes/views';
 import type { ViewContext } from '../view-context';
@@ -21,7 +21,11 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from '../wardrobe/urls';
-import { WardrobeHeader, WardrobeTabs } from '../wardrobe/wardrobe-header';
+import {
+  WardrobeAddSheet,
+  wardrobeBar,
+  type WardrobeHeaderProps,
+} from '../wardrobe/wardrobe-header';
 import {
   GROUPS_PAGE_SIZE,
   type Inbox,
@@ -87,40 +91,44 @@ export function InboxPage(props: { ctx: ViewContext; model: InboxModel }) {
     inbox.own.length === 0 &&
     inbox.stillLooking.length === 0;
   const returnTo = wardrobeUrl(viewOwner, {}, WISHLIST_PATH);
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'wishlist',
+    viewOwner,
+    sharedWardrobes: inbox.sharedWardrobes,
+    canEdit,
+  };
   return (
-    <Layout ctx={ctx} title={t('wishlist.TITLE')}>
-      <WardrobeHeader
-        ctx={ctx}
-        tab="wishlist"
-        viewOwner={viewOwner}
-        sharedWardrobes={inbox.sharedWardrobes}
-        canEdit={canEdit}
-      />
-      <div class="pt-16">
-        <PageColumn width="wide">
-          <WardrobeTabs active="wishlist" viewOwner={viewOwner} />
-        </PageColumn>
-        <PageMain width="wide" class="flex flex-col gap-8 px-4 pt-4 pb-24">
-          {empty ? (
-            <EmptyState
-              message={t(canEdit ? 'wishlist.EMPTY' : 'wishlist.EMPTY_SHARED')}
-            >
-              {canEdit && <AddButtons viewOwner={viewOwner} />}
-            </EmptyState>
-          ) : (
-            <>
-              <ReadyToBuy model={model} />
-              <MusePicks model={model} />
-              <OwnWishlist model={model} />
-              <StillLooking model={model} returnTo={returnTo} />
-            </>
-          )}
-          <SetAside model={model} returnTo={returnTo} />
-        </PageMain>
-      </div>
-      <DecisionToastView toast={model.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="wishlist"
+      title={t('wishlist.TITLE')}
+      bar={wardrobeBar(header)}
+      width="wide"
+      body={{ gap: 8 }}
+      overlays={
+        <>
+          <WardrobeAddSheet {...header} />
+          <DecisionToastView toast={model.toast} />
+        </>
+      }
+    >
+      {empty ? (
+        <EmptyState
+          message={t(canEdit ? 'wishlist.EMPTY' : 'wishlist.EMPTY_SHARED')}
+        >
+          {canEdit && <AddButtons viewOwner={viewOwner} />}
+        </EmptyState>
+      ) : (
+        <>
+          <ReadyToBuy model={model} />
+          <MusePicks model={model} />
+          <OwnWishlist model={model} />
+          <StillLooking model={model} returnTo={returnTo} />
+        </>
+      )}
+      <SetAside model={model} returnTo={returnTo} />
+    </PageShell>
   );
 }
 
@@ -196,11 +204,12 @@ function ProductCard(props: {
         {props.children}
         {item.sourceUrl && (
           // http(s) only (the column's check); a new tab, as on the garment page.
+          // Its margin keeps its 44 px area clear of Bought it's on a phone (#1210).
           <a
             href={item.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="link link-hover text-base-content self-start py-1"
+            class="link link-hover text-base-content self-start py-1 pointer-coarse:mb-3"
           >
             {t('VIEW_PRODUCT')} ↗
           </a>
@@ -303,18 +312,13 @@ export function GroupCards(props: {
         <GroupCard group={group} viewOwner={viewOwner} />
       ))}
       {more && (
-        <li
+        <PageSentinel
+          as="li"
           class="flex justify-center py-4 lg:col-span-2"
-          hx-get={wardrobeUrl(viewOwner, { page: page + 1 }, INBOX_MORE_PATH)}
-          hx-trigger="intersect once"
-          hx-swap="outerHTML"
-          data-inbox-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </li>
+          href={wardrobeUrl(viewOwner, { page: page + 1 }, INBOX_MORE_PATH)}
+          trigger="intersect once"
+          marker="inbox"
+        />
       )}
     </>
   );
@@ -336,51 +340,52 @@ function GroupCard(props: {
   // The same count on every option decides nothing: said once, above them.
   const shared = sharedUnlocks(options, group.unlocks);
   return (
-    <li
-      class="card bg-base-100 border border-base-300 relative"
+    <Card
+      as="li"
+      variant="content"
+      class="relative"
+      bodyClass="p-4 gap-3"
       data-need={String(need.id)}
     >
-      <div class="card-body p-4 gap-3">
-        <div class="min-w-0">
-          <h3 class="font-semibold break-words">{need.name}</h3>
-          <NeedFacts
-            budget={need.budget}
-            options={options.length}
-            unlocks={shared}
-          />
-        </div>
-        <ul class="grid grid-cols-3 gap-2 lg:gap-3">
-          {options.map((pick) => (
-            <li>
-              <a
-                href={needUrl(need.id, viewOwner, '', { option: pick.id })}
-                class="relative z-10 flex flex-col gap-1 no-underline"
-                aria-label={itemName(pick)}
-                data-option={String(pick.id)}
-              >
-                <ProductPhoto photo={pick.photo} alt="" />
-                <PriceAgainstBudget
-                  price={pick.price}
-                  budget={need.budget}
-                  class="text-xs"
-                  compact
-                />
-                {!shared && <Unlocks count={group.unlocks?.get(pick.id)} />}
-              </a>
-            </li>
-          ))}
-        </ul>
-        {/* `static`: the theme's touch hit area makes a btn-sm its own
+      <div class="min-w-0">
+        <h3 class="font-semibold break-words">{need.name}</h3>
+        <NeedFacts
+          budget={need.budget}
+          options={options.length}
+          unlocks={shared}
+        />
+      </div>
+      <ul class={OPTION_ROW}>
+        {options.map((pick) => (
+          <li>
+            <a
+              href={needUrl(need.id, viewOwner, '', { option: pick.id })}
+              class="relative z-10 flex flex-col gap-1 no-underline"
+              aria-label={itemName(pick)}
+              data-option={String(pick.id)}
+            >
+              <ProductPhoto photo={pick.photo} alt="" />
+              <PriceAgainstBudget
+                price={pick.price}
+                budget={need.budget}
+                class="text-xs"
+                compact
+              />
+              {!shared && <Unlocks count={group.unlocks?.get(pick.id)} />}
+            </a>
+          </li>
+        ))}
+      </ul>
+      {/* `static`: the theme's touch hit area makes a btn-sm its own
             containing block (views/assets/main.css), which would shrink the
             stretched ::after to the button. */}
-        <a
-          href={needUrl(need.id, viewOwner)}
-          class="btn btn-primary btn-sm static self-start after:absolute after:inset-0"
-        >
-          {t('muse.DECIDE')}
-        </a>
-      </div>
-    </li>
+      <a
+        href={needUrl(need.id, viewOwner)}
+        class="btn btn-primary btn-sm static self-start after:absolute after:inset-0"
+      >
+        {t('muse.DECIDE')}
+      </a>
+    </Card>
   );
 }
 

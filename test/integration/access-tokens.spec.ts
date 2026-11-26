@@ -46,6 +46,7 @@ describe('agent access tokens', () => {
   });
 
   it('shows a new token once, with the command that connects Claude Code', async () => {
+    t.logs.clear();
     const res = await t.inject({
       method: 'POST',
       url: '/auth/tokens',
@@ -66,6 +67,14 @@ describe('agent access tokens', () => {
     expect(row.tokenHash).toBe(hashToken(token));
     expect(row.tokenHash).not.toContain(token);
     expect(row.tokenPrefix).toBe(token.slice(0, 11));
+    // The audit trail of a credential issued over the network names where from.
+    expect(t.logs.ops('token.created')).toEqual([
+      expect.objectContaining({
+        tokenId: row.id,
+        surface: 'page',
+        address: expect.any(String),
+      }),
+    ]);
 
     const listed = await page();
     expect(listed.body).toContain('Laptop');
@@ -249,6 +258,115 @@ describe('agent access tokens', () => {
     expect(res.body).not.toMatch(/closet_[A-Za-z0-9_-]{43}/);
   });
 
+  describe('a token’s scope (#701)', () => {
+    /** The scope words Agent Access shows on the token named `name`. */
+    const scopeShown = (body: string, name: string) =>
+      new RegExp(`>${name}</span>\\s*<span[^>]*data-scope[^>]*>([^<]*)<`).exec(
+        unescapeHtml(body),
+      )?.[1];
+
+    it('is read-only with every wardrobe unless asked, stored as chosen, and shown on each token; a token from before keeps full power', async () => {
+      const cookie = await t.register('scoped@example.com');
+      const id = await userIdOf(t, 'scoped@example.com');
+      const mint = (name: string, fields: Record<string, string> = {}) =>
+        t.inject({
+          method: 'POST',
+          url: '/auth/tokens',
+          payload: { name, currentPassword: TEST_PASSWORD, ...fields },
+          headers: { cookie },
+        });
+      const form = await t.inject({
+        method: 'GET',
+        url: '/auth/tokens',
+        headers: { cookie },
+      });
+      // Both toggles start off: the default is the narrowest read.
+      expect(form.body).toMatch(/<input type="checkbox" name="writes"/);
+      expect(form.body).not.toMatch(/name="writes"[^>]*checked/);
+      expect(form.body).toMatch(
+        /<input type="checkbox" name="ownWardrobeOnly"/,
+      );
+      expect(form.body).not.toMatch(/name="ownWardrobeOnly"[^>]*checked/);
+
+      expect((await mint('Default')).statusCode).toBe(200);
+      expect(
+        (await mint('Writer', { writes: 'on', ownWardrobeOnly: 'on' }))
+          .statusCode,
+      ).toBe(200);
+      // A row as every token before 0067 is: no scope written, the
+      // columns' defaults.
+      await t.db.insert(personalAccessToken).values({
+        userId: id,
+        kind: 'mcp',
+        name: 'Earlier',
+        tokenHash: hashToken('closet_earlier-701'),
+        tokenPrefix: 'closet_earl',
+      });
+
+      const rows = await t.db
+        .select({
+          name: personalAccessToken.name,
+          readOnly: personalAccessToken.readOnly,
+          ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
+        })
+        .from(personalAccessToken)
+        .where(eq(personalAccessToken.userId, id))
+        .orderBy(asc(personalAccessToken.id));
+      expect(rows).toEqual([
+        { name: 'Default', readOnly: true, ownWardrobeOnly: false },
+        { name: 'Writer', readOnly: false, ownWardrobeOnly: true },
+        { name: 'Earlier', readOnly: false, ownWardrobeOnly: false },
+      ]);
+      expect(
+        await authenticateToken(t.db, 'closet_earlier-701', 'mcp'),
+      ).toMatchObject({ scope: { readOnly: false, ownWardrobeOnly: false } });
+
+      const listed = await t.inject({
+        method: 'GET',
+        url: '/auth/tokens',
+        headers: { cookie },
+      });
+      expect(scopeShown(listed.body, 'Default')).toBe('Read only');
+      expect(scopeShown(listed.body, 'Writer')).toBe(
+        'Can make changes · My wardrobe only',
+      );
+      expect(scopeShown(listed.body, 'Earlier')).toBe('Can make changes');
+    });
+
+    it('keeps the choices on a refused create, and a scope value the form never sends is a 400', async () => {
+      const cookie = await t.register('scope-refused@example.com');
+      const refused = await t.inject({
+        method: 'POST',
+        url: '/auth/tokens',
+        payload: {
+          name: 'Kept',
+          currentPassword: 'not-the-password',
+          writes: 'on',
+          ownWardrobeOnly: 'on',
+        },
+        headers: { cookie },
+      });
+      expect(refused.statusCode).toBe(400);
+      expect(refused.body).toMatch(/name="writes"[^>]*checked/);
+      expect(refused.body).toMatch(/name="ownWardrobeOnly"[^>]*checked/);
+
+      const malformed = await t.inject({
+        method: 'POST',
+        url: '/auth/tokens',
+        payload: { name: 'Odd', currentPassword: TEST_PASSWORD, writes: 'yes' },
+        headers: { cookie },
+      });
+      expect(malformed.statusCode).toBe(400);
+      const id = await userIdOf(t, 'scope-refused@example.com');
+      expect(
+        await t.db
+          .select({ id: personalAccessToken.id })
+          .from(personalAccessToken)
+          .where(eq(personalAccessToken.userId, id)),
+      ).toEqual([]);
+    });
+  });
+
   describe('device tokens (#189)', () => {
     const signedUp = async (email: string) => {
       const cookie = await t.register(email);
@@ -307,6 +425,7 @@ describe('agent access tokens', () => {
       expect(await authenticateToken(t.db, phone.token, 'device')).toEqual({
         user: { id, email: 'kinds@example.com' },
         tokenId: phone.id,
+        scope: { readOnly: false, ownWardrobeOnly: false },
       });
       expect(await authenticateToken(t.db, agent.token, 'device')).toEqual({
         refused: 'wrong kind',
@@ -350,8 +469,8 @@ describe('agent access tokens', () => {
       const first = await minted(id, 'New phone');
       expect(first.evictedId).toBe(ids[7]);
       expect(await revokedAtOf(ids[7])).not.toBeNull();
-      expect(JSON.stringify(t.logs.records)).toContain(
-        `User ${id} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${ids[7]}, the least recently used`,
+      expect(t.logs.ops('token.created')).toContainEqual(
+        expect.objectContaining({ userId: id, evictedId: ids[7] }),
       );
       expect(JSON.stringify(t.logs.records)).not.toContain(first.token);
 
@@ -394,21 +513,27 @@ describe('agent access tokens', () => {
       expect(ids).toEqual(expect.arrayContaining([a.evictedId, b.evictedId]));
     });
 
-    it('Profile › Devices lists the user’s own by name and last use, never the token, and hides while there are none', async () => {
+    it('Profile › Devices lists the user’s own by name and last use, never the token; its row says none while there are none', async () => {
       const { cookie, id } = await signedUp('devices@example.com');
-      const profile = () =>
-        t.inject({ method: 'GET', url: '/auth/profile', headers: { cookie } });
-      expect((await profile()).body).not.toContain('id="devices"');
+      const get = (url: string) =>
+        t.inject({ method: 'GET', url, headers: { cookie } });
+      const none = await get('/auth/profile');
+      expect(none.body).toContain('<li id="devices"><a href="/auth/devices"');
+      expect(none.body).toContain('No apps are signed in.');
 
       const phone = await minted(id, 'Pixel 9');
       await minted(id, 'Claude Code', 'mcp');
       const stranger = await signedUp('devices-stranger@example.com');
       await minted(stranger.id, 'Not mine');
 
-      const res = await profile();
+      const row = await get('/auth/profile');
+      expect(row.body).toContain('<li id="devices"><a href="/auth/devices"');
+      expect(row.body).toContain('1 signed in');
+      expect(row.body).not.toContain('Pixel 9');
+
+      const res = await get('/auth/devices');
       expect(res.statusCode).toBe(200);
       expectNativePostForms(res);
-      expect(res.body).toContain('id="devices"');
       expect(res.body).toContain('Pixel 9');
       expect(res.body).toContain('never used');
       expect(res.body).toContain(`action="/auth/devices/${phone.id}/revoke"`);
@@ -425,7 +550,7 @@ describe('agent access tokens', () => {
       expect(agents.body).not.toContain('Pixel 9');
     });
 
-    it('revoking a device lands on the profile; a stale, someone else’s or an agent token’s id is a notice, never an error page', async () => {
+    it('revoking a device lands on Devices; a stale, someone else’s or an agent token’s id is a notice, never an error page', async () => {
       const { cookie, id } = await signedUp('signout@example.com');
       const phone = await minted(id, 'Old phone');
       const agent = await minted(id, 'Claude Code', 'mcp');
@@ -441,34 +566,41 @@ describe('agent access tokens', () => {
 
       const done = await revoke(phone.id);
       expect(done.statusCode).toBe(303);
-      expect(done.headers.location).toBe(
-        '/auth/profile?deviceRevoked=1#devices',
-      );
+      expect(done.headers.location).toBe('/auth/devices?revoked=1');
       expect(await revokedAtOf(phone.id)).not.toBeNull();
-      expect(t.logs.messages('info', 'Web')).toContain(
-        `User ${id} revoked device token ${phone.id}`,
+      expect(t.logs.ops('token.revoked')).toContainEqual(
+        expect.objectContaining({
+          userId: id,
+          tokenId: phone.id,
+          kind: 'device',
+          changed: true,
+        }),
       );
       const landed = await t.inject({
         method: 'GET',
-        url: '/auth/profile?deviceRevoked=1',
+        url: '/auth/devices?revoked=1',
         headers: { cookie },
       });
       expect(landed.body).toContain('Device signed out.');
-      // The last one gone, so is the section; the notice stays above.
-      expect(landed.body).not.toContain('id="devices"');
+      // The last one gone: the page says none, and Profile's row says so.
+      expect(landed.body).toContain('No apps are signed in.');
+      const profile = await t.inject({
+        method: 'GET',
+        url: '/auth/profile',
+        headers: { cookie },
+      });
+      expect(profile.body).toContain('No apps are signed in.');
 
       for (const stale of [phone.id, theirs.id, agent.id]) {
         const res = await revoke(stale);
         expect(res.statusCode).toBe(303);
-        expect(res.headers.location).toBe(
-          '/auth/profile?deviceRevoked=0#devices',
-        );
+        expect(res.headers.location).toBe('/auth/devices?revoked=0');
       }
       expect(await revokedAtOf(theirs.id)).toBeNull();
       expect(await revokedAtOf(agent.id)).toBeNull();
       const notice = await t.inject({
         method: 'GET',
-        url: '/auth/profile?deviceRevoked=0',
+        url: '/auth/devices?revoked=0',
         headers: { cookie },
       });
       expect(notice.body).toContain('That device was already signed out.');

@@ -1,20 +1,16 @@
+import { Card } from '../card';
 import type { Child } from 'hono/jsx';
 import type { SharePermission } from '../../db/schema';
 import { AccountShell } from '../auth/account-shell';
-import {
-  Field,
-  Fieldset,
-  PostForm,
-  SubmitButton,
-  UsernameTwin,
-} from '../auth/form';
+import { Field, Fieldset, SubmitButton, UsernameTwin } from '../auth/form';
+import { PostForm } from '../form';
 import { loginUrl, registerUrl } from '../auth/return-to';
 import { t, type StringKey } from '../i18n';
-import { AppBar } from '../layout/app-bar';
+import { PageShell } from '../layout/page-shell';
 import { BrandMark } from '../layout/brand-mark';
-import { Layout } from '../layout/layout';
-import { ProfileSection } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
 import { CopyableText } from '../share/share-button';
+// eslint-disable-next-line closet/no-foreign-page-import -- sharedBy is a share-page helper that is no markup; it moves to share/ with its next change (#718)
 import { sharedBy } from '../share/share-page';
 import type { ViewContext } from '../view-context';
 import type {
@@ -32,7 +28,7 @@ import {
   SHARING_SECTION_ID,
 } from './urls';
 
-/** Views of sharing: Profile's Sharing section, the invite landing, the new-link fragment. */
+/** Views of sharing: Profile › Sharing's page, the invite landing, the new-link fragment. */
 
 const REFUSAL_MESSAGES: Record<AcceptRefusal, StringKey> = {
   'not-found': 'SHARE_ERROR_NOT_FOUND',
@@ -74,8 +70,13 @@ export function PermissionBadge(props: {
 /** The answer to the create-invite form (htmx swaps it into #invite-link-result). */
 export function InviteLinkResult(props: { url: string }) {
   return (
-    <div class="flex flex-col gap-3" id="invite-link-result">
-      <CopyableText value={props.url} size="sm" label={t('COPY_TEXT')} />
+    <div id="invite-link-result" class="grid gap-3">
+      <CopyableText
+        value={props.url}
+        size="sm"
+        name={t('INVITE_LINK')}
+        label={t('COPY_TEXT')}
+      />
     </div>
   );
 }
@@ -99,11 +100,11 @@ function partyName(party: ShareParty): string {
   return party.email ?? '';
 }
 
-/** A list within the Sharing section: outbound, pending or inbound shares. */
+/** A list on the Sharing page: outbound, pending or inbound shares. */
 function ShareList(props: { title: string; children: Child }) {
   return (
     <div class="flex flex-col">
-      <h3 class="font-semibold text-sm">{props.title}</h3>
+      <h2 class="font-semibold text-sm">{props.title}</h2>
       <ul class="divide-y divide-base-300">{props.children}</ul>
     </div>
   );
@@ -120,19 +121,27 @@ export interface SharingModel {
 }
 
 /**
- * Profile › Sharing (the manage page until #82): invite links, the
- * wardrobes this user shares and the ones shared with them, and invites
- * waiting for an answer. Every write posts to /wardrobe-share/* and lands
- * back here (SHARING_PATH).
+ * Profile › Sharing (the manage page until #82, a Profile section until
+ * #728): invite links, the wardrobes this user shares and the ones shared
+ * with them, and invites waiting for an answer. Every write posts to
+ * /wardrobe-share/* and lands back here (SHARING_PATH), so it is a
+ * `formPage`: Back from a landing returns to Profile, not the page before
+ * the write.
  */
-export function SharingSection(props: SharingModel) {
-  const { outbound, inbound, pending } = props;
+export function SharingPage(props: { ctx: ViewContext; model: SharingModel }) {
+  const { model } = props;
+  const { outbound, inbound, pending } = model;
   const empty = !outbound.length && !inbound.length && !pending.length;
   return (
-    <ProfileSection id={SHARING_SECTION_ID} heading={t('WARDROBE_SHARING')}>
-      {props.refusal && (
+    <SettingsPage
+      ctx={props.ctx}
+      title={t('WARDROBE_SHARING')}
+      section={SHARING_SECTION_ID}
+      formPage
+    >
+      {model.refusal && (
         <div role="alert" class="alert alert-error">
-          <span>{t(REFUSAL_MESSAGES[props.refusal])}</span>
+          <span>{t(REFUSAL_MESSAGES[model.refusal])}</span>
         </div>
       )}
 
@@ -172,8 +181,9 @@ export function SharingSection(props: SharingModel) {
                 </div>
                 {share.inviteToken && !share.expired && (
                   <CopyableText
-                    value={inviteUrl(props.origin, share.inviteToken)}
+                    value={inviteUrl(model.origin, share.inviteToken)}
                     size="xs"
+                    name={t('INVITE_LINK')}
                     label={t('COPY_INVITE_LINK')}
                   />
                 )}
@@ -244,8 +254,33 @@ export function SharingSection(props: SharingModel) {
       )}
 
       {empty && <p class="text-sm text-muted">{t('NO_SHARES_YET')}</p>}
-    </ProfileSection>
+    </SettingsPage>
   );
+}
+
+/**
+ * Profile's Sharing row: who has this wardrobe, whose this user has, and
+ * the invites to answer and the links still open (told apart: one needs
+ * this user, the other someone else), from the lists the page shows.
+ */
+export function sharingSummary(
+  model: Pick<SharingModel, 'outbound' | 'inbound' | 'pending'>,
+): string {
+  const shared = model.outbound.filter((share) => share.acceptedAt).length;
+  const links = model.outbound.filter(
+    (share) => !share.acceptedAt && !share.expired,
+  ).length;
+  const toAnswer = model.pending.filter((share) => !share.expired).length;
+  const parts = [
+    shared > 0 && t('sharing.SUMMARY_SHARED', { count: shared }),
+    model.inbound.length > 0 &&
+      t('sharing.SUMMARY_INBOUND', { count: model.inbound.length }),
+    toAnswer === 1 && t('sharing.SUMMARY_ANSWER_ONE'),
+    toAnswer > 1 && t('sharing.SUMMARY_ANSWER_MANY', { count: toAnswer }),
+    links === 1 && t('sharing.SUMMARY_LINKS_ONE'),
+    links > 1 && t('sharing.SUMMARY_LINKS_MANY', { count: links }),
+  ].filter((part) => part !== false);
+  return parts.length > 0 ? parts.join(' · ') : t('sharing.SUMMARY_NONE');
 }
 
 /** An unanswered invite's badge: pending, or expired (listed, never offered). */
@@ -276,7 +311,7 @@ export function EditInvitePage(props: {
       title={t('CREATE_EDIT_LINK')}
       back={SHARING_PATH}
     >
-      <p class="text-sm text-muted w-xs">{t('EDIT_LINK_DESC')}</p>
+      <p class="text-sm text-muted w-full max-w-xs">{t('EDIT_LINK_DESC')}</p>
       <PostForm action={CREATE_INVITE_PATH}>
         <Fieldset legend={t('CREATE_EDIT_LINK')}>
           <input type="hidden" name="permission" value="MANAGE" />
@@ -306,34 +341,33 @@ export function InvitePage(props: {
 }) {
   const { ctx, invite } = props;
   return (
-    <Layout ctx={ctx} title={t('WARDROBE_INVITE')}>
-      <AppBar
-        ctx={ctx}
-        title={t('WARDROBE_INVITE')}
-        returnTo={invite && invitePath(props.token)}
-      />
-      <main class="flex flex-col justify-center items-center gap-4 min-h-[80vh] px-4 pt-20">
-        {!ctx.user && <BrandMark ctx={ctx} />}
-        <div class="card bg-base-100 shadow-md w-full max-w-md">
-          <div class="card-body">
-            {invite && !invite.expired ? (
-              <InviteDetails invite={invite} token={props.token} ctx={ctx} />
-            ) : (
-              <>
-                <div role="alert" class="alert alert-error mb-4">
-                  <span>
-                    {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
-                  </span>
-                </div>
-                <a href="/" class="btn btn-primary btn-sm">
-                  {t('RETURN_TO_HOME')}
-                </a>
-              </>
-            )}
-          </div>
-        </div>
-      </main>
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="invite"
+      layout="centred"
+      bar={{
+        title: t('WARDROBE_INVITE'),
+        returnTo: invite && invitePath(props.token),
+      }}
+    >
+      {!ctx.user && <BrandMark ctx={ctx} />}
+      <Card variant="content" class="w-full max-w-md" bodyClass="">
+        {invite && !invite.expired ? (
+          <InviteDetails invite={invite} token={props.token} ctx={ctx} />
+        ) : (
+          <>
+            <div role="alert" class="alert alert-error mb-4">
+              <span>
+                {t(invite ? 'INVITE_EXPIRED_DESC' : 'INVITE_NOT_FOUND')}
+              </span>
+            </div>
+            <a href="/" class="btn btn-primary btn-sm">
+              {t('RETURN_TO_HOME')}
+            </a>
+          </>
+        )}
+      </Card>
+    </PageShell>
   );
 }
 
@@ -353,10 +387,8 @@ function InviteDetails(props: {
       <p class="text-muted mb-4">
         {t('INVITE_FROM')} <strong>{from}</strong>
       </p>
-      <div class="mb-4">
-        <div class="flex items-center gap-2 mb-2">
-          <PermissionBadge permission={invite.permission} />
-        </div>
+      <div class="mb-4 space-y-2">
+        <PermissionBadge permission={invite.permission} />
         <p class="text-sm text-muted">
           {inviteeAccess(invite.permission, name)}
         </p>

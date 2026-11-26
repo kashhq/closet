@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -7,21 +8,25 @@ import { AutosaveSaved } from '../autosave';
 import { addDays, daysBetween, type IsoDate } from '../../calendar-date';
 import { HttpError } from '../errors';
 import type { WebOptions } from '../plugin';
-import { renderFragment } from '../render';
+import { renderFragment, renderPage } from '../render';
 import { IsoDateSchema } from '../schemas';
 import { enforceLimit, type WeatherLimits } from '../security/rate-limit';
+import { actorOf } from '../sharing/access';
+import { viewContext } from '../view-context';
 import { FEELINGS, TEMPERATURE_UNITS } from '../../weather/temperature';
 import {
-  clearHere,
-  clearHome,
   findWeatherSettings,
   type WeatherSettings as WeatherSettingsRow,
-  nudgeTemperatureOffset,
-  resetTemperatureOffset,
-  setHere,
-  setHome,
-  setTemperatureUnit,
 } from './queries';
+import {
+  nudgeWeatherOffset,
+  removeWeatherHere,
+  removeWeatherHome,
+  resetWeatherOffset,
+  setWeatherHere,
+  setWeatherHome,
+  setWeatherUnit,
+} from './weather-actions';
 import { userWeather, type WeatherService } from './service';
 import {
   LocationBody,
@@ -30,13 +35,14 @@ import {
   pickedPlace,
   placeAnswer,
   postedLocation,
-} from './place-picker';
+} from './place-input';
 import {
   HomePlaceResults,
   OffsetControls,
-  WEATHER_SETTINGS_ID,
   WeatherLocation,
+  WeatherSettingsPage,
 } from './settings';
+import { WEATHER_SETTINGS_PATH } from './urls';
 import { dayChips, MAX_SUMMARY_DAYS } from './summary';
 import { UserWeatherLine, WeatherCellDay, WeatherDay } from './views';
 
@@ -56,14 +62,11 @@ const SummaryQuery = Type.Object({
 function summaryDays(from: IsoDate | undefined, to: IsoDate | undefined) {
   if (from === undefined && to === undefined) return [];
   if (from === undefined || to === undefined) {
-    throw new HttpError(400, 'Give both from and to, or neither');
+    throw new HttpError(400, t('refusal.weather.rangePair'));
   }
   const span = daysBetween(from, to) + 1;
   if (span < 1 || span > MAX_SUMMARY_DAYS) {
-    throw new HttpError(
-      400,
-      `Ask for 1 to ${MAX_SUMMARY_DAYS} days, from before to`,
-    );
+    throw new HttpError(400, t('api.DAY_RANGE', { max: MAX_SUMMARY_DAYS }));
   }
   return Array.from({ length: span }, (_, i) => addDays(from, i));
 }
@@ -83,23 +86,25 @@ export interface WeatherRouteOptions extends WebOptions, WeatherLimits {
  *   days, their chips out of band; with view=month (the month grid, #201)
  *   only the cells' compact chips. Always a fragment: the pages load it in
  *   place. The same cached forecast as every other reader.
+ * - GET /auth/profile/weather (WEATHER_SETTINGS_PATH): Profile › Weather,
+ *   the settings page (#728), so it too is a 404 with the weather off.
  * - GET /weather/places?q=: the city search (Open-Meteo geocoding through
  *   the server), WEATHER_SEARCH_LIMIT. `secretPath`: the request log shows
  *   the route, never the typed city.
  * - POST /weather/home, /home/clear, /here, /here/clear, /unit, /feedback,
- *   /offset/reset: the profile's settings (home and here, which set a
+ *   /offset/reset: that page's settings (home and here, which set a
  *   location to fetch for, WEATHER_LOCATION_LIMIT), each answering to htmx the part
- *   of the section it changed (the location, the offset; the unit its status
- *   line and the offset) or a 303 to the profile. Coordinates are rounded
+ *   of the page it changed (the location, the offset; the unit its status
+ *   line and the offset) or a 303 to the page. Coordinates are rounded
  *   before they are stored; the logs name the user, never a location.
  */
 export const weatherRoutes: FastifyPluginCallbackTypebox<
   WeatherRouteOptions
 > = (app, { db, config, logger, weather, weatherLimits }, done) => {
   /**
-   * To htmx, the part of the settings section a write changed (`part`, from
-   * the user's settings); to a plain post, the profile. Never the whole
-   * section: it holds the unit's AutosaveForm (src/web/weather/settings.tsx).
+   * To htmx, the part of the settings page a write changed (`part`, from
+   * the user's settings); to a plain post, the page (a 303). Never the
+   * page's whole content: it holds the unit's AutosaveForm (settings.tsx).
    */
   async function answer(
     request: FastifyRequest,
@@ -107,7 +112,7 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
     part: (settings: WeatherSettingsRow) => JSX.Element,
   ) {
     if (!request.headers['hx-request']) {
-      return reply.redirect(`/auth/profile#${WEATHER_SETTINGS_ID}`, 303);
+      return reply.redirect(WEATHER_SETTINGS_PATH, 303);
     }
     const settings = await findWeatherSettings(db, sessionUserId(request));
     return renderFragment(reply, part(settings));
@@ -165,6 +170,19 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
     },
   );
 
+  // Profile › Weather: the settings page every write here answers a part of.
+  app.get(WEATHER_SETTINGS_PATH, async (request, reply) =>
+    renderPage(
+      reply,
+      <WeatherSettingsPage
+        ctx={viewContext(reply)}
+        settings={await findWeatherSettings(db, sessionUserId(request))}
+        timeZone={config.timeZone}
+        now={new Date()}
+      />,
+    ),
+  );
+
   app.get(
     '/weather/places',
     {
@@ -194,16 +212,17 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
         logger,
         who: `user ${userId}`,
       });
-      await setHome(db, userId, pickedPlace(request.body));
-      logger.info(`Weather home set by user ${userId}`);
+      await setWeatherHome(
+        { db, logger },
+        actorOf(request),
+        pickedPlace(request.body),
+      );
       return answer(request, reply, locationPart);
     },
   );
 
   app.post('/weather/home/clear', async (request, reply) => {
-    const userId = sessionUserId(request);
-    await clearHome(db, userId);
-    logger.info(`Weather home removed by user ${userId}`);
+    await removeWeatherHome({ db, logger }, actorOf(request));
     return answer(request, reply, locationPart);
   });
 
@@ -220,16 +239,18 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
         logger,
         who: `user ${userId}`,
       });
-      await setHere(db, userId, postedLocation(request.body), new Date());
-      logger.info(`Weather location (this phone's) set by user ${userId}`);
+      await setWeatherHere(
+        { db, logger },
+        actorOf(request),
+        postedLocation(request.body),
+        new Date(),
+      );
       return answer(request, reply, locationPart);
     },
   );
 
   app.post('/weather/here/clear', async (request, reply) => {
-    const userId = sessionUserId(request);
-    await clearHere(db, userId);
-    logger.info(`Weather location (this phone's) removed by user ${userId}`);
+    await removeWeatherHere({ db, logger }, actorOf(request));
     return answer(request, reply, locationPart);
   });
 
@@ -243,11 +264,7 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request, reply) => {
-      const userId = sessionUserId(request);
-      await setTemperatureUnit(db, userId, request.body.unit);
-      logger.info(
-        `Temperature unit set to ${request.body.unit} by user ${userId}`,
-      );
+      await setWeatherUnit({ db, logger }, actorOf(request), request.body.unit);
       return answer(request, reply, unitSaved);
     },
   );
@@ -262,23 +279,17 @@ export const weatherRoutes: FastifyPluginCallbackTypebox<
       },
     },
     async (request, reply) => {
-      const userId = sessionUserId(request);
-      const offset = await nudgeTemperatureOffset(
-        db,
-        userId,
+      await nudgeWeatherOffset(
+        { db, logger },
+        actorOf(request),
         request.body.feeling,
-      );
-      logger.info(
-        `Temperature feedback from user ${userId}: ${request.body.feeling}, offset now ${offset}`,
       );
       return answer(request, reply, offsetPart);
     },
   );
 
   app.post('/weather/offset/reset', async (request, reply) => {
-    const userId = sessionUserId(request);
-    await resetTemperatureOffset(db, userId);
-    logger.info(`Temperature offset reset by user ${userId}`);
+    await resetWeatherOffset({ db, logger }, actorOf(request));
     return answer(request, reply, offsetPart);
   });
 

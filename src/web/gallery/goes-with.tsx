@@ -1,5 +1,6 @@
+import { Card } from '../card';
 import type { OutfitCount } from '../../wardrobe/goes-with';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { OutfitCollage } from '../outfits/collage';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import { categoryLabel } from '../wardrobe/garment';
@@ -20,7 +21,7 @@ import { type GoesWithCloset, ideaName, type NearDuplicate } from './ideas';
 const GOES_WITH_ID = 'goes-with';
 
 /** "Makes 12 outfits with your closet", or the card's shorter "Unlocks 12 outfits". */
-function countText(count: OutfitCount, card: boolean): string {
+function countText(count: OutfitCount, card: boolean): Translated {
   const { outfits, capped } = count;
   if (outfits === 0)
     return t(card ? 'goesWith.CARD_NONE' : 'goesWith.COUNT_NONE');
@@ -35,7 +36,7 @@ function countText(count: OutfitCount, card: boolean): string {
 }
 
 /** A card's "Unlocks 12 outfits": the Muse inbox and a need's options. */
-export function unlocksText(count: OutfitCount): string {
+export function unlocksText(count: OutfitCount): Translated {
   return countText(count, true);
 }
 
@@ -74,85 +75,87 @@ export function GoesWithSection({
   if (!goesWith) return null;
   const { best, roles } = goesWith;
   return (
-    <section
+    <Card
+      as="section"
+      variant="content"
+      bodyClass="gap-3"
       id={GOES_WITH_ID}
-      class="card bg-base-100 border border-base-300"
       aria-labelledby="goes-with-title"
     >
-      <div class="card-body gap-3">
-        <h2 id="goes-with-title" class="card-title text-base">
-          {t('goesWith.TITLE')}
-        </h2>
-        <div>
-          <p class="text-lg font-semibold" data-goes-with-count="">
-            {countText(goesWith, false)}
-          </p>
-          <p class="text-xs text-muted">{t('goesWith.JUDGED')}</p>
-        </div>
-        <NearDuplicates duplicates={goesWith.nearDuplicates} />
-        {best.length > 0 && (
-          <>
-            {/* Display only, no control in a card: the strip itself takes focus. */}
-            <SnapStrip
-              size={best.length > 1 ? 'pair' : 'page'}
-              label={t('goesWith.BEST_LABEL')}
-              listbox={false}
-              focusable
-              class="pb-1"
-              attributes={{ 'data-goes-with-strip': '' }}
-            >
-              {best.map((idea, index) => (
-                <article
-                  {...snapItem({
-                    value: idea.garments.map((g) => g.id).join(','),
-                    selected: index === 0,
-                    size: best.length > 1 ? 'pair' : 'page',
-                    listbox: false,
-                    class: 'flex flex-col gap-1',
-                  })}
-                  data-goes-with-idea={idea.garments.map((g) => g.id).join(',')}
-                >
-                  <OutfitCollage garments={idea.garments} />
-                  <p class="text-sm font-medium line-clamp-2">
-                    {ideaName(idea.garments)}
-                  </p>
-                </article>
-              ))}
-            </SnapStrip>
-            <SnapStripsInit />
-            <p class="text-xs text-muted">{t('goesWith.DISPLAY_ONLY')}</p>
-          </>
-        )}
-        {roles.length > 0 && (
-          <div>
-            <h3 class="text-sm font-semibold mb-1">
-              {t('goesWith.PAIRS_HEADING')}
-            </h3>
-            <ul class="flex flex-col gap-1 text-sm">
-              {roles.map((role) => (
-                <li data-goes-with-role={role.role}>
-                  <span class="font-medium">{roleGroupLabel(role.role)}</span>{' '}
-                  <span class="text-muted">
-                    {role.goes === 0
-                      ? t('goesWith.NO_LAYER')
-                      : t('goesWith.ROLE_COUNT', {
-                          goes: role.goes,
-                          of: role.of,
-                        })}
-                  </span>
-                  {role.best.length > 0 && (
-                    <>
-                      {' · '}
-                      <Links garments={role.best.map((p) => p.garment)} />
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      <h2 id="goes-with-title" class="card-title text-base">
+        {t('goesWith.TITLE')}
+      </h2>
+      <div>
+        <p class="text-lg font-semibold" data-goes-with-count="">
+          {countText(goesWith, false)}
+        </p>
+        <p class="text-xs text-muted">{t('goesWith.JUDGED')}</p>
       </div>
-    </section>
+      <NearDuplicates duplicates={goesWith.nearDuplicates} />
+      {best.length > 0 && (
+        <>
+          {/* Display only, no control in a card: the strip itself takes focus. */}
+          <SnapStrip
+            size={best.length > 1 ? 'pair' : 'page'}
+            label={t('goesWith.BEST_LABEL')}
+            listbox={false}
+            desktop="row"
+            focusable
+            class="pb-1"
+            attributes={{ 'data-goes-with-strip': '' }}
+          >
+            {best.map((idea, index) => (
+              <article
+                {...snapItem({
+                  value: idea.garments.map((g) => g.id).join(','),
+                  selected: index === 0,
+                  size: best.length > 1 ? 'pair' : 'page',
+                  listbox: false,
+                  desktop: 'row',
+                  class: 'flex flex-col gap-1',
+                })}
+                data-goes-with-idea={idea.garments.map((g) => g.id).join(',')}
+              >
+                <OutfitCollage garments={idea.garments} />
+                <p class="text-sm font-medium line-clamp-2">
+                  {ideaName(idea.garments)}
+                </p>
+              </article>
+            ))}
+          </SnapStrip>
+          <SnapStripsInit />
+          <p class="text-xs text-muted">{t('goesWith.DISPLAY_ONLY')}</p>
+        </>
+      )}
+      {roles.length > 0 && (
+        <div>
+          <h3 class="text-sm font-semibold mb-1">
+            {t('goesWith.PAIRS_HEADING')}
+          </h3>
+          <ul class="flex flex-col gap-1 text-sm">
+            {roles.map((role) => (
+              <li data-goes-with-role={role.role}>
+                <span class="font-medium">{roleGroupLabel(role.role)}</span>{' '}
+                <span class="text-muted">
+                  {role.goes === 0
+                    ? t('goesWith.NO_LAYER')
+                    : t('goesWith.ROLE_COUNT', {
+                        goes: role.goes,
+                        of: role.of,
+                      })}
+                </span>
+                {role.best.length > 0 && (
+                  <>
+                    {' · '}
+                    <Links garments={role.best.map((p) => p.garment)} />
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }
 

@@ -2,28 +2,39 @@ import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebo
 import { Type } from '@sinclair/typebox';
 import { sessionUserId } from '../auth/require-session';
 import type { WebOptions } from '../plugin';
+import { renderPage } from '../render';
 import { RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
-import { planMyWeekNow, undoWeekPlan } from './plan';
+import { viewContext } from '../view-context';
 import {
+  planWeekFor,
+  saveWeekTemplateFor,
+  undoWeekPlanFor,
+} from './plan-actions';
+import {
+  findWeekTemplate,
   readWeekTemplateForm,
-  saveWeekTemplate,
   WeekTemplateBody,
 } from './template';
 import {
   plannedWeekUrl,
   UNDONE_FLAG,
   WEEK_SAVED_FLAG,
-  WEEK_SETTINGS_ID,
   WEEK_SETTINGS_PATH,
 } from './urls';
+import { WeekTemplatePage } from './views';
+
+// Navigation state: the saved toast's one-shot flag, shown or not.
+const WeekTemplateQuery = Type.Object({
+  [WEEK_SAVED_FLAG]: Type.Optional(Type.String()),
+});
 
 /**
  * The weekly auto-plan's writes (#16): "Plan my week", its Undo, and the
- * Profile's week template. The signed-in user's own, like the calendar;
- * shares never reach them. Every one is a native post answered with a 303
- * (the calendar's banner, the profile's section); what they show is read
- * by the calendar's and the profile's GET routes.
+ * week template, with the template's page (Profile › Your week, #728). The
+ * signed-in user's own, like the calendar; shares never reach them. Every
+ * write is a native post answered with a 303 (the calendar's banner, the
+ * template's page); what the plan shows is read by the calendar's GET.
  *
  * Validation: "Plan my week" takes no input (an empty body is null); the
  * undo's id is data (not an id: 400; not the owner's batch: 404); the
@@ -35,27 +46,12 @@ export const weekPlanRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   done,
 ) => {
   app.post('/calendar/plan-week', async (request, reply) => {
-    const ownerId = sessionUserId(request);
-    const started = performance.now();
-    const { today, forecast, result } = await planMyWeekNow(
-      { db, weather, timeZone: config.timeZone },
-      ownerId,
+    const { result } = await planWeekFor(
+      { db, logger, weather, timeZone: config.timeZone },
+      actorOf(request),
       new Date(),
     );
-    const ms = Math.round(performance.now() - started);
-    if (!result.templateSet) {
-      logger.info(
-        `Week not planned for user ${ownerId}: no week template; sent to set one`,
-      );
-      return reply.redirect(WEEK_SETTINGS_PATH, 303);
-    }
-    const unfilled = `${result.unfilled.length} slot(s) unfilled`;
-    const entries = result.planned.map((p) => p.entryId).join(', ');
-    logger.info(
-      result.weekPlanId === null
-        ? `Week plan for user ${ownerId} from ${today}: nothing to plan, ${unfilled} in ${ms} ms`
-        : `Week planned for user ${ownerId} from ${today} (plan ${result.weekPlanId}): ${result.planned.length} outfit(s) (entries ${entries}), ${unfilled}, forecast for ${forecast.days.size} day(s) in ${ms} ms`,
-    );
+    if (!result.templateSet) return reply.redirect(WEEK_SETTINGS_PATH, 303);
     if (result.weekPlanId === null) {
       return reply.redirect(plannedWeekUrl('none'), 303);
     }
@@ -71,28 +67,32 @@ export const weekPlanRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      const undone = await undoWeekPlan(db, actor, id);
-      logger.info(
-        `Week plan ${id} undone by user ${actor.userId}: ${undone.entries} entr(ies) and ${undone.outfits} outfit(s) removed`,
-      );
+      const undone = await undoWeekPlanFor({ db, logger }, actor, id);
       return reply.redirect(`/calendar?${UNDONE_FLAG}=${undone.entries}`, 303);
     },
   );
 
+  app.get(
+    WEEK_SETTINGS_PATH,
+    { schema: { querystring: WeekTemplateQuery } },
+    async (request, reply) =>
+      renderPage(
+        reply,
+        <WeekTemplatePage
+          ctx={viewContext(reply)}
+          slots={await findWeekTemplate(db, sessionUserId(request))}
+          saved={request.query[WEEK_SAVED_FLAG] === '1'}
+        />,
+      ),
+  );
+
   app.post(
-    '/auth/profile/week',
+    WEEK_SETTINGS_PATH,
     { schema: { body: WeekTemplateBody } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const slots = readWeekTemplateForm(request.body);
-      await saveWeekTemplate(db, userId, slots);
-      logger.info(
-        `Week template saved by user ${userId}: ${slots.length} slot(s) on ${new Set(slots.map((s) => s.weekday)).size} day(s)`,
-      );
-      return reply.redirect(
-        `/auth/profile?${WEEK_SAVED_FLAG}=1#${WEEK_SETTINGS_ID}`,
-        303,
-      );
+      await saveWeekTemplateFor({ db, logger }, actorOf(request), slots);
+      return reply.redirect(`${WEEK_SETTINGS_PATH}?${WEEK_SAVED_FLAG}=1`, 303);
     },
   );
 

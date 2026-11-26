@@ -1,7 +1,9 @@
 import {
   and,
+  asc,
   desc,
   eq,
+  gt,
   inArray,
   lt,
   notInArray,
@@ -113,21 +115,29 @@ function roled(garment: RowGarment): RoledGarment {
 /** A garment a row holds, and that row's role: what the strips' windows must reach. */
 export type Chosen = Pick<RowState, 'role'> & { garmentId: number };
 
-/** A window's garment as roleWindowsSql's JSON has it: its role and count, then the garment. */
-type WindowJson = [role: GarmentRole, count: number, ...RowGarmentJson];
+/** A window's garment as roleWindowsSql's JSON has it: its role, count and rank, then the garment. */
+type WindowJson = [
+  role: GarmentRole,
+  count: number,
+  rank: number,
+  ...RowGarmentJson,
+];
 
 /**
  * Every role the wardrobe (or the capsule) has closet garments of, each
- * with its count and the window a page shows: newest first, STRIP_PAGE
- * garments past the deepest chosen one in that role, so a chosen garment
- * deep in a long cycle is on its strip. Chosen is `chosen` (a garment in
- * a row of its own role: a posted row whose garment was recategorised
+ * with its count and the garments its rows' strips show, newest first and
+ * ranked (1 is the newest): the head (the first STRIP_PAGE, what a row on
+ * "No garment" shows) and STRIP_PAGE either side of each chosen garment
+ * (#996: never the run from the newest down to it, which at 500 garments
+ * shipped a whole role per strip), so a role's garments may come in
+ * separate runs, one per row (windowAround). Chosen is `chosen` (a garment
+ * in a row of its own role: a posted row whose garment was recategorised
  * meanwhile, or is not the wardrobe's, reaches nothing, as its row falls
  * back to "No garment") and, with `outfitId`, every garment the
  * wardrobe's outfit holds (`?outfit=`, whose rows are its garments). One
- * scalar subquery whatever the wardrobe holds: the ranks and counts are
- * window functions, and only the windows' garments come back, in rank
- * order. Read back with readRoleWindows.
+ * scalar subquery whatever the wardrobe holds: the ranks, counts and
+ * chosen ranks are window functions, and only the windows' garments come
+ * back, in rank order. Read back with readRoleWindows.
  */
 export function roleWindowsSql(
   ownerId: number,
@@ -154,49 +164,64 @@ export function roleWindowsSql(
   const isChosen = inOutfit ? sql`(${inRow} or ${inOutfit})` : inRow;
   return sql<WindowJson[]>`(
     select coalesce(json_agg(json_build_array(
-      windowed.role, windowed.count, windowed.id, windowed.name,
+      windowed.role, windowed.count, windowed.rank, windowed.id, windowed.name,
       windowed.category, windowed.status, ${shownPhotoName}, ${file.version},
       ${file.variantKey}
     ) order by windowed.rank), '[]')
     from (
-      select ranked.*, coalesce(max(case when ${isChosen} then ranked.rank end) over (partition by ranked.role), 0) as deepest
+      select flagged.*,
+        array_agg(flagged.rank) filter (where flagged.chosen) over (partition by flagged.role) as chosen_ranks
       from (
-        select ${garment.id} as id, ${garment.name} as name,
-          ${garment.category} as category, ${garment.status} as status,
-          ${garment.photoId} as photo_id, ${roleOf} as role,
-          (row_number() over (partition by ${roleOf} order by ${garment.id} desc))::int as rank,
-          (count(*) over (partition by ${roleOf}))::int as count
-        from ${garment}
-        where ${cycleOf(ownerId, options.capsuleId)}
-      ) ranked
+        select ranked.*, ${isChosen} as chosen
+        from (
+          select ${garment.id} as id, ${garment.name} as name,
+            ${garment.category} as category, ${garment.status} as status,
+            ${garment.photoId} as photo_id, ${roleOf} as role,
+            (row_number() over (partition by ${roleOf} order by ${garment.id} desc))::int as rank,
+            (count(*) over (partition by ${roleOf}))::int as count
+          from ${garment}
+          where ${cycleOf(ownerId, options.capsuleId)}
+        ) ranked
+      ) flagged
     ) windowed
     left join ${file} on ${file.id} = windowed.photo_id
-    where windowed.rank <= windowed.deepest + ${STRIP_PAGE}
+    where windowed.rank <= ${STRIP_PAGE}
+      or exists (select from unnest(windowed.chosen_ranks) as near (rank) where abs(windowed.rank - near.rank) <= ${STRIP_PAGE})
   )`;
 }
 
 /** roleWindowsSql's value as the windows, each role's garments in cycle order. */
 export function readRoleWindows(rows: readonly WindowJson[]): RoleWindow[] {
   const windows = new Map<GarmentRole, RoleWindow>();
-  for (const [role, count, ...shown] of rows) {
+  for (const [role, count, rank, ...shown] of rows) {
     const window = windows.get(role) ?? { role, count, garments: [] };
-    window.garments.push(readRowGarment(shown));
+    window.garments.push({ ...readRowGarment(shown), rank });
     windows.set(role, window);
   }
   return [...windows.values()];
 }
 
 /**
- * The next page of a role's cycle after the garment `before` (the strip's
- * sentinel): up to STRIP_PAGE garments, and whether more follow. Keyset
- * by id, the cycle's order, so a garment added meanwhile never shifts it.
+ * Where a strip page starts (StripSentinel): `before` an id for the older
+ * garments past a window's end, `after` one for the newer garments before
+ * its start (#996). Keyset by id, the cycle's order, so a garment added
+ * meanwhile never shifts a page.
  */
-export async function roleGarmentsBefore(
+export type StripKeyset = { before: number } | { after: number };
+
+/**
+ * A strip's next page from the keyset (the strip's sentinel): up to
+ * STRIP_PAGE garments of the role's cycle, newest first either way, and
+ * whether more follow in that direction.
+ */
+export async function roleGarmentsPage(
   db: Db,
   ownerId: number,
   role: GarmentRole,
-  options: { capsuleId?: number; before: number },
+  options: { capsuleId?: number; keyset: StripKeyset },
 ): Promise<{ garments: RowGarment[]; more: boolean }> {
+  const { keyset } = options;
+  const older = 'before' in keyset;
   const rows = await db
     .select({
       id: garment.id,
@@ -211,13 +236,15 @@ export async function roleGarmentsBefore(
       and(
         cycleOf(ownerId, options.capsuleId),
         inRole(role),
-        lt(garment.id, options.before),
+        older ? lt(garment.id, keyset.before) : gt(garment.id, keyset.after),
       ),
     )
-    .orderBy(desc(garment.id))
+    // The page nearest the keyset first; a newer page is turned back to newest first.
+    .orderBy(older ? desc(garment.id) : asc(garment.id))
     .limit(STRIP_PAGE + 1);
+  const page = rows.slice(0, STRIP_PAGE);
   return {
-    garments: rows.slice(0, STRIP_PAGE),
+    garments: older ? page : page.reverse(),
     more: rows.length > STRIP_PAGE,
   };
 }

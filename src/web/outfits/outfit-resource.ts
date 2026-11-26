@@ -6,12 +6,13 @@ import { OUTFIT_ORIGINS } from '../../wardrobe/outfit-origin';
 import { categoryRole, GARMENT_ROLES } from '../../wardrobe/properties';
 import { GARMENT_STATUSES } from '../../wardrobe/status';
 import { OUTFIT_DISMISS_REASONS } from '../../wardrobe/suggestions';
-import { literals, Nullable, withoutNulls } from '../api/resource';
+import { asResource, literals, Nullable, withoutNulls } from '../api/resource';
 import type { ScheduleOutcome } from '../calendar/queries';
 import { HttpError } from '../errors';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
 import { IsoDateSchema, RowId } from '../schemas';
+import { PublicShareUrl, publicShareUrl } from '../share/urls';
 import type { OutfitContext } from './page-context';
 import {
   OUTFIT_NAME_MAX,
@@ -34,7 +35,9 @@ import { AgentResource, agentNameOf, toAgentResource } from '../write-origin';
  * outfit (listOutfitsPage, list_outfits' read a page at a time) and one in
  * full (requireOutfitPage, the outfit page's one statement). camelCase,
  * null fields left out. An outfit's garments are as its collage shows them;
- * a client reads the rest from GET /garments/{id}.
+ * a client reads the rest from GET /garments/{id}. The records keep their
+ * nulls (`outfitListRecord`, `outfitGarmentRecord`): the API sends them
+ * through asResource, MCP's tools project them.
  */
 
 /** Also a calendar entry's and a trip outfit's garments (calendar/entry-resource.ts, trips/trip-resource.ts). */
@@ -124,6 +127,7 @@ export const Outfit = Type.Object(
     planned: Type.Array(PlannedDay),
     /** The days it was worn (marked, or with a selfie), newest first. */
     worn: Type.Array(WornDay),
+    publicShareUrl: Type.Optional(PublicShareUrl),
   },
   {
     title: 'Outfit',
@@ -133,8 +137,9 @@ export const Outfit = Type.Object(
 );
 type Outfit = Static<typeof Outfit>;
 
-export function toOutfitGarment(garment: OutfitGarment) {
-  return withoutNulls({
+/** A garment an outfit holds, nulls kept: the API's OutfitGarment, what MCP's outfit answers project. */
+export function outfitGarmentRecord(garment: OutfitGarment) {
+  return {
     id: garment.id,
     name: garment.name,
     category: garment.category,
@@ -142,39 +147,70 @@ export function toOutfitGarment(garment: OutfitGarment) {
     status: garment.status,
     thumbUrl: garment.photo && imageUrl(garment.photo, 'thumb'),
     away: garment.away ?? null,
-  });
+  };
 }
+export type OutfitGarmentRecord = ReturnType<typeof outfitGarmentRecord>;
 
-function toOutfitFields(outfit: ToolOutfit | OutfitPageDetail) {
+/** What a list's outfit and one in full share, nulls kept. */
+function outfitFieldsRecord(outfit: ToolOutfit | OutfitPageDetail) {
   return {
     id: outfit.id,
-    ...withoutNulls({ name: outfit.name, notes: outfit.notes }),
+    name: outfit.name,
+    notes: outfit.notes,
     origin: outfit.origin,
-    garments: outfit.garments.map(toOutfitGarment),
+    garments: outfit.garments.map(outfitGarmentRecord),
     toBuy: piecesToBuy(outfit.garments).map(({ id }) => id),
-    ...(outfit.proposal && { proposal: proposalOf(outfit.proposal) }),
+    proposal: outfit.proposal && proposalRecord(outfit.proposal),
     agent: toAgentResource(outfit.agent),
   };
 }
 
 /** A proposal's fields, its agent worded (only the outfit page reads it). */
-function proposalOf(proposal: OutfitProposal | Omit<OutfitProposal, 'agent'>) {
-  return withoutNulls({
+function proposalRecord(
+  proposal: OutfitProposal | Omit<OutfitProposal, 'agent'>,
+) {
+  return {
     ...proposal,
     agent: 'agent' in proposal ? agentNameOf(proposal.agent) : undefined,
-  });
+  };
 }
+
+/**
+ * A list's outfit, nulls kept: the API's OutfitListItem, and what MCP's
+ * list_outfits and get_outfit project (src/web/mcp/tools/outfits.ts).
+ */
+export function outfitListRecord(outfit: ToolOutfit) {
+  return outfitFieldsRecord(outfit);
+}
+export type OutfitListRecord = ReturnType<typeof outfitListRecord>;
 
 export function toOutfitListItem(outfit: ToolOutfit): OutfitListItem {
-  return toOutfitFields(outfit);
+  return asResource(OutfitListItem, outfitListRecord(outfit));
 }
 
-export function toOutfitResource({ outfit, entries }: OutfitContext): Outfit {
-  return {
-    ...toOutfitFields(outfit),
+/**
+ * An outfit's public link (#669): outfits are their owner's alone, so
+ * whoever reads one may stop it; null while not shared.
+ */
+function outfitShareUrl(
+  shareableId: string | null,
+  siteUrl: string,
+): string | null {
+  return shareableId === null
+    ? null
+    : publicShareUrl(siteUrl, 'outfit', shareableId);
+}
+
+export function toOutfitResource(
+  { outfit, entries }: OutfitContext,
+  siteUrl: string,
+): Outfit {
+  return asResource(Outfit, {
+    ...outfitFieldsRecord(outfit),
     planned: entries.planned,
     worn: entries.worn.map(({ entryId, day }) => ({ entryId, day })),
-  };
+    publicShareUrl: outfitShareUrl(outfit.shareableId, siteUrl),
+  });
 }
 
 /**
@@ -219,6 +255,7 @@ export const SyncedOutfit = Type.Object(
       ),
     ),
     agent: Type.Optional(AgentResource),
+    publicShareUrl: Type.Optional(PublicShareUrl),
   },
   {
     title: 'SyncedOutfit',
@@ -229,7 +266,9 @@ export const SyncedOutfit = Type.Object(
 
 export function toSyncedOutfit(
   row: SyncedOutfitRow,
+  siteUrl: string,
 ): Static<typeof SyncedOutfit> {
+  const shareUrl = outfitShareUrl(row.shareableId, siteUrl);
   return {
     id: row.id,
     ...withoutNulls({ name: row.name, notes: row.notes }),
@@ -237,6 +276,7 @@ export function toSyncedOutfit(
     slots: row.slots.map((slot) => withoutNulls(slot)),
     ...(row.proposal && { proposal: withoutNulls(row.proposal) }),
     agent: toAgentResource(row.agent),
+    ...(shareUrl !== null && { publicShareUrl: shareUrl }),
   };
 }
 

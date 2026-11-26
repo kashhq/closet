@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { PUSH_ENDPOINT_FIELD } from '../push/settings';
 import { passwordProblems } from './passwords';
 
@@ -57,7 +57,7 @@ export const ChangePasswordBody = Type.Object({
   currentPassword: Password,
   newPassword: Password,
   confirmPassword: Password,
-  // This device's push subscription (<push-endpoint>, public/js/push.js):
+  // This device's push subscription (<push-endpoint>, views/assets/page/push.ts):
   // the one the new password leaves in place. Empty when the browser has
   // none; absent from pages cached before it. Only ever compared with this
   // user's own rows, so anything else in it keeps nothing.
@@ -65,13 +65,22 @@ export const ChangePasswordBody = Type.Object({
 });
 export type ChangePasswordBody = Static<typeof ChangePasswordBody>;
 
+// Sign out everywhere (#700) asks for the password: the acting session
+// survives it, so a stolen cookie must not be able to sign the owner out of
+// every other device and keep itself. The push endpoint as above.
+export const SignOutEverywhereBody = Type.Object({
+  currentPassword: Password,
+  [PUSH_ENDPOINT_FIELD]: Type.Optional(Type.String({ maxLength: 2048 })),
+});
+export type SignOutEverywhereBody = Static<typeof SignOutEverywhereBody>;
+
 /** Account deletion asks for the account's own credentials again. */
 export const DeleteAccountBody = Credentials;
 export type DeleteAccountBody = Static<typeof Credentials>;
 
 /** Messages per form field; a field without problems has no entry. */
 export type FieldErrors<Field extends string> = Partial<
-  Record<Field, string[]>
+  Record<Field, Translated[]>
 >;
 
 export function hasErrors(errors: FieldErrors<string>): boolean {
@@ -82,16 +91,16 @@ export function hasErrors(errors: FieldErrors<string>): boolean {
 // is a login name here, never mailed.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function emailErrors(email: string): string[] {
+function emailErrors(email: string): Translated[] {
   return EMAIL_SHAPE.test(email.trim()) ? [] : [t('validation.IS_EMAIL')];
 }
 
-function newPasswordErrors(password: string): string[] {
+function newPasswordErrors(password: string): Translated[] {
   return passwordProblems(password).map((key) => t(key));
 }
 
 function only<Field extends string>(
-  entries: [Field, string[]][],
+  entries: [Field, Translated[]][],
 ): FieldErrors<Field> {
   const errors: FieldErrors<Field> = {};
   for (const [field, messages] of entries) {

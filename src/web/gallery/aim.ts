@@ -2,6 +2,7 @@ import type { Db } from '../../db/client';
 import { DEFAULT_OCCASION, type Occasion } from '../../wardrobe/occasions';
 import type { PickedLocation } from '../../weather/location';
 import type { IsoDate } from '../../calendar-date';
+import type { Actor } from '../sharing/access';
 import type { OutfitDestination } from '../outfits/destination';
 import { ideasDayOf, type TripRow } from '../trips/queries';
 import { requireTrip } from '../trips/trip-actions';
@@ -28,7 +29,7 @@ export interface IdeasAim {
  */
 export async function aimIdeas(
   db: Db,
-  ownerId: number,
+  actor: Actor,
   parsed: OutfitDestination,
   today: IsoDate,
 ): Promise<IdeasAim> {
@@ -46,9 +47,9 @@ export async function aimIdeas(
       weatherAt: {},
     };
   }
-  // Trips are private, so the requester alone is the Actor: a share read
-  // ahead would never widen what requireTrip reaches.
-  const trip = await requireTrip(db, { userId: ownerId }, parsed.tripId);
+  // Trips are private, so the requester's own Actor reaches only their
+  // trips: a share read ahead never widens what requireTrip reaches.
+  const trip = await requireTrip(db, actor, parsed.tripId);
   const day = ideasDayOf(trip, parsed.day, today);
   return {
     destination:

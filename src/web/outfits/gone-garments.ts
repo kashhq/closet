@@ -3,7 +3,7 @@ import type { Queryable } from '../../db/client';
 import { garment, outfitSlot } from '../../db/schema';
 import type { GarmentStatus } from '../../wardrobe/status';
 import { HttpError } from '../errors';
-import { t } from '../i18n';
+import { joinCopy, t, type Translated } from '../i18n';
 import { inCloset, offeredToStyle } from '../wardrobe/status';
 import { outfitIsHeld, type PieceToBuy } from './references';
 import { NotFound } from '../refusals';
@@ -183,7 +183,7 @@ export async function slotRefusals(
   });
 }
 
-function goneReason(owned: NonNullable<GoneGarment['garment']>): string {
+function goneReason(owned: NonNullable<GoneGarment['garment']>): Translated {
   const name = owned.name ?? t('outfits.UNNAMED_GARMENT');
   if (owned.status !== 'wishlist') return t('outfits.GONE_ARCHIVED', { name });
   switch (owned.reason) {
@@ -197,14 +197,14 @@ function goneReason(owned: NonNullable<GoneGarment['garment']>): string {
 }
 
 /** The refusal's words: each named garment, then how many are gone. */
-function refusalMessage(gone: readonly GoneGarment[]): string {
+function refusalMessage(gone: readonly GoneGarment[]): Translated {
   const reasons = gone.flatMap((g) =>
     g.garment ? [goneReason(g.garment)] : [],
   );
   const missing = gone.length - reasons.length;
   if (missing === 1) reasons.push(t('outfits.GONE_ONE'));
   if (missing > 1) reasons.push(t('outfits.GONE_MANY', { count: missing }));
-  return t('outfits.NOT_SAVED', { reasons: reasons.join('; ') });
+  return t('outfits.NOT_SAVED', { reasons: joinCopy(reasons, '; ') });
 }
 
 /**

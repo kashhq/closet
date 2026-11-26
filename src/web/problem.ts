@@ -15,7 +15,7 @@ export const PROBLEM_CONTENT_TYPE = 'application/problem+json';
  * The stable machine word of a refusal, which a JSON client switches on
  * (plan section 2): HttpError.code, defaulted from the status (errors.tsx).
  */
-export const ERROR_CODES = [
+const ERROR_CODES = [
   'validation',
   'unauthorized',
   'forbidden',

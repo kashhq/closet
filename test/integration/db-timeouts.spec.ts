@@ -16,7 +16,7 @@ import { createGarment } from './garments';
 import { createTestApp, type TestApp } from './harness';
 
 /**
- * Database timeouts (#134, src/db/AGENTS.md, Timeouts): one stuck
+ * Database timeouts (#134, src/db/reference.md, Timeouts): one stuck
  * transaction must not wedge an owner's writes. The server's pool opens its
  * connections with statement_timeout and idle_in_transaction_session_timeout;
  * every form of the owner lock bounds its lock waits (lock_timeout), so a
@@ -256,5 +256,44 @@ describe('database timeouts', () => {
       },
       1,
     );
+  });
+
+  // DatabaseOutage ends an outage only with an answer to something begun
+  // after it did (#842), so the pool must say when each answer began, not
+  // when it came: a connection's opening, a query answered (the last of a
+  // transaction), nothing for one that failed.
+  it('tells onAnswer when each connection opened and each answered query began', async () => {
+    const heard: number[] = [];
+    const db = createDb(t.database, t.logger, {
+      max: 1,
+      onAnswer: (startedAt) => heard.push(startedAt),
+    });
+    try {
+      const before = performance.now();
+      await db.execute(sql`select 1`);
+      // The connection's opening, then the query it answered.
+      expect(heard).toHaveLength(2);
+      const [opened, answered] = heard;
+      expect(opened).toBeGreaterThanOrEqual(before);
+      expect(answered).toBeGreaterThanOrEqual(opened);
+      expect(answered).toBeLessThanOrEqual(performance.now());
+
+      // A failed query says nothing of the database answering.
+      await db.execute(sql`select 1 / 0`).catch(() => undefined);
+      expect(heard).toHaveLength(2);
+
+      // The failed connection is discarded, so a transaction opens another
+      // (heard once) and reports its last statement's start, once.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`select 1`);
+        await new Promise((later) => setTimeout(later, 20));
+      });
+      expect(heard).toHaveLength(4);
+      const [, , reopened, committed] = heard;
+      expect(reopened).toBeGreaterThanOrEqual(answered);
+      expect(committed).toBeGreaterThan(reopened + 15);
+    } finally {
+      await db.$client.end();
+    }
   });
 });

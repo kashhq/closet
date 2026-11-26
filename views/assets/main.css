@@ -1,13 +1,16 @@
 /* `npm run generate:tailwind` compiles this into public/bundle.css, holding only
    the utilities and daisyUI components the app's markup names. The scan is
    scoped to the files that carry class names at runtime: src/ (the hono/jsx
-   views and their class helpers) and public/js/ (classList/className in the
-   client modules). Unscoped, Tailwind v4 scans every tracked file, so words in
-   docs/, devkit/ and comments became 44 dead classes, and daisyUI components
+   views and their class helpers) and the client modules' classList/className:
+   the TypeScript sources (page/, outbox.ts) and public/js/'s plain JS.
+   Unscoped, Tailwind v4 scans every tracked file, so words in docs/, devkit/
+   and comments became 44 dead classes, and daisyUI components
    (drawer, navbar, react-day-picker) nothing renders (docs/decisions.md
    2026-10-26). */
 @import "tailwindcss" source("../../src");
 @source "../../public/js";
+@source "./page";
+@source "./outbox.ts";
 /* The two webfonts' @font-face rules, built from node_modules by
    `npm run generate:fonts` (views/assets/fonts.css says how). */
 @import "../../public/vendor/fonts/fonts.css";
@@ -173,12 +176,39 @@
   :is(.input, .select):is(.input-sm, .input-xs, .select-sm, .select-xs) {
     --size: calc(var(--size-field) * 10);
   }
+  /* ...and as wide as it is tall: the wardrobe's search, collapsed to its
+     icon (`w-9`), is still a finger's target (#1210). min-width outranks
+     the call site's width. */
+  :is(.input, .select, .textarea) {
+    min-inline-size: 2.75rem;
+  }
   /* A menu's rows (Profile's account links, a ⋯ menu) are a list a finger
      runs down: each row 44 px, its text centred, as an iOS list's. */
   .menu :where(li:not(.menu-title) > :not(ul, details, .menu-title, .btn)),
   .menu :where(li:not(.menu-title) > details > summary:not(.menu-title)) {
     min-height: 2.75rem;
     align-content: center;
+  }
+}
+
+/* A section tab (LinkTabs: an `a.tab` in a `.tabs-border` bar) that is not
+   the current page reads in the muted token, not daisyUI's 50% of the ink
+   (3.4 to 4:1 on both themes, #726). In utilities: daisyUI's layers
+   (`daisyui.*`) rank above components, so only a later layer beats its
+   rule without an unlayered override. Hover and keyboard focus keep
+   daisyUI's full ink; radio and disabled tabs are not LinkTabs and keep
+   daisyUI's. */
+@layer utilities {
+  .tabs-border
+    > a.tab:not(
+      .tab-active,
+      [aria-current='page'],
+      :hover,
+      :focus-visible,
+      [disabled],
+      [aria-disabled='true']
+    ) {
+    color: var(--color-muted);
   }
 }
 
@@ -220,21 +250,71 @@
       inset-block: min(0px, calc((100% - 2.75rem) / 2));
       inset-inline: min(0px, calc((100% - 2.75rem) / 2));
     }
+    /* A joined segment (the sizes unit switch) has no room beside it for
+       its area: it is 44 px wide itself, plus the border its next segment
+       overlaps (daisyUI's join pulls each one back by --border, and the
+       later segment wins that strip), counted on both sides of its centre
+       since the disc is centred on the segment's whole box. */
+    .join-item:is(.btn-sm, .btn-xs) {
+      min-inline-size: calc(2.75rem + 2 * var(--border));
+    }
+  }
+}
+
+/* A row a finger taps, or one holding a small control whose 44 px area has
+   to fit inside it (#1210): at least 44 px tall where the pointer is
+   coarse, a fine pointer's row as drawn. For a label that wraps its small
+   checkbox ("Select all"), a summary that is the row (Styling's preview)
+   and a list whose rows each end in a btn-xs (avoided pairs). Never
+   `min-h-11` at a call site; spacing between two small controls is a
+   `pointer-coarse:` gap at theirs. */
+@utility tap-row {
+  @media (pointer: coarse) {
+    min-block-size: 2.75rem;
+  }
+}
+
+/* A wrapping row of small controls: chips (ChipGroup, the occasion and day
+   pickers) and a row of btn-sm actions (#1210). Where the pointer is coarse
+   a btn-sm is 35.2 px tall (--size-field * 8), so a wrapped row 8 px below
+   puts its 44 px areas over the row above; 10 px clears them. Columns keep
+   8 px: a chip is wider than 44 px, so its area adds nothing beside it. */
+@utility chip-row {
+  display: flex;
+  flex-flow: row wrap;
+  gap: --spacing(2);
+  @media (pointer: coarse) {
+    row-gap: --spacing(2.5);
   }
 }
 
 /* The dock's height, the safe area included, as daisyUI sizes .dock: what a
-   bar fixed above the dock sits on (`bottom-dock`: the wardrobe's select
-   bar, Laundry's and Styling's). */
+   bar above the dock sits on (`bottom-dock`; the action bars below). */
 @theme {
   --spacing-dock: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Content widths (layout/page-main.tsx's `width`): `max-w-page-narrow` for
-   forms, reading and single-column lists, `max-w-page-wide` for galleries. */
+/* Content widths (layout/page-shell.tsx's `width`, a `single` page's):
+   `max-w-page-narrow` for forms, reading and single-column lists,
+   `max-w-page-wide` for galleries. Every other layout's frame is wide (the
+   page frame below). */
 @theme {
   --container-page-narrow: 40rem;
   --container-page-wide: 80rem;
+}
+
+/* The galleries' least tile width from lg (layout/columns.ts): each grid
+   auto-fills as many columns of at least this as the page holds (#1064), so
+   width past 1024 px is density, never another layout. Plain custom
+   properties, not @theme: no utility is built from them, only columns.ts's
+   arbitrary values read them. */
+:root {
+  --tile-garment: 8.75rem;
+  --tile-outfit: 12rem;
+  --tile-idea: 17rem;
+  --tile-candidate: 13rem;
+  --tile-outfit-row: 18rem;
+  --tile-card: 18rem;
 }
 
 /* The left rail's width, and what sits beside it: `left-rail` is the left
@@ -254,24 +334,590 @@
    z-index 1, so any positioned z-10 in the page (the outfit card's calendar
    button) drew over it. The two bars never meet, so they share a level; a
    menu opening from the bar (a scope or ⋯ dropdown) draws over the content
-   from inside it. The toasts (z 999) sit above both. Pages leave the bar's
-   4rem with pt-20 (the bar and a 1rem gutter), or pt-16 when their first
-   row sits flush under it (the Wardrobe tabs). */
+   from inside it. The toasts (z 999) sit above both. */
 /* The app bar's height, once: the bar's own and what a bar sticky between it
-   and the dock (Styling's) subtracts from the viewport (`--app-bar-h`). */
+   and the dock (Styling's) subtracts from the viewport, and what PageShell
+   leaves above a page (`--app-bar-h`). It is in rem, so it grows with the
+   text size like the two-line title clamp it holds (#1028): at 100% text
+   nothing differs. `under-bar` is the bar and a 1rem gutter: where a
+   sticky column stops (`top-under-bar`) and an anchor lands
+   (`scroll-mt-under-bar`). `bar` is the bar alone: where a row sticks under
+   it (`top-bar`). */
 :root {
-  --app-bar-h: 4rem;
+  --app-bar-row-h: 4rem;
+  --app-bar-h: var(--app-bar-row-h);
+  /* daisyUI's own tab height (`.tabs`), owned here so the bar's height can
+     count its tab row; --size-field grows on a coarse pointer (Touch
+     sizing). */
+  --app-bar-tabs-h: calc(var(--size-field) * 10);
 }
+@theme inline {
+  --spacing-bar: var(--app-bar-h);
+  --spacing-under-bar: calc(var(--app-bar-h) + 1rem);
+}
+/* The title block must fit --app-bar-row-h at any text size: two title lines
+   (3.125rem) or, while the freshness line shows (1rem, `#freshness` unhidden
+   by freshness.js), one title line and it. Both are rem and line-height
+   units, so the fixed bar height holds at 200% text with no measuring. */
+.app-bar-title:has(> #freshness:not(.hidden)) h1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+/* Fixed across the top, above the page and level with the dock (z 900). */
 .app-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--app-bar-h);
-  z-index: 900;
+  @apply fixed inset-x-0 top-0 z-900 h-(--app-bar-h);
+}
+
+/* A section's tabs are the bar's (AppBar `tabs`, #1061), so sibling pages
+   show them in one place whatever their width. Below lg they are the
+   header's second row: the title row keeps its 4rem, the tabs wrap under
+   it full width (DOM order puts them after the title, as from lg), and the
+   bar grows by their height through --app-bar-h, which every offset reads
+   (the page frame, the scroll padding, a sticky row's `top-bar`). The
+   active tab's underline sits on the bar's bottom border. They never wrap
+   to a third line: a row too long for the screen (large text) scrolls
+   sideways inside the bar. From lg they sit inline after the title, the
+   page's actions pushed to the end, on the one 4rem row. */
+.app-bar-tabs {
+  --tab-height: var(--app-bar-tabs-h);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
+}
+/* The tab scroller clips what it draws outside its box, so a focused tab's
+   ring is drawn inside the tab (#1105). */
+.app-bar-tabs .tab:focus-visible {
+  @apply outline-2 outline-primary -outline-offset-2;
+}
+@media (max-width: 1023.98px) {
+  :root:has(.app-bar-tabs) {
+    --app-bar-h: calc(var(--app-bar-row-h) + var(--app-bar-tabs-h));
+  }
+  .app-bar:has(> .app-bar-tabs) {
+    flex-wrap: wrap;
+    align-content: flex-start;
+    row-gap: 0;
+  }
+  /* Less the bar's 1px bottom border, as a one-row bar's content box is:
+     the title sits where it does on every other page. */
+  .app-bar:has(> .app-bar-tabs) > .app-bar-title {
+    min-height: calc(var(--app-bar-row-h) - 1px);
+  }
+  .app-bar-tabs {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+/* From lg the tabs grow from their natural width, pushing the actions to
+   the end, and the title gives way first: one line, cut with an ellipsis,
+   its full text in the h1's `title` (#1110). A long title (a shared
+   wardrobe's owner) squeezed the row to nothing when the tabs took only the
+   room the title left. The order is the shrink weights: the title's dwarfs
+   the tabs', so it takes the whole shortfall until it is down to its
+   min-width, and only then does the tab row shrink and scroll inside the
+   bar (its overflow above), so the actions stay on screen (large text at
+   1024 px). Flex has no shrink priority; a weight this large is one. */
+@media (min-width: 1024px) {
+  .app-bar:has(> .app-bar-tabs) > .app-bar-title {
+    flex: 0 100000 auto;
+    min-width: 5rem;
+  }
+  .app-bar:has(> .app-bar-tabs) h1 {
+    min-width: 0;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  .app-bar-tabs {
+    flex: 1 1 auto;
+  }
 }
 .dock {
   z-index: 900;
+}
+
+/* Keyboard focus and scripted scrolling stop short of the fixed bars: a
+   focused control is scrolled into view clear of the app bar and, where the
+   dock sits at the bottom, of the dock (--spacing-dock is 0 where the dock is
+   the rail, and on a page without one). The action bar adds its own height
+   (below). */
+html {
+  scroll-padding-top: calc(var(--app-bar-h) + 0.5rem);
+}
+:root:has(.dock) {
+  scroll-padding-bottom: calc(var(--spacing-dock) + 0.5rem);
+}
+
+/* The action bar (layout/action-bar.tsx, #1063; docs/plans/
+   2026-11-16-desktop-layout.md §3.4), placed by PageShell's `actionBar` as a
+   child of `<main>`: its box, its places and the room it takes, all here.
+   Its height is `--action-bar-h`: its padding, its 1px border and a
+   btn-sm (daisyUI's --size-field * 8, which grows on a coarse pointer), in
+   rem, so it grows with the text. The row is that tall by construction (it
+   never wraps; text too large for the screen scrolls it sideways), so the
+   room reserved for it, which reads the same token, is its real height at
+   any text size or pointer (#1030: a hand-copied 3.5rem was short of it on
+   a phone and hid focus once the row wrapped). Below lg it is fixed
+   above the dock: focus scrolls clear of it and the page's end leaves its
+   height. From lg it sticks at the head of `<main>` under the app bar,
+   aligned to the content column: focus scrolls clear of it at the top.
+   Every bar follows the body in the DOM, the phone's visual order, so Tab
+   reaches the rows first; from lg `order` lifts it to the head of a flex
+   column, where it sticks against the whole of `<main>`. Content whose
+   height varies is a panel's bar aside instead (the page frame below). Page
+   content is z-20 at most: the bar is z-20. */
+:root {
+  --action-bar-h: calc(var(--size-field) * 8 + 1.5rem + 1px);
+}
+@layer components {
+  .action-bar {
+    position: fixed;
+    inset: auto 0 var(--spacing-dock) var(--rail-width);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: var(--action-bar-h);
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+    overflow-x: auto;
+    background-color: var(--color-base-100);
+    border-top: 1px solid var(--color-base-300);
+  }
+  /* `safe`: a row too wide for the screen starts at its start edge, where
+     the scroller reaches it (space-between does so of itself). */
+  .action-bar[data-align="end"] {
+    justify-content: safe flex-end;
+  }
+  .action-bar[data-align="between"] {
+    @apply justify-between;
+  }
+
+  @media (max-width: 1023.98px) {
+    .page-shell:has(> .action-bar) {
+      padding-bottom: calc(var(--spacing-dock) + var(--action-bar-h) + 2rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell:has(> .action-bar) {
+      display: flex;
+      flex-direction: column;
+    }
+    .page-shell > .action-bar {
+      order: -1;
+      position: sticky;
+      top: var(--app-bar-h);
+      bottom: auto;
+      border-top: 0;
+      border-bottom: 1px solid var(--color-base-300);
+    }
+  }
+}
+/* Unlayered, as the scroll padding above is. */
+@media (max-width: 1023.98px) {
+  :root:has(.page-shell > .action-bar) {
+    scroll-padding-bottom: calc(
+      var(--spacing-dock) + var(--action-bar-h) + 0.5rem
+    );
+  }
+}
+@media (min-width: 1024px) {
+  :root:has(.page-shell > .action-bar) {
+    scroll-padding-top: calc(var(--app-bar-h) + var(--action-bar-h) + 0.5rem);
+  }
+}
+
+/* A form's Cancel and submit (layout/form-page.tsx, #1069; docs/plans/
+   2026-11-16-desktop-layout.md §3.7). Below lg the form's last row, as it
+   always was. From lg the row sticks at the window's foot while the form
+   runs past it, so Save is in reach on a long form, and rides up with the
+   form's end once that is in view (sticky keeps it inside its PostForm,
+   so it never covers the forms after it). Not the action bar: that is the
+   page's, outside the form and fixed above a phone's dock, where this row
+   must stay in the flow. Its height is `--form-actions-h` (its padding, its
+   border and a default btn's `--size-field * 10`), which focus scrolls clear
+   of; z-10, under a menu (z-20) opening over it. */
+:root {
+  --form-actions-h: calc(var(--size-field) * 10 + 1.5rem + 1px);
+}
+@layer components {
+  @media (min-width: 1024px) {
+    .form-actions {
+      position: sticky;
+      bottom: var(--spacing-dock);
+      z-index: 10;
+      padding-block: 0.75rem;
+      border-top: 1px solid var(--color-base-300);
+      background-color: var(--color-base-100);
+    }
+  }
+}
+/* Unlayered, after the dock's, as the scroll padding above is. */
+@media (min-width: 1024px) {
+  :root:has(.form-actions) {
+    scroll-padding-bottom: calc(
+      var(--spacing-dock) + var(--form-actions-h) + 0.5rem
+    );
+  }
+}
+
+/* The page frame (layout/page-shell.tsx, #1059; docs/plans/
+   2026-11-16-desktop-layout.md §3.2): `<main class="page-shell">` leaves the
+   app bar's height above (`--app-bar-h`, so it grows with the text, #1028)
+   and the dock's below plus a 2rem gutter (only the gutter at the rail,
+   where --spacing-dock is 0); the room its action bar takes is the action
+   bar's rules above. A `single` page's width is its `max-w-page-*` class; every
+   other layout's frame is wide, set here, so its grid owns the columns. The body and
+   the aside carry the gutter (`data-gutter`). Each layout is one grid here, from lg only: below
+   it every region stacks in DOM order, which is the desktop's left to
+   right. Nothing but this file and page-shell.tsx names a region's place. */
+@layer components {
+  .page-shell {
+    padding-top: var(--app-bar-h);
+    padding-bottom: calc(var(--spacing-dock) + 2rem);
+  }
+  .page-shell:not([data-layout="single"]) {
+    max-width: var(--container-page-wide);
+  }
+  .page-body,
+  .page-aside {
+    padding: 1rem 1rem 0;
+  }
+  .page-body[data-gutter="bleed"] {
+    padding-inline: 0;
+  }
+  .page-body[data-gutter="flush"] {
+    padding: 0;
+  }
+  /* The body's named flow (page-shell.tsx's `gap`): a column that far apart,
+     in Tailwind's steps. A `panel` aside carries the body's (PageAside). */
+  .page-body[data-gap],
+  .page-aside[data-gap] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--page-gap);
+  }
+  .page-body[data-gap="3"],
+  .page-aside[data-gap="3"] {
+    --page-gap: 0.75rem;
+  }
+  .page-body[data-gap="4"],
+  .page-aside[data-gap="4"] {
+    --page-gap: 1rem;
+  }
+  .page-body[data-gap="5"],
+  .page-aside[data-gap="5"] {
+    --page-gap: 1.25rem;
+  }
+  .page-body[data-gap="6"],
+  .page-aside[data-gap="6"] {
+    --page-gap: 1.5rem;
+  }
+  .page-body[data-gap="8"],
+  .page-aside[data-gap="8"] {
+    --page-gap: 2rem;
+  }
+  /* A split page on a phone is one column, the subject then the body: the
+     body's own gap between them, as before the subject was a region.
+     A layout rule that sets a body's padding names the layout in :where(),
+     so it weighs what .page-body does and the gutter (flush, bleed: a class
+     and an attribute) always outranks it. */
+  :where(.page-shell[data-layout="split"]) > .page-body {
+    padding-top: var(--page-gap, 1rem);
+  }
+  /* A panel page on a phone is one column, the body then the aside, which
+     continues the body's flow: its gap between them (PageAside). */
+  :where(.page-shell[data-layout="panel"]) > .page-aside {
+    padding-top: var(--page-gap, 1rem);
+  }
+  /* A panel whose aside is the phone's bar (`asideBelowLg: 'bar'`, Styling's
+     outfit, Shuffle and Save; #664, #1073): its content pads itself, a column
+     at every width. Below lg it is sticky above the dock in the flow after
+     the body (the body's gap-3 step above it), so it rides on the dock while
+     the body scrolls and lands below its end: it covers nothing however tall
+     it grows, so the page leaves only the dock's room, never a reservation.
+     Capped to the room between the app bar and the dock, a child that may
+     grow (`min-h-0`) scrolls inside it. z-10, under a menu (z-20) opening in
+     the body. From lg it is the panel's column like any other (below). */
+  .page-shell[data-aside="bar"] > .page-aside {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  @media (max-width: 1023.98px) {
+    .page-shell[data-aside="bar"] {
+      padding-bottom: max(var(--spacing-dock), 2rem);
+    }
+    .page-shell[data-aside="bar"] > .page-aside {
+      position: sticky;
+      bottom: var(--spacing-dock);
+      z-index: 10;
+      max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
+      margin-top: 0.75rem;
+      background-color: var(--color-base-100);
+      border-top: 1px solid var(--color-base-300);
+    }
+  }
+  /* On a phone the settings index is Profile itself, and a setting's page is
+     the narrow column it was before it had a nav beside it. */
+  .page-shell[data-layout="index"] > .page-aside {
+    display: none;
+  }
+  @media (max-width: 1023.98px) {
+    .page-shell[data-layout="index"] {
+      max-width: var(--container-page-narrow);
+    }
+  }
+  /* On a phone the facets are a closed bottom sheet (§3.3), so their aside
+     takes no room above the body. */
+  @media (max-width: 1023.98px) {
+    .page-shell[data-layout="facets"] > .page-aside {
+      padding: 0;
+    }
+    /* A subject shown from lg only (`subjectBelowLg: 'hidden'`, FormPage's
+       aside, #1069): below lg the page is the narrow column a `single` page
+       is, pixel for pixel; the body's padding is already its 1rem. */
+    .page-shell[data-subject="lg"] {
+      max-width: var(--container-page-narrow);
+    }
+    .page-shell[data-subject="lg"] > .page-aside {
+      display: none;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell:not([data-layout="single"]) {
+      display: grid;
+      align-items: start;
+    }
+    .page-shell > .page-body {
+      grid-area: body;
+      min-width: 0;
+    }
+    .page-shell > .page-aside {
+      grid-area: aside;
+      min-width: 0;
+      position: sticky;
+      top: var(--app-bar-h);
+    }
+    /* A subject and its facts: the photo or collage left, the facts at a
+       reading measure right. */
+    .page-shell[data-layout="split"] {
+      grid-template:
+        "aside body" auto / 5fr 7fr;
+    }
+    .page-shell[data-layout="split"] > .page-body,
+    .page-shell[data-layout="index"] > .page-body {
+      max-width: var(--container-page-narrow);
+    }
+    /* Side by side, the two regions start on one line. */
+    :where(.page-shell[data-layout="split"]) > .page-body,
+    :where(.page-shell[data-layout="panel"]) > .page-aside {
+      padding-top: 1rem;
+    }
+    /* A sticky region (split's subject, panel's aside: a trip's packing
+       list) is sticky only while it fits: taller than the window under the
+       bar, it scrolls inside itself, so its last row (the collage under a
+       long note, the extras under a long list) stays reachable. A non-sticky
+       fallback is not expressible in CSS alone; this keeps the region in
+       view. overflow-y: auto makes the box clip on x too, so nothing may
+       bleed out of it: the aside's own 1rem sides and top hold a focus ring
+       (2px + 2px offset), the bottom gets that room back by padding, taken
+       out of the layout again by the equal negative margin. Neither holds an
+       anchored menu (the garment menu lives in the app bar; Not for me is an
+       inline details; the extras' copy is a native select), and a sheet is
+       top-layer. */
+    .page-shell[data-layout="split"] > .page-aside,
+    .page-shell[data-layout="panel"] > .page-aside {
+      max-height: calc(100dvh - var(--app-bar-h) - var(--spacing-dock));
+      overflow-y: auto;
+      padding-bottom: 0.25rem;
+      margin-bottom: -0.25rem;
+    }
+    /* Work and its result: the result beside it, right. */
+    .page-shell[data-layout="panel"] {
+      grid-template:
+        "body aside" auto / 1fr 20rem;
+    }
+    /* A bar aside's content pads its own sides (the phone's bar); its top
+       and its steps are here, so it starts on the body's line. */
+    .page-shell[data-aside="bar"] > .page-aside {
+      padding-top: 0.5rem;
+      gap: 0.5rem;
+    }
+    /* A filtered gallery: the filters left (§3.3 docks its sheet here). */
+    .page-shell[data-layout="facets"],
+    .page-shell[data-layout="index"] {
+      grid-template:
+        "aside body" auto / 15rem 1fr;
+    }
+    .page-shell[data-layout="index"] > .page-aside {
+      display: block;
+    }
+    /* The facets scroll inside their sticky column, the aside itself the
+       scroller: a fragment swaps its content in place (PageFragment), so
+       the scroll survives an Apply. */
+    .page-shell[data-layout="facets"] > .page-aside {
+      max-height: calc(100dvh - var(--app-bar-h));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
+
+  /* A standalone page (sign in, register, the invite, the offline page): one
+     column centred in the room the bar and the dock leave, from the top once
+     it is taller than that (`safe`: nothing ends up under the fixed bar,
+     where no scroll reaches it). After the lg block so it wins over its grid.
+     The body carries the sides and the gap; a card in it brings its own
+     `max-w-*`. */
+  .page-shell[data-layout="centred"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+    align-items: center;
+    min-height: 100%;
+    padding-top: calc(var(--app-bar-h) + 1rem);
+  }
+  .page-shell[data-layout="centred"] > .page-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  /* Only the padding yields to the gutter (see the split rule above). */
+  :where(.page-shell[data-layout="centred"]) > .page-body {
+    padding: 0 1rem;
+  }
+}
+
+/* Below the rail, the dock's labels give way once they would overflow their
+   links: the container's width in rem shrinks as the root font grows, so
+   this reads the text size against the labels' own need, not the screen
+   (#1027). The query reads the content box, five links side by side, and
+   the widest label (Wardrobe, at the label's 0.6875rem) needs 3.2rem of its
+   link: 5 x 3.2rem is 16rem, and 17rem (a 288 px dock at 100%) leaves a
+   rendering margin. A 320 px phone keeps its labels at 100% text; 200%
+   hides them at any phone width. A longer label raises the need:
+   test/trips.spec.ts measures it just above 17rem. The links
+   keep their icon and their words as the accessible name (sr-only). */
+@media (max-width: 1023.98px) {
+  .dock {
+    container-type: inline-size;
+    container-name: dock;
+  }
+  @container dock (width < 17rem) {
+    .dock-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
+/* A `menu` sheet hangs under the control that opened it from lg
+   (layout/sheet.tsx, #1062; docs/plans/2026-11-16-desktop-layout.md §3.3):
+   confirm-sheet.js marks the open sheet's trigger `data-sheet-anchor`, and
+   the box is placed below it, its end edge on the trigger's, flipping above
+   when there is more room there. Its height is capped to the room beside
+   the anchor (a percentage of the placement's area, not the screen) and
+   the box scrolls inside itself past that, so a tall menu opened from
+   mid-page never loses its last row under the locked page. Fixed, not absolute: an anchor outside the dialog
+   is valid only for a box whose containing block is the viewport, and
+   `place-self: normal` lets the anchor, not the modal's grid, align it.
+   Where anchor positioning is missing the sheet stays centred (its
+   `lg:modal-middle`), as it does when a script opened it without a trigger.
+   In utilities: daisyUI's layers rank above components, and this overrides
+   its modal box. */
+@layer utilities {
+  @supports (anchor-name: --sheet-trigger) {
+    @media (min-width: 1024px) {
+      [data-sheet-anchor] {
+        anchor-name: --sheet-trigger;
+      }
+      :root:has([data-sheet-anchor]) .modal[data-sheet="menu"] > .modal-box {
+        position: fixed;
+        place-self: normal;
+        position-anchor: --sheet-trigger;
+        position-area: block-end span-inline-start;
+        position-try-fallbacks: flip-block;
+        position-try-order: most-block-size;
+        margin-block: 0.5rem;
+        width: 20rem;
+        max-height: calc(100% - 1rem);
+      }
+    }
+  }
+}
+
+/* A `filters` sheet docks in its `facets` aside from lg (layout/sheet.tsx,
+   #1067; docs/plans/2026-11-16-desktop-layout.md §3.3): the dialog, closed,
+   is shown in place as the facet column, so its one form is the phone's
+   bottom sheet and the desktop's filters, never rendered twice. This is the
+   one place CSS overrides a UA default (a closed dialog is display: none),
+   chosen over a script calling show() on resize, which would be layout in
+   script; a closed dialog shown by CSS is neither modal nor inert, and stays
+   named by its heading. Its opener (`dockedFiltersOpener`) and its
+   backdrop's Close go here; the box does not scroll, the aside does (the
+   page-shell block), with Clear and Apply kept at its foot. In utilities:
+   daisyUI's layers rank above components, and this overrides its modal. */
+@layer utilities {
+  @media (min-width: 1024px) {
+    .page-shell[data-layout="facets"]
+      > .page-aside
+      > .modal[data-sheet="filters"]:not([open]) {
+      position: static;
+      display: block;
+      visibility: visible;
+      pointer-events: auto;
+      opacity: 1;
+      z-index: auto;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      background-color: transparent;
+      transition: none;
+      & > .modal-box {
+        opacity: 1;
+        translate: none;
+        scale: none;
+        width: auto;
+        max-width: none;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+        transition: none;
+      }
+      & > .modal-backdrop {
+        display: none;
+      }
+      & .modal-action {
+        position: sticky;
+        bottom: 0;
+        margin-top: 0;
+        padding-block: 1rem;
+        background-color: var(--color-base-100);
+      }
+    }
+    .page-shell[data-layout="facets"] [data-filters-opener] {
+      display: none;
+    }
+  }
+}
+
+/* Sheets and menus appear without sliding or fading for someone who asked
+   the system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal-box,
+  .modal-backdrop {
+    transition: none;
+  }
 }
 
 /* At lg the dock is a slim left rail: the same markup (layout/dock.tsx),
@@ -329,14 +975,8 @@
    through erased pixels. Its colours are the editors' convention for
    transparency, not the theme's, so the same in both schemes. */
 .mask-checkerboard {
-  background-color: #fff;
-  background-image:
-    linear-gradient(45deg, #ccc 25%, transparent 25%),
-    linear-gradient(-45deg, #ccc 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #ccc 75%),
-    linear-gradient(-45deg, transparent 75%, #ccc 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  /* Two quarters of every 16px tile grey, two white: 8px squares. */
+  background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 16px 16px;
 }
 
 /* Tap feedback: pressed while touched, dimmed while the tapped link's
@@ -357,7 +997,7 @@ a.htmx-request,
 
 /* Writes that need the server (Wore today, Washed, the worn pill, the
    laundry's Mark washed: data-needs-network) are dimmed while
-   public/js/connectivity.js says the app is offline; it also sets their
+   views/assets/page/connectivity.ts says the app is offline; it also sets their
    controls' real `disabled` (keyboard included), and its banner explains. */
 html[data-connectivity='offline'] [data-needs-network],
 html[data-connectivity='reconnecting'] [data-needs-network] {
@@ -378,7 +1018,7 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
 }
 
 /* A queued write's "Waiting to sync" (src/web/outbox.tsx): shown while
-   public/js/outbox.js marks its region pending, online or not. */
+   public/js/gen/outbox.js marks its region pending, online or not. */
 [data-outbox-chip] {
   display: none;
 }
@@ -386,310 +1026,175 @@ html[data-connectivity='reconnecting'] [data-offline-note] {
   display: inline-flex;
 }
 
-/*
- * pulltorefresh.js styling to pin refresh UI elements
- * under the app bar and match the daisyui theme
- */
+/* The installed iOS app's pull-to-refresh (views/assets/page/pwa.ts): the
+   library draws its indicator in the body with inline styles, so these win
+   with the important modifier. It hangs under the fixed app bar and beside
+   the rail, in the theme's colours, above everything but the toasts. */
 .ptr--ptr {
-  position: fixed !important;
-  top: 4rem !important; /* pin below the fixed app bar */
-  left: var(--rail-width);
-  right: 0;
-  z-index: 999;
-  background-color: var(--color-base-300) !important;
+  @apply fixed! top-bar! left-rail right-0 z-999 bg-base-300!;
 }
-.ptr--text,
-.ptr--icon {
-  color: var(--color-base-content) !important;
+:is(.ptr--text, .ptr--icon) {
+  @apply text-base-content!;
 }
 
-/* Prevent iOS from collapsing the viewport on scroll */
-body {
-  min-height: 100vh;
-  min-height: 100dvh; /* Use dynamic viewport height */
-}
-
-/* color-multiselect.css
-   DaisyUI v5 compatible — uses --color-* variables throughout */
-
+/* The garment form's colour field (garment-form.tsx ColorPicker, driven by
+   views/assets/page/color-picker.ts): a <details> whose summary shows the
+   ticked colours as pills and whose open body is a searchable checklist,
+   laid over the fields below it (its anchor is a zero-height `relative`).
+   Every colour is a daisyUI token at an opacity, so both themes draw it. */
 .color-ms {
-  position: relative;
-  z-index: 1;
-  isolation: isolate;
-  width: 100%;
-  min-width: 0;
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
-  border-radius: var(--radius-field);
-  background: var(--color-base-100);
-}
+  @apply relative isolate z-1 w-full min-w-0 rounded-[var(--radius-field)] border border-base-content/20 bg-base-100;
 
-.color-ms[open],
-.color-ms:focus-within {
-  z-index: 20;
-  border-color: color-mix(in oklch, var(--color-base-content) 40%, transparent);
-}
+  /* Open or in use, it rises over its neighbours and its line darkens. */
+  &:is([open], :focus-within) {
+    @apply z-20 border-base-content/40;
+  }
+  /* Focused, it wears a daisyUI input's ring around the whole field. */
+  &:focus-within {
+    @apply outline-2 outline-offset-2 outline-base-content;
+  }
+  /* daisyUI's input lifts its focus with a hairline shadow at the theme's
+     depth; a browser without color-mix keeps the ring alone. */
+  @supports (color: color-mix(in oklab, red, red)) {
+    &:focus-within {
+      box-shadow: 0 1px color-mix(in oklab, var(--color-base-content) calc(var(--depth) * 10%), transparent);
+    }
+  }
 
-.color-ms summary {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 0.625rem 0.75rem;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  min-height: 3rem;
-  gap: 0.5rem;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-}
+  & summary {
+    @apply relative flex min-h-12 min-w-0 cursor-pointer list-none items-start justify-between gap-2 overflow-hidden px-3 py-2.5 select-none;
+  }
+  & summary::-webkit-details-marker {
+    @apply hidden;
+  }
+  &[open] .ms-chevron {
+    @apply rotate-180;
+  }
 
-.color-ms summary::-webkit-details-marker {
-  display: none;
-}
+  /* Its parts, which only ever appear inside it. The summary's pills take
+     the row beside the chevron and scroll past about three lines of them. */
+  & .ms-pills {
+    @apply flex max-h-24 w-0 min-w-0 flex-1 flex-wrap gap-1 overflow-y-auto py-0.5;
+  }
+  & .ms-placeholder {
+    @apply text-sm text-muted;
+  }
+  & .ms-pill {
+    @apply inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-[var(--radius-selector,1.9rem)] border border-base-content/15 bg-base-200 px-2 py-0.5 text-xs/[1.4] text-base-content;
+  }
+  & .ms-chevron {
+    @apply shrink-0 text-muted transition-[rotate] duration-150 ease-[ease];
+  }
 
-.ms-placeholder {
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
+  /* The open list, under the summary with a small gap, squared off on top. */
+  & .ms-dropdown {
+    @apply absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-[260px] overflow-y-auto rounded-b-[var(--radius-field)] border border-base-content/20 bg-base-100 py-1;
+    box-shadow: 0 4px 12px color-mix(in oklab, var(--color-base-content) 10%, transparent);
+  }
+  & .ms-search {
+    @apply mx-2 my-1.5 flex items-center gap-1.5 rounded-[var(--radius-field)] border border-base-content/20 bg-base-200 px-2 py-1 text-muted;
+  }
+  & .ms-search-input {
+    @apply w-full border-0 bg-transparent p-0 text-[0.8125rem] text-base-content outline-0;
+  }
+  & .ms-options {
+    @apply py-0.5;
+  }
+  & .ms-option {
+    @apply flex cursor-pointer items-center gap-2.5 px-3 py-[0.4375rem] text-sm text-base-content hover:bg-base-200;
 
-.ms-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.25rem;
-  flex: 1 1 0;
-  min-width: 0;
-  width: 0;
-  padding: 0.125rem 0;
-  max-height: 6rem; /* ~3 rows of pills */
-  overflow-y: auto;
-}
+    & input[type='checkbox'] {
+      @apply size-4 shrink-0 cursor-pointer accent-primary;
+    }
+  }
+  & .ms-empty {
+    @apply px-3 py-2.5 text-center text-[0.8125rem] text-muted;
+  }
 
-.ms-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  padding: 0.125rem 0.375rem 0.125rem 0.5rem;
-  border-radius: var(--radius-selector, 1.9rem);
-  background: var(--color-base-200);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
-  color: var(--color-base-content);
-  line-height: 1.4;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.ms-pill-remove {
-  cursor: pointer;
-  color: var(--color-muted);
-  font-size: 0.875rem;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.75rem;
-  min-height: 1.4rem;
-  margin: -0.125rem -0.375rem -0.125rem 0;
-  border-radius: 0 var(--radius-selector, 1.9rem) var(--radius-selector, 1.9rem) 0;
-  background: color-mix(in oklch, var(--color-base-content) 10%, transparent);
-  align-self: stretch;
-}
-
-.ms-pill-remove:hover {
-  color: var(--color-base-content);
-  background: color-mix(in oklch, var(--color-base-content) 20%, transparent);
-}
-
-.ms-chevron {
-  color: var(--color-muted);
-  flex-shrink: 0;
-  transition: transform 0.15s ease;
-}
-
-.color-ms[open] .ms-chevron {
-  transform: rotate(180deg);
-}
-
-.ms-dropdown-anchor {
-  position: relative;
-  height: 0;
-  overflow: visible;
-}
-
-.ms-dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 0.25rem);
-  z-index: 30;
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
-  border-radius: 0 0 var(--radius-field) var(--radius-field);
-  box-shadow: 0 4px 12px color-mix(in oklch, var(--color-base-content) 10%, transparent);
-  background: var(--color-base-100);
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 0.25rem 0;
-}
-
-.ms-search {
-  margin: 0.375rem 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
-  border-radius: var(--radius-field);
-  padding: 0.25rem 0.5rem;
-  background: var(--color-base-200);
-  color: var(--color-muted);
-}
-
-.ms-search-input {
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 0.8125rem;
-  color: var(--color-base-content);
-  width: 100%;
-  padding: 0;
-}
-
-.ms-options {
-  padding: 0.125rem 0;
-}
-
-.ms-option {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.4375rem 0.75rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--color-base-content);
-}
-
-.ms-option:hover {
-  background: var(--color-base-200);
-}
-
-.ms-option input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: var(--color-primary);
-}
-
-.ms-option.hidden {
-  display: none;
-}
-
-/* Swatch */
-.ms-swatch {
-  /* Change to display: block; to display color dots for each color */
-  display: none;
-  width: 0.75rem;
-  height: 0.75rem;
-  min-width: 0.75rem;
-  min-height: 0.75rem;
-  max-width: 0.75rem;
-  max-height: 0.75rem;
-  border-radius: 50%;
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
-  flex-shrink: 0;
-}
-
-/* Known enum colors — CSS color names work directly */
-.ms-swatch--red    { background: red; }
-.ms-swatch--pink   { background: pink; }
-.ms-swatch--orange { background: orange; }
-.ms-swatch--yellow { background: yellow; }
-.ms-swatch--green  { background: green; }
-.ms-swatch--blue   { background: blue; }
-.ms-swatch--purple { background: purple; }
-.ms-swatch--black  { background: black; }
-.ms-swatch--white  { background: white; }
-.ms-swatch--grey   { background: grey; }
-.ms-swatch--beige  { background: beige; }
-.ms-swatch--brown  { background: brown; }
-.ms-swatch--gold   { background: gold; }
-.ms-swatch--silver { background: silver; }
-.ms-swatch--pattern {
-  background: repeating-linear-gradient(
-    45deg,
-    #ccc,
-    #ccc 2px,
-    #fff 2px,
-    #fff 6px
-  );
-}
-/* other: a neutral swatch */
-.ms-swatch--other {
-  background: color-mix(in oklch, var(--color-base-content) 20%, transparent);
-}
-
-/* Empty state */
-.ms-empty {
-  padding: 0.625rem 0.75rem;
-  font-size: 0.8125rem;
-  color: var(--color-muted);
-  text-align: center;
-}
-
-/* Footer */
-.ms-footer {
-  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
-  padding: 0.375rem 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ms-count {
-  font-size: 0.75rem;
-  color: var(--color-muted);
-}
-
-.ms-clear {
-  cursor: pointer;
-  border: 1px solid color-mix(in oklch, var(--color-primary) 30%, transparent);
-  border-radius: var(--radius-field);
-  background: color-mix(in oklch, var(--color-primary) 10%, transparent);
-  color: var(--color-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-  padding: 0.25rem 0.5rem;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.ms-clear:hover {
-  background: color-mix(in oklch, var(--color-primary) 18%, transparent);
-  border-color: color-mix(in oklch, var(--color-primary) 45%, transparent);
-}
-
-.ms-clear:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* REPLACE with this */
-.color-ms:focus-within {
-  --input-color: var(--color-base-content);
-  outline: 2px solid var(--input-color);
-  outline-offset: 2px;
-  isolation: isolate;
-}
-
-@supports (color: color-mix(in lab, red, red)) {
-  .color-ms:focus-within {
-    box-shadow: 0 1px color-mix(in oklab, var(--input-color) calc(var(--depth) * 10%), #0000);
+  /* The count of ticked colours and Clear all, under the list. */
+  & .ms-footer {
+    @apply flex items-center justify-between border-t border-base-content/10 px-3 py-1.5;
+  }
+  & .ms-count {
+    @apply text-xs text-muted;
+  }
+  & .ms-clear {
+    @apply cursor-pointer rounded-[var(--radius-field)] border border-primary/30 bg-primary/10 px-2 py-1 text-xs/none font-semibold text-primary transition-colors duration-150 ease-[ease] hover:border-primary/45 hover:bg-primary/18 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
   }
 }
+
+/* A garment colour as a dot or a bar's segment (insights and the year in
+   review: `swatch--<colour>`, GARMENT_COLORS' names). A named colour is
+   its CSS keyword; `pattern` is a fine grey stripe and `other` a tint of
+   the text. A modifier class, so the page audit reads it as data. */
+.swatch--red {
+  background-color: red;
+}
+.swatch--pink {
+  background-color: pink;
+}
+.swatch--orange {
+  background-color: orange;
+}
+.swatch--yellow {
+  background-color: yellow;
+}
+.swatch--green {
+  background-color: green;
+}
+.swatch--blue {
+  background-color: blue;
+}
+.swatch--purple {
+  background-color: purple;
+}
+.swatch--black {
+  background-color: black;
+}
+.swatch--white {
+  background-color: white;
+}
+.swatch--grey {
+  background-color: grey;
+}
+.swatch--beige {
+  background-color: beige;
+}
+.swatch--brown {
+  background-color: brown;
+}
+.swatch--gold {
+  background-color: gold;
+}
+.swatch--silver {
+  background-color: silver;
+}
+.swatch--pattern {
+  background-image: repeating-linear-gradient(45deg, #ccc 0 2px, #fff 2px 6px);
+}
+.swatch--other {
+  @apply bg-base-content/20;
+}
+
 /* The snap strip's previous/next buttons (src/web/strip/snap-strip.tsx, #311)
    show only where the primary input hovers and is precise: a mouse, not a
    phone. One markup for every device. */
 @custom-variant fine (@media (hover: hover) and (pointer: fine));
+
+/* Styling's preview whole (src/web/styling/styling-page.tsx, PREVIEW_*;
+   #468, #664): the phone's bar draws the outfit as a strip until its
+   `<details>` (a `group`) opens, and from lg the aside always shows it
+   whole. One variant for both, so each class of the whole shape is spelled
+   once and the two can never drift apart (#1073: they were `group-open:`
+   and `lg:` twins). */
+@custom-variant preview-whole {
+  &:is(:where(.group)[open] *) {
+    @slot;
+  }
+  @media (width >= 64rem) {
+    @slot;
+  }
+}
 
 /* The shared photo viewer (src/web/files/photo-viewer.tsx, public/js/
    photo-viewer.js, #313): a full-screen scroll-snap row of slides. A zoomed

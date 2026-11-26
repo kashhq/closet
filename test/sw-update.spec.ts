@@ -7,7 +7,7 @@ import { cachedPaths, networkSwitch } from './support/service-worker';
 
 /**
  * The installed app's update flow (src/web/shell/AGENTS.md, Updates): a new
- * build's worker waits, public/js/pwa.js offers it in a toast, Reload posts
+ * build's worker waits, views/assets/page/pwa.ts offers it in a toast, Reload posts
  * SKIP_WAITING (only online), and the page reloads once the new worker
  * controls it. Never a forced reload, in this window or another. Then the
  * activation refresh (#656): the pages build A stored still open offline
@@ -156,6 +156,12 @@ test.describe('service worker update', () => {
     expect(offlineErrors).toEqual([]);
     await offline.close();
 
+    // A's copy of /wardrobe gets a body mark the server never renders, its
+    // headers (tag, stamp) kept: a refresh that stored the server's body
+    // again, rather than confirming the copy, loses it.
+    const wardrobeKey = `${next.origin}/wardrobe`;
+    await markStoredBody(page, dueIds, wardrobeKey);
+
     // Back online, one key cut: the refresh walks the cache in order and
     // stops there; nothing after it is asked. Then it resumes at the cut
     // key on the next WARM_PAGES, never asking again for what it renewed.
@@ -178,6 +184,34 @@ test.describe('service worker update', () => {
       )
       .toEqual([]);
     expect(refetches.since(dueIds, 'answered')).toEqual(dueIds);
+    // The new build serves the same pages (only its worker changed), so each
+    // page was asked with its copy's tag and confirmed by a 304 (#708): its
+    // copy stored again with a new stamp, one, never a second Server-Timing
+    // entry. A fragment carries no tag and is fetched whole.
+    const asked = refetches.list.filter(
+      (r) => !r.held && r.outcome === 'answered' && dueIds.includes(r.id),
+    );
+    for (const { id, conditional } of asked) {
+      expect(conditional, id).toBe(!id.endsWith('|hx'));
+    }
+    for (const copy of await storedPages(page)) {
+      expect(copy.stamps, copy.id).toBe(1);
+    }
+    // The server answered each of those 304, and the marked copy was kept
+    // whole and re-stamped: its body is A's, its stamp after B activated.
+    const answered = new Map(
+      next.warmAnswers.map((a) => [
+        keyId(`${next.origin}${a.url}`, a.fragment),
+        a.status,
+      ]),
+    );
+    for (const { id } of asked.filter((r) => r.conditional)) {
+      expect(answered.get(id), id).toBe(304);
+    }
+    expect(asked.map((r) => r.id)).toContain(wardrobeKey);
+    const kept = await storedBody(page, wardrobeKey);
+    expect(kept.marked).toBe(true);
+    expect(kept.cachedAt).toBeGreaterThan(activatedAt);
 
     // Offline again, the tab root opens at once from B's own copy.
     await setNetwork('offline');
@@ -291,26 +325,87 @@ function keyId(url: string, fragment: boolean): string {
 interface StoredPage {
   id: string;
   cachedAt: number;
+  /** Its Server-Timing's arrival stamps: one, however often re-stamped. */
+  stamps: number;
+}
+
+const BODY_MARK = '<!-- sw-update: the stored body -->';
+
+/**
+ * Appends BODY_MARK to the stored copy of `url`, its headers unchanged. A
+ * put moves its key to the cache's end, and the refresh walks the cache in
+ * order, so every copy of `ids` (which holds `url`) is put again in turn,
+ * keeping their order.
+ */
+async function markStoredBody(
+  page: Page,
+  ids: string[],
+  url: string,
+): Promise<void> {
+  await page.evaluate(
+    async ([keys, marked, mark]) => {
+      const cache = await caches.open('pages-v2');
+      const stored = (await cache.keys()).filter((key) =>
+        keys.includes(key.url.replace(/%7Chx$/i, '|hx')),
+      );
+      if (!stored.some((key) => key.url === marked)) {
+        throw new Error(`no stored copy of ${marked}`);
+      }
+      for (const key of stored) {
+        const copy = await cache.match(key);
+        if (!copy) continue;
+        const body = `${await copy.text()}${key.url === marked ? mark : ''}`;
+        const headers = new Headers(copy.headers);
+        headers.delete('Content-Length');
+        await cache.put(
+          key,
+          new Response(body, { status: copy.status, headers }),
+        );
+      }
+    },
+    [ids, url, BODY_MARK] as const,
+  );
+}
+
+/** Whether the stored copy of `url` still carries BODY_MARK, and its stamp. */
+function storedBody(
+  page: Page,
+  url: string,
+): Promise<{ marked: boolean; cachedAt: number }> {
+  return page.evaluate(
+    async ([key, mark]) => {
+      const copy = await (await caches.open('pages-v2')).match(key);
+      return {
+        marked: (await copy?.text())?.endsWith(mark) ?? false,
+        cachedAt: Number(copy?.headers.get('X-SW-Cached-At') ?? 0),
+      };
+    },
+    [url, BODY_MARK] as const,
+  );
 }
 
 /** pages-v2's pages and fragments in the cache's own order, with their stamps. */
 async function storedPages(page: Page): Promise<StoredPage[]> {
   const stored = await page.evaluate(async () => {
     const cache = await caches.open('pages-v2');
-    const copies: { url: string; cachedAt: number }[] = [];
+    const copies: { url: string; cachedAt: number; stamps: number }[] = [];
     for (const key of await cache.keys()) {
       if (new URL(key.url).origin !== location.origin) continue;
       const copy = await cache.match(key);
       copies.push({
         url: key.url,
         cachedAt: Number(copy?.headers.get('X-SW-Cached-At') ?? 0),
+        stamps: (copy?.headers.get('Server-Timing') ?? '')
+          .split(',')
+          .filter((entry) => entry.trim().startsWith('cache;')).length,
       });
     }
     return copies;
   });
-  return stored.map(({ url, cachedAt }) => ({
+  return stored.map(({ url, cachedAt, stamps }) => ({
     id: keyId(url, /(?:\||%7C)hx$/i.test(url)),
     cachedAt,
+    stamps,
   }));
 }
 
@@ -326,6 +421,8 @@ function activationTime(page: Page): Promise<number> {
 interface Refetch {
   id: string;
   outcome: 'answered' | 'cut';
+  /** Sent with If-None-Match: the stored copy's ETag (#708). */
+  conditional: boolean;
   /** Asked while `hold` cut every one. */
   held: boolean;
 }
@@ -356,12 +453,13 @@ async function recordRefetches(context: BrowserContext) {
     }
     const id = keyId(route.request().url(), headers['hx-request'] === 'true');
     const held = recorder.hold;
+    const conditional = headers['if-none-match'] !== undefined;
     if (held || id === recorder.cut) {
-      recorder.list.push({ id, outcome: 'cut', held });
+      recorder.list.push({ id, outcome: 'cut', held, conditional });
       await route.abort('internetdisconnected');
       return;
     }
-    recorder.list.push({ id, outcome: 'answered', held });
+    recorder.list.push({ id, outcome: 'answered', held, conditional });
     await route.fallback();
   });
   return recorder;

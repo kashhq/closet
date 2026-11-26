@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
 import type { IsoDate } from '../../calendar-date';
 import { initialCutoutState } from '../../cutout/state';
@@ -120,16 +121,19 @@ export interface InspirationPage {
 }
 
 /**
- * The owner's looks, newest first: the Inspiration tab's one statement
- * after the session's (inspiration_owner_id_id_index, read backward), and
- * list_inspiration's; all of them, or a `page` (GET /api/v1/looks).
+ * The owner's looks, newest first, a `page` at a time: the Inspiration
+ * tab's one statement after the session's (inspiration_owner_id_id_index,
+ * read backward), its sentinel's, list_inspiration's and GET /api/v1/looks'
+ * (#528: a library has no upload cap, so no reader takes all of it). `next`
+ * is the last id of the page when more follow, to come back as `before`.
  */
 export async function listInspirations(
   db: Db,
   ownerId: number,
-  page?: InspirationPage,
-): Promise<ListedInspiration[]> {
-  const query = db
+  { before, limit }: InspirationPage,
+): Promise<{ looks: ListedInspiration[]; next: number | null }> {
+  // One more than the page: whether another follows.
+  const rows = await db
     .select({
       ...SUMMARY_COLUMNS,
       pieceCount: sql<number>`(select count(*)::int from ${inspirationPiece} where ${eq(inspirationPiece.inspirationId, inspiration.id)})`,
@@ -139,17 +143,16 @@ export async function listInspirations(
     .where(
       and(
         eq(inspiration.ownerId, ownerId),
-        page?.before === undefined
-          ? undefined
-          : lt(inspiration.id, page.before),
+        before === undefined ? undefined : lt(inspiration.id, before),
       ),
     )
-    .orderBy(desc(inspiration.id));
-  const rows = await (page ? query.limit(page.limit) : query);
-  return rows.map(({ fileName, version, ...row }) => ({
+    .orderBy(desc(inspiration.id))
+    .limit(limit + 1);
+  const looks = rows.slice(0, limit).map(({ fileName, version, ...row }) => ({
     ...row,
     photo: photoOf({ fileName, version }),
   }));
+  return { looks, next: rows.length > limit ? looks[limit - 1].id : null };
 }
 
 type PieceJson = [
@@ -342,28 +345,33 @@ async function insertInspiration(
  * replaces the first.
  */
 export function setInspirationPhoto(
-  db: Db,
+  db: Queryable,
   id: number,
   ownerId: number,
   photo: NewPhotoRow,
 ): Promise<{ replaced: string | null }> {
   return db.transaction(async (tx) => {
+    // Only the look is read here: a row that waited on the lock is
+    // re-evaluated with its joins still on the old snapshot, so a joined
+    // file name can be null beside a photo id that is set (#527). The
+    // replaced name comes from the DELETE itself (files/AGENTS.md).
     const [look] = await tx
-      .select({ photoId: inspiration.photoId, fileName: file.fileName })
+      .select({ photoId: inspiration.photoId })
       .from(inspiration)
-      .leftJoin(file, eq(file.id, inspiration.photoId))
       .where(and(eq(inspiration.id, id), eq(inspiration.ownerId, ownerId)))
-      .for('update', { of: inspiration });
+      .for('update');
     if (!look) throw new NotFound('inspiration');
     const photoId = await insertPhotoRow(tx, {
       ...photo,
       ...initialCutoutState('unwanted'),
     });
     await tx.update(inspiration).set({ photoId }).where(eq(inspiration.id, id));
-    if (look.photoId !== null) {
-      await tx.delete(file).where(eq(file.id, look.photoId));
-    }
-    return { replaced: look.fileName };
+    if (look.photoId === null) return { replaced: null };
+    const [replaced] = await tx
+      .delete(file)
+      .where(eq(file.id, look.photoId))
+      .returning({ fileName: file.fileName });
+    return { replaced: replaced.fileName };
   });
 }
 
@@ -602,7 +610,10 @@ export function setInspirationPieces(
   pieces: readonly LookPiece[],
 ): Promise<PiecesSet> {
   if (pieces.length > INSPIRATION_MAX_PIECES) {
-    throw new HttpError(400, `At most ${INSPIRATION_MAX_PIECES} pieces`);
+    throw new HttpError(
+      400,
+      t('refusal.inspiration.tooManyPieces', { max: INSPIRATION_MAX_PIECES }),
+    );
   }
   return db.transaction(async (tx) => {
     await lockOwnLook(tx, id, ownerId);

@@ -7,11 +7,24 @@ import { CONDITIONS } from '../../wardrobe/properties';
 import type { FieldErrors } from '../auth/validation';
 import { t } from '../i18n';
 import { FormPage } from '../layout/form-page';
-import { FieldMessages, FormField, inputAttributes } from '../form-field';
+import {
+  FieldMessages,
+  FieldRow,
+  FormField,
+  inputAttributes,
+} from '../form-field';
+import {
+  colorOption,
+  colorPicker,
+  colorPickerPart,
+  colorPill,
+} from '../page-contract';
 import type { ViewContext } from '../view-context';
 import { GARMENT_COLORS } from '../../wardrobe/properties';
 import { categoryLabel, normalizeCategory } from './garment';
+import { GarmentPhotoView, type PhotoSubject } from './garment-photo';
 import { valueLabel } from './labels';
+import { Icon } from '../layout/icon';
 import {
   LinkImportSection,
   type LinkImportView,
@@ -47,7 +60,7 @@ import {
   CARE_NOTE_MAX,
   type CareFormValues,
   CATEGORY_MAX,
-  type FormAudience,
+  formAudience,
   type GarmentField,
   type GarmentFormValues,
   NAME_MAX,
@@ -84,25 +97,17 @@ export function isWishlistForm(mode: GarmentFormMode): boolean {
   );
 }
 
-/**
- * Who owns the garment a form saves: the requester in their own wardrobe
- * (`viewOwner` undefined: authorizeWardrobe's isOwner), and always for a
- * clone, which lands there. The one rule for both sides of the owner-only
- * fields (FormAudience, garment-input.ts): the form renders them only for the
- * owner, and the routes read them from the post only for the owner.
- */
-export function formAudience(
-  mode: Pick<GarmentFormMode, 'kind'>,
-  viewOwner: number | undefined,
-): FormAudience {
-  return { owner: mode.kind === 'clone' || viewOwner === undefined };
-}
-
 export interface GarmentFormModel {
   mode: GarmentFormMode;
+  /**
+   * The garment edited or cloned, its photo as shown (withShownPhoto): the
+   * page's subject from lg (#1069). A new garment has none (its pending
+   * photo is a field of the form, `link`).
+   */
+  subject?: PhotoSubject;
   values: GarmentFormValues;
   /** The category suggestions (built-in, then the wardrobe's own). */
-  categories: { value: string; label: string }[];
+  categories: string[];
   /** The shared wardrobe the form was opened in; undefined for one's own. */
   viewOwner: number | undefined;
   errors?: FieldErrors<GarmentField>;
@@ -175,7 +180,9 @@ function formAction({ mode, viewOwner }: GarmentFormModel): string {
  * re-render with the messages when a post is refused (400), in the shared
  * add/edit frame (`FormPage`: a native post, disabled offline, #411; a
  * batch's draft queue does not cover the save itself, only its Discard).
- * Field names are the ones the form has always posted (cached pages of the
+ * An edit or a clone shows the garment's photo beside the fields from lg
+ * (FormPage `aside`, #1069), with the cutout's state as the garment page
+ * draws it; a phone sees the form alone, as before. Field names are the ones the form has always posted (cached pages of the
  * installed app still send them), dateAquired included.
  */
 export function GarmentFormPage(props: {
@@ -195,6 +202,15 @@ export function GarmentFormPage(props: {
       back={back}
       action={formAction(model)}
       submitLabel={t('SAVE')}
+      aside={
+        model.subject && (
+          <GarmentPhotoView
+            garment={model.subject}
+            viewOwner={viewOwner}
+            place="form"
+          />
+        )
+      }
       intro={
         <>
           {draft && <DraftQueueSection queue={draft} viewOwner={viewOwner} />}
@@ -234,7 +250,7 @@ export function GarmentFormPage(props: {
         />
       )}
       <NameAndCategory model={model} category={category} />
-      <ColorMultiSelect selected={values.colors} errors={errors.color} />
+      <ColorPicker selected={values.colors} errors={errors.color} />
       <BrandAndSize model={model} />
       <OwnershipFields model={model} wishlist={wishlist} />
       <MoreDetails model={model} wishlist={wishlist} category={category} />
@@ -270,10 +286,9 @@ function NameAndCategory(props: { model: GarmentFormModel; category: string }) {
       >
         <input
           {...inputAttributes('garment-category', 'w-full', errors.category)}
-          type="text"
-          name="category"
           list="category-suggestions"
-          value={values.category}
+          name="category"
+          value={categoryLabel(values.category)}
           maxlength={CATEGORY_MAX}
           required
           placeholder={t('TYPE_OR_SELECT_CATEGORY')}
@@ -281,8 +296,8 @@ function NameAndCategory(props: { model: GarmentFormModel; category: string }) {
           {...REFRESH_PROPERTIES}
         />
         <datalist id="category-suggestions">
-          {model.categories.map((suggestion) => (
-            <option value={suggestion.value}>{suggestion.label}</option>
+          {model.categories.map((label) => (
+            <option value={label} />
           ))}
         </datalist>
       </FormField>
@@ -306,21 +321,23 @@ function BrandAndSize({ model }: { model: GarmentFormModel }) {
   const own = viewOwner === undefined;
   return (
     <>
-      <TextField
-        name="brand"
-        label={t('BRAND')}
-        value={values.brand}
-        maxlength={BRAND_MAX}
-        placeholder={t('BRAND_PLACEHOLDER')}
-        refresh={own ? BRAND_SIZE_HINT_TRIGGER : {}}
-      />
-      <TextField
-        name="size"
-        label={t('SIZE')}
-        value={values.size}
-        maxlength={SIZE_MAX}
-        placeholder={t('SIZE_PLACEHOLDER')}
-      />
+      <FieldRow>
+        <TextField
+          name="brand"
+          label={t('BRAND')}
+          value={values.brand}
+          maxlength={BRAND_MAX}
+          placeholder={t('BRAND_PLACEHOLDER')}
+          refresh={own ? BRAND_SIZE_HINT_TRIGGER : {}}
+        />
+        <TextField
+          name="size"
+          label={t('SIZE')}
+          value={values.size}
+          maxlength={SIZE_MAX}
+          placeholder={t('SIZE_PLACEHOLDER')}
+        />
+      </FieldRow>
       {own && <BrandSizeHint note={model.brandSize} />}
       {model.lookalikes && <LookalikesRegion panel={model.lookalikes} />}
     </>
@@ -446,7 +463,9 @@ function MoreDetails(props: {
         />
         <TextField
           name="price"
-          label={t('PRICE')}
+          label={
+            Number(values.care.quantity) > 1 ? t('PRICE_PER_PIECE') : t('PRICE')
+          }
           value={values.price}
           maxlength={PRICE_INPUT_MAX}
           placeholder={t('PRICE_PLACEHOLDER')}
@@ -474,13 +493,11 @@ function moreDetailsOpen(
   { errors = {}, link, values }: GarmentFormModel,
   wishlist: boolean,
 ): boolean {
-  return (
-    wishlist ||
-    errors.dateAquired !== undefined ||
-    errors.sourceUrl !== undefined ||
-    errors.price !== undefined ||
-    (link !== undefined && values.sourceUrl !== '')
+  const refused = [errors.dateAquired, errors.sourceUrl, errors.price].some(
+    (messages) => messages !== undefined,
   );
+  const linkFilled = link !== undefined && values.sourceUrl !== '';
+  return wishlist || refused || linkFilled;
 }
 
 /**
@@ -571,10 +588,13 @@ function TextField(props: {
 /** Identical copies (three white tees): a number stepper, 1 to QUANTITY_MAX. */
 function QuantityField(props: { value: string; errors?: string[] }) {
   return (
+    // items-start: the label hugs its text instead of stretching over the
+    // row, so the narrow field, not a 24 px label strip, is the tap (#1210).
     <FormField
       id="garment-quantity"
       label={t('QUANTITY')}
       messages={props.errors}
+      class="items-start"
     >
       <input
         {...inputAttributes('garment-quantity', 'w-28', props.errors)}
@@ -631,7 +651,7 @@ function ConditionFields({ care }: { care: CareFormValues }) {
       <span class="label">
         <span class="label-text">{t('CONDITION')}</span>
       </span>
-      <div class="flex flex-wrap gap-2">
+      <div class="chip-row">
         {CONDITIONS.map((condition) => (
           <input
             type="radio"
@@ -680,13 +700,15 @@ function TextArea(props: {
 }
 
 /**
- * One checkbox per built-in colour (the form's `color` fields), inside a
- * searchable dropdown that public/js/color-multiselect.js enhances with
- * pills. Without the script it is still a working list of checkboxes. A
- * posted value outside the list (a hand-made request) is refused by the
- * server and named in the message, never rendered as an option.
+ * One checkbox per built-in colour (the form's `color` fields), in a
+ * searchable dropdown whose summary shows the ticked colours as pills.
+ * Every pill is rendered here, hidden unless its colour is ticked, with the
+ * count: views/assets/page/color-picker.ts only shows and hides them as the
+ * ticks change, and without it the field is still a working list. A posted
+ * value outside the list (a hand-made request) is refused by the server and
+ * named in the message, never rendered as an option.
  */
-function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
+function ColorPicker(props: { selected: string[]; errors?: string[] }) {
   const selected = new Set(props.selected);
   const count = GARMENT_COLORS.filter((color) => selected.has(color)).length;
   return (
@@ -694,77 +716,74 @@ function ColorMultiSelect(props: { selected: string[]; errors?: string[] }) {
       <span class="label">
         <span class="label-text">{t('COLOR')}</span>
       </span>
-      <details
-        class="color-ms w-full min-w-0"
-        data-placeholder={t('SELECT_COLOR')}
-        data-selected-label={t('SELECTED')}
-      >
+      <details class="color-ms w-full min-w-0" {...colorPicker()}>
         <summary>
           <span class="ms-pills">
-            <span class="ms-placeholder">{t('SELECT_COLOR')}</span>
-          </span>
-          <svg
-            class="ms-chevron"
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </summary>
-        <div class="ms-dropdown-anchor">
-          <div class="ms-dropdown">
-            <div class="ms-search">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+            <span
+              class="ms-placeholder"
+              {...colorPickerPart('placeholder')}
+              hidden={count > 0}
+            >
+              {t('SELECT_COLOR')}
+            </span>
+            {GARMENT_COLORS.map((color) => (
+              <span
+                class="ms-pill badge badge-ghost"
+                {...colorPill(color)}
+                hidden={!selected.has(color)}
               >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+                <span class="capitalize">{color}</span>
+              </span>
+            ))}
+          </span>
+          <Icon paths="m6 9 6 6 6-6" class="ms-chevron size-4" weight="2" />
+        </summary>
+        {/* A zero-height anchor: the open list overlays the fields below. */}
+        <div class="relative h-0">
+          <div class="ms-dropdown">
+            <label class="ms-search">
+              <Icon
+                paths={[
+                  'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
+                  'M21 21l-4.35-4.35',
+                ]}
+                class="size-3.5 shrink-0"
+                weight="2"
+              />
               <input
-                type="text"
                 class="ms-search-input"
                 placeholder={t('SEARCH_COLORS')}
                 aria-label={t('SEARCH_COLORS')}
                 autocomplete="off"
+                {...colorPickerPart('search')}
               />
-            </div>
+            </label>
             <div class="ms-options">
               {GARMENT_COLORS.map((color) => (
-                <label class="ms-option">
+                <label class="ms-option" {...colorOption(color)}>
                   <input
                     type="checkbox"
                     name="color"
                     value={color}
                     checked={selected.has(color)}
                   />
-                  <span class={`ms-swatch ms-swatch--${color}`}></span>
                   <span class="capitalize">{color}</span>
                 </label>
               ))}
             </div>
-            <div class="ms-empty" hidden>
+            <div class="ms-empty" {...colorPickerPart('empty')} hidden>
               {t('NO_MATCHES')}
             </div>
             <div class="ms-footer">
               <span class="ms-count">
-                {count} {t('SELECTED')}
+                <span {...colorPickerPart('count')}>{count}</span>{' '}
+                {t('SELECTED')}
               </span>
-              <button type="button" class="ms-clear">
+              <button
+                type="button"
+                class="ms-clear"
+                {...colorPickerPart('clear')}
+              >
                 {t('CLEAR_ALL')}
               </button>
             </div>

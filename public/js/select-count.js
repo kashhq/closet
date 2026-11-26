@@ -1,8 +1,9 @@
 /**
  * Select mode's "N selected" (SelectForm, src/web/wardrobe/wardrobe-page.tsx):
  * the boxes checked in the form, recounted on every toggle and whenever htmx
- * settles new content into it. The grid's next page arrives through the
- * sentinel's swap and fires no change event, yet the capsule picker renders
+ * settles new content into it. The count is shown in the page's action bar,
+ * outside the form: the form's `data-select-count` names its element's id.
+ * The grid's next page arrives through the sentinel's swap and fires no change event, yet the capsule picker renders
  * members on it checked, and Save posts them: the count must include them.
  *
  * "Select all N" (`data-select-all`, #677) posts `all=1` and the server acts
@@ -28,7 +29,7 @@ const TILES = 'input[type=checkbox][name=ids]';
 const CARRIED = 'input[data-carried]';
 
 function count(form) {
-  const shown = form.querySelector('[data-select-count-value]');
+  const shown = document.getElementById(form.dataset.selectCount);
   if (!shown) return;
   const all = form.querySelector('[data-select-all]');
   if (all?.checked) {

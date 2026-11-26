@@ -13,6 +13,7 @@ import { type AppOptions, createApp } from '../../src/app';
 import { type Config, loadConfig } from '../../src/config';
 import type { CutoutQueue } from '../../src/cutout/queue';
 import {
+  createDb,
   type Db,
   dbConfig,
   type DbConfig,
@@ -21,9 +22,15 @@ import {
 import { ownersLockCte } from '../../src/db/owner-lock';
 import { user } from '../../src/db/schema';
 import { createLoggerTo, type Logger } from '../../src/logger';
-import { hashPassword } from '../../src/web/auth/passwords';
+import {
+  configurePasswordHashing,
+  hashPassword,
+} from '../../src/web/auth/passwords';
 import { insertUser } from '../../src/web/auth/queries';
-import { passwordFingerprint } from '../../src/web/auth/tokens';
+import {
+  passwordFingerprint,
+  type SessionStamp,
+} from '../../src/web/auth/tokens';
 import { type IsoDate, todayIn } from '../../src/calendar-date';
 import type { Photos } from '../../src/web/files/photos';
 import {
@@ -273,6 +280,8 @@ export interface TestAppOptions {
   heicDecoder?: AppOptions['heicDecoder'];
   /** PHOTO_UPLOAD_LIMIT's max (AppOptions.photoUploadMax). */
   photoUploadMax?: AppOptions['photoUploadMax'];
+  /** SIGN_IN_ACCOUNT_LIMIT's max (AppOptions.signInAccountMax). */
+  signInAccountMax?: AppOptions['signInAccountMax'];
 }
 
 /** A spec never reaches a real third party: each one it turns on needs its stand-in. */
@@ -287,6 +296,21 @@ function missingStandIn(
     return 'ORDER_MAIL_JMAP_TOKEN needs the JMAP stub (options.orderMail): a spec must never call Fastmail';
   }
   return undefined;
+}
+
+/** An account written straight to the database, before any app exists. */
+async function insertBeforeBoot(
+  config: Config,
+  logger: Logger,
+  email: string,
+): Promise<void> {
+  configurePasswordHashing(config.PASSWORD_HASH_ROUNDS);
+  const db = createDb(dbConfig(config), logger, { max: 1 });
+  try {
+    await insertUser(db, email, await hashPassword(TEST_PASSWORD));
+  } finally {
+    await db.$client.end();
+  }
 }
 
 export async function createTestApp(
@@ -322,8 +346,13 @@ export async function createTestApp(
   let metrics: Metrics;
   let errors: ErrorTracker;
   let orderMail: OrderMailDeps | undefined;
+  // ORDER_MAIL_OWNER must name an account before the boot that resolves it
+  // (#706), as production's owner signs up before setting the token: with
+  // the order mail on, the owner is inserted first and signs in after.
+  const ownerBeforeBoot = Boolean(config.ORDER_MAIL_JMAP_TOKEN);
   try {
     await options.beforeBoot?.(database.env);
+    if (ownerBeforeBoot) await insertBeforeBoot(config, logger, OWNER_EMAIL);
     ({ app, db, photos, cutouts, push, weather, metrics, errors, orderMail } =
       await createApp(config, logger, {
         outboundFetch: options.outboundFetch,
@@ -332,6 +361,7 @@ export async function createTestApp(
         onRoute: options.onRoute,
         heicDecoder: options.heicDecoder,
         photoUploadMax: options.photoUploadMax,
+        signInAccountMax: options.signInAccountMax,
       }));
     await app.ready();
   } catch (error) {
@@ -402,7 +432,9 @@ export async function createTestApp(
   };
 
   try {
-    const cookie = await register(OWNER_EMAIL);
+    const cookie = ownerBeforeBoot
+      ? await login(OWNER_EMAIL)
+      : await register(OWNER_EMAIL);
     const [row] = await db
       .select({ id: user.id })
       .from(user)
@@ -476,25 +508,28 @@ export async function userIdOf(t: TestApp, email: string): Promise<number> {
 }
 
 /**
- * The password fingerprint a session of `userId` opened now carries (its
- * token's `pwf`): what a write that rechecks its session takes, called
- * outside a request (upsertDevice).
+ * The stamp a session of `userId` opened now carries (its token's `pwf` and
+ * `sv`): what a write that rechecks its session takes, called outside a
+ * request (upsertDevice, createInvite).
  */
-export async function sessionFingerprintOf(
+export async function sessionStampOf(
   db: Db,
   userId: number,
-): Promise<string> {
+): Promise<SessionStamp> {
   const [row] = await db
-    .select({ password: user.password })
+    .select({ password: user.password, version: user.sessionVersion })
     .from(user)
     .where(eq(user.id, userId));
   if (!row) throw new Error(`No account ${userId}`);
-  return passwordFingerprint(row.password);
+  return {
+    fingerprint: passwordFingerprint(row.password),
+    version: row.version,
+  };
 }
 
 /**
  * `subscription` stored for `userId` as a request of a session opened now
- * would store it (upsertDevice, with that session's fingerprint), for specs
+ * would store it (upsertDevice, with that session's stamp), for specs
  * that set up a device outside a request. Its device id.
  */
 export async function subscribeAs(
@@ -502,11 +537,11 @@ export async function subscribeAs(
   userId: number,
   subscription: SubscriptionInput,
 ): Promise<number> {
-  const fingerprint = await sessionFingerprintOf(db, userId);
+  const session = await sessionStampOf(db, userId);
   const deviceId = await upsertDevice(
     db,
     userId,
-    fingerprint,
+    session,
     subscription,
     undefined,
   );
@@ -609,8 +644,8 @@ function requestsSince(marks: Map<LogCapture, number>): RequestStatements[] {
  * proving a page reads what it shows rather than a whole table: rows, not
  * only statements, since one statement can return everything. Each
  * request's own count is noted as a statement budget (STATEMENTS_OUT,
- * test/support/statement-budgets.ts): the counts these specs pin are the
- * ones the metrics ratchet holds.
+ * test/support/statement-budgets.ts), which the metrics report reads; only
+ * the specs' own assertions hold a count (#721).
  */
 export async function recordQueries(
   work: () => Promise<unknown>,

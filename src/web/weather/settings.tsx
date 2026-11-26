@@ -1,33 +1,40 @@
 import type { Child } from 'hono/jsx';
 import { AutosaveForm } from '../autosave';
 import { t } from '../i18n';
-import { ProfileSection } from '../layout/parts';
+import { SettingsPage } from '../layout/settings-page';
+import type { ViewContext } from '../view-context';
 import {
   displayDifference,
   OFFSET_LIMIT,
   TEMPERATURE_UNITS,
 } from '../../weather/temperature';
 import {
-  LocationFields,
   PLACE_QUERY_MAX,
   PLACE_QUERY_MIN,
   type PlaceAnswer,
-  PlaceResults,
-  postedPick,
-} from './place-picker';
+} from './place-input';
+import { LocationFields, PlaceResults, postedPick } from './place-picker';
 import {
   activeLocation,
   HERE_FRESH_HOURS,
   type WeatherSettings,
 } from './queries';
+import { WEATHER_SETTINGS_ID } from './urls';
 import { fetchedLabel } from './views';
+import {
+  LOCATE_FORM_ID,
+  locateButton,
+  locateStatus,
+  needsNetwork,
+  pageModule,
+} from '../page-contract';
 
 /**
- * The profile's weather section (#14; the redesign's Profile slots it in
- * unchanged, docs/plans/2026-09-26-redesign.md): the home city (a search on
+ * Profile › Weather (#14; a Profile section until #728, its own page since,
+ * WEATHER_SETTINGS_PATH): the home city (a search on
  * Open-Meteo's geocoding, through the server), "Use my location" (the
  * phone's position, rounded to 2 decimals in the browser and again on the
- * server; public/js/locate.js), the unit, and the personal temperature
+ * server; views/assets/page/locate.ts), the unit, and the personal temperature
  * offset with its "too warm" and "too cold" feedback (the minimal form of
  * #9's "say why not"). Each part answers only itself
  * (src/web/weather/routes.tsx): the location forms `WeatherLocation`, the
@@ -37,7 +44,6 @@ import { fetchedLabel } from './views';
  * would die with it (src/web/autosave.tsx). Each is disabled offline.
  */
 
-export const WEATHER_SETTINGS_ID = 'weather';
 const LOCATION_ID = 'weather-location';
 const OFFSET_ID = 'weather-offset';
 
@@ -45,29 +51,27 @@ const swapInto = (id: string) =>
   ({
     'hx-target': `#${id}`,
     'hx-swap': 'outerHTML',
-    'data-needs-network': '',
+    ...needsNetwork(),
   }) as const;
 const LOCATION_SWAP = swapInto(LOCATION_ID);
 const OFFSET_SWAP = swapInto(OFFSET_ID);
 
-// A fixed module string (never a value): runs each time the location part
-// is swapped in, so the new button is wired (an inline module, not a
-// <script src>, which would run once per document).
-const LOCATE_MODULE = `import { initLocate } from 'locate';
-initLocate(document.getElementById('${LOCATION_ID}'));`;
-
-export function WeatherSettings(props: {
+export function WeatherSettingsPage(props: {
+  ctx: ViewContext;
   settings: WeatherSettings;
   timeZone: string;
   now: Date;
 }) {
+  const { ctx, ...location } = props;
   const { settings } = props;
   return (
-    <ProfileSection
-      id={WEATHER_SETTINGS_ID}
-      heading={t('weather.SETTINGS_HEADING')}
+    <SettingsPage
+      ctx={ctx}
+      title={t('weather.SETTINGS_HEADING')}
+      section={WEATHER_SETTINGS_ID}
+      formPage
     >
-      <WeatherLocation {...props} />
+      <WeatherLocation {...location} />
       <AutosaveForm action="/weather/unit">
         <div class="flex items-center gap-2">
           <span class="text-sm">{t('weather.UNIT')}</span>
@@ -86,8 +90,15 @@ export function WeatherSettings(props: {
         </div>
       </AutosaveForm>
       <OffsetControls settings={settings} />
-    </ProfileSection>
+    </SettingsPage>
   );
+}
+
+/** Profile's Weather row: the home city, or that there is none. */
+export function weatherSummary(settings: WeatherSettings): string {
+  return settings.home
+    ? t('weather.HOME_IS', { name: settings.home.name })
+    : t('weather.SUMMARY_NO_HOME');
 }
 
 /** Home, the city search and "Use my location": what the location forms answer. */
@@ -100,7 +111,9 @@ export function WeatherLocation(props: {
   const active = activeLocation(settings, now);
   const here = active?.source === 'here' ? settings.here : null;
   return (
-    <div id={LOCATION_ID} class="flex flex-col gap-3">
+    // views/assets/page/locate.ts wires the button each time the part
+    // arrives, the page or a location answer's swap (page-mount.ts).
+    <div id={LOCATION_ID} class="flex flex-col gap-3" {...pageModule('locate')}>
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm">
           {settings.home
@@ -125,7 +138,7 @@ export function WeatherLocation(props: {
         hx-get="/weather/places"
         hx-target="#weather-places"
         hx-swap="innerHTML"
-        data-needs-network=""
+        {...needsNetwork()}
       >
         <input
           type="search"
@@ -148,11 +161,6 @@ export function WeatherLocation(props: {
         locatedAt={here?.locatedAt ?? null}
         timeZone={timeZone}
         now={now}
-      />
-      <script
-        type="module"
-        // A fixed string (LOCATE_MODULE), no value spliced in.
-        dangerouslySetInnerHTML={{ __html: LOCATE_MODULE }}
       />
     </div>
   );
@@ -186,11 +194,11 @@ function HereControls(props: {
   // context with Geolocation) and posts the rounded position through the
   // hidden form.
   return (
-    <div class="flex flex-col gap-1" data-needs-network="">
+    <div class="flex flex-col gap-1" {...needsNetwork()}>
       <button
         type="button"
         class="btn btn-outline btn-sm self-start"
-        data-locate=""
+        {...locateButton()}
         hidden
       >
         {t('weather.USE_HERE')}
@@ -198,14 +206,15 @@ function HereControls(props: {
       <p
         class="text-xs text-error"
         role="alert"
-        data-locate-status=""
-        data-denied={t('weather.HERE_DENIED')}
-        data-failed={t('weather.HERE_FAILED')}
-        data-not-saved={t('weather.HERE_NOT_SAVED')}
+        {...locateStatus({
+          denied: t('weather.HERE_DENIED'),
+          failed: t('weather.HERE_FAILED'),
+          notSaved: t('weather.HERE_NOT_SAVED'),
+        })}
         hidden
       ></p>
       <form
-        id="weather-here-form"
+        id={LOCATE_FORM_ID}
         hx-post="/weather/here"
         {...LOCATION_SWAP}
         hidden
@@ -244,7 +253,7 @@ export function OffsetControls(props: {
       hx-swap-oob={props.oob ? 'true' : undefined}
     >
       <p class="text-sm">{offsetLabel(settings)}</p>
-      <div class="flex flex-wrap gap-2">
+      <div class="chip-row">
         {(['too-warm', 'too-cold'] as const).map((feeling) => (
           <form hx-post="/weather/feedback" {...OFFSET_SWAP}>
             <input type="hidden" name="feeling" value={feeling} />

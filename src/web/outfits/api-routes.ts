@@ -15,12 +15,15 @@ import {
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { actorOf } from '../sharing/access';
+import { PublicShare, publicShareUrl } from '../share/urls';
 import { API_PREFIX } from '../surface';
 import {
   editOutfit,
+  saveOutfit,
   reactToProposal,
   removeOutfit,
   requireOutfitPage,
+  setOutfitPublicShare,
 } from './outfit-actions';
 import {
   NewOutfit,
@@ -36,13 +39,11 @@ import {
   toOutfitResource,
 } from './outfit-resource';
 import { OUTFIT_LISTS } from './outfit-list';
-import { createOutfit, listOutfitsPage, outfitText } from './queries';
+import { listOutfitsPage, outfitText } from './queries';
 import type { OutfitReaction } from './reactions';
+import { OUTFIT_PAGE_SIZE } from './page-size';
 import { OutfitParams } from './schemas';
 import { BY_PERSON } from '../write-origin';
-
-/** A page of GET /outfits unless asked: the Saved grid's two columns, a few screens. */
-const OUTFIT_PAGE_SIZE = 30;
 
 const OutfitListQuery = Type.Object({
   cursor: Type.Optional(ListCursor),
@@ -72,7 +73,7 @@ const OUTFIT_PATH = '/outfits/:id';
 /**
  * Outfits on /api/v1 (#193a; plan section 6), registered by apiPlugin,
  * each calling what its page twin calls (operations.ts names the twin):
- * outfit-actions.ts for one outfit, createOutfit for a new one. Outfits are
+ * outfit-actions.ts for one outfit, saveOutfit for a new one. Outfits are
  * private (AGENTS.md): only the token's user's own are reached, there is
  * no `?ownerId=`, and another's outfit is the 404 of an unknown id.
  */
@@ -142,6 +143,7 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           request.params.id,
           todayIn(config.timeZone, new Date()),
         ),
+        config.siteUrl,
       ),
   );
 
@@ -159,33 +161,26 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const userId = actorOf(request).userId;
       const { name, notes, slots, plan, clientId } = request.body;
       if (slots.every((slot) => slot.garmentId === undefined)) {
         throw new HttpError(400, t('api.OUTFIT_NEEDS_GARMENT'));
       }
-      const saved = await createOutfit(db, userId, {
-        name: outfitText(name) ?? null,
-        notes: outfitText(notes) ?? null,
-        slots: slotsOf(slots),
-        plan: plan && {
-          day: plan.day,
-          occasion: plan.occasion ?? DEFAULT_OCCASION,
+      const saved = await saveOutfit(
+        { db, logger },
+        actorOf(request),
+        {
+          name: outfitText(name) ?? null,
+          notes: outfitText(notes) ?? null,
+          slots: slotsOf(slots),
+          plan: plan && {
+            day: plan.day,
+            occasion: plan.occasion ?? DEFAULT_OCCASION,
+          },
+          origin: 'person',
+          madeBy: BY_PERSON,
         },
-        origin: 'person',
-        madeBy: BY_PERSON,
-      });
-      const planned = plan ? `, ${saved.schedule} on ${plan.day}` : '';
-      const client = clientId ? `, client id ${clientId.slice(0, 8)}` : '';
-      if (saved.alreadySaved) {
-        logger.info(
-          `Outfit ${saved.id} of the same garments reused by user ${userId} (API)${planned}${saved.adopted ? '; taken over from the week planner' : ''}${client}`,
-        );
-      } else {
-        logger.info(
-          `Outfit ${saved.id} created by user ${userId} (API): ${saved.slots} row(s)${planned}${client}`,
-        );
-      }
+        clientId,
+      );
       const answer = {
         id: saved.id,
         alreadySaved: saved.alreadySaved,
@@ -217,19 +212,11 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { id } = request.params;
       const actor = actorOf(request);
       const { name, notes, slots } = request.body;
-      const saved = await editOutfit(db, actor, id, {
+      const saved = await editOutfit({ db, logger }, actor, id, {
         name: outfitText(name),
         notes: outfitText(notes),
         slots: slots && slotsOf(slots),
       });
-      const changed = [
-        ...(name !== undefined ? ['name'] : []),
-        ...(notes !== undefined ? ['notes'] : []),
-        ...(slots ? [`${saved.slots} row(s)`] : []),
-      ];
-      logger.info(
-        `Outfit ${id} updated by user ${actor.userId} (API): ${changed.join(', ') || 'nothing sent'}${saved.entriesClaimed ? `, ${saved.entriesClaimed} planned entry(ies) now the user's` : ''}`,
-      );
       return { entriesClaimed: saved.entriesClaimed ?? 0 };
     },
   );
@@ -250,9 +237,60 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request, reply) => {
       const { id } = request.params;
       const actor = actorOf(request);
-      const { wearsKept } = await removeOutfit(db, actor, id);
-      logger.info(
-        `Outfit ${id} deleted by user ${actor.userId} (${wearsKept} wears kept as day-level wears) (API)`,
+      await removeOutfit({ db, logger }, actor, id);
+      return reply.status(204).send(null);
+    },
+  );
+
+  // The page's Share and Stop sharing (#669, #959): one writer,
+  // setOutfitPublicShare, so both are idempotent as there.
+  app.put(
+    `${OUTFIT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'shareOutfit',
+        tags: ['outfits'],
+        summary: "Makes an outfit's public link",
+        description:
+          "Another's outfit is a 404 like an unknown id. An outfit shared already keeps its link, answered again; one shared after a stop gets a new one, never the old.",
+        params: OutfitParams,
+        response: apiResponses({ 200: PublicShare }),
+      },
+    },
+    async (request) => {
+      const { shareableId } = await setOutfitPublicShare(
+        { db, logger },
+        actorOf(request),
+        request.params.id,
+        true,
+      );
+      return {
+        publicShareUrl: publicShareUrl(config.siteUrl, 'outfit', shareableId),
+      };
+    },
+  );
+
+  app.delete(
+    `${OUTFIT_PATH}/share`,
+    {
+      schema: {
+        operationId: 'stopSharingOutfit',
+        tags: ['outfits'],
+        summary: "Ends an outfit's public link",
+        description:
+          'Its page and preview image are a 404 from then on. An outfit not shared is answered the same: nothing to end.',
+        params: OutfitParams,
+        response: apiResponses({
+          204: Type.Null({ description: 'Not shared' }),
+        }),
+      },
+    },
+    async (request, reply) => {
+      await setOutfitPublicShare(
+        { db, logger },
+        actorOf(request),
+        request.params.id,
+        false,
       );
       return reply.status(204).send(null);
     },
@@ -285,13 +323,10 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
             }
           : { event: body.event };
       const { from, to, complete } = await reactToProposal(
-        db,
+        { db, logger },
         actor,
         id,
         change,
-      );
-      logger.info(
-        `Outfit ${id} ${from} -> ${to} by user ${actor.userId}${change.event === 'decline' ? ` (${change.reason})` : ''} (API)`,
       );
       return { from, to, complete };
     },

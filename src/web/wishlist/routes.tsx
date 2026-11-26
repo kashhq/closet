@@ -1,7 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyReply } from 'fastify';
-import { sessionUserId } from '../auth/require-session';
 import type { FieldErrors } from '../auth/validation';
 import { type IsoDate, parseIsoDate, todayIn } from '../../calendar-date';
 import { t } from '../i18n';
@@ -172,18 +171,11 @@ export const wishlistRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           400,
         );
       }
-      const outcome = await buyWishlistItem(
+      await buyWishlistItem(
         options,
         actorOf(request),
         garmentAddress(request),
         { ...read.purchase, archiveReplaced },
-      );
-      logger.info(
-        `Garment ${id} bought (wishlist -> closet) by user ${sessionUserId(request)} in wardrobe ${access.ownerId}${
-          outcome.archivedReplaced === null
-            ? ''
-            : `; garment ${outcome.archivedReplaced} it replaces archived`
-        }`,
       );
       return reply.redirect(garmentUrl(id, viewOwner, '', { bought: 1 }), 303);
     },

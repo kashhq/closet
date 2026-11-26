@@ -1,38 +1,32 @@
-# Build stage
-FROM node:22 AS builder
-
-# Create app directory
+# Two stages: `build` installs every dependency and compiles dist/ and the
+# generated public/ files; the runtime stage starts again from the slim image
+# with production dependencies and only what the server reads.
+FROM node:22 AS build
 WORKDIR /app
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-#
-# Note when using COPY with more than one source file, 
-# the destination must be a directory and end with a /
-# .npmrc: onnxruntime-node skips its CUDA download (the model runs on the CPU).
-COPY package*.json .npmrc ./
-COPY patches ./patches
-RUN npm ci
+# The manifests and patches first, so the dependency layer is reused until
+# they change. .npmrc: onnxruntime-node skips its CUDA download (the model
+# runs on the CPU).
+COPY package.json package-lock.json .npmrc ./
+COPY patches/ patches/
+RUN npm ci --no-audit --no-fund
 
-COPY src ./src
-COPY views ./views
-COPY public ./public
-COPY tsconfig*.json ./
-COPY scripts ./scripts
+COPY --link src/ src/
+COPY --link views/ views/
+COPY --link public/ public/
+COPY --link scripts/ scripts/
+COPY tsconfig.json tsconfig.build.json ./
 
 # No .git in the build context, so public/build.json records only the build time; the release
 # (APP_VERSION, below) is what names the build at runtime. Nothing commit-specific is in this
 # stage, so its layers stay cached across commits.
 RUN npm run build
 
-# Production stage
-FROM node:22-slim
-
+FROM node:22-slim AS runtime
 WORKDIR /app
 
-COPY package*.json .npmrc ./
-COPY patches ./patches
+COPY package.json package-lock.json .npmrc ./
+COPY patches/ patches/
 # Runtime dependencies only. Everything the running app serves or loads from
 # node_modules (htmx, workbox-window, sharp, onnxruntime-node) is in
 # "dependencies", and so is patch-package, because the postinstall runs it
@@ -55,9 +49,9 @@ RUN npm ci --omit=dev && npm cache clean --force \
   && find "$ort/linux" -mindepth 1 -maxdepth 1 ! -name "$keep" -exec rm -rf {} + \
   && test -d "$ort/linux/$keep"
 
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
+# The compiled server and the public/ the build generated into.
+COPY --from=build /app/dist/ dist/
+COPY --from=build /app/public/ public/
 # The migrations the app runs at boot (src/db/migrate.ts reads SQL and
 # meta/_journal.json from <root>/drizzle).
 COPY drizzle ./drizzle
@@ -65,7 +59,10 @@ COPY drizzle ./drizzle
 # them from here): `docker exec closet npm run seed -- --persona demo`.
 COPY src/seed/personas ./src/seed/personas
 
-COPY .env .
+# The committed defaults (README, Settings); never .env.local.
+COPY .env ./
+# The licence travels with the code it covers (MIT; also the image's label).
+COPY LICENSE ./
 
 # The server-mode cutout model (MODELS_PATH, 940 MB) is not in the image: it
 # is downloaded here on first need. Mount a local volume on it so it is
@@ -83,18 +80,18 @@ COPY .env .
 # cache and logs for `docker exec closet npm run ...`), temp files /tmp.
 RUN mkdir -p /app/data /app/models && chown node:node /app/data /app/models
 
-# Set NODE_ENV to production
-ENV NODE_ENV=production
-
 # The release identity, passed once by the build (ci.yml publish: the 7-char sha; the PR gate:
 # gate-<n>) and reported as /health/ready's `version`, on /about, and as the error tracker's release.
 # The image is its only source: compose never sets APP_VERSION (devkit release_check.sh guards
 # it). Last in the stage so a new value rebuilds only these layers.
 ARG APP_VERSION=dev
-ENV APP_VERSION=$APP_VERSION
-LABEL org.opencontainers.image.version=$APP_VERSION
+ENV NODE_ENV=production APP_VERSION=$APP_VERSION
+LABEL org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.revision=$APP_VERSION \
+      org.opencontainers.image.source=https://github.com/kashhq/closet \
+      org.opencontainers.image.licenses=MIT
 
-EXPOSE 3000
+EXPOSE 3000/tcp
 
 # /health/ready (src/web/health): the database, the boot's migrations, the timers and the cutout
 # queue; 503 when a required one is down. node's own fetch, so the slim image needs no curl. The

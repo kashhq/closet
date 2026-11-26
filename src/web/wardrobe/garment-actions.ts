@@ -2,11 +2,15 @@ import type { MultipartFile } from '@fastify/multipart';
 import { type CutoutOutcome, recordCutoutEvent } from '../../cutout/queries';
 import { QUANTITY_MAX } from '../../wardrobe/availability';
 import type { GarmentStatus } from '../../wardrobe/status';
+import type { Queryable } from '../../db/client';
+import type { WriteOrigin } from '../write-origin';
+import type { GarmentDetail } from './queries';
 import { HttpError } from '../errors';
 import type { EditedCutout } from '../files/photos';
 import { t } from '../i18n';
+import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
-import { setPublicShare } from '../share/queries';
+import { type ShareableIdAfter, setPublicShare } from '../share/queries';
 import type { Actor, AuthorizedWardrobe } from '../sharing/access';
 import {
   type AuthorizedGarment,
@@ -16,9 +20,10 @@ import {
   requireGarment,
 } from './garment-access';
 import type { ConditionFields, GarmentFields } from './garment-input';
-import { readTags, type TagBody } from './grid-schemas';
+import { type BulkChange, readTags, type TagBody } from './grid-schemas';
 import { addCopies } from './lookalikes';
 import {
+  bulkSetProperty,
   type GarmentPhoto,
   setCondition,
   updateGarmentFields,
@@ -27,12 +32,17 @@ import {
 import { addRepair, deleteRepair, type NewRepair } from './repairs';
 import { setGarmentStatus, type StatusOutcome } from './status';
 import {
+  cloneGarment,
+  createGarment,
+  createGarmentOnce,
+  createGarmentWithPendingPhoto,
   removeGarment,
   replacePhoto,
   type RotateDirection,
   rotateGarmentPhoto,
   type SwappedCutout,
   type WardrobeDeps,
+  type WithGarment,
 } from './writes';
 
 type Db = WardrobeDeps['db'];
@@ -54,12 +64,158 @@ type Db = WardrobeDeps['db'];
  * from a surface.
  */
 
+const CREATED = 'garment.created';
+const STATUS_CHANGED = 'garment.status.changed';
+
+/** What a new garment's line says besides the garment: where it went and what it was for. */
+interface CreatedNote {
+  destination: 'closet' | 'wishlist';
+  replacesGarmentId?: number;
+  boughtForNeedId?: number;
+  orderItem?: number;
+}
+
+/**
+ * A new garment in `ownerId`'s wardrobe (createGarment; the caller has
+ * authorized the wardrobe), the line `garment.created`.
+ */
+export async function addGarment(
+  deps: WardrobeDeps,
+  actor: Actor,
+  ownerId: number,
+  fields: GarmentFields,
+  note: CreatedNote,
+  madeBy: WriteOrigin,
+  withGarment?: WithGarment,
+): Promise<number> {
+  const id = await createGarment(
+    deps,
+    ownerId,
+    fields,
+    note.destination,
+    madeBy,
+    withGarment,
+  );
+  logOp(deps.logger, actor, CREATED, {
+    garmentId: id,
+    ownerId,
+    ...note,
+  });
+  return id;
+}
+
+/**
+ * addGarment claiming the actor's pending photo (`fileName`) in the
+ * garment's transaction; undefined when it was claimed or evicted meanwhile
+ * (nothing written, no line).
+ */
+export async function addGarmentWithPendingPhoto(
+  deps: WardrobeDeps,
+  actor: Actor,
+  ownerId: number,
+  fields: GarmentFields,
+  fileName: string,
+  note: CreatedNote,
+  madeBy: WriteOrigin,
+  withGarment?: WithGarment,
+): Promise<Awaited<ReturnType<typeof createGarmentWithPendingPhoto>>> {
+  const claimed = await createGarmentWithPendingPhoto(
+    deps,
+    ownerId,
+    actor.userId,
+    fields,
+    fileName,
+    note.destination,
+    madeBy,
+    withGarment,
+  );
+  if (claimed) {
+    logOp(deps.logger, actor, CREATED, {
+      garmentId: claimed.id,
+      ownerId,
+      photo: true,
+      ...note,
+    });
+  }
+  return claimed;
+}
+
+/** addGarment for the API's retried create (createGarmentOnce): `changed` false for a retry. */
+export async function addGarmentOnce(
+  deps: WardrobeDeps,
+  actor: Actor,
+  ownerId: number,
+  fields: GarmentFields,
+  note: CreatedNote,
+  clientId: string,
+  settle?: (tx: Queryable) => Promise<WithGarment | undefined>,
+): Promise<{ id: number; created: boolean }> {
+  const once = await createGarmentOnce(
+    deps,
+    ownerId,
+    fields,
+    note.destination,
+    clientId,
+    settle,
+  );
+  logOp(deps.logger, actor, CREATED, {
+    garmentId: once.id,
+    ownerId,
+    changed: once.created,
+    clientId,
+    ...note,
+  });
+  return once;
+}
+
+/** A copy of `source` in the actor's own wardrobe (cloneGarment), the line `garment.cloned`. */
+export async function cloneGarmentFor(
+  deps: WardrobeDeps,
+  actor: Actor,
+  source: GarmentDetail,
+  fields: GarmentFields,
+): Promise<number> {
+  const id = await cloneGarment(deps, source, actor.userId, fields);
+  logOp(deps.logger, actor, 'garment.cloned', {
+    garmentId: id,
+    sourceId: source.id,
+  });
+  return id;
+}
+
+/**
+ * Select mode's "Set…" over the wardrobe `ownerId` (authorized by the
+ * caller: owner or MANAGE): the garments named whose role has the property
+ * are set, the rest counted as skipped. No change, or none named, writes
+ * nothing (`garments.property.set` with zeros).
+ */
+export async function bulkSetGarments(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  ownerId: number,
+  ids: number[],
+  change: BulkChange | undefined,
+): Promise<{ updated: number; skipped: number }> {
+  const result =
+    change && ids.length > 0
+      ? await bulkSetProperty(db, ownerId, ids, change)
+      : { updated: 0, skipped: 0 };
+  logOp(logger, actor, 'garments.property.set', {
+    property: change?.property ?? null,
+    ownerId,
+    updated: result.updated,
+    skipped: result.skipped,
+    asked: ids.length,
+  });
+  return result;
+}
+
 /**
  * The edit form's save (every field; a cleared one is null), without
  * reading the garment: the update answers whether it was there (#161).
  */
 export async function updateGarment(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   fields: Partial<GarmentFields>,
@@ -75,6 +231,10 @@ export async function updateGarment(
   ) {
     throw garmentNotFound();
   }
+  logOp(logger, actor, 'garment.updated', {
+    garmentId: address.id,
+    ownerId: wardrobe.access.ownerId,
+  });
   return wardrobe;
 }
 
@@ -87,7 +247,7 @@ export async function updateGarment(
 export async function editGarment<
   Edit extends { fields: Partial<GarmentFields> },
 >(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   edit: (stored: AuthorizedGarment) => Edit,
@@ -105,12 +265,17 @@ export async function editGarment<
   ) {
     throw garmentNotFound();
   }
+  logOp(logger, actor, 'garment.updated', {
+    garmentId: address.id,
+    ownerId: stored.access.ownerId,
+    fields: Object.keys(edited.fields),
+  });
   return { ...stored, edit: edited };
 }
 
 /** The garment page's condition control: owner and MANAGE, like any property. */
 export async function setGarmentCondition(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   fields: ConditionFields,
@@ -119,6 +284,11 @@ export async function setGarmentCondition(
   if (!(await setCondition(db, address.id, wardrobe.access.ownerId, fields))) {
     throw garmentNotFound();
   }
+  logOp(logger, actor, 'garment.condition.set', {
+    garmentId: address.id,
+    condition: fields.condition,
+    note: Boolean(fields.conditionNote),
+  });
   return wardrobe;
 }
 
@@ -128,7 +298,7 @@ export async function setGarmentCondition(
  * category does not have is a 400. Answers the fields it changed.
  */
 export async function tagGarment(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   tags: Omit<TagBody, 'next'>,
@@ -148,6 +318,13 @@ export async function tagGarment(
   ) {
     throw garmentNotFound();
   }
+  // A card left alone (Next posts its checked chips) is no event.
+  if (changed.length > 0) {
+    logOp(logger, actor, 'garment.tagged', {
+      garmentId: address.id,
+      fields: changed,
+    });
+  }
   return { ...stored, changed };
 }
 
@@ -155,14 +332,16 @@ export async function tagGarment(
  * Share (`shared`) or Stop sharing a garment's public link (#669,
  * setPublicShare): owner and MANAGE, as the ⋯ menu's Share always was, so
  * a link a grantee minted shows on the owner's page with Stop. Answers the
- * link's id after the write.
+ * link's id after the write. Pages and the API (PUT and DELETE
+ * /garments/{id}/share) alike: a Share of a shared garment keeps its id, a
+ * Stop of an unshared one writes null again, so both are idempotent.
  */
-export async function setGarmentPublicShare(
-  db: Db,
+export async function setGarmentPublicShare<Shared extends boolean>(
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
-  shared: boolean,
-): Promise<AuthorizedWardrobe & { shareableId: string | null }> {
+  shared: Shared,
+): Promise<AuthorizedWardrobe & { shareableId: ShareableIdAfter<Shared> }> {
   const wardrobe = await garmentWardrobe(db, actor, address, 'manage');
   const written = await setPublicShare(
     db,
@@ -172,6 +351,10 @@ export async function setGarmentPublicShare(
     shared,
   );
   if (!written) throw garmentNotFound();
+  logOp(logger, actor, 'garment.share.set', {
+    garmentId: address.id,
+    shared,
+  });
   return { ...wardrobe, ...written };
 }
 
@@ -188,7 +371,7 @@ const STATUS_REFUSED = {
  * the opposite move the old archive toggle made.
  */
 export async function changeGarmentStatus(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   event: keyof typeof STATUS_REFUSED,
@@ -201,6 +384,11 @@ export async function changeGarmentStatus(
     { event },
   );
   if (!outcome.ok) throw statusRefusal(address, event, outcome);
+  logOp(logger, actor, STATUS_CHANGED, {
+    garmentId: address.id,
+    from: outcome.from,
+    to: outcome.to,
+  });
   return { ...wardrobe, from: outcome.from, to: outcome.to };
 }
 
@@ -224,7 +412,7 @@ const EVENT_TO = { archived: 'archive', closet: 'restore' } as const;
  * status that does not take the event is Archive's or Restore's 409.
  */
 export async function putGarmentStatus(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   to: OwnedStatus,
@@ -237,8 +425,21 @@ export async function putGarmentStatus(
     wardrobe.access.ownerId,
     { event },
   );
-  if (outcome.ok) return { ...wardrobe, from: outcome.from, to: outcome.to };
+  if (outcome.ok) {
+    logOp(logger, actor, STATUS_CHANGED, {
+      garmentId: address.id,
+      from: outcome.from,
+      to: outcome.to,
+    });
+    return { ...wardrobe, from: outcome.from, to: outcome.to };
+  }
   if (outcome.reason === 'not-allowed' && outcome.status === to) {
+    logOp(logger, actor, STATUS_CHANGED, {
+      garmentId: address.id,
+      from: to,
+      to,
+      changed: false,
+    });
     return { ...wardrobe, from: to, to };
   }
   throw statusRefusal(address, event, outcome);
@@ -278,6 +479,11 @@ export async function deleteOwnGarment(
       logDetail: `garment ${address.id} is a suggestion, set aside, never deleted`,
     });
   }
+  logOp(deps.logger, actor, 'garment.deleted', {
+    garmentId: address.id,
+    ownerId: wardrobe.access.ownerId,
+    status: deleted.status,
+  });
   return { ...wardrobe, status: deleted.status };
 }
 
@@ -287,7 +493,7 @@ export async function deleteOwnGarment(
  * item, an archived one) and one past QUANTITY_MAX are 409s.
  */
 export async function addGarmentCopies(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   copies: number,
@@ -312,6 +518,11 @@ export async function addGarmentCopies(
       { logDetail },
     );
   }
+  logOp(logger, actor, 'garment.copies.added', {
+    garmentId: address.id,
+    from: outcome.from,
+    to: outcome.to,
+  });
   return { ...wardrobe, from: outcome.from, to: outcome.to };
 }
 
@@ -384,19 +595,21 @@ export async function turnGarmentPhoto(
  * says why), so a second tap is harmless.
  */
 export async function retryGarmentCutout(
-  deps: Pick<WardrobeDeps, 'db' | 'cutouts'>,
+  deps: Pick<WardrobeDeps, 'db' | 'cutouts' | 'logger'>,
   actor: Actor,
   address: GarmentAddress,
 ): Promise<AuthorizedWardrobe & { outcome: CutoutOutcome }> {
   const { photo, ...wardrobe } = await photoToChange(deps.db, actor, address);
   // Nothing would run it: the page shows no "Try again" then (shownWithoutCutouts).
-  if (!deps.cutouts.enabled) {
-    return { ...wardrobe, outcome: { ok: false, reason: 'not-allowed' } };
-  }
-  const outcome = await recordCutoutEvent(deps.db, photo.fileName, {
-    type: 'retry',
-  });
+  const outcome: CutoutOutcome = deps.cutouts.enabled
+    ? await recordCutoutEvent(deps.db, photo.fileName, { type: 'retry' })
+    : { ok: false, reason: 'not-allowed' };
   if (outcome.ok) deps.cutouts.wake();
+  logOp(deps.logger, actor, 'garment.cutout.requeued', {
+    garmentId: address.id,
+    changed: outcome.ok,
+    reason: outcome.ok ? undefined : outcome.reason,
+  });
   return { ...wardrobe, outcome };
 }
 
@@ -407,7 +620,7 @@ export async function retryGarmentCutout(
  * it was read (a delete, a photo replaced) a 404.
  */
 export async function saveEditedGarmentCutout(
-  deps: Pick<WardrobeDeps, 'db' | 'photos'>,
+  deps: Pick<WardrobeDeps, 'db' | 'photos' | 'logger'>,
   actor: Actor,
   address: GarmentAddress,
   upload: () => Promise<MultipartFile | undefined>,
@@ -421,6 +634,10 @@ export async function saveEditedGarmentCutout(
       logDetail: `photo ${photo.fileName} of garment ${address.id} went while its mask was saved`,
     });
   }
+  logOp(deps.logger, actor, 'garment.cutout.replaced', {
+    garmentId: address.id,
+    version: edited.version,
+  });
   return edited;
 }
 
@@ -454,7 +671,7 @@ export function garmentNotOwnedYet(): HttpError {
  * moved to the wishlist since it was read is a 404.
  */
 export async function logRepair(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   entry: NewRepair,
@@ -466,12 +683,18 @@ export async function logRepair(
       logDetail: `garment ${address.id} gone or on the wishlist since it was read`,
     });
   }
+  logOp(logger, actor, 'garment.repair.logged', {
+    garmentId: address.id,
+    repairId,
+    kind: entry.kind,
+    day: entry.day,
+  });
   return repairId;
 }
 
 /** Removes entry `repairId` from the owner's garment's log; another garment's entry is a 404. */
 export async function removeRepair(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   repairId: number,
@@ -480,4 +703,8 @@ export async function removeRepair(
   if (!(await deleteRepair(db, access.ownerId, address.id, repairId))) {
     throw new NotFound('repair');
   }
+  logOp(logger, actor, 'garment.repair.removed', {
+    garmentId: address.id,
+    repairId,
+  });
 }

@@ -1,4 +1,4 @@
-import { type Static, type TSchema, Type } from '@sinclair/typebox';
+import { CloneType, type Static, type TSchema, Type } from '@sinclair/typebox';
 import {
   NEVER_WASH,
   QUANTITY_MAX,
@@ -173,9 +173,7 @@ export type GarmentPatch = Static<typeof GarmentPatch>;
 const Destination = Type.Optional(literals(ENTRY_STATUSES));
 
 const ReplacesGarmentId = Type.Optional(
-  Type.Integer({
-    minimum: 1,
-    maximum: ROW_ID_MAX,
+  CloneType(RowId, {
     description:
       "The garment of this wardrobe a wishlist item would replace: `destination` wishlist only (another wardrobe's is not stored)",
   }),
@@ -209,9 +207,7 @@ export const NewGarment = Type.Object(
     destination: Destination,
     replacesGarmentId: ReplacesGarmentId,
     boughtForNeedId: Type.Optional(
-      Type.Integer({
-        minimum: 1,
-        maximum: ROW_ID_MAX,
+      CloneType(RowId, {
         description:
           '"Bought a different one": your own Muse need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only',
       }),

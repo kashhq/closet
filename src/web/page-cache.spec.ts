@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  backoffAfter,
   bypassesWorker,
   CACHED_AT_HEADER,
   cachedAt,
+  CACHED_AT_TIMING_NAME,
+  conditionalVerdict,
+  confirmedHeaders,
+  confirmsCopy,
   endedSession,
   forbidsStorage,
   isBackingOff,
@@ -13,6 +18,7 @@ import {
   pageAccount,
   parseRefreshBackoff,
   parseRefreshedRecord,
+  planRefresh,
   type RefreshBackoff,
   refreshDue,
   refreshedRecord,
@@ -21,9 +27,12 @@ import {
   refetchVerdict,
   renderedAccount,
   revalidationOutcome,
+  revalidationTag,
   sentToLogin,
   servesStaleWhileRevalidate,
   SESSION_ENDED_HEADER,
+  stampedServerTiming,
+  walkRecord,
 } from './page-cache';
 import { PROFILE_PATH } from './auth/urls';
 
@@ -199,6 +208,100 @@ describe('cachedAt and pageAccount', () => {
     expect(cachedAt(new Headers())).toBe(0);
     expect(cachedAt(new Headers({ [CACHED_AT_HEADER]: 'soon' }))).toBe(0);
     expect(pageAccount(new Headers())).toBe('');
+  });
+});
+
+// A copy confirmed by a 304 is stored again with a new stamp (#708):
+// freshness.js reads the first `cache` entry, so there must be one.
+describe('stampedServerTiming', () => {
+  it('keeps the server’s entries and leaves exactly one stamp, the new one', () => {
+    const served = 'route;desc="/wardrobe/:id", db;dur=4.1';
+    const first = stampedServerTiming(served, '100');
+    const again = stampedServerTiming(first, '200');
+    expect(again).toBe(`${served}, ${CACHED_AT_TIMING_NAME};desc="200"`);
+    expect(again.match(/(^|, )cache;/g)).toHaveLength(1);
+    expect(stampedServerTiming(null, '5')).toBe('cache;desc="5"');
+  });
+});
+
+describe('the conditional refetch', () => {
+  const page = (account: string, etag = 'W/"a"', status = 200) => ({
+    status,
+    headers: new Headers({ [PAGE_ACCOUNT_HEADER]: account, ETag: etag }),
+  });
+
+  it('sends the tag of a copy the cache’s owner holds, never another account’s', () => {
+    expect(revalidationTag(page('7'), '7')).toBe('W/"a"');
+    // After a switch to account 8, account 7's copy is no validator.
+    expect(revalidationTag(page('7'), '8')).toBeUndefined();
+    expect(revalidationTag(page('7'), undefined)).toBeUndefined();
+    expect(revalidationTag(undefined, '7')).toBeUndefined();
+    const untagged = {
+      status: 200,
+      headers: new Headers({ [PAGE_ACCOUNT_HEADER]: '7' }),
+    };
+    expect(revalidationTag(untagged, '7')).toBeUndefined();
+  });
+
+  it('re-stamps only a copy a 304 confirms for the account owning the cache', () => {
+    const copy = page('7');
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '7')).toBe(true);
+    expect(confirmsCopy(page('7', 'W/"a"', 200), copy, '7')).toBe(false);
+    expect(confirmsCopy(page('7', 'W/"b"', 304), copy, '7')).toBe(false);
+    expect(confirmsCopy(page('8', 'W/"a"', 304), copy, '7')).toBe(false);
+    // The cache changed hands while the 304 was in flight.
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, '8')).toBe(false);
+    expect(confirmsCopy(page('7', 'W/"a"', 304), copy, undefined)).toBe(false);
+  });
+
+  it('asks again unconditionally after a 304 it may not keep, never passing it on', () => {
+    const copy = page('7');
+    expect(conditionalVerdict(page('7', 'W/"a"', 304), copy, '7')).toBe(
+      'confirmed',
+    );
+    expect(conditionalVerdict(page('7', 'W/"b"', 200), copy, '7')).toBe(
+      'answer',
+    );
+    expect(conditionalVerdict(page('7', 'W/"a"', 503), copy, '7')).toBe(
+      'answer',
+    );
+    // The cache changed hands while the 304 was in flight (#991).
+    expect(conditionalVerdict(page('7', 'W/"a"', 304), copy, '8')).toBe(
+      'unconditional',
+    );
+    expect(conditionalVerdict(page('7', 'W/"b"', 304), copy, '7')).toBe(
+      'unconditional',
+    );
+  });
+});
+
+describe('confirmedHeaders', () => {
+  it('takes the 304’s headers and keeps the body’s own', () => {
+    const stored = new Headers({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Encoding': 'br',
+      'Cache-Control': 'private, no-cache',
+      'X-Asset-Version': 'old1234',
+      'X-Page-Account': '7',
+      ETag: 'W/"a"',
+    });
+    const updated = confirmedHeaders(
+      stored,
+      new Headers({
+        'Cache-Control': 'no-store',
+        'X-Asset-Version': 'new5678',
+        'X-Page-Account': '7',
+        ETag: 'W/"a"',
+        'Content-Length': '0',
+      }),
+    );
+    expect(updated.get('X-Asset-Version')).toBe('new5678');
+    expect(updated.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(updated.get('Content-Encoding')).toBe('br');
+    expect(updated.get('Content-Length')).toBeNull();
+    // A route moved to no-store: its copy goes rather than being kept.
+    expect(forbidsStorage(updated)).toBe(true);
+    expect(stored.get('Cache-Control')).toBe('private, no-cache');
   });
 });
 
@@ -618,6 +721,91 @@ describe('the refresh backoff', () => {
       failures: 1,
       retryAt: now + 5 * MINUTE,
       activatedAt: buildB,
+    });
+  });
+
+  // The worker's bookkeeping around the walk (refreshOlderBuildPages, #786).
+  describe('the run around the walk', () => {
+    const now = activated + 10 * MINUTE;
+    const waitingOne = nextRefreshBackoff(undefined, now, activated);
+    const elapsed: RefreshBackoff = {
+      failures: 2,
+      retryAt: now - 1,
+      activatedAt: activated,
+    };
+
+    it('asks the keys not backing off, carrying the backoff they had', () => {
+      const plan = planRefresh(
+        [
+          { key: 'waits', url: '/a', recorded: true, backoff: waitingOne },
+          { key: 'due again', url: '/b', recorded: true, backoff: elapsed },
+          { key: 'fresh', url: '/c', recorded: false, backoff: undefined },
+          // An expired or unreadable record: asked, with no failure count.
+          { key: 'expired', url: '/d', recorded: true, backoff: undefined },
+        ],
+        now,
+      );
+      expect(plan.asked).toEqual(['due again', 'fresh', 'expired']);
+      expect(plan.waiting).toEqual([waitingOne]);
+      expect([...plan.previous]).toEqual([['/b', elapsed]]);
+    });
+
+    it('doubles a failed key’s backoff and clears any other answer’s', () => {
+      expect(
+        backoffAfter({ verdict: 'failed' }, elapsed, true, now, activated),
+      ).toEqual({
+        backoff: {
+          failures: 3,
+          retryAt: now + 20 * MINUTE,
+          activatedAt: activated,
+        },
+      });
+      expect(
+        backoffAfter({ verdict: 'failed' }, undefined, false, now, activated),
+      ).toEqual({ backoff: nextRefreshBackoff(undefined, now, activated) });
+      for (const step of [
+        { verdict: 'stored' },
+        { verdict: 'kept' },
+        { verdict: 'deleted', removed: 1 },
+      ] satisfies RefetchStep[]) {
+        expect(backoffAfter(step, elapsed, true, now, activated)).toEqual({
+          backoff: undefined,
+        });
+        // No record to delete: nothing to write.
+        expect(
+          backoffAfter(step, undefined, false, now, activated),
+        ).toBeUndefined();
+      }
+    });
+
+    it('leaves a record alone when the key ended the walk', () => {
+      for (const verdict of ['stop', 'session-ended', 'unreachable'] as const) {
+        expect(
+          backoffAfter(
+            { verdict, stop: verdict },
+            elapsed,
+            true,
+            now,
+            activated,
+          ),
+        ).toBeUndefined();
+      }
+    });
+
+    it('records the walk only when it asked every key, with the earliest backoff left', () => {
+      const failed = nextRefreshBackoff(undefined, now, activated);
+      const after = new Map<string, RefreshBackoff | undefined>([
+        ['/b', failed],
+        ['/c', undefined],
+      ]);
+      expect(walkRecord(true, now, [waitingOne], after)).toBeUndefined();
+      expect(walkRecord(false, now, [], new Map())).toEqual({ at: now });
+      // A cleared key waits for nothing; the earliest of the rest rules.
+      expect(walkRecord(false, now, [waitingOne], after)).toEqual({
+        at: now,
+        retryAt: waitingOne.retryAt,
+      });
+      expect(walkRecord(false, now, [], after)?.retryAt).toBe(failed.retryAt);
     });
   });
 });

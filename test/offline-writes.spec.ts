@@ -1,4 +1,4 @@
-import { type Page, type Route } from '@playwright/test';
+import { type Page, type Request, type Route } from '@playwright/test';
 import { expect, test } from './support/fixtures';
 import { createGarment, createOutfit } from './support/e2e-data';
 import {
@@ -31,7 +31,7 @@ import { CACHED_AT_HEADER } from '../src/web/page-cache';
  * not listed; the integration tier's expectFullPage holds every page's
  * PostForms to the marker.
  *
- * Except the writes the outbox queues (#178, public/js/outbox.js): Wore
+ * Except the writes the outbox queues (#178, public/js/gen/outbox.js): Wore
  * today and a packing tick stay enabled offline, show their other state and
  * "Waiting to sync", and save on reconnect; a write the server refuses is a
  * notice until dismissed or signed out; another account's page never sends
@@ -127,7 +127,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
   await test.step('every PostForm on a page is disabled offline and restored online', async () => {
     await signIn(page, 'offline-writes');
     let outside = 0;
-    for (const url of ['/wardrobe', '/auth/profile', '/auth/tokens']) {
+    for (const url of ['/wardrobe', '/auth/profile/week', '/auth/tokens']) {
       await page.goto(url);
       const online = await guardedControls(page);
       expect(online.length, url).toBeGreaterThan(0);
@@ -150,6 +150,43 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     }
     // The add sheet's camera and library inputs name their forms in `form=`.
     expect(outside).toBeGreaterThanOrEqual(2);
+
+    // The capsule picker's Save sits in the action bar, outside #pick-form
+    // (`form=`): disabled offline beside the banner's reason, and online a
+    // double tap posts once (submit-once.js reads the form's `elements`).
+    await createGarment(page, 'Picked tee');
+    const made = await page.request.post('/capsules', {
+      form: { name: 'Picked' },
+      headers: SAME_ORIGIN,
+    });
+    const capsuleId = /^\/capsules\/(\d+)/.exec(
+      new URL(made.url()).pathname,
+    )![1];
+    const capsule = `/capsules/${capsuleId}`;
+    await page.goto(`/wardrobe?pick=${capsuleId}`);
+    const save = page.locator('#wardrobe-actions').getByRole('button', {
+      name: 'Save',
+      exact: true,
+    });
+    await setReachable(page, false);
+    await expect(save).toBeDisabled();
+    await expect(page.locator('#connectivity-banner')).toContainText(
+      'Dimmed controls need a connection.',
+    );
+    await setReachable(page, true);
+    await expect(save).toBeEnabled();
+    const picks: string[] = [];
+    const countPick = (request: Request) => {
+      const { pathname } = new URL(request.url());
+      if (request.method() === 'POST' && pathname === `${capsule}/garments`) {
+        picks.push(pathname);
+      }
+    };
+    page.on('request', countPick);
+    await save.dblclick();
+    await page.waitForURL((url) => url.pathname === capsule);
+    page.off('request', countPick);
+    expect(picks).toHaveLength(1);
   });
 
   await test.step('wears and ticks queue offline, save on reconnect, and stay their account’s', async () => {
@@ -210,17 +247,23 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(offlineBanner).toBeVisible();
     await wore.click();
     await expect(banner).toHaveText('2 changes waiting to sync');
-    await page.goto(tripUrl);
-    await expect(offlineBanner).toBeVisible();
-    await page.getByRole('checkbox', { name: /Navy chinos/ }).check();
-    await expect(pendingChips).toHaveCount(1);
-    await expect(banner).toHaveText('3 changes waiting to sync');
-    expect(saved).toEqual([]);
 
     // Reopened offline, the page shows what waits, from the records.
     await page.goto(`/wardrobe/${chinos}`);
     await expect(undo).toBeVisible();
     await expect(pendingChips).toHaveCount(1);
+
+    // The tick is the last tap, and its page stays on screen through the sync.
+    await page.goto(tripUrl);
+    await expect(offlineBanner).toBeVisible();
+    const tick = page.getByRole('checkbox', { name: /Navy chinos/ });
+    const summary = page.locator('#trip-packed-summary');
+    await expect(summary).toContainText('0 of 1 packed');
+    await tick.check();
+    await expect(pendingChips).toHaveCount(1);
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(banner).toHaveText('3 changes waiting to sync');
+    expect(saved).toEqual([]);
 
     // The tee goes meanwhile (elsewhere): its wear cannot be saved.
     expect(
@@ -238,13 +281,27 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(notice).toContainText(
       'Gone tee, Wore today: not saved, it was deleted.',
     );
-    await page.reload();
+    // The synced tick keeps its count (#823: not the page-load 0), and the
+    // page, touched and with no worker to renew it, is offered the server's
+    // copy, which brings the same (#900).
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(tick).toBeChecked();
+    // Marked so the server's copy is told apart from the outbox's drawing.
+    await summary.evaluate((element) => {
+      element.dataset.drawn = '';
+    });
+    await page
+      .locator('#toast-host > div', { hasText: 'Newer version of this page' })
+      .getByRole('button', { name: 'Refresh' })
+      .click();
+    await expect(page.locator('#trip-packed-summary[data-drawn]')).toHaveCount(
+      0,
+    );
+    await expect(summary).toContainText('1 of 1 packed');
+    await expect(tick).toBeChecked();
+    await page.goto(`/wardrobe/${chinos}`);
     await expect(undo).toBeVisible();
     await expect(notice).toBeVisible();
-    await page.goto(tripUrl);
-    await expect(
-      page.getByRole('checkbox', { name: /Navy chinos/ }),
-    ).toBeChecked();
 
     // A declined deletion keeps it: the form's own confirm comes after the
     // outbox's hold, which must not have discarded anything yet.
@@ -253,9 +310,9 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await page.getByLabel('Password').fill(E2E_PASSWORD);
     // The sheet is asked after the outbox's hold, the form's own confirm.
     const confirmSheet = page.locator('#confirm-sheet');
-    await page.getByRole('button', { name: 'Delete Account' }).click();
+    await page.getByRole('button', { name: 'Delete account' }).click();
     await expect(confirmSheet).toContainText(
-      'Are you sure you want to delete your account?',
+      'Delete your account and everything in it?',
     );
     await confirmSheet.getByRole('button', { name: 'Cancel' }).first().click();
     await expect(page).toHaveURL(/\/auth\/delete-account$/);
@@ -263,10 +320,10 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(notice).toBeVisible();
 
     // Signing out with the refusal unsynced asks before discarding it.
-    await page.locator('#avatar').click();
+    await page.getByRole('link', { name: 'Profile', exact: true }).click();
     await page
       .locator('#sign-out')
-      .getByRole('button', { name: 'Logout' })
+      .getByRole('button', { name: 'Sign out' })
       .click();
     await expect(confirmSheet).toContainText(
       '1 change has not synced. Sign out and discard it?',
@@ -293,7 +350,7 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await signIn(page, 'outbox-other');
     attempted.length = 0;
     const deleted = page.waitForEvent('console', (message) =>
-      message.text().includes('of another account deleted unsent'),
+      message.text().includes('of another account dropped unsent'),
     );
     await page.goto('/wardrobe');
     expect((await deleted).text()).toContain('[outbox] 1 queued change(s)');
@@ -339,7 +396,12 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
         reached = resolve;
       });
     let held = reachedOnce();
-    await page.goto(`/wardrobe/${chinos}`);
+    // Opened by a boosted tap, whose answer's ETag names the copy on screen:
+    // page.clock replaces `performance`, so a full load's tag (Navigation
+    // Timing's Server-Timing) cannot be read under it.
+    await page.goto('/wardrobe');
+    await page.locator(`main a[href="/wardrobe/${chinos}"]`).first().click();
+    await expect(wore).toBeVisible();
     await page.route(`**${wearPath}`, async (route) => {
       const now = answer;
       if (now === 'refuse-worn' && worn(route) === '1') {
@@ -374,9 +436,20 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await setWritesReachable(page, true);
     await backingOff;
     const undone = replayed('0');
+    // The Undo leaves the server as the page was loaded: the sync's server
+    // copy answers 304 to the page's tag, and nothing is offered (#900).
+    const unchanged = page.waitForEvent('console', (message) =>
+      message.text().includes('server copy after a sync unchanged'),
+    );
     await undo.click();
     await undone;
     await expect(waiting).toHaveCount(0);
+    await unchanged;
+    await expect(
+      page.locator('#toast-host > div', {
+        hasText: 'Newer version of this page',
+      }),
+    ).toHaveCount(0);
     await page.reload();
     await expect(wore).toBeVisible();
     await expect(waiting).toHaveCount(0);
@@ -531,6 +604,56 @@ test('offline: PostForms are guarded, and queued writes wait, save and stay orde
     await expect(notice).toBeHidden();
     await expect(wore).toBeVisible();
     await expect(page.locator('[data-outbox="pending"]')).toHaveCount(0);
+  });
+
+  await test.step('a native post (the laundry’s Mark washed) is held, queued a wash per row, and replays on reconnect', async () => {
+    await signIn(page, 'outbox-laundry');
+    const ids = [
+      await createGarment(page, 'Hamper tee'),
+      await createGarment(page, 'Hamper shirt'),
+    ];
+    for (const id of ids) {
+      expect(
+        (
+          await page.request.post(`/wardrobe/${id}/wear`, {
+            form: { worn: '1' },
+            headers: SAME_ORIGIN,
+          })
+        ).ok(),
+      ).toBe(true);
+    }
+    const banner = page.locator('#outbox-banner');
+    const posted: string[] = [];
+    const washes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'POST') return;
+      const { pathname } = new URL(request.url());
+      // Only the laundry's own post and the washes it queues: the vitals and
+      // error-tracking beacons are POSTs too.
+      if (pathname === '/laundry') posted.push(pathname);
+      else if (/^\/wardrobe\/\d+\/washed$/.test(pathname)) {
+        washes.push(pathname);
+      }
+    });
+
+    await page.goto('/laundry');
+    await setWritesReachable(page, false);
+    await page.getByRole('button', { name: 'Mark washed' }).click();
+    // Held at the capture-phase submit: the form never posts, so the page
+    // stays on the hamper and each row is its own pending wash.
+    await expect(banner).toHaveText('2 changes waiting to sync');
+    await expect(page).toHaveURL(/\/laundry$/);
+    expect(posted).toEqual([]);
+
+    await setWritesReachable(page, true);
+    await expect(page.getByText('2 changes saved')).toBeVisible();
+    await expect(banner).toBeHidden();
+    expect(posted).toEqual([]);
+    expect(washes.sort()).toEqual(
+      ids.map((id) => `/wardrobe/${id}/washed`).sort(),
+    );
+    await page.reload();
+    await expect(page.getByText('Nothing needs a wash.')).toBeVisible();
   });
 
   await test.step('the worker refetches what a sync saved, and the queue ends with the session', async (step) => {

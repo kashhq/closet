@@ -1,54 +1,73 @@
 import * as z from 'zod';
+import { LIST_LIMIT_MAX, type Projection, project } from '../../api/resource';
 import { DEFAULT_OCCASION } from '../../../wardrobe/occasions';
 import { planOutfit } from '../../calendar/entry-actions';
-import { replaceEntryOutfit, replaceMessage } from '../../calendar/replace';
+import { replaceEntryOutfit } from '../../calendar/replace';
 import { newOutfitSlots } from '../../outfits/gone-garments';
-import { requireOutfit } from '../../outfits/outfit-actions';
+import { requireOutfit, saveOutfit } from '../../outfits/outfit-actions';
 import {
-  type CreateResult,
-  createOutfit,
-  listOutfits,
+  listOutfitsPage,
   OUTFIT_GARMENTS_MAX,
   OUTFIT_NAME_MAX,
   OUTFIT_NOTES_MAX,
   type ToolOutfit,
 } from '../../outfits/queries';
-import { piecesToBuy } from '../../outfits/references';
+import { OUTFIT_PAGE_SIZE } from '../../outfits/page-size';
+import {
+  OutfitGarmentResource,
+  OutfitListItem,
+  outfitListRecord,
+  type OutfitGarmentRecord,
+  type OutfitListRecord,
+} from '../../outfits/outfit-resource';
 import { actorOf, defineTool, originOf } from '../tool';
-import { agentNameOf } from '../../write-origin';
 import { isoDate, occasionInput, rowId } from './common';
 
-function outfitOut(outfit: ToolOutfit) {
-  return {
-    id: outfit.id,
-    name: outfit.name,
-    notes: outfit.notes,
-    // Who made it (#659): person, agent, or a one-off (idea, planner).
-    origin: outfit.origin,
-    // One of Muse's proposals (#335): its note and the owner's reaction.
-    proposal: outfit.proposal,
-    // Your agent made it over MCP (#682): its token's name.
-    agent: agentNameOf(outfit.agent),
-    garments: outfit.garments.map(({ id, name }) => ({ id, name })),
-    // Incomplete (#335): it cannot be planned or packed until these are bought.
-    toBuy: piecesToBuy(outfit.garments).map(({ id, name }) => ({ id, name })),
-  };
+/**
+ * The outfit resources as an agent reads them (#711): the API's records
+ * (outfit-resource.ts), nulls kept; no photo URLs (an agent cannot fetch a
+ * signed /file URL), and `agent` the agent's bare name, as every tool's.
+ * Also a trip outfit's and a calendar entry's garments.
+ */
+export const OUTFIT_GARMENT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  category: 'keep',
+  role: 'keep',
+  status: 'keep',
+  thumbUrl: 'omit',
+  // Read only by the outfit page and the calendar; null elsewhere, which
+  // an agent would read as "in the closet".
+  away: 'omit',
+} as const satisfies Projection<OutfitGarmentRecord>;
+
+export const OUTFIT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  notes: 'keep',
+  // Who made it (#659): person, agent, or a one-off (idea, planner).
+  origin: 'keep',
+  garments: 'own',
+  // Incomplete (#335): the pieces to buy first, by id and name.
+  toBuy: 'own',
+  // One of Muse's proposals (#335): its note and the owner's reaction.
+  proposal: 'keep',
+  agent: 'own',
+} as const satisfies Projection<OutfitListRecord>;
+
+export function outfitGarmentForAgent(garment: OutfitGarmentRecord) {
+  return project(garment, OutfitGarmentResource, OUTFIT_GARMENT_FOR_MCP, {});
 }
 
-/** create_outfit's log line: the outfit made, or the one its garments already were. */
-function createdMessage(
-  userId: number,
-  saved: CreateResult,
-  plan: { day: string; occasion: string } | undefined,
-): string {
-  const what = saved.alreadySaved
-    ? `Outfit ${saved.id} of the same garments reused`
-    : `Outfit ${saved.id} created (${saved.slots} slots)`;
-  const planned = plan
-    ? `, ${saved.schedule} ${plan.day} (${plan.occasion})`
-    : '';
-  const adopted = saved.adopted ? '; taken over from the week planner' : '';
-  return `${what} by user ${userId} (MCP)${planned}${adopted}`;
+function outfitForAgent(outfit: ToolOutfit) {
+  const record = outfitListRecord(outfit);
+  return project(record, OutfitListItem, OUTFIT_FOR_MCP, {
+    garments: record.garments.map(outfitGarmentForAgent),
+    toBuy: record.garments
+      .filter((garment) => record.toBuy.includes(garment.id))
+      .map(({ id, name }) => ({ id, name })),
+    agent: record.agent?.name ?? null,
+  });
 }
 
 /**
@@ -60,13 +79,30 @@ export const outfitTools = [
   defineTool({
     name: 'list_outfits',
     title: 'List my outfits',
-    description:
-      'Your own saved outfits, newest first (not the outfits your agent proposed that you have not saved), each with its garments in the order it was built. toBuy lists the garments it holds that are not bought yet (wishlist items): an outfit with any is incomplete, and cannot be planned, added to a trip or worn until they are bought.',
-    input: z.object({}),
+    description: `Your own saved outfits, newest first (not the outfits your agent proposed that you have not saved), each with its garments in the order it was built, ${OUTFIT_PAGE_SIZE} a page unless \`limit\` asks: pass the answer's \`next\` (null on the last page) back as \`before\` for the next. toBuy lists the garments it holds that are not bought yet (wishlist items): an outfit with any is incomplete, and cannot be planned, added to a trip or worn until they are bought.`,
+    input: z.object({
+      before: rowId()
+        .optional()
+        .describe("The previous page's `next`, passed back as it came."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(LIST_LIMIT_MAX)
+        .optional()
+        .describe(
+          `How many a page holds: ${OUTFIT_PAGE_SIZE} unless asked, at most ${LIST_LIMIT_MAX}.`,
+        ),
+    }),
     writes: false,
-    async run(_args, ctx) {
-      const outfits = await listOutfits(ctx.db, ctx.userId);
-      return { outfits: outfits.map(outfitOut) };
+    async run({ before, limit = OUTFIT_PAGE_SIZE }, ctx) {
+      // GET /api/v1/outfits' reader and page size (#660), so the two page alike.
+      const { outfits, next } = await listOutfitsPage(ctx.db, ctx.userId, {
+        before,
+        limit,
+        proposed: false,
+      });
+      return { outfits: outfits.map(outfitForAgent), next };
     },
   }),
 
@@ -78,7 +114,7 @@ export const outfitTools = [
     input: z.object({ id: rowId().describe('The outfit id.') }),
     writes: false,
     async run({ id }, ctx) {
-      return outfitOut(await requireOutfit(ctx.db, actorOf(ctx), id));
+      return outfitForAgent(await requireOutfit(ctx.db, actorOf(ctx), id));
     },
   }),
 
@@ -115,15 +151,18 @@ export const outfitTools = [
       const plan = scheduleDate
         ? { day: scheduleDate, occasion: occasion ?? DEFAULT_OCCASION }
         : undefined;
-      const saved = await createOutfit(ctx.db, ctx.userId, {
-        name: name || null,
-        notes: notes?.trim() ? notes : null,
-        slots,
-        plan,
-        origin: 'agent',
-        madeBy: originOf(ctx),
-      });
-      ctx.webLogger.info(createdMessage(ctx.userId, saved, plan));
+      const saved = await saveOutfit(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
+        {
+          name: name || null,
+          notes: notes?.trim() ? notes : null,
+          slots,
+          plan,
+          origin: 'agent',
+          madeBy: originOf(ctx),
+        },
+      );
       return {
         id: saved.id,
         name: saved.name,
@@ -154,14 +193,11 @@ export const outfitTools = [
       if (replaceEntryId !== undefined) {
         const target = { entryId: replaceEntryId, day: date, occasion };
         const replaced = await replaceEntryOutfit(
-          ctx.db,
+          { db: ctx.db, logger: ctx.webLogger },
           actorOf(ctx),
           target,
           { outfitId },
           originOf(ctx),
-        );
-        ctx.webLogger.info(
-          replaceMessage(ctx.userId, target, replaced, ' (MCP)'),
         );
         return {
           outcome: replaced.outcome,
@@ -174,16 +210,13 @@ export const outfitTools = [
         };
       }
       const scheduled = await planOutfit(
-        ctx.db,
+        { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
         { outfitId, day: date, occasion: occasion ?? DEFAULT_OCCASION },
         originOf(ctx),
       );
       // Already there: the occasion it kept.
       const { outcome, occasion: kept } = scheduled;
-      ctx.webLogger.info(
-        `Outfit ${outfitId} ${outcome} on ${date} (${kept}) for user ${ctx.userId} (MCP)${outcome === 'already-scheduled' && scheduled.adopted ? "; the week planner's entry is the user's now" : ''}`,
-      );
       return { outcome, date, occasion: kept };
     },
   }),

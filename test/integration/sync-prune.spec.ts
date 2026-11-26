@@ -217,8 +217,12 @@ describe('the prune', () => {
       deletions: [],
       more: false,
     });
+    // A full sync opens with the user's week template (revision 0, #716).
     const fresh = await changes(a.token);
-    expect(keys(fresh.changes)).toEqual([`garment:${kept}`]);
+    expect(keys(fresh.changes)).toEqual([
+      `weekTemplate:${a.id}`,
+      `garment:${kept}`,
+    ]);
     expect(fresh.deletions).toEqual([]);
   });
 
@@ -254,6 +258,7 @@ describe('the prune', () => {
     );
     const fresh = await changes(a.token);
     expect(keys(fresh.changes)).toEqual([
+      `weekTemplate:${a.id}`,
       `garment:${kept}`,
       `garment:${later}`,
     ]);

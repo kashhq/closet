@@ -316,7 +316,7 @@ describe('adding a garment from a link', () => {
       const body = unescapeHtml(res.body);
       expect(body).toContain('value="Heavyweight Pocket Tee"');
       expect(body).toContain('value="Studio Knit"');
-      expect(body).toMatch(/name="category"[^>]*value="tops"/);
+      expect(body).toMatch(/name="category"[^>]*value="Tops"/);
       expect(body).toMatch(/name="color" value="blue"\s+checked/);
       expect(body).toMatch(/name="materials" value="cotton"[^>]*checked/);
       expect(body).toMatch(/name="fabricWeight"[^>]*value="240"/);

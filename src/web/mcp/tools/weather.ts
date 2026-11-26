@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import type { Occasion } from '../../../wardrobe/occasions';
 import { FORECAST_DAYS } from '../../../weather/forecast';
@@ -95,7 +96,7 @@ export const weatherTools = [
       ) {
         throw new HttpError(
           400,
-          `Ask for days from ${today} to ${horizon(today)}, from before to`,
+          t('refusal.weather.daysFromTo', { from: today, to: horizon(today) }),
         );
       }
       const { settings, active, cached } = await userWeather(

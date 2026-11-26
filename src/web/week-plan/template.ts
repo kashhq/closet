@@ -1,8 +1,8 @@
 import { type Static, type TSchema, Type } from '@sinclair/typebox';
-import { and, eq, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
 import { lockedOwnerId, ownerLockCte, ownerLocked } from '../../db/owner-lock';
-import { weekTemplate } from '../../db/schema';
+import { user, weekTemplate } from '../../db/schema';
 import { selectScalars } from '../../db/select-scalars';
 import {
   compareOccasions,
@@ -51,6 +51,34 @@ export function weekTemplateSql(userId: number): SQL<TemplateSlot[]> {
       'occasion', ${weekTemplate.occasion}
     )), '[]')
     from ${weekTemplate} where ${weekTemplate.userId} = ${userId})`;
+}
+
+/**
+ * The templates of these users, one per user whether or not they ever set
+ * one (empty: never set), in one statement: the changes feed's page
+ * (src/web/sync/feed.ts), whose ids are users its keyset read in the same
+ * snapshot (the template's stamp is a column of the user row, SYNC_STAMPS).
+ */
+export async function weekTemplatesByUserIds(
+  db: Queryable,
+  userIds: readonly number[],
+): Promise<{ userId: number; slots: TemplateSlot[] }[]> {
+  // Correlated by hand: a single-table select writes its columns without
+  // their table (src/db/AGENTS.md, Gotchas).
+  const slots = sql<TemplateSlot[]>`(
+    select coalesce(json_agg(json_build_object(
+      'weekday', ${weekTemplate}.weekday,
+      'occasion', ${weekTemplate}.occasion
+    )), '[]')
+    from ${weekTemplate} where ${weekTemplate}.user_id = ${user}.id)`;
+  const rows = await db
+    .select({ userId: user.id, slots })
+    .from(user)
+    .where(inArray(user.id, [...userIds]));
+  return rows.map(({ userId, slots }) => ({
+    userId,
+    slots: inTemplateOrder(slots),
+  }));
 }
 
 /** Weekday, then the occasions' display order (compareOccasions). */

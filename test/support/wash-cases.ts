@@ -122,3 +122,92 @@ export function washCaseRows(
     },
   };
 }
+
+/**
+ * Whether a wash replaces the stored last wash (#793): washMoves
+ * (src/wardrobe/availability.spec.ts) and markWashed's update
+ * (test/integration/wears.spec.ts) each answer every row, and both must
+ * give `moves`. `stored` is the garment's last wash (null: never washed),
+ * `next` the wash posted; days and hours as in WashCase.
+ */
+export interface WashMoveCase {
+  name: string;
+  stored: { day: number; hour: number | null } | null;
+  next: { day: number; hour: number | null };
+  moves: boolean;
+}
+
+export const WASH_MOVE_CASES: readonly WashMoveCase[] = [
+  {
+    name: 'never washed',
+    stored: null,
+    next: { day: 0, hour: null },
+    moves: true,
+  },
+  {
+    name: 'a later day, timeless over known',
+    stored: { day: -1, hour: 21 },
+    next: { day: 0, hour: null },
+    moves: true,
+  },
+  {
+    name: 'an earlier day',
+    stored: { day: 0, hour: null },
+    next: { day: -1, hour: 21 },
+    moves: false,
+  },
+  {
+    name: 'the same day, a later known instant',
+    stored: { day: 0, hour: 9 },
+    next: { day: 0, hour: 21 },
+    moves: true,
+  },
+  {
+    name: 'the same day, an earlier known instant',
+    stored: { day: 0, hour: 21 },
+    next: { day: 0, hour: 9 },
+    moves: false,
+  },
+  {
+    name: 'the same day and instant (a repeat)',
+    stored: { day: 0, hour: 9 },
+    next: { day: 0, hour: 9 },
+    moves: false,
+  },
+  {
+    // An old client's replay must not uncount the evening's wear.
+    name: 'the same day, timeless over known',
+    stored: { day: 0, hour: 9 },
+    next: { day: 0, hour: null },
+    moves: false,
+  },
+  {
+    // The timeless one may have been at 21:00: 09:00 would count a 19:00 wear after it.
+    name: 'the same day, known over timeless',
+    stored: { day: 0, hour: null },
+    next: { day: 0, hour: 9 },
+    moves: false,
+  },
+  {
+    name: 'the same day, timeless over timeless',
+    stored: { day: 0, hour: null },
+    next: { day: 0, hour: null },
+    moves: false,
+  },
+];
+
+/** A move case's stored and posted washes, dated from `day0` in `timeZone`. */
+export function washMoveRows(
+  c: WashMoveCase,
+  day0: IsoDate,
+  timeZone: string,
+): { stored: LastWash | null; next: LastWash & { day: IsoDate } } {
+  const wash = ({ day, hour }: { day: number; hour: number | null }) => ({
+    day: addDays(day0, day),
+    washedAt:
+      hour === null
+        ? null
+        : instantAt(addDays(day0, day), hour, timeZone).getTime(),
+  });
+  return { stored: c.stored && wash(c.stored), next: wash(c.next) };
+}

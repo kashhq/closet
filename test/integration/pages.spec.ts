@@ -1,6 +1,6 @@
 import { loginUrl } from '../../src/web/auth/return-to';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PostForm } from '../../src/web/auth/form';
+import { PostForm } from '../../src/web/form';
 import { renderToString } from '../../src/web/render';
 import { createTestApp, TestApp } from './harness';
 import {
@@ -135,7 +135,7 @@ describe('pages', () => {
     expect(invite.body).not.toContain(t.owner.email);
   });
 
-  it('GET /wardrobe as an htmx fragment is only #wardrobe-main', async () => {
+  it('GET /wardrobe as an htmx fragment is only #wardrobe-body', async () => {
     const res = await t.inject({
       method: 'GET',
       url: '/wardrobe?keyword=Blazer',

@@ -45,7 +45,7 @@ export function dayRefusal(
 }
 
 /**
- * The page's outbox (views/assets/outbox.ts, bundled into public/js/outbox.js;
+ * The page's outbox (views/assets/outbox.ts, bundled into public/js/gen/outbox.js;
  * plan section 3) and the views that mark the queueable controls share
  * these rules, so a key the server renders is the key the outbox collapses
  * by.
@@ -55,7 +55,8 @@ export function dayRefusal(
 export interface QueuedTarget {
   /**
    * One record per key, the last intent wins: `wear:41:2026-11-12` (a
-   * garment's wear on a day), `wash:41`, `entry:88`, `packed:7:41` (a
+   * garment's wear on a day; its region names `wear:41` and the outbox adds
+   * the page's day, #708), `wash:41`, `entry:88`, `packed:7:41` (a
    * trip's garment), `item:7:3` (a trip's extra).
    */
   key: string;
@@ -64,13 +65,12 @@ export interface QueuedTarget {
 
 /**
  * The target of a queued write: `id` is the route's `:id` (the garment, the
- * entry, the trip); `part` what the key adds, a wear's day or the trip's
- * garment or extra.
+ * entry, the trip); `part` what the key adds, the trip's garment or extra.
  */
 export function queuedTarget(
   kind: QueueableKind,
   id: number,
-  part?: number | IsoDate,
+  part?: number,
 ): QueuedTarget {
   return {
     key: [kind, id, ...(part === undefined ? [] : [part])].join(':'),
@@ -103,6 +103,14 @@ export function queueableKindOf(path: string): QueueableKind | undefined {
  * an opaque answer.
  */
 export const REPLAY_HEADER = 'X-Closet-Queued';
+
+/**
+ * The server's word on a replay (answerReplay, replayRefused in
+ * src/web/offline-writes.ts): `changed` or `unchanged` on its 204, the
+ * refusal's reason on a 409. The outbox takes a 204 for saved only with it
+ * (replayVerdict).
+ */
+export const OUTCOME_HEADER = 'X-Closet-Outcome';
 
 /** Whether a request is a replay, from Node's lower-cased headers. */
 export function isReplayRequest(
@@ -201,11 +209,17 @@ export function goesThroughOutbox(
   return offline || keys.some((key) => pendingKeys.has(key));
 }
 
-/** What the queue's rules read of a stored record. */
+/**
+ * What the queue's rules read of a stored record. `discarded` is a
+ * tombstone (`discardedRecord`): the notice's Discard leaves it in the
+ * record's place, so every reader learns the write was dropped, not saved.
+ */
 export interface StoredRecord {
   account: string;
   key: string;
-  state: 'pending' | 'failed';
+  state: 'pending' | 'failed' | 'discarded';
+  /** When Discard left the tombstone (epoch ms): its prune clock. */
+  discardedAt?: number;
 }
 
 /**
@@ -296,7 +310,7 @@ export type ReplayVerdict =
   | { verdict: 'signed-out' };
 
 const UNREACHABLE = 'unreachable';
-export type RetryCause = 'server' | typeof UNREACHABLE;
+type RetryCause = 'server' | typeof UNREACHABLE;
 
 function isRefusal(outcome: string | null): outcome is ReplayRefusal {
   return outcome === 'too-old' || outcome === 'future' || outcome === 'account';
@@ -347,7 +361,9 @@ export function reasonTextName(reason: ReplayFailure | undefined): string {
 }
 
 /**
- * A replay's answer (src/web/offline-writes.ts): 204 saved, 401 signed out,
+ * A replay's answer (src/web/offline-writes.ts): 204 saved when it carries
+ * `X-Closet-Outcome: changed | unchanged` (answerReplay; a 204 without it
+ * is not ours, a captive portal's, and is retried as unreachable), 401 signed out,
  * 404 gone (a deleted garment, entry or trip), 410 saved (a queued wear's
  * client id names a wear that landed and was deleted since, #196a: the tap
  * was saved once and a later write undid it), a 409 refused for the reason
@@ -362,8 +378,15 @@ export function replayVerdict(
   status: number,
   outcome: string | null,
 ): ReplayVerdict {
-  if (status === 204)
-    return { verdict: 'saved', changed: outcome === 'changed' };
+  if (status === 204) {
+    // Only the replay contract's own 204 is saved: a captive portal or an
+    // intercepting proxy on the plain-HTTP twin answers 204 too, and taking
+    // that for saved would drop the record (#731).
+    if (outcome === 'changed' || outcome === 'unchanged') {
+      return { verdict: 'saved', changed: outcome === 'changed' };
+    }
+    return UNAVAILABLE;
+  }
   if (status === 409 && isRefusal(outcome)) {
     return { verdict: 'failed', reason: outcome };
   }
@@ -422,22 +445,125 @@ export function packedCount(
 export const REPLAY_TIMEOUT_MS = 15_000;
 
 /**
- * The page's message to the service worker after a drain saved queued
- * writes (plan section 5): `{ type, paths }`, the saved records' paths. The
- * worker refetches the cached pages that show them (`showsQueuedWrite`), so
- * a page reopened offline later shows the synced state, not the one cached
- * before the tap (views/assets/src-sw.ts, refetchSyncedPages).
+ * The document event every tab whose page shows a saved write gets once a
+ * drain (its own or another tab's) saved it: `detail.paths`. freshness.js
+ * (which spells this string itself: it cannot import a TS module) fetches
+ * the page's server copy and takes it as a revalidation's `updated`, so its
+ * counts and lines are the server's whether or not a worker controls the
+ * page, cached it, or could refetch it (#900).
  */
-export const OUTBOX_SYNCED = 'OUTBOX_SYNCED';
+export const OUTBOX_SYNCED_EVENT = 'outbox:synced';
+
+/** Whether a page (its pathname) shows any of a sync's saved writes. */
+export function showsSyncedWrite(
+  writePaths: readonly string[],
+  pagePath: string,
+): boolean {
+  return writePaths.some((write) => showsQueuedWrite(write, pagePath));
+}
+
+/** How a record stopped being pending, as the page learns it. */
+export type IntentEnd = 'saved' | 'failed' | 'discarded';
 
 /**
- * The worker's answer to every tab it controls once that refetch is done:
- * `{ type, pages: [{ url, fragment, html, fetchedAt }] }`, each cached page
- * (or `|hx` fragment) whose server copy differs from the one it replaced. A
- * tab showing one swaps it in as a revalidation's (public/js/freshness.js,
- * which spells this string itself: it cannot import a TS module).
+ * Where a region's write stands, read from the store as committed: pending
+ * while a record of the page's account and the region's key waits, `failed`
+ * or `discarded` as its record says, and `saved` only when no such record is
+ * left. Discard leaves a tombstone in the same transaction that ends the
+ * record (`discardedRecord`), so a read can never see a discarded write as
+ * gone, and so as saved, whichever tab reads first or whenever the
+ * channel's message arrives (#900). A record is the account's and the
+ * key's together: a dropped account's tombstone keeps its key for a day
+ * (#1042), the same key as the next account's tick on a shared trip, and
+ * must never revert that tick.
  */
-export const PAGES_RENEWED = 'PAGES_RENEWED';
+export function regionEnd(
+  account: string,
+  key: string,
+  records: readonly StoredRecord[],
+): 'pending' | IntentEnd {
+  const states = new Set(
+    records
+      .filter((record) => record.account === account && record.key === key)
+      .map((r) => r.state),
+  );
+  if (states.has('pending')) return 'pending';
+  if (states.has('failed')) return 'failed';
+  if (states.has('discarded')) return 'discarded';
+  return 'saved';
+}
+
+/**
+ * How long a Discard's tombstone stays: long enough for every open tab to
+ * re-read the store (a tab asleep in the background re-reads on its next
+ * render), pruned at a later page load (`tombstoneExpired`). A newer tap on
+ * its key replaces it at once (`OutboxStore.putCollapsed`).
+ */
+export const DISCARD_TOMBSTONE_MS = 24 * 60 * 60 * 1000;
+
+/** The tombstone a Discard writes in a record's place: never sent, shown or counted. */
+export function discardedRecord<R extends ReplayRecord>(
+  record: R,
+  now: number,
+): R {
+  return settledRecord(record, discarding(now));
+}
+
+/** A tombstone past DISCARD_TOMBSTONE_MS; one stamped in the future (a clock moved back) waits. */
+export const tombstoneExpired = (record: StoredRecord, now: number): boolean =>
+  record.state === 'discarded' &&
+  now - (record.discardedAt ?? 0) >= DISCARD_TOMBSTONE_MS;
+
+/**
+ * The tombstone a session or account drop writes in an unsent record's
+ * place (#1042): Discard's, so a tab still open on the dropped account
+ * reverts the intent instead of taking the vanished record for a save. It
+ * keeps no label: the account has left this device, and the garment's name
+ * must not outlive it in the store for a day.
+ */
+export function droppedRecord<R extends ReplayRecord & { label: string }>(
+  record: R,
+  now: number,
+): R {
+  return { ...discardedRecord(record, now), label: '' };
+}
+
+/**
+ * What a drop does to one stored record (`goes`: the drop names it, as
+ * sign-out's leftovers or another account's records at a claim): an unsent
+ * one is replaced by its tombstone (`droppedRecord`), never deleted; an
+ * expired tombstone of any account is pruned, a fresh one kept until every
+ * tab has re-read it. Run inside the drop's one transaction
+ * (`dropQueuedWrites`, outbox-store.ts).
+ */
+export function atDrop(
+  record: StoredRecord,
+  goes: boolean,
+  now: number,
+): 'tombstone' | 'prune' | 'keep' {
+  if (record.state === 'discarded') {
+    return tombstoneExpired(record, now) ? 'prune' : 'keep';
+  }
+  return goes ? 'tombstone' : 'keep';
+}
+
+/**
+ * What a region does once its record is no longer pending (outbox.ts,
+ * endIntent): only a region that showed the intent has anything to undo or
+ * keep (#876); one whose markup was already in the record's state shows
+ * the server's and is left alone. A failed or discarded intent is put back
+ * to the server's state (`revert`); a saved one is now the server's state
+ * (`confirm`): a tick becomes the row's served state, and its counter's
+ * served number with it (#823), so the line never falls back to the
+ * page-load count.
+ */
+export function intentEnding(
+  mark: string | undefined,
+  end: IntentEnd,
+): 'none' | 'revert' | 'confirm' {
+  if (mark !== 'flipped' && mark !== 'ticked') return 'none';
+  return end === 'saved' ? 'confirm' : 'revert';
+}
 
 /**
  * Which queued writes go when a page claims the worker's page cache
@@ -566,29 +692,62 @@ export type ReplayRecord = StoredRecord & {
   serverErrors?: number;
   /** When it became stuck, or last answered 5xx while stuck: its retry clock. */
   stuckAt?: number;
+  /** Why it failed for good (`state: 'failed'`): the notice's reason. */
+  reason?: ReplayFailure;
+  /** When sign-out's discard named it (discardAtSignOut): no drain sends it (`sendable`). */
+  heldForDiscardAt?: number;
 };
+
+/**
+ * The only fields a replay's answer, the notice's Try again or a Discard
+ * writes of a stored record, applied by `settledRecord` to the copy read in
+ * the write's own transaction, never to the copy its caller read earlier.
+ * Every other field is another writer's: a sign-out's hold above all
+ * (#1161), which a settle putting back the drain's pre-hold copy would erase,
+ * so the record the user chose to discard would be sent again. A new field
+ * is preserved by every settle unless it is added here.
+ */
+export type ReplayChange = Partial<
+  Pick<
+    ReplayRecord,
+    'state' | 'reason' | 'attempts' | 'serverErrors' | 'stuckAt' | 'discardedAt'
+  >
+>;
+
+/** `stored`, the record as its write's transaction read it, with `change` and nothing else applied. */
+export function settledRecord<R extends ReplayRecord>(
+  stored: R,
+  change: ReplayChange,
+): R {
+  return { ...stored, ...change };
+}
+
+/** A stuck record's counters cleared: the notice's Try again. */
+export const UNSTUCK = {
+  attempts: 0,
+  serverErrors: undefined,
+  stuckAt: undefined,
+} as const satisfies ReplayChange;
 
 export const isStuck = (record: ReplayRecord) => record.stuckAt !== undefined;
 
-/** A stuck record with its counters cleared: the notice's "Try again". */
-export function unstuck<R extends ReplayRecord>(record: R): R {
-  return {
-    ...record,
-    attempts: 0,
-    serverErrors: undefined,
-    stuckAt: undefined,
-  };
+/** What a Discard writes of a record (`settledRecord`): its tombstone's fields. */
+export function discarding(now: number): ReplayChange {
+  return { ...UNSTUCK, state: 'discarded', discardedAt: now };
 }
 
-/** What replayQueue tells its driver to do with a record. */
-export type ReplayStep<R> =
+/**
+ * What replayQueue tells its driver to do with a record. A `change` is
+ * written onto the stored copy (`settledRecord`), never the drain's copy.
+ */
+type ReplayStep =
   | { step: 'saved'; changed: boolean }
-  /** Refused for good: `record` is the failed one. */
-  | { step: 'failed'; record: R }
-  /** Stays queued: `record` has its attempt counted (and its 5xx state as it now stands). */
+  /** Refused for good. */
+  | { step: 'failed'; change: { state: 'failed'; reason: ReplayFailure } }
+  /** Stays queued: its attempt counted (and its 5xx state as it now stands). */
   | {
       step: 'kept';
-      record: R;
+      change: { attempts: number; serverErrors?: number; stuckAt?: number };
       why: 'server-error' | 'stuck' | typeof UNREACHABLE;
     };
 
@@ -597,7 +756,7 @@ export interface ReplayDriver<R> {
   skip(record: R): Promise<boolean>;
   send(record: R): Promise<ReplayVerdict>;
   /** Whether the record was still queued, so the step applied. */
-  settle(record: R, step: ReplayStep<R>): Promise<boolean>;
+  settle(record: R, step: ReplayStep): Promise<boolean>;
   now(): number;
 }
 
@@ -652,32 +811,31 @@ export async function replayQueue<R extends ReplayRecord>(
     } else if (answer.verdict === 'failed') {
       await driver.settle(record, {
         step: 'failed',
-        record: { ...record, state: 'failed', reason: answer.reason },
+        change: { state: 'failed', reason: answer.reason },
       });
     } else if (!('cause' in answer)) {
       return { end: 'no-session' };
     } else if (answer.cause === UNREACHABLE) {
-      const kept = { ...record, attempts: record.attempts + 1 };
+      const attempts = record.attempts + 1;
       await driver.settle(record, {
         step: 'kept',
-        record: kept,
+        change: { attempts },
         why: UNREACHABLE,
       });
-      wait(retryDelayMs(kept.attempts));
+      wait(retryDelayMs(attempts));
       return backoff();
     } else {
       const serverErrors = (record.serverErrors ?? 0) + 1;
       const stuck =
         isStuck(record) || serverErrors >= STUCK_AFTER_SERVER_ERRORS;
       const kept = {
-        ...record,
         attempts: record.attempts + 1,
         serverErrors,
         ...(stuck ? { stuckAt: driver.now() } : {}),
       };
       await driver.settle(record, {
         step: 'kept',
-        record: kept,
+        change: kept,
         why: stuck ? 'stuck' : 'server-error',
       });
       held.add(record.key);
@@ -753,8 +911,10 @@ export const actionBusyAttributes = (busy: boolean): Record<string, string> =>
 /** The store the notice's buttons act through (the page's IndexedDB; a stub in the spec). */
 export interface StuckActionStore<R extends ReplayRecord> {
   find(id: string): Promise<R | undefined>;
-  /** replayQueue's `settle`: `next` in the record's place, or deleted; whether it was still queued. */
-  settle(record: R, next?: R): Promise<boolean>;
+  /** replayQueue's `settle`: the stored copy with `change` (`settledRecord`), or deleted; whether it was still queued. */
+  settle(record: R, change?: ReplayChange): Promise<boolean>;
+  /** The record's tombstone (`discardedRecord`) in its place if it is still queued; whether it was. */
+  discard(record: R): Promise<boolean>;
 }
 
 /**
@@ -776,7 +936,7 @@ export async function retryStuck<R extends ReplayRecord>(
   return exclusively(async () => {
     const record = await store.find(id);
     if (!record || !isStuck(record)) return undefined;
-    return (await store.settle(record, unstuck(record))) ? record : undefined;
+    return (await store.settle(record, UNSTUCK)) ? record : undefined;
   });
 }
 
@@ -788,6 +948,91 @@ export async function discardStuck<R extends ReplayRecord>(
   return exclusively(async () => {
     const record = await store.find(id);
     if (!record) return undefined;
-    return (await store.settle(record)) ? record : undefined;
+    return (await store.discard(record)) ? record : undefined;
   });
+}
+
+/**
+ * How long sign-out's hold keeps a record from every drain (`sendable`):
+ * the discard needs the turn only past the one replay in flight
+ * (REPLAY_TIMEOUT_MS). A hold its tab never released (closed while it
+ * waited) lapses, and the record is sent again, as before the hold.
+ */
+export const DISCARD_HOLD_MS = 60_000;
+
+/**
+ * Whether a drain may send a stored record (the drain's `skip`, read before
+ * each one): still queued (not replaced, not a tombstone) and not held by a
+ * sign-out's discard. A hold stamped in the future (a clock moved back) is
+ * taken as lapsed, so no record is stranded.
+ */
+export function sendable(
+  stored: ReplayRecord | undefined,
+  now: number,
+): boolean {
+  if (stored === undefined || stored.state === 'discarded') return false;
+  const held = stored.heldForDiscardAt;
+  if (held === undefined) return true;
+  const age = now - held;
+  return age < 0 || age >= DISCARD_HOLD_MS;
+}
+
+/** The hold's copy of a stored record, or undefined when there is nothing to hold (a tombstone). */
+export function heldForDiscard<R extends ReplayRecord>(
+  stored: R,
+  now: number,
+): R | undefined {
+  return stored.state === 'discarded'
+    ? undefined
+    : { ...stored, heldForDiscardAt: now };
+}
+
+/** The released copy of a record the discard did not tombstone, or undefined when nothing changes. */
+export function releasedFromDiscard<R extends ReplayRecord>(
+  stored: R,
+): R | undefined {
+  if (stored.state === 'discarded' || stored.heldForDiscardAt === undefined) {
+    return undefined;
+  }
+  return { ...stored, heldForDiscardAt: undefined };
+}
+
+/** The store sign-out's discard acts through (the page's IndexedDB; a stub in the spec). */
+export interface SignOutDiscardStore {
+  /** The named records stamped by `heldForDiscard`, in one transaction. */
+  hold(ids: readonly string[], now: number): Promise<void>;
+  /** The named unsent records to their tombstones (dropQueuedWrites). */
+  drop(goes: (record: { id: string }) => boolean): Promise<{ dropped: number }>;
+  /** The named records still held, released (`releasedFromDiscard`). */
+  release(ids: readonly string[]): Promise<void>;
+}
+
+/**
+ * Sign-out's discard of what the drain left (outbox.ts, drainBeforeLeaving).
+ * First the records are held in the store (#1157), so every tab's drain,
+ * reading the store before each send (`sendable`), sends none of them from
+ * its next record on: the discard waits for the one replay in flight,
+ * within its own deadline (REPLAY_TIMEOUT_MS), not for each leftover in
+ * turn, whichever tab holds the lock. Then, in the drain's turn like the
+ * notice's Discard, they are dropped to their tombstones: one that landed
+ * is gone and nothing is reverted; one that failed is tombstoned. Without
+ * the turn the server could save a write the page already shows reverted.
+ * The release runs however it ends, so a turn that is refused (a lock
+ * request rejecting) leaves nothing held. How many were dropped.
+ */
+export async function discardAtSignOut(
+  exclusively: Exclusively,
+  ids: readonly string[],
+  store: SignOutDiscardStore,
+  now: () => number,
+): Promise<number> {
+  const named = new Set(ids);
+  await store.hold(ids, now());
+  try {
+    return await exclusively(
+      async () => (await store.drop((record) => named.has(record.id))).dropped,
+    );
+  } finally {
+    await store.release(ids);
+  }
 }

@@ -1,6 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import { type FastifyReply, type FastifyRequest } from 'fastify';
 import { AWAY_REASONS } from '../../wardrobe/availability';
 import { sessionUserId } from '../auth/require-session';
 import { announce } from '../announce';
@@ -11,7 +11,6 @@ import type { WebOptions } from '../plugin';
 import { renderFragment, renderPage } from '../render';
 import {
   answerReplay,
-  instantNote,
   isReplay,
   postedInstant,
   replayNote,
@@ -30,10 +29,11 @@ import { garmentAddress, garmentNotFound } from '../wardrobe/garment-access';
 import { garmentUrl, LAUNDRY_PATH } from '../wardrobe/urls';
 import { CARE_NOTE_MAX } from '../wardrobe/garment-input';
 import { LaundryPage } from './laundry-page';
-import { laundryList, markWashed, wearStatusOf } from './queries';
+import { laundryList, wearStatusOf } from './queries';
 import {
   putGarmentAway,
   washGarment,
+  washGarments,
   WearClientIdRefusal,
   wearGarment,
 } from './wear-actions';
@@ -94,6 +94,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   { db, config, logger },
   done,
 ) => {
+  const deps = { db, logger };
   const today = () => todayIn(config.timeZone, new Date());
 
   /**
@@ -121,7 +122,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       reply,
       <WearStatus
         garment={status.garment}
-        panel={{ summary: status.summary, today: day }}
+        panel={{ summary: status.summary, answeredOn: day }}
         after={result.after}
       />,
     );
@@ -145,7 +146,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const day = requestedDay(reply, request.body.day, today());
       const { clientId } = request.body;
       const { ownerId, changed } = await wearGarment(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         {
@@ -162,9 +163,6 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         }
         throw error;
       });
-      logger.info(
-        `Garment ${id} ${worn ? 'worn' : 'wear undone'} on ${day} by user ${ownerId}${changed ? '' : ', already so'}${replayNote(request)}`,
-      );
       return answer(
         request,
         reply,
@@ -196,13 +194,10 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const day = requestedDay(reply, request.body?.day, today());
       const at = postedInstant(request, request.body?.at, day, config.timeZone);
       const { ownerId, changed } = await washGarment(
-        db,
+        deps,
         actorOf(request),
         garmentAddress(request),
         { day, at },
-      );
-      logger.info(
-        `Garment ${id} washed on ${day} ${instantNote(at)} by user ${ownerId}${changed ? '' : ', already washed then or later'}${replayNote(request)}`,
       );
       return answer(
         request,
@@ -225,14 +220,11 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const { id } = request.params;
       const { away, awayNote } = request.body;
-      const { ownerId } = await putGarmentAway(
-        db,
+      await putGarmentAway(
+        deps,
         actorOf(request),
         garmentAddress(request),
         away === '' ? null : { reason: away, note: awayNote?.trim() || null },
-      );
-      logger.info(
-        `Garment ${id} ${away === '' ? 'back in the closet' : `away (${away})`} for user ${ownerId}`,
       );
       // "Where it is" is an AutosaveForm: its status line, never the form.
       if (!request.headers['hx-request']) {
@@ -252,7 +244,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const userId = sessionUserId(request);
       const [items, sharedWardrobes] = await Promise.all([
         laundryList(db, userId),
-        sharedWardrobesOf(db, userId),
+        sharedWardrobesOf(db, actorOf(request)),
       ]);
       return renderPage(
         reply,
@@ -272,19 +264,12 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     LAUNDRY_PATH,
     { schema: { body: LaundryBody } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
       const ids = request.body?.ids ?? [];
       const day = today();
-      const washed = await markWashed(
-        db,
-        userId,
-        ids,
+      const { washed } = await washGarments(deps, actorOf(request), ids, {
         day,
-        postedInstant(request, undefined, day, config.timeZone),
-      );
-      logger.info(
-        `Laundry by user ${userId} on ${day}: ${washed.length} washed of ${ids.length} checked`,
-      );
+        at: postedInstant(request, undefined, day, config.timeZone),
+      });
       return reply.redirect(`${LAUNDRY_PATH}?washed=${washed.length}`, 303);
     },
   );

@@ -122,7 +122,7 @@ describe('property filters, select mode and bulk edit', () => {
     it('says nothing matches, not that the wardrobe is empty', async () => {
       const res = await get('/wardrobe?warmth=5&material=silk');
       expect(res.body).toContain('No garments match these filters.');
-      expect(res.body).not.toContain('Add your first garment');
+      expect(res.body).not.toContain('Add a garment to start');
     });
 
     it('refuses a warmth or material outside its set', async () => {
@@ -305,10 +305,13 @@ describe('property filters, select mode and bulk edit', () => {
         property: 'pattern',
         pattern: 'solid',
       });
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          /^Bulk pattern by user \d+ in wardrobe \d+: 1 set, 0 skipped, 1 selected$/,
-        ),
+      expect(t.logs.ops('garments.property.set')).toContainEqual(
+        expect.objectContaining({
+          property: 'pattern',
+          updated: 1,
+          skipped: 0,
+          asked: 1,
+        }),
       );
     });
 
@@ -316,7 +319,7 @@ describe('property filters, select mode and bulk edit', () => {
       const res = await get('/wardrobe?bulkUpdated=3&bulkSkipped=1');
       expectNoRawI18nKeys(res);
       expect(res.body).toContain('Set on 3 garments · 1 skipped');
-      expect(res.body).toContain('"bulkUpdated","bulkSkipped"');
+      expect(res.body).toContain('data-strip-flags="bulkUpdated bulkSkipped ');
     });
 
     it('writes nothing for a VIEW grantee', async () => {

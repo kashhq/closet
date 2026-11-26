@@ -1,25 +1,30 @@
 import { type Occasion, OCCASIONS } from '../../wardrobe/occasions';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { BandActions, PageBand } from '../layout/page-band';
+import { PageShell } from '../layout/page-shell';
 import { ideasUrl } from '../gallery/urls';
 import type { GarmentOutfit } from '../outfits/queries';
 import type { OutfitList } from '../outfits/outfit-list';
-import { SavedOutfitPicker } from '../outfits/saved-outfit-button';
+import {
+  SavedOutfitButtons,
+  SavedOutfitPicker,
+} from '../outfits/saved-outfit-button';
 import { stylingUrl } from '../styling/urls';
 import type { ViewContext } from '../view-context';
 import type { IsoDate } from '../../calendar-date';
 import { type DayChoice, plannedNote } from './day-choice';
 import { dayLabel, occasionLabel } from '../date-labels';
-import { dayUrl, planPageUrl } from './urls';
+import type { DayDestination } from '../outfits/destination';
+import { dayUrl, planMoreUrl, planPageUrl } from './urls';
 
 /** The day's DayChoice (what is on it, the entry `replace` names). */
 export interface PlanModel extends DayChoice {
   day: IsoDate;
   occasion: Occasion;
-  /** The owner's own outfits of `list`, newest first (savedOutfitsSql). */
+  /** A page of the owner's own outfits of `list`, newest first (savedOutfitsSql, #660). */
   outfits: GarmentOutfit[];
+  /** The id the next page starts below; null on the last. */
+  next: number | null;
   /** `?show=` (#659): the kept outfits, or the one-offs. */
   list: OutfitList;
 }
@@ -33,6 +38,10 @@ export interface PlanModel extends DayChoice {
  * /calendar). The week's "+ Plan" sheet (plan-sheet.tsx, R6) offers the
  * same three ways; its "Pick a saved outfit" is the Saved tab with `?for=`
  * (R5). This page is Change's (#69) and the links cached before R6.
+ *
+ * The page is wide (#1070): its head a band (PageBand: the day, the
+ * occasion chips, the two links) over the saved outfits, which fill the
+ * width as a grid (SavedOutfitPicker's OUTFIT_ROW_GRID).
  *
  * Opened to change an entry (`&replace=`, the calendar row's Change, #69),
  * it is "Change outfit": the occasion is the entry's (no chips), and ideas,
@@ -54,43 +63,75 @@ export function PlanPage(props: { ctx: ViewContext; model: PlanModel }) {
   const ideas = ideasUrl({ destination });
   const title = changing ? t('changeEntry.TITLE') : t('CALENDAR_PLAN_TITLE');
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar ctx={ctx} title={title} back={dayUrl(model.day)} />
-      <main class="p-4 pt-20 pb-24 w-full sm:max-w-lg sm:mx-auto flex flex-col gap-5">
-        <PlanHeading model={model} changing={changing} />
+    <PageShell
+      ctx={ctx}
+      name="plan"
+      bar={{ title, back: dayUrl(model.day) }}
+      width="wide"
+      body={{ gap: 5 }}
+    >
+      <PageBand lead={<PlanHeading model={model} changing={changing} />}>
         {!changing && <OccasionChips day={model.day} chosen={model.occasion} />}
-
-        <div class="flex flex-col gap-2">
+        <BandActions>
           <a href={ideas} class="btn btn-primary w-full" data-plan-ideas="">
             {t('gallery.PLAN_IDEAS')}
           </a>
           <a href={build} class="btn btn-outline w-full" data-plan-styling="">
             + {t('CALENDAR_PLAN_BUILD')}
           </a>
-        </div>
+        </BandActions>
+      </PageBand>
 
-        <SavedOutfitPicker
-          heading={t('CALENDAR_PLAN_SAVED')}
-          action="/calendar"
-          list={model.list}
-          href={planPageUrl(destination)}
-          outfits={model.outfits}
-          noteOf={(outfit) => plannedNote(model, outfit.id)}
-        >
-          <input type="hidden" name="date" value={model.day} />
-          <input type="hidden" name="occasion" value={model.occasion} />
-          <input type="hidden" name="week" value={model.day} />
-          {changing && (
-            <input
-              type="hidden"
-              name="replace"
-              value={String(changing.entryId)}
-            />
-          )}
-        </SavedOutfitPicker>
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      <SavedOutfitPicker
+        heading={t('CALENDAR_PLAN_SAVED')}
+        action="/calendar"
+        list={model.list}
+        href={planPageUrl(destination)}
+        outfits={model.outfits}
+        noteOf={(outfit) => plannedNote(model, outfit.id)}
+        more={moreUrl(destination, model.list, model.next)}
+      >
+        <input type="hidden" name="date" value={model.day} />
+        <input type="hidden" name="occasion" value={model.occasion} />
+        <input type="hidden" name="week" value={model.day} />
+        {changing && (
+          <input
+            type="hidden"
+            name="replace"
+            value={String(changing.entryId)}
+          />
+        )}
+      </SavedOutfitPicker>
+    </PageShell>
+  );
+}
+
+/** The next page's address, carrying the entry being changed: its buttons are the same form's. */
+function moreUrl(
+  destination: DayDestination,
+  list: OutfitList,
+  next: number | null,
+): string | undefined {
+  return next === null ? undefined : planMoreUrl(destination, list, next);
+}
+
+/**
+ * A next page of the plan page's saved outfits (GET /calendar/plan/more,
+ * #660): its buttons and the next sentinel, landing in the page's form.
+ */
+export function PlanOutfits(props: {
+  destination: DayDestination;
+  list: OutfitList;
+  outfits: GarmentOutfit[];
+  next: number | null;
+  choice: DayChoice;
+}) {
+  return (
+    <SavedOutfitButtons
+      outfits={props.outfits}
+      noteOf={(outfit) => plannedNote(props.choice, outfit.id)}
+      more={moreUrl(props.destination, props.list, props.next)}
+    />
   );
 }
 
@@ -139,7 +180,7 @@ function OccasionChips(props: { day: IsoDate; chosen: Occasion }) {
       <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
         {t('CALENDAR_PLAN_OCCASION')}
       </p>
-      <ul class="flex flex-wrap gap-2">
+      <ul class="chip-row">
         {OCCASIONS.map((occasion) => {
           const chosen = occasion === props.chosen;
           return (

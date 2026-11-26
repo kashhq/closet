@@ -7,7 +7,13 @@ import { findWeatherSettings, setHome } from '../../src/web/weather/queries';
 import { recordStatements } from '../support/query-recorder';
 import { startWeatherStub, type WeatherStub } from '../support/weather-stub';
 import { createGarment } from './garments';
-import { createTestApp, type TestApp, unescapeHtml, userIdOf } from './harness';
+import {
+  asFixture,
+  createTestApp,
+  type TestApp,
+  unescapeHtml,
+  userIdOf,
+} from './harness';
 import { expectFullPage } from './pages';
 
 /**
@@ -71,8 +77,8 @@ describe('the style profile', () => {
       palette: ['blue', 'white', 'grey'],
       notes: 'Office three days',
     });
-    expect(t.logs.messages('info', 'Web')).toContainEqual(
-      `Style profile saved by user ${ownerId}: 2 styles, 3 colours`,
+    expect(t.logs.ops('style.profile.saved')).toContainEqual(
+      expect.objectContaining({ userId: ownerId, styles: 2, colours: 3 }),
     );
 
     const page = await get('/auth/profile/style?saved=profile');
@@ -85,7 +91,7 @@ describe('the style profile', () => {
   it("shows the week's rhythm read-only, derived from the week template (#16)", async () => {
     const unset = await get('/auth/profile/style');
     expect(unset.body).toContain('Not set yet');
-    expect(unset.body).toContain('href="/auth/profile#week"');
+    expect(unset.body).toContain('href="/auth/profile/week"');
     await saveWeekTemplate(t.db, ownerId, [
       { weekday: 1, occasion: 'work' },
       { weekday: 2, occasion: 'work' },
@@ -205,7 +211,7 @@ describe('the style profile', () => {
     });
 
     afterAll(async () => {
-      await t.db.delete(outfitRule);
+      await asFixture(t.db, (tx) => tx.delete(outfitRule));
     });
 
     it('adds rules by property, type and garment, and lists them as sentences', async () => {
@@ -252,8 +258,13 @@ describe('the style profile', () => {
         'Always Brown boots with Selvedge jeans',
       ]);
       const [first] = await rules();
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit rule ${first.id} added by user ${ownerId}: never color:blue with color:black`,
+      expect(t.logs.ops('outfit.rule.added')).toContainEqual(
+        expect.objectContaining({
+          ruleId: first.id,
+          userId: ownerId,
+          kind: 'never',
+          changed: true,
+        }),
       );
       expect((await get(ADDED)).body).toContain('Rule added');
     });
@@ -372,7 +383,7 @@ describe('the style profile beside the weather', () => {
       (await t.inject({ method: 'GET', url: '/auth/profile/style' })).body,
     );
     expect(page).toMatch(
-      /id="style-home"[\s\S]*href="\/auth\/profile#weather"[^>]*>Add your city for the weather/,
+      /id="style-home"[\s\S]*href="\/auth\/profile\/weather"[^>]*>Add your city for the weather/,
     );
   });
 
@@ -386,7 +397,7 @@ describe('the style profile beside the weather', () => {
     );
     expect(page).toContain('Home: Fort Greene, Brooklyn');
     expect(page).toMatch(
-      /id="style-home"[\s\S]*href="\/auth\/profile#weather"[^>]*>Change it in Weather/,
+      /id="style-home"[\s\S]*href="\/auth\/profile\/weather"[^>]*>Change it in Weather/,
     );
     // No field posts it: saving the style profile cannot write a location.
     expect(page).not.toMatch(/name="(home|city|location)/);

@@ -1,5 +1,5 @@
 import { type GarmentRole, gsmToOz } from '../../wardrobe/properties';
-import { t, type StringKey, tKey } from '../i18n';
+import { t, type CopyKey, tKey, type Translated } from '../i18n';
 
 /**
  * The words for the property values (src/wardrobe/properties.ts owns the
@@ -29,7 +29,7 @@ export type LabelledProperty =
 export function valueLabel(
   property: LabelledProperty,
   value: string | number,
-): string {
+): Translated {
   return tKey(`property.${property}.${value}`);
 }
 
@@ -47,7 +47,7 @@ export function roleGroupLabel(role: GarmentRole): string {
   return t(`roles.${role}`);
 }
 
-const ROLE_LABELS: Record<GarmentRole, StringKey> = {
+const ROLE_LABELS: Record<GarmentRole, CopyKey> = {
   layer: 'styling.role.layer',
   'one-piece': 'styling.role.one-piece',
   top: 'styling.role.top',
@@ -59,6 +59,6 @@ const ROLE_LABELS: Record<GarmentRole, StringKey> = {
 };
 
 /** One garment of a role, singular ("Top", "Shoes"). */
-export function roleLabel(role: GarmentRole): string {
+export function roleLabel(role: GarmentRole): Translated {
   return t(ROLE_LABELS[role]);
 }

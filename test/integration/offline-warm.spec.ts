@@ -83,7 +83,6 @@ describe('GET /offline/warm', () => {
           .insert(file)
           .values({
             fileName: `${randomUUID()}.webp`,
-            shareableId: randomUUID(),
             createdOn: new Date().toISOString(),
             createdById: ownerId,
           })

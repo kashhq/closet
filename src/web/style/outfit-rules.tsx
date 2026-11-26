@@ -10,7 +10,7 @@ import {
   GarmentCategory,
   PATTERNS,
 } from '../../wardrobe/properties';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { ChipGroup, FieldMessages, FormField } from '../form-field';
 import type { AvoidedPair } from '../gallery/queries';
 import { IDEAS_ALLOW_PATH } from '../gallery/urls';
@@ -60,7 +60,7 @@ export function OutfitRulesSection({ model }: { model: OutfitRulesModel }) {
   return (
     <section
       id={OUTFIT_RULES_SECTION_ID}
-      class="flex flex-col gap-3 mt-8 scroll-mt-20"
+      class="flex flex-col gap-3 mt-8 scroll-mt-under-bar"
       aria-labelledby="outfit-rules-heading"
     >
       <h2 id="outfit-rules-heading" class="text-lg font-semibold">
@@ -269,7 +269,7 @@ function AvoidedPairs({ pairs }: { pairs: AvoidedPair[] }) {
             b: garmentLabel(b),
           });
           return (
-            <li class="flex items-center justify-between gap-2">
+            <li class="tap-row flex items-center justify-between gap-2">
               <span>{pair}</span>
               <PostForm action={IDEAS_ALLOW_PATH}>
                 <input type="hidden" name="garmentId" value={String(a.id)} />

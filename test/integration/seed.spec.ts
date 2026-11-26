@@ -559,9 +559,8 @@ describe('seed personas', () => {
     });
     expect(grid.statusCode).toBe(200);
     expect(grid.body).toContain('Olive chore coat');
-    // Nothing left to tag: no "needs details" prompt (#685).
-    expect(grid.body).not.toContain('need details');
-    expect(grid.body).not.toContain('needs details');
+    // Nothing left to tag: no "to tag" chip (#685).
+    expect(grid.body).not.toContain('to tag');
     const thumb = extractImgSrcs(unescapeHtml(grid.body)).find((src) =>
       src.startsWith('/file/'),
     )!;
@@ -632,7 +631,7 @@ describe('seed personas', () => {
     expect(tag.statusCode).toBe(200);
   });
 
-  it("shows Theo's size in each wishlist item's brand, and his sizes on the profile (#24)", async () => {
+  it("shows Theo's size in each wishlist item's brand, and his sizes on Profile › Sizes (#24)", async () => {
     const cookie = await t.login(EMAILS[0], PASSWORD);
     const wishlist = await t.inject({
       method: 'GET',
@@ -643,10 +642,10 @@ describe('seed personas', () => {
     expect(wishlist.body).toContain('Your size in Allbirds: 10');
     const profile = await t.inject({
       method: 'GET',
-      url: '/auth/profile',
+      url: '/auth/profile/sizes',
       headers: { cookie },
     });
-    expect(profile.body).toContain('32 in');
+    expect(profile.body).toMatch(/name="waist" value="32"/);
     // Dana's wardrobe, which he manages: no note of his.
     const dana = await userIdOf(t, EMAILS[2]);
     const danaForm = await t.inject({

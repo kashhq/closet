@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { HttpError } from '../../errors';
 import { sharedWardrobesOf } from '../../sharing/access';
@@ -7,7 +8,7 @@ import {
   garmentSummaries,
 } from '../../wardrobe/queries';
 import { type ComparedGarment, compareWardrobes } from '../compare';
-import { defineTool, type ToolContext, wardrobeFor } from '../tool';
+import { actorOf, defineTool, type ToolContext, wardrobeFor } from '../tool';
 import { rowId } from './common';
 
 /**
@@ -48,7 +49,7 @@ export const sharingTools = [
     input: z.object({}),
     writes: false,
     async run(_args, ctx) {
-      const shared = await sharedWardrobesOf(ctx.db, ctx.userId);
+      const shared = await sharedWardrobesOf(ctx.db, actorOf(ctx));
       return {
         wardrobes: shared.map((wardrobe) => ({
           ownerId: wardrobe.grantorId,
@@ -72,7 +73,7 @@ export const sharingTools = [
     writes: false,
     async run({ ownerId }, ctx) {
       if (ownerId === ctx.userId) {
-        throw new HttpError(400, 'Compare with a wardrobe shared with you');
+        throw new HttpError(400, t('refusal.sharing.compareWithShared'));
       }
       const shared = await wardrobeFor(ctx, ownerId, 'view');
       const [mine, theirs] = await Promise.all([

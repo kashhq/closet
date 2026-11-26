@@ -29,13 +29,16 @@ export const RotateBody = Type.Object({
 
 /**
  * GET /wardrobe/:id/cutout: `poll`, how many polls the page made
- * (cutoutPollDelay, garment-page.tsx). URL state only our own fragment
- * writes; a page cached before it existed sends none. A string here, read by
- * `pollCount` (garment-page.tsx): URL state is a fallback, never a 400.
+ * (cutoutPollDelay), and `place`, the page the photo is drawn on (`form`
+ * for the garment form's subject, #1069). URL state only our own fragment
+ * writes; a page cached before either existed sends none. Strings here,
+ * read by `pollCount` and `photoPlace` (garment-photo.tsx): URL state is a
+ * fallback, never a 400.
  */
 export const CutoutPollQuery = Type.Object({
   ...OwnerQuery.properties,
   poll: Type.Optional(Type.String()),
+  place: Type.Optional(Type.String()),
 });
 
 /** The page flags that show a toast once (stripped from the URL by the page). */

@@ -1,6 +1,7 @@
 import { ownerTransaction } from '../auth/queries';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
+import { logOp } from '../op-log';
 import {
   type Actor,
   type AuthorizedWardrobe,
@@ -68,10 +69,13 @@ export async function buyWishlistItem(
       logDetail: `garment ${garmentId} is ${outcome.status}`,
     });
   }
-  if (outcome.settled.ok && outcome.settled.groupId !== null) {
-    logger.info(
-      `Garment ${garmentId} bought for user ${ownerId} resolves option group ${outcome.settled.groupId}; picks ${outcome.settled.dismissed.join(', ') || 'none'} set aside as chose_another`,
-    );
-  }
+  const settled = outcome.settled.ok ? outcome.settled : undefined;
+  logOp(logger, actor, 'garment.bought', {
+    garmentId,
+    ownerId,
+    archivedReplaced: outcome.archivedReplaced,
+    needId: settled?.groupId ?? null,
+    setAside: settled?.dismissed ?? [],
+  });
   return { ...wardrobe, archivedReplaced: outcome.archivedReplaced };
 }

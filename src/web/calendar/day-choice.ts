@@ -3,6 +3,13 @@ import { selectScalars } from '../../db/select-scalars';
 import type { Occasion } from '../../wardrobe/occasions';
 import { t } from '../i18n';
 import type { DayDestination } from '../outfits/destination';
+import type { OutfitList } from '../outfits/outfit-list';
+import {
+  type OutfitPage,
+  type OutfitPageAsk,
+  type SavedOutfit,
+  savedOutfitsSql,
+} from '../outfits/queries';
 import { occasionLabel } from '../date-labels';
 import { type DayEntry, entriesOfDaySql } from './queries';
 
@@ -23,20 +30,29 @@ export interface DayChoice {
   replacing?: { entryId: number; outfitName: string | null; worn: boolean };
 }
 
-/** The plan page's read of the day: entriesOfDaySql alone, one statement. */
-export async function dayChoice(
+/**
+ * The plan page's read, one statement (#165, #660): a page of the owner's
+ * own outfits of `list`, as every picker lists them (savedOutfitsSql:
+ * ownersOutfit, keptOutfit; Muse's proposals are the Outfits tab's own
+ * section, #335, one-offs behind the segment, #659), and the day's
+ * entries. GET /calendar/plan and its sentinel's GET /calendar/plan/more.
+ */
+export async function planContext(
   db: Db,
   ownerId: number,
   destination: DayDestination,
-): Promise<DayChoice> {
-  const { entries } = await selectScalars(db, {
+  list: OutfitList,
+  page: OutfitPageAsk,
+): Promise<{ page: OutfitPage<SavedOutfit>; choice: DayChoice }> {
+  const row = await selectScalars(db, {
+    page: savedOutfitsSql(ownerId, list, page),
     entries: entriesOfDaySql(ownerId, destination.day),
   });
-  return readDayChoice(entries, destination);
+  return { page: row.page, choice: readDayChoice(row.entries, destination) };
 }
 
 /**
- * The DayChoice of the day's entries (entriesOfDaySql): dayChoice's, and
+ * The DayChoice of the day's entries (entriesOfDaySql): planContext's, and
  * the Saved tab's, which reads the entries in its grid's statement
  * (savedContext, src/web/outfits/page-context.ts).
  */

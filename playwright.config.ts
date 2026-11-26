@@ -1,13 +1,9 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, type Project } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
-import {
-  APP_ORIGIN,
-  E2E_SENTRY_DSN,
-  ORDER_REVIEW_OWNER,
-} from './test/support/e2e-session';
+import { APP_ORIGIN, E2E_SENTRY_DSN } from './test/support/e2e-session';
 
 // The committed .env's public defaults (APP_NAME) for the specs, under
 // whatever the environment sets, as the server reads them (src/config.ts).
@@ -29,12 +25,9 @@ process.env.PASSWORD_HASH_ROUNDS ??= '4';
 // Production runs with the metrics on: the pages load the timing beacon
 // (public/js/vitals.js); the scenarios run with it in the page, as users do.
 process.env.METRICS_ENABLED ??= 'true';
-// The order mail on (#25), against the test server's JMAP stand-in
-// (test/support/jmap-stub.ts, never Fastmail): the poll runs beside the
-// scenarios as it does in production. Its owner is the fixed account.
-process.env.ORDER_MAIL_JMAP_TOKEN ??= 'fmu1-e2e-stand-in';
-process.env.ORDER_MAIL_SENDERS ??= 'orders-owner@example.com';
-process.env.ORDER_MAIL_OWNER ??= ORDER_REVIEW_OWNER;
+// The order mail stays off: its boot needs ORDER_MAIL_OWNER's account to
+// exist already (#706), which a fresh e2e database never has, and no
+// scenario reads the review list (test/integration/order-mail.spec.ts does).
 // Error tracking on, as production runs it (Bugsink): signed-in pages load
 // public/js/errors.js. The DSN is Bugsink's stand-in on a port nothing
 // listens on; the server's events fail to send, logged and dropped, never
@@ -43,7 +36,7 @@ process.env.SENTRY_DSN ??= E2E_SENTRY_DSN;
 
 /**
  * A Safari tab (not the installed app) opens the install dialog over the
- * first page of every session (public/js/pwa.js, offerInstall), and it
+ * first page of every session (views/assets/page/pwa.ts, offerInstall), and it
  * takes every tap until dismissed. The Safari projects start as a user who
  * has dismissed it: @khmyznikov/pwa-install's own flag, which it reads from
  * sessionStorage or localStorage.
@@ -59,10 +52,30 @@ const INSTALL_DISMISSED = {
 };
 
 /**
- * See https://playwright.dev/docs/test-configuration.
+ * The browsers, each under the name `--project=` takes: make ci-e2e runs
+ * chromium, the nightly the Safari pair (.github/workflows/nightly.yml,
+ * #179), npm run test:e2e all five. The Safari projects start with the
+ * install dialog dismissed (INSTALL_DISMISSED).
  */
+// CI sets CI; a run without it is a developer's.
+const IN_CI = Boolean(process.env.CI);
+
+const BROWSERS: readonly [name: string, device: string, safari?: true][] = [
+  ['chromium', 'Desktop Chrome'],
+  ['firefox', 'Desktop Firefox'],
+  ['webkit', 'Desktop Safari', true],
+  ['Mobile Chrome', 'Pixel 5'],
+  ['Mobile Safari', 'iPhone 12', true],
+];
+const projects: Project[] = BROWSERS.map(([name, device, safari]) => ({
+  name,
+  use: safari
+    ? { ...devices[device], storageState: INSTALL_DISMISSED }
+    : devices[device],
+}));
+
 export default defineConfig({
-  testDir: './test',
+  testDir: 'test',
   /* test/integration/ holds the Vitest in-process tier (npm run test:int).
    * screenshots.spec.ts is a generator, not a test: only `make screenshots`
    * (SEED_SCREENSHOTS) runs it, so the gate's e2e tier stays the ten
@@ -71,66 +84,28 @@ export default defineConfig({
     '**/integration/**',
     ...(process.env.SEED_SCREENSHOTS ? [] : ['**/screenshots.spec.ts']),
   ],
-  /* Run tests in files in parallel */
+  /* Every test may run beside any other, in any file: a spec owns its data. */
   fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* In CI a stray test.only fails the run, and a failure gets two retries
+   * (traced: `trace` below); a local run fails at once. */
+  forbidOnly: IN_CI,
+  retries: IN_CI ? 2 : 0,
   /* CI's runner has 4 vCPUs beside the server and Postgres: two browsers.
    * Specs own their data (their own users; screenshots.spec.ts resets its
    * personas and runs serially in one worker), so they may run together. */
-  workers: process.env.CI ? 2 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  workers: IN_CI ? 2 : undefined,
+  /* An HTML report under playwright-report/ (ci.yml keeps it when a run
+   * fails); test:e2e:ci passes --reporter=list, which the floors read. */
+  reporter: [['html']],
   use: {
     /* Base URL to use in actions like `await page.goto('')`: :3000 unless
      * PORT names another, which the webServer then listens on. */
     baseURL: APP_ORIGIN,
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    /* A retried failure records a trace to open in the trace viewer. */
     trace: 'on-first-retry',
   },
 
-  /* Configure projects for major browsers */
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    /* The Safari projects run nightly (.github/workflows/nightly.yml, #179). */
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'], storageState: INSTALL_DISMISSED },
-    },
-
-    /* Test against mobile viewports. */
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'], storageState: INSTALL_DISMISSED },
-    },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
-  ],
+  projects,
 
   /* Outside CI a server already listening on the port is reused instead (a
    * start:dev or start:prod one runs the real model on uploads). */
@@ -141,7 +116,8 @@ export default defineConfig({
     // pending (test/support/cutout-stub.ts).
     command: 'npm run start:test',
     url: `${APP_ORIGIN}/health/ready`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !IN_CI,
+    // The server's log only when it fails to start.
     stderr: 'pipe',
   },
 });

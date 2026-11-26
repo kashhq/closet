@@ -1,8 +1,10 @@
 import { loginUrl } from '../../src/web/auth/return-to';
-import { eq, type SQL } from 'drizzle-orm';
+import { eq, inArray, type SQL } from 'drizzle-orm';
 import { readdir } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { garment, user } from '../../src/db/schema';
+import { randomUUID } from 'node:crypto';
+import { file, garment, inspiration, selfie, user } from '../../src/db/schema';
+import { insertPhotoRow } from '../../src/web/files/queries';
 import { variantFileName } from '../../src/web/files/image-variant';
 import {
   createGarment,
@@ -12,7 +14,14 @@ import {
   photoRowCount,
   uploadPhoto,
 } from './garments';
-import { createTestApp, TEST_PASSWORD, TestApp, userIdOf } from './harness';
+import {
+  asFixture,
+  createTestApp,
+  multipart,
+  TEST_PASSWORD,
+  TestApp,
+  userIdOf,
+} from './harness';
 
 /**
  * Deleting an account removes the user's photos from storage, not only the
@@ -106,5 +115,108 @@ describe('account deletion', () => {
     });
     expect(profile.statusCode).toBe(302);
     expect(profile.headers.location).toBe(loginUrl('/auth/profile'));
+  });
+
+  // Before #40 a MANAGE grantee's upload made a file row of the grantee's,
+  // and their account deletion emptied the owner's garment and unlinked
+  // its bytes. The upload is the owner's row, and the photo foreign key
+  // pairs photo_id with owner_id, so it can never be otherwise (#703).
+  it("a MANAGE grantee's deletion keeps the photo they uploaded into the owner's wardrobe", async () => {
+    const granteeEmail = 'grantee-uploader@example.com';
+    const granteeCookie = await t.register(granteeEmail);
+    const grantee = await userIdOf(t, granteeEmail);
+    const invite = await t.inject({
+      method: 'POST',
+      url: '/wardrobe-share/create-invite-link',
+      payload: { permission: 'MANAGE', currentPassword: TEST_PASSWORD },
+      headers: { 'hx-request': 'true' },
+    });
+    const token = /\/wardrobe-share\/invite\/([0-9a-f-]{36})/.exec(
+      invite.body,
+    )![1];
+    await t.inject({
+      method: 'POST',
+      url: `/wardrobe-share/invite/${token}/accept`,
+      headers: { cookie: granteeCookie },
+    });
+    const owner = t.owner.id;
+    const coat = await createGarment(t, { name: 'Shared coat' });
+    const body = await multipart(
+      {},
+      {
+        photo: {
+          data: await jpegPhoto(),
+          filename: 'photo.jpg',
+          contentType: 'image/jpeg',
+        },
+      },
+    );
+    const upload = await t.inject({
+      method: 'POST',
+      url: `/wardrobe/${coat}/photo?ownerId=${owner}`,
+      payload: body.payload,
+      headers: { ...body.headers, cookie: granteeCookie },
+    });
+    expect(upload.statusCode).toBe(303);
+    const fileName = await photoFileName(t, coat);
+    expect(await photoRow(t, fileName)).toMatchObject({ createdById: owner });
+
+    const res = await deleteAccount(granteeCookie, {
+      email: granteeEmail,
+      password: TEST_PASSWORD,
+    });
+    expect(res.statusCode).toBe(302);
+    expect(await accounts(eq(user.id, grantee))).toBe(0);
+    expect(await photoFileName(t, coat)).toBe(fileName);
+    expect(await storedFiles()).toContain(fileName);
+  });
+
+  // The pair's delete actions (#703): a garment's photo going empties the
+  // garment and keeps its owner (SET NULL on photo_id alone, hand-written
+  // in drizzle/0065); a selfie or a look goes with its photo.
+  it('deleting a photo row empties its garment and takes its selfie or look', async () => {
+    const owner = t.owner.id;
+    const shirt = await createGarment(t, { name: 'Photo shirt' });
+    const ids = await asFixture(t.db, async (tx) => {
+      const photo = () =>
+        insertPhotoRow(tx, {
+          fileName: `${randomUUID()}.webp`,
+          createdOn: new Date().toISOString(),
+          createdById: owner,
+        });
+      const shirtPhoto = await photo();
+      await tx
+        .update(garment)
+        .set({ photoId: shirtPhoto })
+        .where(eq(garment.id, shirt));
+      const selfiePhoto = await photo();
+      const [{ id: selfieId }] = await tx
+        .insert(selfie)
+        .values({ ownerId: owner, day: t.today(), photoId: selfiePhoto })
+        .returning({ id: selfie.id });
+      const lookPhoto = await photo();
+      const [{ id: lookId }] = await tx
+        .insert(inspiration)
+        .values({ ownerId: owner, photoId: lookPhoto })
+        .returning({ id: inspiration.id });
+      return { shirtPhoto, selfiePhoto, lookPhoto, selfieId, lookId };
+    });
+
+    await asFixture(t.db, (tx) =>
+      tx
+        .delete(file)
+        .where(
+          inArray(file.id, [ids.shirtPhoto, ids.selfiePhoto, ids.lookPhoto]),
+        ),
+    );
+    const [shirtRow] = await t.db
+      .select({ photoId: garment.photoId, ownerId: garment.ownerId })
+      .from(garment)
+      .where(eq(garment.id, shirt));
+    expect(shirtRow).toEqual({ photoId: null, ownerId: owner });
+    expect(await t.db.$count(selfie, eq(selfie.id, ids.selfieId))).toBe(0);
+    expect(await t.db.$count(inspiration, eq(inspiration.id, ids.lookId))).toBe(
+      0,
+    );
   });
 });

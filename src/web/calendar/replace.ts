@@ -7,6 +7,7 @@ import { HttpError } from '../errors';
 import { pickIdea } from '../outfits/pick';
 import { t } from '../i18n';
 import { garmentsGoneRefusal, goneGarments } from '../outfits/gone-garments';
+import { type ActionDeps, logOp } from '../op-log';
 import { NotFound } from '../refusals';
 import type { Actor } from '../sharing/access';
 import { detachEntrySelfie } from '../selfies/queries';
@@ -23,6 +24,7 @@ import {
   lockEntryToReplace,
   ownsOutfit,
   setEntryOutfit,
+  takeOverEntry,
 } from './queries';
 
 /**
@@ -41,7 +43,8 @@ import {
  *   photo shows the old outfit, so it must not move to the new one, and
  *   deleting it would lose a record, the #19 rule for a deleted outfit. An
  *   unworn entry has one only when it was unmarked after the photo.
- * - **The choice becomes the person's** (planned_by 'user', setEntryOutfit):
+ * - **The choice becomes the person's** (planned_by 'user', setEntryOutfit,
+ *   or takeOverEntry for the outfit it already holds):
  *   the re-plan and Undo leave it alone (#16). Also when it is the outfit
  *   the entry already had: choosing what the planner chose takes the entry
  *   over (`adopted`), as planning it does (insertEntry).
@@ -111,15 +114,46 @@ export interface Replaced {
  *   404);
  * - a worn entry, or the new outfit already on the day: a 409 saying what
  *   to do instead.
+ * What went through is logged once, after commit (`calendar.entry.changed`;
+ * `changed` false for the outfit the entry already holds). `db` may be a
+ * caller's transaction (a spec's interleave), which the owner lock joins.
  */
-export function replaceEntryOutfit(
-  db: Queryable,
+export async function replaceEntryOutfit(
+  { db, logger }: ActionDeps<Queryable>,
   actor: Actor,
   target: EntryTarget,
   choice: ReplacementChoice,
   madeBy: WriteOrigin,
 ): Promise<Replaced> {
-  const ownerId = actor.userId;
+  const replaced = await replaceInTransaction(
+    db,
+    actor.userId,
+    target,
+    choice,
+    madeBy,
+  );
+  logOp(logger, actor, 'calendar.entry.changed', {
+    entryId: replaced.entryId,
+    day: replaced.day,
+    occasion: replaced.occasion,
+    outfitId: replaced.outfitId,
+    previousOutfitId: replaced.previousOutfitId,
+    changed: replaced.outcome === 'replaced',
+    outfitCreated: !replaced.alreadySaved,
+    adopted: replaced.adopted,
+    selfieDetached: replaced.selfieDetached,
+    plannerOutfitsRemoved: replaced.outfitsRemoved,
+  });
+  return replaced;
+}
+
+function replaceInTransaction(
+  db: Queryable,
+  ownerId: number,
+  target: EntryTarget,
+  choice: ReplacementChoice,
+  madeBy: WriteOrigin,
+): Promise<Replaced> {
   const refused = (reason: string) =>
     `${entryLabel(target)} not changed for user ${ownerId}: ${reason}`;
   return ownerTransaction(db, ownerId, 'replaceEntryOutfit', async (tx) => {
@@ -162,7 +196,7 @@ export function replaceEntryOutfit(
       // The same outfit chosen again takes the entry over only from a
       // lower rank (the agent never takes a person's, planned-by.ts).
       if (takesOver(chooserOf(madeBy).plannedBy, entry.plannedBy)) {
-        await setEntryOutfit(tx, entry.id, chosen.id, madeBy);
+        await takeOverEntry(tx, entry.id, madeBy);
       }
       return { outcome: 'unchanged', ...result, outfitsRemoved: 0 };
     }
@@ -216,38 +250,8 @@ async function chosenOutfit(
   return picked === 'not-found' ? undefined : picked;
 }
 
-/** The entry a log line names: `Calendar entry 12 (2026-11-14 work)`, or bare without a day. */
+/** The entry a refusal's logDetail names: `Calendar entry 12 (2026-11-14 work)`, or bare without a day. */
 function entryLabel(target: EntryTarget): string {
   const named = [target.day, target.occasion].filter(Boolean).join(' ');
   return `Calendar entry ${target.entryId}${named ? ` (${named})` : ''}`;
-}
-
-/** What a replace changed, for its log line. */
-function changeSummary(outcome: Replaced): string {
-  const parts = [
-    `outfit ${outcome.previousOutfitId} -> ${outcome.alreadySaved ? '' : 'new '}outfit ${outcome.outfitId}`,
-  ];
-  if (outcome.selfieDetached !== undefined) {
-    parts.push(`selfie ${outcome.selfieDetached} kept as a look`);
-  }
-  if (outcome.outfitsRemoved > 0) {
-    parts.push(`planner's outfit ${outcome.previousOutfitId} removed`);
-  }
-  return parts.join(', ');
-}
-
-/** The log line for a replace that went through (context Web; `via` marks the MCP tool). */
-export function replaceMessage(
-  ownerId: number,
-  target: EntryTarget,
-  outcome: Replaced,
-  via = '',
-): string {
-  const entry = entryLabel({ ...target, day: outcome.day });
-  if (outcome.outcome === 'unchanged') {
-    return outcome.adopted
-      ? `${entry} already holds outfit ${outcome.outfitId}; taken over from the week planner by user ${ownerId}${via}`
-      : `${entry} already holds outfit ${outcome.outfitId} for user ${ownerId}${via}; nothing changed`;
-  }
-  return `${entry} changed by user ${ownerId}${via}: ${changeSummary(outcome)}`;
 }

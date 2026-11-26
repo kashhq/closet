@@ -4,8 +4,9 @@
  * The migration's SQL is frozen once shipped; this list is what
  * test/integration/sync-triggers.spec.ts holds `pg_trigger` to, so a table
  * added here without its triggers (or the reverse) fails there. Read by
- * schema.ts for sync_tombstone's resource check. Inspiration (#22) is not
- * synced (owner decision, 2026-11-13).
+ * schema.ts for sync_tombstone's resource check, and by the changes feed
+ * (src/web/sync/feed.ts), whose resources are the roots and the stamps.
+ * Inspiration (#22) is not synced (owner decision, 2026-11-13).
  */
 
 /** A root: its own revision and updated_at, a tombstone when deleted. */
@@ -33,6 +34,13 @@ export interface SyncChild {
   parent: string;
   /** ...matched against this column of the parent. */
   match: string;
+  /**
+   * The parent is a one-row-per-user table its child may come before (rules
+   * without a style profile): the touch inserts the missing parent row
+   * (closet_sync_touch_or_create, drizzle/0069), so it needs a parent whose
+   * every other column has a default or is nullable, `match` its primary key.
+   */
+  createsParent?: true;
 }
 
 export const SYNC_ROOTS = [
@@ -53,8 +61,6 @@ export const SYNC_ROOTS = [
     clientId: false,
   },
 ] as const satisfies readonly SyncRoot[];
-
-export type SyncResource = (typeof SYNC_ROOTS)[number]['table'];
 
 export const SYNC_CHILDREN = [
   { table: 'outfit_slot', key: 'outfit_id', parent: 'outfit', match: 'id' },
@@ -80,11 +86,37 @@ export const SYNC_CHILDREN = [
     match: 'id',
   },
   { table: 'file', key: 'id', parent: 'garment', match: 'photo_id' },
+  // A rule is part of its owner's style profile (#716): the feed's
+  // styleProfile carries the rules.
+  {
+    table: 'outfit_rule',
+    key: 'owner_id',
+    parent: 'style_profile',
+    match: 'user_id',
+    createsParent: true,
+  },
 ] as const satisfies readonly SyncChild[];
 
 /**
- * The week template has no row of its own to stamp (a user's set of
- * weekday occasions, replaced whole): a write to it stamps
- * `user.week_template_revision` with the owner's revision.
+ * A stamp: a synced resource with no row of its own (the week template: a
+ * user's set of weekday occasions, replaced whole). A write to its table
+ * stamps the owner's `user` row's `revision` column with the owner's
+ * revision (closet_sync_week_template, 0052), and the feed reads it from
+ * there, one per user, the change's id the user's. Never deleted, so never
+ * tombstoned: emptied, it is a change like any other.
  */
-export const WEEK_TEMPLATE_TABLE = 'week_template';
+export interface SyncStamp {
+  /** The resource's name in the feed and its cursor (the written table's). */
+  resource: string;
+  /** The `user` column holding its revision. */
+  revision: string;
+}
+
+export const SYNC_STAMPS = [
+  { resource: 'week_template', revision: 'week_template_revision' },
+] as const satisfies readonly SyncStamp[];
+
+/** Every resource the changes feed carries: a root's table or a stamp's resource. */
+export type SyncResource =
+  | (typeof SYNC_ROOTS)[number]['table']
+  | (typeof SYNC_STAMPS)[number]['resource'];

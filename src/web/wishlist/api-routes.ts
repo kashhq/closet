@@ -10,10 +10,11 @@ import { actorOf, authorizeWardrobe } from '../sharing/access';
 import { garmentAddress } from '../wardrobe/garment-access';
 import { OwnerId } from '../wardrobe/garment-api-input';
 import { readPrice } from '../wardrobe/garment-input';
-import { markSuggestionsSeen, readInbox } from './inbox';
+import { readInbox } from './inbox';
 import { buyWishlistItem } from './purchase';
 import {
   makeDecision,
+  markNeedsSeen,
   type OwnerDecision,
   requireNeed,
 } from './suggestion-actions';
@@ -51,7 +52,7 @@ function noteOf(note: string | undefined): string | null {
  * registered by apiPlugin, each calling what its page twin calls
  * (operations.ts names the twin): readInbox and requireNeed for the tab and
  * a need's screen, makeDecision for every decision the owner makes,
- * buyWishlistItem for "Bought it", markSuggestionsSeen for "New from Muse",
+ * buyWishlistItem for "Bought it", markNeedsSeen for "New from Muse",
  * goesWithCloset for a wishlist item's "Goes with my closet". Each refuses
  * itself. The wishlist is shared like the rest of the wardrobe
  * (src/web/wishlist/AGENTS.md): a VIEW share reads it and Muse's notes, a
@@ -113,13 +114,7 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const ownerId = actorOf(request).userId;
-      const needs = await markSuggestionsSeen(db, ownerId);
-      if (needs.length > 0) {
-        logger.info(
-          `Suggestions seen by user ${ownerId} (API): ${needs.length} needs new (${needs.map((need) => need.id).join(', ')})`,
-        );
-      }
+      const needs = await markNeedsSeen({ db, logger }, actorOf(request));
       return toNewNeedsSeen(needs);
     },
   );
@@ -150,21 +145,13 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     },
   );
 
-  /** makeDecision() for the owner, logged as the page logs it. */
-  async function decided(
+  /** makeDecision() for the owner, which logs its own outcome. */
+  function decided(
     request: FastifyRequest,
     ownerId: number | undefined,
     decision: OwnerDecision,
   ) {
-    const outcome = await makeDecision(db, actorOf(request), ownerId, decision);
-    const subject =
-      'garmentId' in decision
-        ? `garment ${decision.garmentId}`
-        : `need ${decision.groupId}`;
-    logger.info(
-      `Decision ${decision.kind} on ${subject} (need ${outcome.groupId ?? 'none'}) by user ${outcome.access.ownerId} (API): ${outcome.dismissed.length} set aside, ${outcome.restored.length} restored`,
-    );
-    return outcome;
+    return makeDecision({ db, logger }, actorOf(request), ownerId, decision);
   }
 
   app.post(
@@ -255,7 +242,6 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { acquiredOn = null, archiveReplaced = false } = request.body;
       // The price as the page's form stores it ("49.9" is 49.90).
       const read = readPrice(request.body.price ?? undefined);
@@ -269,13 +255,6 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         actor,
         garmentAddress(request),
         { acquiredOn, price, archiveReplaced },
-      );
-      logger.info(
-        `Garment ${id} bought (wishlist -> closet) by user ${actor.userId} in wardrobe ${outcome.access.ownerId} (API)${
-          outcome.archivedReplaced === null
-            ? ''
-            : `; garment ${outcome.archivedReplaced} it replaces archived`
-        }`,
       );
       return outcome.archivedReplaced === null
         ? {}
@@ -300,13 +279,10 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request) => {
       const { id } = request.params;
       const outcome = await makeDecision(
-        db,
+        { db, logger },
         actorOf(request),
         request.query.ownerId,
         { kind: 'returned', garmentId: id },
-      );
-      logger.info(
-        `Garment ${id} returned (archived) by user ${outcome.access.ownerId} (API); need ${outcome.groupId ?? 'none'} open again`,
       );
       return outcome.groupId === null ? {} : { needId: outcome.groupId };
     },

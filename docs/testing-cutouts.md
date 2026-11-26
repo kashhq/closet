@@ -19,7 +19,7 @@ photo.
 
 ## Holding a cutout pending
 
-A spec that asserts the pending state ("Removing background…", the photo at
+A spec that asserts the pending state ("Cutting out the background…", the photo at
 version 1 and unkeyed, no pencil) holds it instead of racing the queue:
 
 ```ts

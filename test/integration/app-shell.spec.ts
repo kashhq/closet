@@ -63,7 +63,7 @@ describe('app shell', () => {
       );
     });
 
-    it('signed out: Login everywhere, and Register on the login page', async () => {
+    it('signed out: Sign in everywhere, and Create account on the sign-in page', async () => {
       const about = await t.inject({
         method: 'GET',
         url: '/about',
@@ -119,35 +119,49 @@ describe('app shell', () => {
   });
 
   describe('Profile', () => {
-    it('is sectioned, each section an anchor the jump links reach', async () => {
+    it('is an index: a row per setting, each keeping its old anchor and opening its page (#728)', async () => {
       const res = await get('/auth/profile');
       const body = res.body;
       // PWA and weather are off in the harness: no notifications or
-      // weather section, and no jump link to either.
-      const sections = [
-        'account',
-        'sharing',
-        'week',
-        'style',
-        'agent-access',
-        'sign-out',
+      // weather row. Each row is the old section's anchor, so a deep link
+      // from before the split (/auth/profile#sharing) lands on it.
+      const rows: [string, string][] = [
+        ['sharing', '/auth/profile/sharing'],
+        ['week', '/auth/profile/week'],
+        ['style', '/auth/profile/style'],
+        ['sizes', '/auth/profile/sizes'],
+        ['agent-access', '/auth/tokens'],
+        // Always a row: it reads no data, as the settings nav lists it too.
+        ['devices', '/auth/devices'],
       ];
-      for (const id of sections) {
-        expect(body).toContain(`<section id="${id}"`);
-        expect(body).toContain(`href="#${id}"`);
+      for (const [id, href] of rows) {
+        expect(body).toMatch(new RegExp(`<li id="${id}"><a href="${href}"`));
       }
       expect(body).not.toContain('id="notifications"');
       expect(body).not.toContain('id="weather"');
-      // In the plan's order.
-      const order = sections.map((id) => body.indexOf(`<section id="${id}"`));
+      for (const id of ['account', 'export', 'sign-out']) {
+        expect(body).toMatch(new RegExp(`<section[^>]* id="${id}"`));
+      }
+      const order = [
+        'account',
+        ...rows.map(([id]) => id),
+        'export',
+        'sign-out',
+      ].map((id) => body.indexOf(`id="${id}"`));
       expect(order).toEqual([...order].sort((a, b) => a - b));
-      // The account's forms, the style profile and agent access are linked.
+      // Sign out is reached without passing a form: its own is the first.
+      expect(body.indexOf('<form')).toBe(
+        body.indexOf('<form', body.indexOf('id="sign-out"')),
+      );
+      // No setting's editor is here any more.
+      expect(body).not.toContain('/wardrobe-share/create-invite-link');
+      expect(body).not.toContain('action="/auth/profile/week"');
+      // The account's forms and Sign out everywhere are linked.
       for (const href of [
         '/auth/update-email',
         '/auth/change-password',
         '/auth/delete-account',
-        '/auth/profile/style',
-        '/auth/tokens',
+        '/auth/sign-out-everywhere',
         '/about',
       ]) {
         expect(body).toContain(`href="${href}"`);
@@ -178,17 +192,30 @@ describe('app shell', () => {
       ).toBe(200);
 
       const hers = unescapeHtml(
-        (await get('/auth/profile', alice.cookie)).body,
+        (await get('/auth/profile/sharing', alice.cookie)).body,
       );
       expect(hers).toContain(`/wardrobe-share/invite/${token}`);
-      expect(hers).toContain('Alice laptop');
-      expect(hers).toContain(`Signed in as ${alice.email}`);
+      const herProfile = unescapeHtml(
+        (await get('/auth/profile', alice.cookie)).body,
+      );
+      expect(herProfile).toContain(`Signed in as ${alice.email}`);
+      expect(herProfile).toContain('1 link open');
+      expect(herProfile).toContain('1 active');
+      expect(
+        unescapeHtml((await get('/auth/tokens', alice.cookie)).body),
+      ).toContain('Alice laptop');
 
-      const his = unescapeHtml((await get('/auth/profile', bob.cookie)).body);
+      const his = unescapeHtml(
+        (await get('/auth/profile/sharing', bob.cookie)).body,
+      );
       expect(his).not.toContain(token);
-      expect(his).not.toContain('Alice laptop');
       expect(his).not.toContain(alice.email);
-      expect(his).toContain('No wardrobe shares yet.');
+      expect(his).toContain('No shared wardrobes yet.');
+      const hisProfile = unescapeHtml(
+        (await get('/auth/profile', bob.cookie)).body,
+      );
+      expect(hisProfile).toContain('Not shared');
+      expect(hisProfile).toContain('No tokens yet.');
 
       // Once Bob accepts, each sees the share from their own side.
       await t.inject({
@@ -197,11 +224,13 @@ describe('app shell', () => {
         headers: { cookie: bob.cookie },
       });
       const accepted = unescapeHtml(
-        (await get('/auth/profile', bob.cookie)).body,
+        (await get('/auth/profile/sharing', bob.cookie)).body,
       );
-      expect(accepted).toContain('Shared With You');
+      expect(accepted).toContain('Shared with you');
       expect(accepted).toContain(alice.email);
-      expect(accepted).not.toContain('Alice laptop');
+      expect(
+        unescapeHtml((await get('/auth/profile', bob.cookie)).body),
+      ).toContain('1 shared with you');
     });
 
     it('needs a session', async () => {
@@ -215,10 +244,10 @@ describe('app shell', () => {
     });
 
     it('shows a refused invite in Sharing, and ignores an unknown code', async () => {
-      const refused = await get('/auth/profile?shareError=own-invite');
+      const refused = await get('/auth/profile/sharing?shareError=own-invite');
       expect(refused.body).toContain('You cannot accept your own invite.');
       for (const code of ['bogus', 'constructor', 'toString']) {
-        const res = await get(`/auth/profile?shareError=${code}`);
+        const res = await get(`/auth/profile/sharing?shareError=${code}`);
         expect(res.statusCode).toBe(200);
         expect(res.body).not.toContain('role="alert"');
       }
@@ -242,18 +271,18 @@ describe('app shell', () => {
     it('redirects the old manage page permanently to Profile › Sharing', async () => {
       const res = await get('/wardrobe-share/manage');
       expect(res.statusCode).toBe(301);
-      expect(res.headers.location).toBe('/auth/profile#sharing');
+      expect(res.headers.location).toBe('/auth/profile/sharing');
     });
 
     it('keeps a refusal code through the redirect, and drops an unknown one', async () => {
       const refused = await get('/wardrobe-share/manage?error=already-shared');
       expect(refused.statusCode).toBe(301);
       expect(refused.headers.location).toBe(
-        '/auth/profile?shareError=already-shared#sharing',
+        '/auth/profile/sharing?shareError=already-shared',
       );
       for (const code of ['bogus', 'constructor']) {
         const res = await get(`/wardrobe-share/manage?error=${code}`);
-        expect(res.headers.location).toBe('/auth/profile#sharing');
+        expect(res.headers.location).toBe('/auth/profile/sharing');
       }
     });
 
@@ -284,11 +313,11 @@ describe('app shell', () => {
       });
       expect(res.statusCode).toBe(200);
       expectFullPage(res);
-      expect(pageTitle(res.body)).toBe('Wardrobe Invitation');
+      expect(pageTitle(res.body)).toBe('Wardrobe invitation');
     });
   });
 
-  // What public/js/back.js reads (#105); test/back-navigation.spec.ts (retired 2026-10-13)
+  // What views/assets/page/back.ts reads (#105); test/back-navigation.spec.ts (retired 2026-10-13)
   // proves the behaviour in a browser.
   describe("the app bar's back arrow", () => {
     const header = (html: string) =>
@@ -296,7 +325,7 @@ describe('app shell', () => {
 
     it('goes back in history, with its href as the fallback', async () => {
       const res = await get('/auth/update-email');
-      expect(res.body).toContain('/js/back.js?v=');
+      expect(res.body).toContain('/js/gen/back.js?v=');
       expect(res.body).toMatch(
         /<a href="\/auth\/profile#account" class="btn[^"]*" aria-label="Back" data-history-back=""/,
       );

@@ -16,11 +16,13 @@ import {
   withoutNulls,
 } from '../api/resource';
 import { HttpError } from '../errors';
+import { t } from '../i18n';
 import { apiInspirationPhotoUrl, type PrivatePhoto } from '../files/image-url';
 import { IdeaGarment, toIdeaGarment } from '../gallery/idea-resource';
 import { RowId } from '../schemas';
 import { REFUSALS } from '../wardrobe/link-import/import';
 import { LINK_INPUT_MAX } from '../wardrobe/link-import/link-text';
+import { LOOK_PAGE_SIZE } from './page-size';
 import { typesOfRole } from './piece-input';
 import {
   INSPIRATION_MAX_PIECES,
@@ -40,9 +42,6 @@ import type { UnreadReason } from './writes';
  * from what the Inspiration tab, a look's page and the match view read.
  * The token's user's own, like the style profile: a share never reaches one.
  */
-
-/** A page of GET /looks unless asked: more than the tab shows above the fold. */
-export const LOOK_PAGE_SIZE = 50;
 
 export const LookParams = Type.Object({ id: RowId });
 
@@ -287,7 +286,7 @@ const ClientId = Type.Optional(
   Type.String({
     format: 'uuid',
     description:
-      'Your id for this create, for retrying it offline: accepted, not yet deduplicated',
+      'Your id for this create, for retrying it offline: accepted and logged, never stored (a saved look has no client id column), so a retry saves another look',
   }),
 );
 
@@ -409,7 +408,11 @@ type LookPieceInput = Static<typeof LookPieceInput>;
 export function readLookPiece(input: LookPieceInput, pointer: string): Piece {
   const type = input.type ?? null;
   if (type !== null && !typesOfRole(input.role).includes(type)) {
-    const message = `"${type}" is not a type of ${input.role} (${typesOfRole(input.role).join(', ')})`;
+    const message = t('refusal.inspiration.roleType', {
+      type,
+      role: input.role,
+      types: typesOfRole(input.role).join(', '),
+    });
     throw new HttpError(400, message, {
       validation: [{ path: `${pointer}/type`, message }],
     });

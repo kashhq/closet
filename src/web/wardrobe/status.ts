@@ -20,7 +20,7 @@ import type { IsoDate } from '../../calendar-date';
 /**
  * "In the closet": owned and in use. The one predicate for every closet
  * read, so a wishlist item or an archived garment never shows up where
- * clothes one can wear do: the grid (without "Show archived"), the outfit
+ * clothes one can wear do: the grid (without "Include archived"), the outfit
  * Styling's strips, capsules' counts and pages, tagging mode, laundry and
  * the wash counts, availableGarment (src/web/wears/queries.ts), the MCP
  * tools' closet reads, the outfit generator (#9, through availableGarment),
@@ -71,7 +71,7 @@ export function offeredToStyle(): SQL {
 
 /**
  * Owned now or once (the closet and the archive), never a wishlist item:
- * the grid's "Show archived", the filter modal's choices, what an outfit
+ * the grid's "Include archived", the filter modal's choices, what an outfit
  * slot, a capsule membership or a wash may name.
  */
 export function ownedGarment(): SQL {

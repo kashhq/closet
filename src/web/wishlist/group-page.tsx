@@ -1,13 +1,11 @@
+import { Card } from '../card';
 import type { BestOutfits } from '../../wardrobe/goes-with';
 import { PhotoSet, viewerTrigger, enlargeLabel } from '../files/photo-viewer';
 import type { ClosetGarment } from '../gallery/queries';
 import { ideaName } from '../gallery/ideas';
 import { t } from '../i18n';
 import { museName } from '../write-origin';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import { OutfitCollage } from '../outfits/collage';
 import { BrandSizeNote } from '../sizes/views';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
@@ -33,6 +31,7 @@ import {
   reasonText,
   UndoForm,
 } from './suggestion-parts';
+import { THUMB_ROW } from '../layout/columns';
 
 export interface NeedPageModel {
   detail: NeedDetail;
@@ -101,83 +100,85 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
   // The same count on every option decides nothing: said once, in the facts.
   const shared = sharedUnlocks(shown, model.detail.judged);
   return (
-    <Layout ctx={ctx} title={need.name}>
-      <AppBar
-        ctx={ctx}
-        title={need.name}
-        back={wardrobeUrl(model.viewOwner, {}, WISHLIST_PATH)}
-      />
-      <PageMain width="wide" class="flex flex-col gap-5 px-4 pt-20 pb-24">
-        <header class="flex flex-col gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <FromAgent agent={need.agent} />
-            <NeedState model={model} chosen={chosen} />
-          </div>
-          <NeedFacts
-            budget={need.budget}
-            options={options.length}
-            unlocks={shared}
+    <PageShell
+      ctx={ctx}
+      name="need"
+      bar={{
+        title: need.name,
+        back: wardrobeUrl(model.viewOwner, {}, WISHLIST_PATH),
+      }}
+      width="wide"
+      body={{ gap: 5 }}
+      overlays={<DecisionToastView toast={model.toast} />}
+    >
+      <header class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <FromAgent agent={need.agent} />
+          <NeedState model={model} chosen={chosen} />
+        </div>
+        <NeedFacts
+          budget={need.budget}
+          options={options.length}
+          unlocks={shared}
+        />
+        {need.note && (
+          <details class="text-sm">
+            <summary class="link link-hover text-muted">
+              {t('muse.WHY', { agent: museName(need.agent) })}
+            </summary>
+            <p class="pt-1 whitespace-pre-line" data-need-note="">
+              {need.note}
+            </p>
+          </details>
+        )}
+      </header>
+      {shown.length > 0 && (
+        <>
+          <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
+          <SnapStrip
+            size="peek"
+            label={t('muse.OPTIONS_LABEL', { need: need.name })}
+            listbox={false}
+            desktop="grid"
+            tapThrough
+            class="pb-2"
+            attributes={{ 'data-need-options': '' }}
+          >
+            {shown.map((pick, index) => (
+              <OptionCard
+                model={model}
+                pick={pick}
+                chosen={pick === chosen}
+                selected={
+                  model.option === undefined
+                    ? index === 0
+                    : pick.id === model.option
+                }
+                self={self}
+                showUnlocks={!shared}
+              />
+            ))}
+          </SnapStrip>
+          <SnapStripsInit />
+        </>
+      )}
+      {need.status === 'open' && options.length === 0 && (
+        <p class="text-sm text-muted" data-no-options="">
+          {t('muse.NO_OPTIONS_LEFT')}
+        </p>
+      )}
+      <SetAsidePicks model={model} picks={setAside} self={self} />
+      {model.isOwner && need.status === 'open' && (
+        <footer class="flex flex-wrap items-start gap-2 border-t border-base-300 pt-4">
+          <BoughtDifferent needId={need.id} />
+          <NotForMe
+            action={needUrl(need.id, undefined, '/dismiss')}
+            returnTo={self}
+            label={t('muse.NOT_THIS_NEED')}
           />
-          {need.note && (
-            <details class="text-sm">
-              <summary class="link link-hover text-muted">
-                {t('muse.WHY', { agent: museName(need.agent) })}
-              </summary>
-              <p class="pt-1 whitespace-pre-line" data-need-note="">
-                {need.note}
-              </p>
-            </details>
-          )}
-        </header>
-        {shown.length > 0 && (
-          <>
-            <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
-            <SnapStrip
-              size="options"
-              label={t('muse.OPTIONS_LABEL', { need: need.name })}
-              listbox={false}
-              tapThrough
-              class="pb-2"
-              attributes={{ 'data-need-options': '' }}
-            >
-              {shown.map((pick, index) => (
-                <OptionCard
-                  model={model}
-                  pick={pick}
-                  chosen={pick === chosen}
-                  selected={
-                    model.option === undefined
-                      ? index === 0
-                      : pick.id === model.option
-                  }
-                  self={self}
-                  showUnlocks={!shared}
-                />
-              ))}
-            </SnapStrip>
-            <SnapStripsInit />
-          </>
-        )}
-        {need.status === 'open' && options.length === 0 && (
-          <p class="text-sm text-muted" data-no-options="">
-            {t('muse.NO_OPTIONS_LEFT')}
-          </p>
-        )}
-        <SetAsidePicks model={model} picks={setAside} self={self} />
-        {model.isOwner && need.status === 'open' && (
-          <footer class="flex flex-wrap items-start gap-2 border-t border-base-300 pt-4">
-            <BoughtDifferent needId={need.id} />
-            <NotForMe
-              action={needUrl(need.id, undefined, '/dismiss')}
-              returnTo={self}
-              label={t('muse.NOT_THIS_NEED')}
-            />
-          </footer>
-        )}
-      </PageMain>
-      <DecisionToastView toast={model.toast} />
-      <Dock ctx={ctx} />
-    </Layout>
+        </footer>
+      )}
+    </PageShell>
   );
 }
 
@@ -258,59 +259,55 @@ function OptionCard(props: {
   const { need, judged, brandSizes } = model.detail;
   const best = judged?.get(pick.id);
   return (
-    <article
+    <Card
+      as="article"
+      variant="content"
+      bodyClass="p-3 gap-2 flex-1"
       {...snapItem({
         value: String(pick.id),
         selected: props.selected,
-        size: 'options',
+        size: 'peek',
         listbox: false,
-        class: 'card bg-base-100 border border-base-300',
+        desktop: 'grid',
       })}
       data-option={String(pick.id)}
     >
-      <div class="card-body p-3 gap-2 flex-1">
-        {pick.photo ? (
-          <button
-            type="button"
-            class="block w-full"
-            aria-label={enlargeLabel(pick.name)}
-            {...viewerTrigger(PHOTO_SET, pick.photo, 'original')}
-          >
-            <ProductPhoto
-              photo={pick.photo}
-              alt={pickName(pick)}
-              eager={props.selected}
-            />
-          </button>
-        ) : (
-          <ProductPhoto photo={null} alt="" />
-        )}
-        <div>
-          <h2 class="font-semibold break-words">{pickName(pick)}</h2>
-          {pick.brand && <p class="text-sm text-muted">{pick.brand}</p>}
-        </div>
-        <PriceAgainstBudget price={pick.price} budget={need.budget} />
-        {model.isOwner && props.showUnlocks && <Unlocks count={best} />}
-        {brandSizes && (
-          <BrandSizeNote note={brandSizes(pick.brand)} size="text-xs" clamp />
-        )}
-        {pick.note && (
-          <p class="text-sm line-clamp-2" data-pick-note="">
-            {pick.note}
-          </p>
-        )}
-        {/* At the card's foot, so This one lines up across the columns. */}
-        <div class="mt-auto flex flex-col gap-2">
-          <OptionActions
-            model={model}
-            pick={pick}
-            chosen={chosen}
-            self={self}
+      {pick.photo ? (
+        <button
+          type="button"
+          class="block w-full"
+          aria-label={enlargeLabel(pick.name)}
+          {...viewerTrigger(PHOTO_SET, pick.photo, 'original')}
+        >
+          <ProductPhoto
+            photo={pick.photo}
+            alt={pickName(pick)}
+            eager={props.selected}
           />
-          {best && <BestOutfitRows best={best} pickId={pick.id} />}
-        </div>
+        </button>
+      ) : (
+        <ProductPhoto photo={null} alt="" />
+      )}
+      <div>
+        <h2 class="font-semibold break-words">{pickName(pick)}</h2>
+        {pick.brand && <p class="text-sm text-muted">{pick.brand}</p>}
       </div>
-    </article>
+      <PriceAgainstBudget price={pick.price} budget={need.budget} />
+      {model.isOwner && props.showUnlocks && <Unlocks count={best} />}
+      {brandSizes && (
+        <BrandSizeNote note={brandSizes(pick.brand)} size="text-xs" clamp />
+      )}
+      {pick.note && (
+        <p class="text-sm line-clamp-2" data-pick-note="">
+          {pick.note}
+        </p>
+      )}
+      {/* At the card's foot, so This one lines up across the columns. */}
+      <div class="mt-auto flex flex-col gap-2">
+        <OptionActions model={model} pick={pick} chosen={chosen} self={self} />
+        {best && <BestOutfitRows best={best} pickId={pick.id} />}
+      </div>
+    </Card>
   );
 }
 
@@ -388,7 +385,7 @@ function BestOutfitRows(props: {
   return (
     <div class="flex flex-col gap-1 pt-1">
       <p class="text-xs text-muted">{t('muse.BEST_LABEL')}</p>
-      <ul class="grid grid-cols-3 gap-2" data-best-outfits="">
+      <ul class={THUMB_ROW} data-best-outfits="">
         {props.best.best.map((idea) => (
           <li title={ideaName(idea.garments)}>
             <OutfitCollage

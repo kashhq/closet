@@ -1,14 +1,15 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
-import { type Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { type Cookie, type Page } from '@playwright/test';
 import { expect } from './support/fixtures';
 import sharp from 'sharp';
 import { addDays } from '../src/calendar-date';
 import { test } from './support/cutout-hold';
-import { signUpHeaders } from './support/e2e-session';
+import { SAME_ORIGIN, signUpHeaders } from './support/e2e-session';
 import { openGarmentMenu, openPhotoSheet } from './support/garment-page';
 import { householdToday } from './support/household-today';
 import { fakeSubscription, stubPushManager } from './support/push-stub';
+import { expectReadableTabs } from './support/tab-contrast';
 
 /**
  * Phone-width (390 px) screenshots, and a desktop (1440 px) block, of the key pages with the seed personas
@@ -45,6 +46,7 @@ function seed(...args: string[]): void {
     ['dist/seed/seed.cli.js', ...args, '--reset', '--password-stdin'],
     { input: `${PASSWORD}\n`, stdio: ['pipe', 'inherit', 'inherit'] },
   );
+  sessions.clear();
 }
 
 test.beforeAll(() => {
@@ -54,18 +56,43 @@ test.beforeAll(() => {
 
 const personaEmail = (persona: string) => `${persona}@closet.invalid`;
 
+/**
+ * One sign-in per persona and seed, replayed as cookies: the per-account
+ * sign-in limit (5 a minute, #984) answers 429 to the dozens a run would
+ * otherwise make. A re-seed ends the persona's sessions, so `seed()` drops
+ * its entry. Module state lives as long as the serial file's worker.
+ */
+const sessions = new Map<string, Cookie[]>();
+
 async function signInAs(page: Page, persona: string): Promise<void> {
+  const known = sessions.get(persona);
+  if (known) {
+    await page.context().addCookies(known);
+    return;
+  }
   const res = await page.request.post('/auth/login', {
     form: { email: personaEmail(persona), password: PASSWORD },
     headers: signUpHeaders(),
     maxRedirects: 0,
   });
   expect(res.status()).toBe(302);
+  sessions.set(persona, await page.context().cookies());
 }
 
 async function shot(page: Page, name: string, url?: string): Promise<void> {
   if (url) await page.goto(url);
   await page.waitForLoadState('networkidle');
+  // Every shot of a page with section tabs, in both themes, proves them
+  // readable (#726); a page without an inactive tab skips it (the picker
+  // shows the Closet tab alone), and so does one with a sheet open (its
+  // backdrop dims the tabs on purpose).
+  const sheetOpen = (await page.locator('dialog[open]').count()) > 0;
+  const inactiveTabs = page.locator(
+    'nav.tabs a.tab:not([aria-current="page"])',
+  );
+  if (!sheetOpen && (await inactiveTabs.count()) > 0) {
+    await expectReadableTabs(page);
+  }
   await page.screenshot({
     path: `${DIR}/${name}.png`,
     fullPage: true,
@@ -87,6 +114,28 @@ async function openRawSelvedgeJeans(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Raw selvedge jeans',
   );
+}
+
+/**
+ * The planned week (2026-09-27) with Tuesday's "+ Plan" sheet open, the page
+ * behind it at one place every run (#1087). The week opens at the top
+ * (nothing in the app scrolls it); the place behind the sheet is where this
+ * spec scrolls the button. So the page settles first (the weather line
+ * replaces its 20 px slot with its 52 px, fonts), then the spec centres the
+ * button itself, leaving the click nothing to scroll.
+ */
+async function openTuesdayPlanSheet(page: Page): Promise<void> {
+  await page.goto('/calendar?week=2026-09-27');
+  await page.waitForLoadState('networkidle');
+  // The summary's placeholder is a div; its answer replaces it.
+  await expect(page.locator('div#weather-line')).toHaveCount(0);
+  const plan = page.locator('[data-checks^="plan-2026-09-29-"]').first();
+  await plan.evaluate(async (button) => {
+    await document.fonts.ready;
+    button.scrollIntoView({ block: 'center', behavior: 'instant' });
+  });
+  await plan.click();
+  await expect(page.locator('#plan-sheet-2026-09-29')).toBeVisible();
 }
 
 /** Styling with its top row locked: frozen, ringed in the accent (#106). */
@@ -156,28 +205,26 @@ test('demo: Theo, every feature with real data', async ({ page }) => {
   await shot(page, '10-demo-calendar-planned', '/calendar?week=2026-09-27');
   // The calendar's month of collages (R6, #86): August's history.
   await shot(page, '70-demo-calendar-month', '/calendar/month?month=2026-08');
+  // The plan page (#1070): its head a band from lg, the saved outfits a grid.
+  await shot(
+    page,
+    '71b-demo-calendar-plan-page',
+    '/calendar/plan?for=day:2026-09-29&occasion=evening',
+  );
   // The planned week's "+ Plan" on Tuesday: its sheet, the three ways.
   // Opened by the day's button or, while the week template leaves it open
   // slots (from today on), the first of those.
-  await page.goto('/calendar?week=2026-09-27');
-  await page.locator('[data-plan^="plan-2026-09-29-"]').first().click();
-  await expect(
-    page.locator('dialog[data-plan-sheet="2026-09-29"]'),
-  ).toBeVisible();
-  // The viewport alone: a full-page shot stitches the modal mid-page.
-  await page.screenshot({
-    path: `${DIR}/71-demo-calendar-plan-sheet.png`,
-    animations: 'disabled',
-  });
-  // Sharing is Profile's section since #82: the old page's link lands there,
-  // and the shot is the section (65 is the whole of Profile).
-  await page.goto('/wardrobe-share/manage');
-  await expect(page).toHaveURL(/\/auth\/profile#sharing$/);
-  await page.waitForLoadState('networkidle');
-  await page.locator('#sharing').screenshot({
-    path: `${DIR}/11-demo-shares.png`,
-    animations: 'disabled',
-  });
+  // The viewport alone: a full-page shot stitches the modal mid-page. Taken
+  // twice from two loads, which must match (#1087).
+  const planSheet = async () => {
+    await openTuesdayPlanSheet(page);
+    return page.screenshot({ animations: 'disabled' });
+  };
+  const first = await planSheet();
+  expect((await planSheet()).equals(first), 'the same shot twice').toBe(true);
+  writeFileSync(`${DIR}/71-demo-calendar-plan-sheet.png`, first);
+  // Sharing is its own settings page since #728 (65 is Profile's index).
+  await shot(page, '11-demo-shares', '/auth/profile/sharing');
   await shot(page, '65-demo-profile', '/auth/profile');
   // The Wardrobe's header (R3, #83): the switcher in the title (Dana's
   // wardrobe is shared with Theo), the ⋯ menu, the add sheet, and the grid
@@ -251,12 +298,321 @@ test.describe('desktop', () => {
     );
     await shot(page, '82b-demo-styling-shuffled-desktop');
   });
+
+  // Density (#1064): the galleries auto-fill from lg, the week's collages
+  // take their desktop step, a month cell sets its collage beside the date
+  // and the plan page's outfits fill a grid (#1070).
+  test('demo: Theo, the grids and the calendar at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '83-demo-wardrobe-desktop', '/wardrobe');
+    await shot(page, '84-demo-outfits-desktop', '/outfits');
+    await shot(page, '85-demo-inspiration-desktop', '/inspiration');
+    await shot(page, '86-demo-wishlist-desktop', '/wardrobe/wishlist');
+    await shot(page, '87-demo-insights-desktop', '/wardrobe/insights');
+    await shot(
+      page,
+      '88-demo-calendar-three-outfits-desktop',
+      '/calendar?week=2026-08-09',
+    );
+    await shot(
+      page,
+      '89-demo-calendar-month-desktop',
+      '/calendar/month?month=2026-08',
+    );
+    await shot(
+      page,
+      '89b-demo-calendar-plan-page-desktop',
+      '/calendar/plan?for=day:2026-09-29&occasion=evening',
+    );
+  });
+
+  // Section tabs in the app bar (#1061): each section's sibling pages not
+  // shot above, so every tab row is seen in its one place, and Profile at
+  // the rail's foot.
+  test('demo: Theo, the section tabs at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '90-demo-capsules-desktop', '/capsules');
+    await shot(page, '91-demo-laundry-desktop', '/laundry');
+    await shot(page, '92-demo-ideas-desktop', '/outfits/ideas?seed=1');
+    await shot(page, '93-demo-trips-desktop', '/trips');
+    await shot(page, '94-demo-profile-desktop', '/auth/profile');
+  });
+
+  // The Wardrobe's facets (#1067): the filters docked beside the grid,
+  // applied (the chips in the scope row, the choices checked in the
+  // column), and the scope row's search focused by `/`.
+  test('demo: Theo, the Wardrobe facets at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe');
+    const facets = page.locator('#filter-modal');
+    await expect(facets).toBeVisible();
+    await facets.getByRole('radio', { name: 'Tops', exact: true }).click();
+    await facets.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page).toHaveURL(/category=tops/);
+    await shot(page, '83b-demo-wardrobe-facets-desktop');
+    await page.keyboard.press('/');
+    await expect(
+      page.getByRole('search').getByRole('textbox', { name: 'Search' }),
+    ).toBeFocused();
+    await page.keyboard.type('blue');
+    await shot(page, '83c-demo-wardrobe-search-desktop');
+  });
+
+  // The action bars (#1063) at the head of their column (Laundry's is 91
+  // above): select mode with two checked, and the capsule picker.
+  test('demo: Theo, the action bars at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await page.goto('/wardrobe?select=1');
+    const boxes = page.locator('#wardrobe-grid input[name="ids"]');
+    await boxes.nth(0).check();
+    await boxes.nth(1).check();
+    await expect(page.locator('#selected-count')).toHaveText('2');
+    await shot(page, '95-demo-select-desktop');
+    await page.goto('/capsules');
+    await page.getByRole('link', { name: /^Weekend/ }).click();
+    await expect(page).toHaveURL(/\/capsules\/\d+$/);
+    await page.getByRole('link', { name: 'Choose garments' }).first().click();
+    await expect(page.locator('#pick-form')).toBeVisible();
+    await shot(page, '96-demo-capsule-picker-desktop');
+  });
+
+  // The strip's desktop modes (#1065): Today's cards in a grid (Ideas' is
+  // 92 above) and Goes-with's best outfits a row. No persona has a Muse
+  // need, so its options grid has no shot.
+  test('demo: Theo, the strips at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await shot(page, '97-demo-today-desktop', '/');
+    await page.goto('/wardrobe/wishlist');
+    await page.getByRole('link', { name: 'White Couriers' }).click();
+    await expect(page.locator('[data-goes-with-strip]')).toBeVisible();
+    await shot(page, '98-demo-goes-with-desktop');
+  });
+
+  // The split pages (#1068): the photo or collage left and sticky, the
+  // facts beside it.
+  test('demo: Theo, the garment and outfit pages at 1440', async ({ page }) => {
+    await signInAs(page, 'demo');
+    await openRawSelvedgeJeans(page);
+    await shot(page, '99-demo-garment-desktop');
+    // The garment form beside its photo (#1069), viewport-high: the sticky
+    // Cancel and Save at the window's foot is what it shows.
+    await page.goto(`${page.url().split('?')[0]}/edit`);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: `${DIR}/99c-demo-garment-form-desktop.png`,
+      animations: 'disabled',
+    });
+    await page.goto('/outfits');
+    await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+    await shot(page, '99b-demo-outfit-desktop');
+  });
+});
+
+/**
+ * Every sheet open, each from its own trigger (layout/sheet.tsx, #1062):
+ * on a phone every kind is the bottom sheet, from lg the kind places it
+ * (choice centred, form a right panel, menu under its trigger). Viewport
+ * shots: a full-page one stitches the modal mid-page. Nothing is posted,
+ * so Theo is as the seed left him.
+ */
+async function sheetShots(page: Page, suffix: string): Promise<void> {
+  const open = async (name: string, sheet: string) => {
+    await expect(page.locator(sheet)).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({
+      path: `${DIR}/90-sheet-${name}${suffix}.png`,
+      animations: 'disabled',
+    });
+  };
+  await signInAs(page, 'demo');
+  // From lg the filters are docked beside the grid, never opened (#1067):
+  // the facets block above shoots them there.
+  if (page.viewportSize()!.width < 1024) {
+    await page.goto('/wardrobe');
+    await page.getByRole('button', { name: 'Filters' }).click();
+    await open('filters', '#filter-modal');
+  }
+  await page.goto('/wardrobe');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await open('add', '#add-sheet');
+  await page.goto('/wardrobe?select=1');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await open('bulk-actions', '#bulk-actions');
+  await page.goto('/wardrobe?select=1');
+  await page.getByRole('button', { name: 'Set…', exact: true }).click();
+  await open('bulk-set', '#bulk-dialog');
+  await openRawSelvedgeJeans(page);
+  await page.locator('#editMaskBtn').click();
+  await open('mask-editor', '#maskEditorDialog');
+  await page.reload();
+  await openPhotoSheet(page);
+  await open('garment-photo', '#garment-photo-sheet');
+  await page.reload();
+  const menu = await openGarmentMenu(page);
+  await menu.getByRole('button', { name: 'Archive', exact: true }).click();
+  await open('confirm', '#confirm-sheet');
+  await page.goto('/outfits');
+  await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await open('outfit-plan', '#outfit-plan-sheet');
+  await page.goto('/styling');
+  await lockTopRow(page);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await open('styling-save', '#styling-save');
+  await openTuesdayPlanSheet(page);
+  await open('calendar-plan', '#plan-sheet-2026-09-29');
+}
+
+test.describe('sheets', () => {
+  test('demo: Theo, every sheet at 390', async ({ page }) => {
+    await sheetShots(page, '');
+  });
+
+  test.describe('desktop', () => {
+    test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+    test('demo: Theo, every sheet at 1440', async ({ page }) => {
+      await sheetShots(page, '-desktop');
+    });
+  });
+});
+
+/**
+ * The pages D2 (#1060) put on `PageShell`, plus the capsule page and a
+ * selfie's dialog (their frames moved in #1096 and #1106), at the current
+ * viewport: `make screenshots` runs it at 390 and at 1440, so a change to
+ * the frame shows against `main` on a phone and at a desktop's width.
+ * `suffix` names the viewport. Theo's data is as the seed left it (before
+ * the tests that re-seed him); the tagging page needs untagged garments,
+ * which are Dana's.
+ */
+async function framedPageShots(page: Page, suffix: string): Promise<void> {
+  const name = (slug: string) => `91-framed-${slug}${suffix}`;
+  await signInAs(page, 'demo');
+  await shot(page, name('profile'), '/auth/profile');
+  await shot(page, name('style'), '/auth/profile/style');
+  await shot(page, name('sizes'), '/auth/profile/sizes');
+  await shot(page, name('tokens'), '/auth/tokens');
+  await shot(page, name('sharing'), '/auth/profile/sharing');
+  await shot(page, name('week'), '/auth/profile/week');
+  await shot(page, name('link-import'), '/wardrobe/new/from-link');
+  await shot(page, name('plan'), `/calendar/plan?for=day:${ANCHOR}`);
+  await shot(page, name('recap'), `/wardrobe/recap?year=${ANCHOR.slice(0, 4)}`);
+  await page.goto('/outfits');
+  await page.locator('#saved-outfits a[href^="/outfits/"]').first().click();
+  await shot(page, name('outfit'));
+  const outfitPath = new URL(page.url()).pathname;
+  const hx = { ...SAME_ORIGIN, 'hx-request': 'true' };
+  const sharingIds = async () => {
+    const html = await (await page.request.get('/auth/profile/sharing')).text();
+    return [...html.matchAll(/\/wardrobe-share\/(\d+)\/remove/g)].map(
+      (match) => match[1],
+    );
+  };
+  const sharedBefore = new Set(await sharingIds());
+  // What the shots leave on is put back whether they finish or not, or the
+  // 1440 run's Profile shot carries the 390 run's invite and a failure leaves
+  // the public link on for the later shots.
+  const putBack = async () => {
+    await signInAs(page, 'demo');
+    await page.request.post(`${outfitPath}/share/stop`, { headers: hx });
+    for (const id of await sharingIds()) {
+      if (sharedBefore.has(id)) continue;
+      await page.request.post(`/wardrobe-share/${id}/remove`, { headers: hx });
+    }
+  };
+  // The cleanup makes network calls: if one throws while a shot is already
+  // failing, it must not replace that first error (#1168).
+  try {
+    await page.request.post(`${outfitPath}/share`, { headers: hx });
+    await page.goto(outfitPath);
+    const shareLink = new URL(
+      await page.locator('[data-public-share] input').inputValue(),
+    );
+    const invite = await page.request.post(
+      '/wardrobe-share/create-invite-link',
+      { form: { permission: 'VIEW' }, headers: hx },
+    );
+    const invitePath = /\/wardrobe-share\/invite\/[0-9a-f-]{36}/.exec(
+      await invite.text(),
+    )?.[0];
+    expect(invitePath).toBeDefined();
+    await page.goto('/trips');
+    await page.getByRole('link', { name: /Austin conference/ }).click();
+    await expect(page.locator('#trip-packed-summary')).toBeVisible();
+    await shot(page, name('trip'));
+    await page.locator('[data-add-outfit]').first().click();
+    await expect(
+      page.getByRole('heading', { name: 'Add an outfit' }),
+    ).toBeVisible();
+    await shot(page, name('trip-add-outfit'));
+    await page.goto('/capsules');
+    await page.getByRole('link', { name: /^Weekend/ }).click();
+    await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
+    await shot(page, name('capsule'));
+    await openSelfie(page);
+    await page.screenshot({
+      path: `${DIR}/${name('selfie-dialog')}.png`,
+      animations: 'disabled',
+    });
+    await shot(page, name('trips'), '/trips');
+    await shot(page, name('laundry'), '/laundry');
+    await shot(page, name('about'), '/about');
+    await shot(page, name('offline'), '/offline.html');
+    await shot(page, name('invite-signed-in'), invitePath);
+    await page.context().clearCookies();
+    await shot(page, name('login'), '/auth/login');
+    await shot(page, name('register'), '/auth/register');
+    await shot(page, name('invite'), invitePath);
+    await shot(page, name('offline-signed-out'), '/offline.html');
+    await shot(page, name('share'), `${shareLink.pathname}${shareLink.search}`);
+  } catch (failure) {
+    await putBack().catch((cleanupFailure: unknown) => {
+      console.error('Cleanup after a failed shot also failed:', cleanupFailure);
+    });
+    throw failure;
+  }
+  await putBack();
+  await signInAs(page, 'sparse');
+  await shot(page, name('tag'), '/wardrobe/tag');
+}
+
+/** The latest week with a selfie, its first one open in its dialog. */
+async function openSelfie(page: Page): Promise<void> {
+  for (const start of [
+    '2026-09-20',
+    '2026-09-13',
+    '2026-09-06',
+    '2026-08-30',
+  ]) {
+    await page.goto(`/calendar?week=${start}`);
+    if ((await page.locator('button[data-selfie]').count()) > 0) break;
+  }
+  await page.locator('button[data-selfie]').first().click();
+  await expect(page.locator('dialog[open] img')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('framed pages', () => {
+  test('demo: Theo, the framed pages at 390', async ({ page }) => {
+    await framedPageShots(page, '');
+  });
+
+  test.describe('desktop', () => {
+    test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+    test('demo: Theo, the framed pages at 1440', async ({ page }) => {
+      await framedPageShots(page, '-desktop');
+    });
+  });
 });
 
 test('demo: Theo, capsules', async ({ page }) => {
   await signInAs(page, 'demo');
   await shot(page, '17-demo-capsules', '/capsules');
   await page.getByRole('link', { name: /^Weekend/ }).click();
+  // The list's card has the name too: the URL says the boosted tap landed.
+  await expect(page).toHaveURL(/\/capsules\/\d+$/);
   await expect(page.getByRole('heading', { name: 'Weekend' })).toBeVisible();
   await shot(page, '18-demo-capsule');
   await page.getByRole('link', { name: 'Choose garments' }).first().click();
@@ -331,9 +687,8 @@ test('demo: Theo, weather', async ({ page }) => {
   await signInAs(page, 'demo');
   // Today's line (the seed's simulated weather, from the test server's
   // stand-in for Open-Meteo) in °F, then the forecast on this week's days.
-  await page.goto('/wardrobe');
+  await page.goto('/');
   await expect(page.locator('p#weather-line')).toContainText('°F');
-  await shot(page, '35-demo-weather-wardrobe');
   // Today carries Open-Meteo's credit (CC BY 4.0, #640) on a row of its own:
   // the credit is one text line at 390 px and the weather line above it is
   // not pushed onto more rows by it.
@@ -349,11 +704,10 @@ test('demo: Theo, weather', async ({ page }) => {
   await page.goto('/calendar');
   await expect(page.locator('[data-weather-day]')).not.toHaveCount(0);
   await shot(page, '36-demo-weather-calendar');
-  await page.goto('/auth/profile');
-  await expect(page.locator('#weather')).toContainText(
+  await page.goto('/auth/profile/weather');
+  await expect(page.locator('main')).toContainText(
     'Home: Fort Greene, Brooklyn',
   );
-  await page.locator('#weather').scrollIntoViewIfNeeded();
   await shot(page, '37-demo-weather-profile');
 });
 
@@ -364,17 +718,13 @@ test('demo: Theo, his style profile', async ({ page }) => {
 
 test('demo: Theo, his sizes (#24)', async ({ page }) => {
   await signInAs(page, 'demo');
-  // Profile › Sizes (the section alone; 65 is the whole of Profile), its
-  // editor, and a brand's note where he shops: a wishlist item's page and
-  // its form.
-  await page.goto('/auth/profile#sizes');
-  await expect(page.locator('#sizes')).toContainText('Your size in Uniqlo');
-  await page.waitForLoadState('networkidle');
-  await page.locator('#sizes').screenshot({
-    path: `${DIR}/75-demo-profile-sizes.png`,
-    animations: 'disabled',
-  });
-  await shot(page, '76-demo-sizes-editor', '/auth/profile/sizes');
+  // Profile › Sizes (its own page since #728), and a brand's note where he
+  // shops: a wishlist item's page and its form.
+  await page.goto('/auth/profile/sizes');
+  await expect(
+    page.locator('input[name="brand"][value="Uniqlo"]'),
+  ).toBeVisible();
+  await shot(page, '76-demo-sizes-editor');
   await page.goto('/wardrobe/wishlist');
   await page.getByRole('link', { name: 'White Couriers' }).click();
   await expect(page).toHaveURL(/\/wardrobe\/\d+$/);
@@ -486,8 +836,6 @@ test('sparse: Dana, untagged and degraded', async ({ page }) => {
 test('fresh: Riley, the empty states', async ({ page }) => {
   await signInAs(page, 'fresh');
   await shot(page, '14-fresh-wardrobe', '/wardrobe');
-  // No city yet: the header's weather line asks for one.
-  await expect(page.getByText('Add your city for the weather')).toBeVisible();
   await shot(page, '15-fresh-outfits', '/outfits');
   await shot(page, '65-fresh-styling', '/styling');
   await shot(page, '16-fresh-calendar', `/calendar?week=${ANCHOR}`);
@@ -559,7 +907,7 @@ test('demo: Theo, Today and his reminders (#15)', async ({ page }) => {
   // headless shell has no push service or permission, so both are stubbed
   // (test/support/push-stub.ts); the server's side is real.
   await stubPushManager(page, fakeSubscription(), true, { granted: true });
-  await page.goto('/auth/profile');
+  await page.goto('/auth/profile/notifications');
   const reminders = page.locator('#push-reminders');
   await expect(reminders).toBeVisible();
   await reminders
@@ -572,8 +920,7 @@ test('demo: Theo, Today and his reminders (#15)', async ({ page }) => {
   // The weekly auto-plan (#16): his week template on the Profile, and the
   // days after today that "Plan my week" filled (the seed's, demo.md step
   // 7), marked Auto on the calendar: tomorrow's week has some.
-  await page.locator('#week').scrollIntoViewIfNeeded();
-  await shot(page, '58-demo-week-template');
+  await shot(page, '58-demo-week-template', '/auth/profile/week');
   await shot(
     page,
     '59-demo-week-planned',
@@ -625,7 +972,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.locator('#garment-category').fill('jacket');
       await page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(page.locator('#garment-photo-status')).toHaveText(
-        /Removing background/,
+        /Cutting out the background/,
       );
       await shot(page, `76-demo-add-from-photo-saved${suffix}`);
       await cutouts.release(personaEmail('demo'));

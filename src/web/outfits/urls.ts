@@ -1,5 +1,6 @@
 import { SECTION_HOME } from '../layout/sections';
 import { destinationQuery, type OutfitDestination } from './destination';
+import { type OutfitList, withOutfitList } from './outfit-list';
 
 /**
  * The Outfits page's addresses, built from parsed values (nothing needs
@@ -18,6 +19,25 @@ export function savedUrl(destination: OutfitDestination): string {
   return destination.kind === 'day'
     ? `${SAVED_PATH}?${destinationQuery(destination)}`
     : SAVED_PATH;
+}
+
+/** The Saved grid's next page (#660): its sentinel's GET, always a fragment. */
+export const SAVED_TILES_PATH = `${SAVED_PATH}/tiles`;
+
+/**
+ * The Saved grid's page below `before`, for the same list and day as the
+ * page that drew the sentinel.
+ */
+export function savedTilesUrl(
+  destination: OutfitDestination,
+  list: OutfitList,
+  before: number,
+): string {
+  const query = [
+    destination.kind === 'day' && destinationQuery(destination),
+    `before=${before}`,
+  ].filter(Boolean);
+  return withOutfitList(`${SAVED_TILES_PATH}?${query.join('&')}`, list);
 }
 
 /** An outfit's page. */

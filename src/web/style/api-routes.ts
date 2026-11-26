@@ -6,12 +6,8 @@ import type { ApiOptions } from '../api/plugin';
 import { RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
 import { API_PREFIX } from '../surface';
-import {
-  addOutfitRule,
-  deleteOutfitRule,
-  saveStyleProfile,
-  styleProfileParts,
-} from './queries';
+import { styleProfileParts } from './queries';
+import { addRule, removeRule, saveProfile } from './style-actions';
 import {
   OutfitRuleAdded,
   OutfitRuleInput,
@@ -76,7 +72,6 @@ export const styleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const { styles, palette, budget, notes } = request.body;
       const fields = storedStyleProfile({
         styles,
@@ -84,10 +79,7 @@ export const styleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         budget: budget ?? null,
         notes: notes ?? null,
       });
-      await saveStyleProfile(db, userId, fields);
-      logger.info(
-        `Style profile saved by user ${userId} (API): ${fields.styles?.length ?? 0} styles, ${fields.palette?.length ?? 0} colours`,
-      );
+      await saveProfile({ db, logger }, actorOf(request), fields);
       return toStyleProfileValues(fields);
     },
   );
@@ -109,16 +101,10 @@ export const styleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const actor = actorOf(request);
       const { kind } = request.body;
       const [a, b] = readRuleSides(request.body);
-      const added = await addOutfitRule(db, actor, { kind, a, b });
+      const added = await addRule({ db, logger }, actor, { kind, a, b });
       if (added === 'duplicate') {
-        logger.info(
-          `Outfit rule (${kind}) already held by user ${actor.userId} (API)`,
-        );
         return reply.status(200).send({ added: false });
       }
-      logger.info(
-        `Outfit rule ${added} (${kind}) added by user ${actor.userId} (API)`,
-      );
       return reply
         .status(201)
         .header('Location', `${API_PREFIX}/outfit-rules/${added}`)
@@ -142,8 +128,7 @@ export const styleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request, reply) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      await deleteOutfitRule(db, actor, id);
-      logger.info(`Outfit rule ${id} removed by user ${actor.userId} (API)`);
+      await removeRule({ db, logger }, actor, id);
       return reply.status(204).send(null);
     },
   );

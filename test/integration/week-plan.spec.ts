@@ -342,18 +342,25 @@ describe('the weekly auto-plan', () => {
     vi.useRealTimers();
   });
 
-  describe('the week template, on the Profile', () => {
+  describe('the week template, Profile › Your week (its own page, #728)', () => {
     it('shows an empty week, saves it whole, and shows it again', async () => {
-      const blank = await get('/auth/profile');
+      const row = await get('/auth/profile');
+      expect(row.body).toContain('<li id="week"><a href="/auth/profile/week"');
+      expect(row.body).toContain('Not set yet');
+      expect(row.body).not.toContain('action="/auth/profile/week"');
+
+      const blank = await get('/auth/profile/week');
       expectFullPage(blank);
       expectNativePostForms(blank);
-      expect(blank.body).toContain('id="week"');
       expect(blank.body).toContain('action="/auth/profile/week"');
+      expect(blank.body).toMatch(
+        /<a href="\/auth\/profile#week" class="btn[^"]*" aria-label="Back"/,
+      );
 
       t.logs.clear();
       const res = await post('/auth/profile/week', TEMPLATE);
       expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/auth/profile?weekSaved=1#week');
+      expect(res.headers.location).toBe('/auth/profile/week?saved=1');
       const rows = await t.db
         .select({
           weekday: weekTemplate.weekday,
@@ -364,14 +371,17 @@ describe('the weekly auto-plan', () => {
         .orderBy(asc(weekTemplate.weekday), asc(weekTemplate.occasion));
       expect(rows).toHaveLength(8);
       expect(rows).toContainEqual({ weekday: 2, occasion: 'evening' });
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Week template saved by user ${t.owner.id}: 8 slot(s) on 7 day(s)`,
+      expect(t.logs.ops('week.template.saved')).toContainEqual(
+        expect.objectContaining({ userId: t.owner.id, slots: 8, days: 7 }),
       );
 
-      const page = unescapeHtml((await get('/auth/profile?weekSaved=1')).body);
+      const page = unescapeHtml((await get('/auth/profile/week?saved=1')).body);
       expect(page).toContain('Week saved');
       expect(page).toMatch(/name="day-2"[\s\S]*?value="all-day" selected/);
       expect(page).toMatch(/name="around-2" value="evening"[^>]*checked/);
+      expect((await get('/auth/profile')).body).toContain(
+        'Set for 7 of 7 days',
+      );
     });
 
     it('refuses what the week cannot hold: two outfits for one day, an unknown occasion', async () => {
@@ -389,12 +399,21 @@ describe('the weekly auto-plan', () => {
       ).toBe(8);
     });
 
-    it('is the user’s own: another user’s profile shows their empty week', async () => {
+    it('is the user’s own: another user’s page shows their empty week', async () => {
       const stranger = await t.register('stranger-week@example.com');
       const theirs = unescapeHtml(
-        (await get('/auth/profile', { cookie: stranger })).body,
+        (await get('/auth/profile/week', { cookie: stranger })).body,
       );
       expect(theirs).not.toMatch(/value="all-day" selected/);
+    });
+
+    it('counts a day with only an occasion around it as set', async () => {
+      await post('/auth/profile/week', { 'around-3': 'evening' });
+      const row = (await get('/auth/profile')).body;
+      expect(row).toContain('Set for 1 of 7 days');
+      expect(row).not.toContain('Not set yet');
+      // The later suites plan from the full template.
+      await post('/auth/profile/week', TEMPLATE);
     });
   });
 
@@ -459,7 +478,7 @@ describe('the weekly auto-plan', () => {
       const cookie = await t.register('no-template@example.com');
       const res = await post('/calendar/plan-week', {}, cookie);
       expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/auth/profile#week');
+      expect(res.headers.location).toBe('/auth/profile/week');
       expect(await t.db.$count(weekPlan)).toBe(0);
     });
 
@@ -489,15 +508,15 @@ describe('the weekly auto-plan', () => {
       expect(recorded.every((r) => r.outfitCreated && r.torso === null)).toBe(
         true,
       );
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((m) =>
-            m.startsWith(
-              `Week planned for user ${t.owner.id} from ${TODAY} (plan ${planId}): 8 outfit(s)`,
-            ),
-          ),
-      ).toBe(true);
+      expect(t.logs.ops('week.planned')).toContainEqual(
+        expect.objectContaining({
+          userId: t.owner.id,
+          from: TODAY,
+          weekPlanId: planId,
+          planned: 8,
+          changed: true,
+        }),
+      );
 
       // The banner: what was planned, and Undo. #165: read with the week in
       // one statement after the session (five in parallel before).
@@ -706,11 +725,12 @@ describe('the weekly auto-plan', () => {
         garmentId: slots.map((s) => String(s.garmentId)),
       });
       expect(edit.statusCode).toBe(302);
-      expect(
-        t.logs
-          .messages('info', 'Web')
-          .some((m) => m.includes("1 planned entry(ies) now the user's")),
-      ).toBe(true);
+      expect(t.logs.ops('outfit.updated')).toContainEqual(
+        expect.objectContaining({
+          outfitId: tomorrows.outfitId,
+          entriesClaimed: 1,
+        }),
+      );
       const byId = new Map((await weekEntries()).map((e) => [e.id, e]));
       expect(byId.get(todays.id)!.plannedBy).toBe('user');
       expect(byId.get(tomorrows.id)!.plannedBy).toBe('user');
@@ -770,9 +790,16 @@ describe('the weekly auto-plan', () => {
         occasion: 'all-day',
       });
       expect(again.statusCode).toBe(302);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Outfit ${thursday.outfitId} already scheduled on ${WEEK[3]} for user ${t.owner.id}; all-day not added; the week planner's entry is the user's now`,
-      );
+      expect(t.logs.ops('calendar.entry.planned')).toEqual([
+        expect.objectContaining({
+          userId: t.owner.id,
+          entryId: thursday.id,
+          outfitId: thursday.outfitId,
+          day: WEEK[3],
+          changed: false,
+          adopted: true,
+        }),
+      ]);
       const theirs = (await weekEntries()).find((e) => e.id === thursday.id)!;
       expect(theirs).toMatchObject({
         plannedBy: 'user',
@@ -1023,11 +1050,18 @@ describe('the weekly auto-plan', () => {
       expect(left.get(adopted.outfitId)).toBe('person');
       expect(left.get(packed.outfitId)).toBe('planner');
       expect(left.get(twice.outfitId)).toBe('planner');
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${plain.id} deleted by user ${t.owner.id}, one-off outfit ${plain.outfitId} removed`,
+      const deleted = t.logs.ops('calendar.entry.deleted');
+      expect(deleted).toContainEqual(
+        expect.objectContaining({
+          entryId: plain.id,
+          oneOffOutfitRemoved: plain.outfitId,
+        }),
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${twice.id} deleted by user ${t.owner.id}`,
+      expect(deleted).toContainEqual(
+        expect.objectContaining({
+          entryId: twice.id,
+          oneOffOutfitRemoved: null,
+        }),
       );
     });
 
@@ -1432,6 +1466,54 @@ describe('the weekly auto-plan', () => {
       expect(sends).toEqual([]);
     });
 
+    // #862: the week is read after the removal, so the removed entry's wear
+    // no longer uses up the coat's one clean wear.
+    it('swaps in a garment the entry it removed from a day away had planned, its wash limit free again', async () => {
+      const coatWash = (washAfterWears: number | null) =>
+        asFixture(t.db, (tx) =>
+          tx
+            .update(garment)
+            .set({ washAfterWears })
+            .where(eq(garment.id, coat)),
+        );
+      await coatWash(1);
+      try {
+        await planMyWeek(t.db, t.owner.id, {
+          today: TODAY,
+          hour: 8,
+          days: WEEK,
+          forecast: {
+            days: new Map(
+              weekAt((day) => (day === WEEK[3] ? -2 : 24)).map((d) => [
+                d.day,
+                d,
+              ]),
+            ),
+            offset: 0,
+          },
+        });
+        const thursday = (await weekEntries()).find((e) => e.day === WEEK[3])!;
+        expect(await garmentsOf(thursday.outfitId)).toContain(coat);
+        await createTrip(t.db, t.owner.id, {
+          name: 'Thursday away',
+          destination: null,
+          startsOn: WEEK[3],
+          endsOn: WEEK[3],
+          notes: null,
+        });
+        forecastDays = weekAt((day) => (day === WEEK[4] ? -2 : 24));
+        const run = await replanWeeks(deps, at(TODAY, 7));
+        expect(run).toMatchObject({ claimed: 1, swapped: 1, failed: 0 });
+        const after = await weekEntries();
+        expect(after.filter((e) => e.day === WEEK[3])).toEqual([]);
+        const friday = after.filter((e) => e.day === WEEK[4]);
+        expect(friday).toHaveLength(1);
+        expect(await garmentsOf(friday[0].outfitId)).toContain(coat);
+      } finally {
+        await coatWash(null);
+      }
+    });
+
     it("a trip created or moved over planned days takes the planner's entries off them from today on, and leaves the person's and the past's (#684)", async () => {
       await planWarm();
       const before = await weekEntries();
@@ -1469,12 +1551,8 @@ describe('the weekly auto-plan', () => {
       expect(await t.db.$count(outfit, eq(outfit.id, thursday.outfitId))).toBe(
         0,
       );
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        expect.stringMatching(
-          new RegExp(
-            `^Trip ${tripId} created .*, 2 planned entr\\(ies\\) removed from its days$`,
-          ),
-        ),
+      expect(t.logs.ops('trip.created')).toContainEqual(
+        expect.objectContaining({ tripId, autoEntriesRemoved: 2 }),
       );
       // Moved to end on Saturday: Saturday's goes too, Friday's stays.
       const moved = await post(`/trips/${tripId}`, {

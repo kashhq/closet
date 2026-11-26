@@ -3,10 +3,9 @@ import { FormField, inputAttributes } from '../form-field';
 import { t } from '../i18n';
 import { FormPage } from '../layout/form-page';
 import type { ViewContext } from '../view-context';
+import { type PickedPlace, type PlaceAnswer } from '../weather/place-input';
 import {
   fetchedPick,
-  type PickedPlace,
-  type PlaceAnswer,
   PlaceLocationFields,
   PlaceResults,
 } from '../weather/place-picker';
@@ -17,6 +16,7 @@ import {
   TRIP_NOTES_MAX,
   type TripField,
 } from './validation';
+import { FIELD_GRID } from '../layout/columns';
 
 export interface TripFormModel {
   /** Absent for a new trip. */
@@ -95,7 +95,7 @@ export function TripFormPage(props: {
           <DestinationInput value={values.destination} sizing="w-full" />
         </FormField>
       )}
-      <div class="grid grid-cols-2 gap-3">
+      <div class={FIELD_GRID}>
         <DateField
           field="startsOn"
           label={t('trips.STARTS')}

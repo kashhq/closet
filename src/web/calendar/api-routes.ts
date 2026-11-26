@@ -24,7 +24,7 @@ import {
   toEntryOutfitChanged,
 } from './entry-resource';
 import { findEntries, MAX_CALENDAR_DAYS } from './queries';
-import { replaceEntryOutfit, replaceMessage } from './replace';
+import { replaceEntryOutfit } from './replace';
 import { BY_PERSON } from '../write-origin';
 
 const EntryParams = Type.Object({ id: RowId });
@@ -35,7 +35,7 @@ const ENTRY_PATH = '/calendar-entries/:id';
  * The calendar on /api/v1 (#193b; plan section 6), registered by apiPlugin,
  * each calling what its page twin calls (operations.ts names the twin):
  * entry-actions.ts and replaceEntryOutfit, which take the owner lock
- * themselves. Entries are private (AGENTS.md): only the token's user's own
+ * themselves and log every write. Entries are private (AGENTS.md): only the token's user's own
  * are reached, there is no `?ownerId=`, and another's entry is the 404 of
  * an unknown id. Days are the household's (GET /me's `today`).
  */
@@ -44,6 +44,7 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   { db, config, logger, photos },
   done,
 ) => {
+  const deps = { db, logger };
   app.get(
     '/calendar-entries',
     {
@@ -106,26 +107,17 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const actor = actorOf(request);
       const { outfitId, day, clientId } = request.body;
       const occasion = request.body.occasion ?? DEFAULT_OCCASION;
       const scheduled = await planOutfit(
-        db,
-        actor,
+        deps,
+        actorOf(request),
         { outfitId, day, occasion },
         BY_PERSON,
+        { clientId },
       );
       const adopted =
         scheduled.outcome === 'already-scheduled' && scheduled.adopted;
-      const client = clientId ? `, client id ${clientId.slice(0, 8)}` : '';
-      const taken = adopted
-        ? "; the week planner's entry is the user's now"
-        : '';
-      logger.info(
-        scheduled.outcome === 'scheduled'
-          ? `Outfit ${outfitId} scheduled on ${day} (${occasion}) by user ${actor.userId} (API): entry ${scheduled.entryId}${client}`
-          : `Outfit ${outfitId} already scheduled on ${day} (${scheduled.occasion}) for user ${actor.userId} (API): entry ${scheduled.entryId}${taken}${client}`,
-      );
       const answer = {
         id: scheduled.entryId,
         outcome: scheduled.outcome,
@@ -153,17 +145,14 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const actor = actorOf(request);
-      const target = { entryId: request.params.id };
       const choice = entryOutfitChoice(request.body);
       const replaced = await replaceEntryOutfit(
-        db,
-        actor,
-        target,
+        deps,
+        actorOf(request),
+        { entryId: request.params.id },
         choice,
         BY_PERSON,
       );
-      logger.info(replaceMessage(actor.userId, target, replaced, ' (API)'));
       return toEntryOutfitChanged(replaced, choice);
     },
   );
@@ -187,7 +176,7 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { id } = request.params;
       const { worn } = request.body;
       const now = new Date();
-      const outcome = await markEntryWorn(db, actor, {
+      const outcome = await markEntryWorn(deps, actor, {
         entryId: id,
         worn,
         at: now,
@@ -198,13 +187,6 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           `Calendar entry ${id} not marked worn for user ${actor.userId}: its day is ahead`,
         );
       }
-      const state = worn ? 'worn' : 'not worn';
-      const wears = `${outcome.wears} wears ${worn ? 'logged' : 'removed'}`;
-      logger.info(
-        outcome.changed
-          ? `Calendar entry ${id} marked ${state} by user ${actor.userId} (API): ${wears}`
-          : `Calendar entry ${id} already ${state} for user ${actor.userId} (API)`,
-      );
       return outcome;
     },
   );
@@ -223,9 +205,8 @@ export const calendarApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      // removeEntry logs the delete.
       await removeEntry(
-        { db, photos, logger },
+        { ...deps, photos },
         actorOf(request),
         request.params.id,
       );

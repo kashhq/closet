@@ -1,11 +1,11 @@
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
 import { OfflineIcon } from '../layout/app-status';
-import { Dock, sectionLabel } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { sectionLabel } from '../layout/dock';
+import { PageShell } from '../layout/page-shell';
 import { SECTION_HOME } from '../layout/sections';
 import { OPENS_STALE, PAGES_CACHE } from '../page-cache';
 import type { ViewContext } from '../view-context';
+import { offlineFallback, savedPages, savedPagesNone } from '../page-contract';
 
 /**
  * The service worker's navigation fallback (FALLBACK_HTML_URL in
@@ -20,11 +20,15 @@ import type { ViewContext } from '../view-context';
  */
 export function OfflinePage({ ctx }: { ctx: ViewContext }) {
   return (
-    <Layout ctx={ctx}>
-      <AppBar ctx={ctx} title={t('OFFLINE_TITLE')} />
-      <main
-        class="p-20 gap-2 flex flex-col justify-center items-center h-full"
-        data-offline-fallback=""
+    <PageShell
+      ctx={ctx}
+      name="offline"
+      layout="centred"
+      bar={{ title: t('OFFLINE_TITLE') }}
+    >
+      <div
+        class="px-16 gap-2 flex flex-col items-center"
+        {...offlineFallback()}
       >
         <OfflineIcon class="size-6 text-error animate-pulse" />
         <h2 class="font-semibold">{t('OFFLINE_NOT_SAVED')}</h2>
@@ -33,7 +37,7 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
             <p>{t('OFFLINE_DESC')}</p>
             <ul
               class="flex flex-wrap gap-2 justify-center"
-              data-saved-pages={PAGES_CACHE}
+              {...savedPages(PAGES_CACHE)}
             >
               {OPENS_STALE.map((section) => (
                 <li hidden>
@@ -43,13 +47,12 @@ export function OfflinePage({ ctx }: { ctx: ViewContext }) {
                 </li>
               ))}
             </ul>
-            <p hidden data-saved-pages-none="">
+            <p hidden {...savedPagesNone()}>
               {t('OFFLINE_NONE_SAVED')}
             </p>
           </>
         )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+      </div>
+    </PageShell>
   );
 }

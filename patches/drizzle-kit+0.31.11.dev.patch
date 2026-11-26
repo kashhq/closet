@@ -1,5 +1,5 @@
 diff --git a/node_modules/drizzle-kit/api.js b/node_modules/drizzle-kit/api.js
-index f4ecb91..59fb484 100644
+index f4ecb91..af4ca7a 100644
 --- a/node_modules/drizzle-kit/api.js
 +++ b/node_modules/drizzle-kit/api.js
 @@ -23179,7 +23179,10 @@ WHERE
@@ -14,7 +14,23 @@ index f4ecb91..59fb484 100644
              );
              const tableChecks = await db.query(`SELECT 
  						tc.constraint_name,
-@@ -75271,8 +75274,13 @@ var pushSchema = async (imports, drizzleInstance, schemaFilters, tablesFilter, e
+@@ -23240,12 +23243,13 @@ WHERE
+               AND att.attrelid = con.conrelid
+             LEFT JOIN pg_catalog.pg_class frel ON frel.oid = con.confrelid
+             LEFT JOIN pg_catalog.pg_namespace fnsp ON fnsp.oid = frel.relnamespace
+-            LEFT JOIN pg_catalog.pg_attribute fatt ON fatt.attnum = ANY (con.confkey)
++            LEFT JOIN pg_catalog.pg_attribute fatt ON fatt.attnum = con.confkey[array_position(con.conkey, att.attnum)]
+               AND fatt.attrelid = con.confrelid
+           WHERE
+             nsp.nspname = '${tableSchema}'
+             AND rel.relname = '${tableName}'
+-            AND con.contype IN ('f');`
++            AND con.contype IN ('f')
++          ORDER BY con.conname, array_position(con.conkey, att.attnum);`
+             );
+             foreignKeysCount += tableForeignKeys.length;
+             if (progressCallback) {
+@@ -75271,8 +75275,13 @@ var pushSchema = async (imports, drizzleInstance, schemaFilters, tablesFilter, e
      getTablesFilterByExtensions({ extensionsFilters, dialect: "postgresql" })
    );
    const db = {
@@ -31,7 +47,7 @@ index f4ecb91..59fb484 100644
      }
    };
 diff --git a/node_modules/drizzle-kit/api.mjs b/node_modules/drizzle-kit/api.mjs
-index a940272..0c07ffe 100644
+index a940272..1125cb6 100644
 --- a/node_modules/drizzle-kit/api.mjs
 +++ b/node_modules/drizzle-kit/api.mjs
 @@ -23195,7 +23195,10 @@ WHERE
@@ -46,7 +62,23 @@ index a940272..0c07ffe 100644
              );
              const tableChecks = await db.query(`SELECT 
  						tc.constraint_name,
-@@ -75300,8 +75303,13 @@ var pushSchema = async (imports, drizzleInstance, schemaFilters, tablesFilter, e
+@@ -23256,12 +23259,13 @@ WHERE
+               AND att.attrelid = con.conrelid
+             LEFT JOIN pg_catalog.pg_class frel ON frel.oid = con.confrelid
+             LEFT JOIN pg_catalog.pg_namespace fnsp ON fnsp.oid = frel.relnamespace
+-            LEFT JOIN pg_catalog.pg_attribute fatt ON fatt.attnum = ANY (con.confkey)
++            LEFT JOIN pg_catalog.pg_attribute fatt ON fatt.attnum = con.confkey[array_position(con.conkey, att.attnum)]
+               AND fatt.attrelid = con.confrelid
+           WHERE
+             nsp.nspname = '${tableSchema}'
+             AND rel.relname = '${tableName}'
+-            AND con.contype IN ('f');`
++            AND con.contype IN ('f')
++          ORDER BY con.conname, array_position(con.conkey, att.attnum);`
+             );
+             foreignKeysCount += tableForeignKeys.length;
+             if (progressCallback) {
+@@ -75300,8 +75304,13 @@ var pushSchema = async (imports, drizzleInstance, schemaFilters, tablesFilter, e
      getTablesFilterByExtensions({ extensionsFilters, dialect: "postgresql" })
    );
    const db = {

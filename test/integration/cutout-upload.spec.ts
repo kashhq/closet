@@ -82,14 +82,102 @@ describe('cutouts: upload, page and polling', () => {
         `<div id="garment-photo" hx-get="/wardrobe/${id}/cutout\\?poll=1" hx-trigger="every 2s" hx-swap="outerHTML" hx-indicator="#garment-photo-status">`,
       ),
     );
-    expect(html).toContain('Removing background…');
+    expect(html).toContain('Cutting out the background…');
     // Nothing to edit yet; the photo sheet posts the photo alone, prepared
     // on the phone first.
     expect(html).not.toContain('id="editMaskBtn"');
     expect(html).not.toContain('name="nobgPhoto"');
-    expect(html).toContain("import('photo-input')");
+    expect(html).toContain('data-photo-pick=""');
     expectNativePostForms(res);
     expectNoRawI18nKeys(res);
+  });
+
+  // #1069: the edit form's subject is the page's photo view in the form's
+  // place, which keeps its place across the polls and never draws the
+  // page's tools: the form has no photo sheet or mask editor, and a retry
+  // would leave what was typed. A new garment has no subject.
+  it("shows the edit form's photo as its subject, pending and polling in the form's place, without the page's tools", async () => {
+    const id = await createGarment(t, { name: 'Form shirt' });
+    await uploadPhoto(t, id, await jpegPhoto());
+
+    const form = await t.inject({ method: 'GET', url: `/wardrobe/${id}/edit` });
+    expect(form.statusCode).toBe(200);
+    const html = unescapeHtml(form.body);
+    expect(html).toMatch(
+      /<main class="page-shell w-full mx-auto" data-layout="split" data-subject="lg">\s*<section id="form-aside" class="page-aside">/,
+    );
+    expect(html).toContain(
+      `<div id="garment-photo" hx-get="/wardrobe/${id}/cutout?poll=1&place=form" hx-trigger="every 2s"`,
+    );
+    expect(html).toContain('Cutting out the background…');
+    expect(html).toMatch(
+      /<img src="\/file\/[^"]+" alt="Form shirt" class="object-contain w-full h-full" loading="lazy"\/?>/,
+    );
+
+    t.cutouts.start(
+      fakeRunner(() => {
+        throw new Error('model exploded');
+      }),
+    );
+    await t.cutouts.whenIdle();
+    const failed = unescapeHtml(
+      (
+        await t.inject({
+          method: 'GET',
+          url: `/wardrobe/${id}/cutout?poll=3&place=form`,
+          headers: HX_FRAGMENT,
+        })
+      ).body,
+    );
+    expect(failed).toContain('The background could not be removed.');
+    expect(failed).not.toContain('/cutout/retry');
+    expect(failed).not.toContain('id="editMaskBtn"');
+
+    const add = unescapeHtml(
+      (await t.inject({ method: 'GET', url: '/wardrobe/new' })).body,
+    );
+    expect(add).toContain('data-layout="single"');
+    expect(add).not.toContain('id="garment-photo"');
+  });
+
+  // Every route that draws a garment's form hands it its subject: the
+  // clone form, and the refused edit and clone, whose 400 re-renders the
+  // form (garment-routes.tsx), and the refused repair-log entry, which draws
+  // the edit page (repair-routes.tsx); a route that stopped passing it would
+  // drop the photo from that page alone.
+  it('keeps the photo subject on the clone form and on a refused edit or clone', async () => {
+    const id = await createGarment(t, { name: 'Refused shirt' });
+    await uploadPhoto(t, id, await jpegPhoto());
+    const refused = new URLSearchParams({
+      name: 'Refused shirt',
+      category: '',
+    });
+    const post = (url: string) =>
+      t.inject({
+        method: 'POST',
+        url,
+        payload: refused.toString(),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      });
+
+    const refusedRepair = await t.inject({
+      method: 'POST',
+      url: `/wardrobe/${id}/repairs`,
+      payload: new URLSearchParams({ kind: 'repair', note: ' ' }).toString(),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    });
+
+    for (const [res, status] of [
+      [await t.inject({ method: 'GET', url: `/wardrobe/${id}/clone` }), 200],
+      [await post(`/wardrobe/${id}`), 400],
+      [await post(`/wardrobe/${id}/clone`), 400],
+      [refusedRepair, 400],
+    ] as const) {
+      expect(res.statusCode).toBe(status);
+      expect(unescapeHtml(res.body)).toMatch(
+        /<section id="form-aside" [^>]*>\s*<div id="garment-photo"[^>]*>\s*<figure /,
+      );
+    }
   });
 
   // #689: a queue that cannot run its model leaves the photo pending for
@@ -129,7 +217,7 @@ describe('cutouts: upload, page and polling', () => {
       ] as const) {
         const html = await poll(n);
         expect(html).toContain(polls(id, n, every));
-        expect(html).toContain('Removing background…');
+        expect(html).toContain('Cutting out the background…');
       }
       const capped = await poll(24);
       expect(capped).toContain('<div id="garment-photo">');
@@ -137,16 +225,27 @@ describe('cutouts: upload, page and polling', () => {
       expect(capped).toContain(
         'Background removal is queued and will finish later.',
       );
-      expect(capped).not.toContain('Removing background…');
+      expect(capped).not.toContain('Cutting out the background…');
       // URL state is a fallback, never a 400: a count past the clamp (a page
       // left open for hours) or one no fragment writes still answers.
-      for (const odd of ['1001', '99999999999999999999', 'soon', '-1']) {
+      // A count past the clamp is still capped (no further poll while the
+      // model is unavailable); one that is not digits starts the backoff
+      // over, every 2 s from poll 1.
+      for (const [odd, restarts] of [
+        ['1001', false],
+        ['99999999999999999999', false],
+        ['soon', true],
+        ['-1', true],
+      ] as const) {
         const res = await t.inject({
           method: 'GET',
           url: `/wardrobe/${id}/cutout?poll=${odd}`,
           headers: HX_FRAGMENT,
         });
         expectFragment(res);
+        const html = unescapeHtml(res.body);
+        if (restarts) expect(html, odd).toContain(polls(id, 0, '2s'));
+        else expect(html, odd).not.toContain('hx-trigger');
       }
     });
 
@@ -171,7 +270,7 @@ describe('cutouts: upload, page and polling', () => {
       for (const n of [24, 40]) {
         const html = await pollOf(id)(n);
         expect(html).toContain(polls(id, n, '10s'));
-        expect(html).toContain('Removing background…');
+        expect(html).toContain('Cutting out the background…');
         expect(html).not.toContain('will finish later');
       }
       release();

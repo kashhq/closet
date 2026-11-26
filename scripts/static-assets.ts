@@ -1,16 +1,24 @@
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import {
+  type BuildContext,
+  type BuildOptions,
+  buildSync,
+  context,
+} from 'esbuild';
 import {
   isFreshVariant,
   PRECOMPRESSED_EXTENSIONS,
   PUBLIC_DIR,
   variantSource,
 } from '../src/static-assets';
+import { IMPORT_MAP_NAMES } from '../src/web/layout/import-map';
 
 // Build steps for what src/static-assets.ts serves from public/. Run by
 // scripts/generate-static-assets.ts (`npm run generate:modules`,
-// `npm run generate:precompress`) and, so the integration tier serves
+// `npm run generate:pages`, `npm run generate:precompress`) and, so the integration tier serves
 // public/ as the build leaves it, by the integration project's globalSetup
 // (test/support/static-assets-setup.ts).
 
@@ -72,6 +80,162 @@ export function syncClientModules(): { copied: string[]; removed: string[] } {
     .filter((file) => !wanted.has(variantSource(file) ?? file));
   for (const file of removed) fs.rmSync(path.join(MODULES_DIR, file));
   return { copied, removed };
+}
+
+const PAGE_SOURCES = path.join(PUBLIC_DIR, '..', 'views', 'assets');
+/**
+ * The page modules' output, public/js/gen/ (ignored by git), served as
+ * /js/gen/<name>.js (pageModuleUrl, src/web/layout/import-map.ts). Nothing
+ * but this build writes there, so whatever it did not output this run is
+ * stale by definition: no list of what earlier runs built is kept. Kept out
+ * of public/js/ itself, which holds the tracked plain-JS modules
+ * (scripts/ci/plain_js.conf).
+ */
+export const PAGE_OUT = path.join(PUBLIC_DIR, 'js', 'gen');
+
+/**
+ * The page's TypeScript modules (src/web/shell/AGENTS.md, Client modules):
+ * views/assets/outbox.ts and every views/assets/page/<name>.ts, each to
+ * PAGE_OUT/<name>.js. Each is one ES module: what it imports by a relative
+ * path (the shared rules in src/) is bundled in, what it imports by an
+ * importmap name stays a bare import the browser resolves, so a module
+ * several import (toast, single-flight) is one instance per document.
+ */
+export function pageModuleEntries(
+  sources: string = PAGE_SOURCES,
+): Record<string, string> {
+  const page = path.join(sources, 'page');
+  const entries: Record<string, string> = {
+    outbox: path.join(sources, 'outbox.ts'),
+  };
+  for (const file of fs.readdirSync(page).sort()) {
+    // A `.browser.spec.ts` beside its module is a test, never a client entry (#1225).
+    if (
+      !file.endsWith('.ts') ||
+      file.endsWith('.d.ts') ||
+      file.endsWith('.spec.ts')
+    )
+      continue;
+    entries[path.basename(file, '.ts')] = path.join(page, file);
+  }
+  return entries;
+}
+
+function pageBuildOptions(sources: string, outdir: string): BuildOptions {
+  return {
+    entryPoints: pageModuleEntries(sources),
+    outdir,
+    bundle: true,
+    minify: true,
+    format: 'esm',
+    external: IMPORT_MAP_NAMES,
+  };
+}
+
+// Where the page modules were built before public/js/gen/ (#1177).
+const PAGE_LEGACY_DIR = path.join(PUBLIC_DIR, 'js');
+
+/**
+ * Warns about each untracked `<name>.js` the builds before public/js/gen/ left
+ * in public/js/ for a page module's name: obsolete build output nothing loads
+ * (the URLs moved to /js/gen/), but still copied into an image by the
+ * Dockerfile's `COPY public`. It touches no file (#1181): an untracked file of
+ * that name may be a developer's edit, and moving or deleting it is a data-loss
+ * risk for a few hours' worth of stale output. A tracked file (a plain-JS
+ * module) is never named. Without git to ask (the image build has no .git),
+ * nothing is said.
+ */
+function warnLegacyCopies(names: string[], dir: string): void {
+  const candidates = names
+    .map((name) => `${name}.js`)
+    .filter((file) => fs.existsSync(path.join(dir, file)));
+  if (candidates.length === 0) return;
+  let tracked: Set<string>;
+  try {
+    const listed = execFileSync('git', ['ls-files', '-z', '--', '.'], {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    tracked = new Set(listed.split('\0').filter(Boolean));
+  } catch {
+    return;
+  }
+  for (const file of candidates) {
+    if (tracked.has(file)) continue;
+    console.warn(
+      `page modules: ${path.relative(process.cwd(), path.join(dir, file))} is an obsolete build output from before public/js/gen/; delete it by hand (git clean -n public/js lists them)`,
+    );
+  }
+}
+
+/**
+ * Makes `outdir` hold exactly this build of pageModuleEntries (minified, as
+ * the worker is), like syncClientModules: an output whose bytes are already
+ * current is left alone, so its mtime (and its precompressed variants'
+ * freshness) survives a repeat run, and every other file there goes, a
+ * renamed or deleted module's output with it. Returns the names written and
+ * removed.
+ */
+export function buildPageModules(
+  where: {
+    sources?: string;
+    outdir?: string;
+    legacyDir?: string;
+  } = {},
+): { written: string[]; removed: string[] } {
+  const {
+    sources = PAGE_SOURCES,
+    outdir = PAGE_OUT,
+    legacyDir = PAGE_LEGACY_DIR,
+  } = where;
+  warnLegacyCopies(Object.keys(pageModuleEntries(sources)), legacyDir);
+  const result = buildSync({
+    ...pageBuildOptions(sources, outdir),
+    logLevel: 'warning',
+    write: false,
+  });
+  fs.mkdirSync(outdir, { recursive: true });
+  const built = new Set<string>();
+  const written: string[] = [];
+  for (const output of result.outputFiles) {
+    const name = path.relative(outdir, output.path);
+    built.add(name);
+    const bytes = Buffer.from(output.contents);
+    if (
+      fs.existsSync(output.path) &&
+      fs.readFileSync(output.path).equals(bytes)
+    ) {
+      continue;
+    }
+    fs.writeFileSync(output.path, bytes);
+    written.push(name);
+  }
+  // A current output's variants stay for precompress to judge.
+  const removed = listFiles(outdir)
+    .map((file) => path.relative(outdir, file))
+    .filter((file) => !built.has(variantSource(file) ?? file));
+  for (const file of removed) fs.rmSync(path.join(outdir, file));
+  return { written, removed };
+}
+
+/**
+ * Rebuilds the page modules into the same directory on every change to
+ * their sources, for `npm run start:dev` (which builds once first). The
+ * entry list is read at start: a new or renamed page module needs a restart,
+ * whose first build removes the old output. Returns the watching context;
+ * the process runs until it is stopped.
+ */
+export async function watchPageModules(
+  where: { sources?: string; outdir?: string } = {},
+): Promise<BuildContext> {
+  const { sources = PAGE_SOURCES, outdir = PAGE_OUT } = where;
+  const watcher = await context({
+    ...pageBuildOptions(sources, outdir),
+    logLevel: 'info',
+  });
+  await watcher.watch();
+  return watcher;
 }
 
 // Text formats worth compressing; images, fonts (woff2 is brotli already)

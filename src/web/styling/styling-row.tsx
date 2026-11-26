@@ -1,14 +1,17 @@
 import { garmentMarks } from '../../wardrobe/marks';
 import type { GarmentRole } from '../../wardrobe/properties';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
+import { PageSentinel } from '../page-sentinel';
 import { GarmentMark } from '../layout/garment-mark';
 import { GarmentPicture } from '../layout/parts';
 import { categoryLabel } from '../wardrobe/garment';
 import { roleLabel } from '../wardrobe/labels';
 import { SnapStrip, snapItem, type SnapSize } from '../strip/snap-strip';
 import { garmentUrl } from '../wardrobe/urls';
+import type { StripKeyset } from './queries';
 import type { RowGarment, StylingRow } from './rows';
 import { STYLING_GARMENTS_PATH, type StylingState, stylingUrl } from './urls';
+import { Icon } from '../layout/icon';
 
 /**
  * A Styling row (#42): a role's strip of garments, scroll-snap with the
@@ -37,9 +40,12 @@ export function ridesAlong(role: GarmentRole): boolean {
   return SMALL.includes(role);
 }
 
-/** The strip's item size; see `SnapSize` for how it and the end spacers go together. */
+/**
+ * The strip's item size; see `SnapSize` for how it and the end spacers go
+ * together. From `lg` both are the `regular` tile (`small`'s step).
+ */
 function sizing(role: GarmentRole): SnapSize {
-  return ridesAlong(role) ? 'small' : 'roomy';
+  return ridesAlong(role) ? 'small' : 'regular';
 }
 
 /**
@@ -83,8 +89,10 @@ export function StylingRowView(props: {
   const label = roleLabel(row.role);
   const size = sizing(row.role);
   return (
+    // The lock is a btn-xs over the strip, which paints later: on a phone
+    // the gap leaves its 44 px area room (main.css, Touch hit areas; #1210).
     <section
-      class="group/row flex flex-col gap-1"
+      class="group/row flex flex-col gap-1 pointer-coarse:gap-2.5"
       data-styling-row={row.role}
       aria-label={label}
     >
@@ -108,18 +116,27 @@ export function StylingRowView(props: {
           locked={row.locked}
         />
         {row.garments.map((garment) => (
-          <GarmentItem
-            garment={garment}
-            role={row.role}
-            selected={garment.id === row.garmentId}
-            locked={row.locked}
-            viewOwner={context.viewOwner}
-          />
+          <>
+            {garment.id === row.moreAfter && (
+              <StripSentinel
+                role={row.role}
+                keyset={{ after: garment.id }}
+                context={context}
+              />
+            )}
+            <GarmentItem
+              garment={garment}
+              role={row.role}
+              selected={garment.id === row.garmentId}
+              locked={row.locked}
+              viewOwner={context.viewOwner}
+            />
+          </>
         ))}
         {row.moreBefore !== undefined && (
           <StripSentinel
             role={row.role}
-            before={row.moreBefore}
+            keyset={{ before: row.moreBefore }}
             context={context}
           />
         )}
@@ -139,7 +156,7 @@ export function StylingRowView(props: {
  * snapshot (innerHTML) keeps, so a row restored by Back is still frozen and
  * still reads locked, and makes the neighbours inert or not.
  */
-function LockToggle(props: { locked: boolean; label: string }) {
+function LockToggle(props: { locked: boolean; label: Translated }) {
   return (
     // daisyUI's swap: the label is the control (its input has no box), so
     // it shows the keyboard focus its checkbox has.
@@ -151,36 +168,16 @@ function LockToggle(props: { locked: boolean; label: string }) {
         aria-label={t('styling.LOCK', { role: props.label })}
       />
       {/* Heroicons' lock-closed and lock-open, outline. */}
-      <svg
+      <Icon
+        paths="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
         class="swap-on size-4 text-accent"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        aria-hidden="true"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
-        />
-      </svg>
-      <svg
+        weight="1.5"
+      />
+      <Icon
+        paths="M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
         class="swap-off size-4 text-muted"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        aria-hidden="true"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
-        />
-      </svg>
+        weight="1.5"
+      />
     </label>
   );
 }
@@ -272,50 +269,62 @@ export function GarmentLook(props: {
 }
 
 /**
- * The end of the strip's window: fetches the next page of the role's cycle
- * when it scrolls into view and is replaced by it (and its own sentinel).
- * `intersect`, not `revealed`: that one watches the window's scroll, never
- * a horizontal strip's (AGENTS.md, Gotchas).
+ * An end of the strip's window: fetches the next page of the role's cycle
+ * when it scrolls into view and is replaced by it (and its own sentinel):
+ * older garments at the strip's end (`before`), newer ones at the start of
+ * a window deep in the cycle (`after`, #996), which snap-strip.js keeps
+ * from moving the chosen item as they land. `intersect`, not `revealed`:
+ * that one watches the window's scroll, never a horizontal strip's
+ * (AGENTS.md, Gotchas).
  */
 function StripSentinel(props: {
   role: GarmentRole;
-  before: number;
+  keyset: StripKeyset;
   context: RowContext;
 }) {
+  const { keyset } = props;
   const url = stylingUrl(props.context.state, STYLING_GARMENTS_PATH, [
     `role=${props.role}`,
-    `before=${props.before}`,
+    'before' in keyset ? `before=${keyset.before}` : `after=${keyset.after}`,
   ]);
   return (
-    <span
+    <PageSentinel
+      as="span"
       class="snap-center shrink-0 w-12 flex items-center justify-center"
-      hx-get={url}
-      hx-trigger="intersect once"
-      hx-swap="outerHTML"
-      data-strip-more=""
-    >
-      <span
-        class="loading loading-dots loading-sm text-muted"
-        aria-label={t('LOADING_MORE')}
-      ></span>
-    </span>
+      href={url}
+      trigger="intersect once"
+      marker="strip"
+      size="sm"
+      inListbox
+    />
   );
 }
 
 /**
- * GET /styling/garments: the next page of a strip, and its sentinel when
- * more follow. Never chosen and never inert: the request does not carry the
- * row's lock, so styling.js makes them inert as they land in a locked row.
+ * GET /styling/garments: a page of a strip, and its sentinel when more
+ * follow that way: after the page for older garments, before it for newer
+ * ones. Never chosen and never inert: the request does not carry the row's
+ * lock, so styling.js makes them inert as they land in a locked row.
  */
 export function StripPage(props: {
   role: GarmentRole;
+  keyset: StripKeyset;
   garments: RowGarment[];
   more: boolean;
   context: RowContext;
 }) {
+  const first = props.garments.at(0);
   const last = props.garments.at(-1);
+  const older = 'before' in props.keyset;
   return (
     <>
+      {props.more && !older && first && (
+        <StripSentinel
+          role={props.role}
+          keyset={{ after: first.id }}
+          context={props.context}
+        />
+      )}
       {props.garments.map((garment) => (
         <GarmentItem
           garment={garment}
@@ -325,10 +334,10 @@ export function StripPage(props: {
           viewOwner={props.context.viewOwner}
         />
       ))}
-      {props.more && last && (
+      {props.more && older && last && (
         <StripSentinel
           role={props.role}
-          before={last.id}
+          keyset={{ before: last.id }}
           context={props.context}
         />
       )}

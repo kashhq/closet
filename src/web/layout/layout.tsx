@@ -7,11 +7,14 @@ import { THEME_BASE_100 } from '../theme-colors';
 import type { ViewContext } from '../view-context';
 import { PhotoViewer } from '../files/photo-viewer';
 import { AppStatus } from './app-status';
+import { pageModuleUrl } from './import-map';
 import { ConfirmSheet } from './confirm-sheet';
+import { pageIdentity } from '../page-contract';
 
 /**
- * The document shell of every page. The pages render the app bar and dock
- * themselves (the error page and every current page do).
+ * The document shell of every page. `PageShell` renders it with the app
+ * bar, the page's `<main>` and the dock inside; the pages not on the shell
+ * yet (guards.conf `@page-main`'s `known` lines) render those themselves.
  *
  * English only: `lang`, `og:locale` and the default description are fixed.
  */
@@ -29,55 +32,73 @@ import { ConfirmSheet } from './confirm-sheet';
 //  - A request gives up after the outbox's replay timeout, the one bound on
 //    how long the app waits for the server (0, htmx's default, spun a hung
 //    hx-post forever); public/js/request-failures.js says so.
+//  - No attribute settling: htmx inserts an element that replaces one of the
+//    same id wearing the old element's class and style, and gives it its
+//    own only after the settle delay (20 ms), a frame drawn with the wrong
+//    look. A month cell's weather chip arrived with its empty slot's classes
+//    at base size, widening the date column, then shrank (the calendar
+//    scenario measured between the two). The settle exists for CSS
+//    transitions between the two classes, which nothing here uses.
+//  - No script from a swap, and no eval (#672): htmx drops every <script> a
+//    boosted body, a fragment or an error page brings, a same-origin src
+//    included, so a page's setup is page-mount.ts's `data-page-module` and a
+//    data island an attribute. Never `inlineScriptNonce`: htmx would stamp
+//    it on whatever script a swap carries, an injected one too.
 const HTMX_CONFIG = {
+  allowEval: false,
+  allowScriptTags: false,
+  attributesToSettle: [],
   disableInheritance: true,
   historyCacheSize: 3,
   timeout: REPLAY_TIMEOUT_MS,
 };
 
-// Bare specifiers for every ES module the pages import, so the versioned URL
-// lives here once. Page-specific modules (the snap strip's snap-strip, which
-// Styling's styling imports, the garment page's mask-editor and photo-input,
-// select mode's select-count, the recap's recap-export, the share
-// confirmation's share-confirm and click-gate, a look's share-saved) are
-// only fetched by the page that imports them.
-function importMap(version: string) {
-  const v = `?v=${version}`;
-  return {
-    imports: {
-      'workbox-window': `/modules/workbox-window.prod.mjs${v}`,
-      // pwa.js imports these two only where they do something.
-      'pwa-install': `/modules/pwa-install.bundle.js${v}`,
-      pulltorefreshjs: `/modules/pulltorefresh/index.esm.js${v}`,
-      toast: `/js/toast.js${v}`,
-      'confirm-sheet': `/js/confirm-sheet.js${v}`,
-      'mask-editor': `/js/mask-editor.js${v}`,
-      'photo-input': `/js/photo-input.js${v}`,
-      'snap-strip': `/js/snap-strip.js${v}`,
-      styling: `/js/styling.js${v}`,
-      locate: `/js/locate.js${v}`,
-      push: `/js/push.js${v}`,
-      freshness: `/js/freshness.js${v}`,
-      'age-label': `/js/age-label.js${v}`,
-      'single-flight': `/js/single-flight.js${v}`,
-      'select-count': `/js/select-count.js${v}`,
-      'recap-export': `/js/recap-export.js${v}`,
-      'share-confirm': `/js/share-confirm.js${v}`,
-      'share-saved': `/js/share-saved.js${v}`,
-      'click-gate': `/js/click-gate.js${v}`,
-    },
-  };
+/**
+ * A page's own link preview: the og tags (the share page's garment, a public
+ * entry page's description). Each falls back to the app's, or the request's
+ * URL and the app icon. `PageShell`'s `meta`.
+ */
+export interface PageMeta {
+  ogTitle?: string;
+  ogDescription?: string;
+  ogUrl?: string;
+  ogImage?: string;
+  /** Also describe the page as a schema.org WebPage, by its og title and description (sign in, register). */
+  webPage?: boolean;
 }
 
-export interface LayoutProps {
+/**
+ * The schema.org WebPage of a public entry page, for link previews. In the
+ * head, like every <script> (#672): htmx drops each one a swap brings,
+ * data included (`allowScriptTags: false`), and `expectFullPage` refuses
+ * one in the body.
+ */
+function WebPageData(props: {
+  ctx: ViewContext;
+  name: string;
+  description: string;
+}) {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: props.name,
+    description: props.description,
+    isPartOf: { '@id': `${props.ctx.siteUrl}/#website` },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // Structured data is JSON by definition; jsonForScript keeps it
+      // from closing the element.
+      dangerouslySetInnerHTML={{ __html: jsonForScript(data) }}
+    />
+  );
+}
+
+export interface LayoutProps extends PageMeta {
   ctx: ViewContext;
   /** <title>; the app name when absent. */
   title?: string;
-  ogTitle?: string;
-  ogDescription?: string;
-  /** The page's own link preview (the share page); the request URL and app icon otherwise. */
-  ogUrl?: string;
-  ogImage?: string;
   children?: Child;
 }
 
@@ -100,11 +121,11 @@ function ErrorScript({ ctx, v }: { ctx: ViewContext; v: string }) {
  * The offline outbox (#178, src/web/shell/outbox.md): queues wears, washes
  * and packing ticks offline and replays them. Signed-in pages only, whose
  * #app-status names the account. Built from views/assets/outbox.ts
- * (`npm run generate:outbox`); it imports from the importmap.
+ * (`npm run generate:pages`); it imports from the importmap.
  */
 function OutboxScript({ ctx, v }: { ctx: ViewContext; v: string }) {
   if (!ctx.user) return null;
-  return <script type="module" src={`/js/outbox.js${v}`}></script>;
+  return <script type="module" src={`${pageModuleUrl('outbox')}${v}`}></script>;
 }
 
 export function Layout({
@@ -114,6 +135,7 @@ export function Layout({
   ogDescription = t('APP_DESCRIPTION'),
   ogUrl = ctx.ogUrl,
   ogImage = ctx.ogImage,
+  webPage,
   children,
 }: LayoutProps) {
   // Every first-party static URL carries ?v=appVersion (src/build-info.ts):
@@ -123,7 +145,9 @@ export function Layout({
   return (
     // data-signed-in: pwa.js starts Web Push (push.js) only on signed-in
     // pages; the session cookie is httpOnly, so scripts cannot tell.
-    <html lang="en" data-signed-in={ctx.user ? '' : undefined}>
+    // data-asset-version: the build this page was rendered with, which the
+    // worker checks before claiming it (pwa.js, claimIfUncontrolled).
+    <html lang="en" {...pageIdentity(ctx.user !== undefined, ctx.appVersion)}>
       <head>
         <meta charset="UTF-8" />
         {/* No viewport-fit=cover: iOS standalone handles the safe areas
@@ -159,6 +183,9 @@ export function Layout({
         <meta name="twitter:description" content={ogDescription} />
         <meta name="twitter:image" content={ogImage} />
         <meta property="og:site_name" content={ctx.appName} />
+        {webPage && (
+          <WebPageData ctx={ctx} name={ogTitle} description={ogDescription} />
+        )}
 
         <link rel="icon" href={`/favicon.ico${v}`} sizes="48x48" />
         {/* iOS scales it to 180 px; Firefox also reads it as the site icon
@@ -178,16 +205,24 @@ export function Layout({
         {/* Libraries are served from node_modules (registerStaticAssets in
             app.ts), never a CDN. */}
         <script defer src={`/modules/htmx.min.js${v}`}></script>
-        <script defer src={`/js/color-multiselect.js${v}`}></script>
+        {/* The page's one inline script, allowed by its hash (csp.ts):
+            written as is, the string the header was hashed from. */}
         <script
           type="importmap"
-          dangerouslySetInnerHTML={{
-            __html: jsonForScript(importMap(ctx.appVersion)),
-          }}
+          dangerouslySetInnerHTML={{ __html: ctx.importMap }}
         />
         {/* Heartbeat-driven online/offline state and the banner in
             AppStatus; runs everywhere, service worker or not. */}
-        <script type="module" src={`/js/connectivity.js${v}`}></script>
+        <script
+          type="module"
+          src={`${pageModuleUrl('connectivity')}${v}`}
+        ></script>
+        {/* The garment form's colour field; delegated, so one load serves
+            every form a navigation brings. */}
+        <script
+          type="module"
+          src={`${pageModuleUrl('color-picker')}${v}`}
+        ></script>
         {/* The confirmation sheet (ConfirmSheet): hx-confirm and a PostForm's
             confirm. Before submit-once, which skips a declined submit. */}
         <script type="module" src={`/js/confirm-sheet.js${v}`}></script>
@@ -204,16 +239,30 @@ export function Layout({
         <script type="module" src={`/js/request-failures.js${v}`}></script>
         {/* The app bar's back arrow goes back like a native app's. After
             submit-once, whose cancelled submits it must see as cancelled. */}
-        <script type="module" src={`/js/back.js${v}`}></script>
+        <script type="module" src={`${pageModuleUrl('back')}${v}`}></script>
+        {/* Escape closes an open app bar menu (a <details> has no key). */}
+        <script
+          type="module"
+          src={`${pageModuleUrl('menu-escape')}${v}`}
+        ></script>
         {/* The shared photo viewer (src/web/files/photo-viewer.tsx): one
             document listener opens any [data-photo-open]. */}
         <script type="module" src={`/js/photo-viewer.js${v}`}></script>
+        {/* The one-line behaviours a control asks for by data-* (the CSP
+            allows no inline handler) and each page's own setup on every
+            visit (data-page-module): delegated, and in the head, so every
+            swap is seen. */}
+        <script type="module" src={`${pageModuleUrl('actions')}${v}`}></script>
+        <script
+          type="module"
+          src={`${pageModuleUrl('page-mount')}${v}`}
+        ></script>
         <OutboxScript ctx={ctx} v={v} />
         {ctx.pwaEnabled && (
           // Service worker registration, update toast, Web Push, the install
           // dialog, iOS pull to refresh. In the head so hx-boost body swaps
           // never re-run it.
-          <script type="module" src={`/js/pwa.js${v}`}></script>
+          <script type="module" src={`${pageModuleUrl('pwa')}${v}`}></script>
         )}
         {ctx.metricsEnabled && ctx.user && (
           // The device's page-load, htmx and interaction timings, beaconed
@@ -230,12 +279,13 @@ export function Layout({
           request lights the app bar's spinner (#loading) and marks the tapped
           link htmx-request (pressed styling in main.css), so a slow network
           never looks like a dead tap; an element with its own hx-indicator
-          (the photo form) keeps it. */}
+          (the photo form) keeps it. `min-h-dvh` follows iOS's toolbars, so the
+          viewport never collapses under a scroll. */}
       <body
         hx-boost="true"
         hx-indicator="#loading, closest a"
         hx-inherit="hx-boost hx-indicator"
-        class="h-screen flex flex-col"
+        class="h-screen min-h-dvh flex flex-col"
       >
         {children}
         <AppStatus ctx={ctx} />

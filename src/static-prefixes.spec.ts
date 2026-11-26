@@ -5,7 +5,7 @@ describe('isStaticPath', () => {
   it.each([
     '/modules/htmx.min.js',
     '/assets/icon.png',
-    '/js/mask-editor.js',
+    '/js/gen/mask-editor.js',
     '/vendor/fonts/fonts.css',
     '/file/8d755fce.webp?v=3',
     '/file/nobg/8d755fce.webp',

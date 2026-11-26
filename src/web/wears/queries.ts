@@ -110,8 +110,13 @@ export interface WearSummary {
   worn: number;
   sinceWash: number;
   lastWorn: IsoDate | null;
-  /** Worn today by "Wore today" (undoable), through a worn calendar entry, or not. */
-  today: 'single' | 'entry' | null;
+  /**
+   * How it was worn on `lastWorn`: by "Wore today" (undoable; it wins when
+   * both), through a worn calendar entry, or null, never worn. No "worn
+   * today": the page's script judges that on the tap's day (#708,
+   * src/page-day.ts), so the page reads the same tomorrow.
+   */
+  lastWornBy: 'single' | 'entry' | null;
   /** Its repairs' costs summed (repairCostSql), for the wear line's cost per wear. */
   repairCost: string | null;
 }
@@ -130,17 +135,17 @@ export function wearSummarySql(
   garmentId: number,
   today: IsoDate,
 ): SQL<WearSummary> {
-  const worn = (entry: SQL) =>
-    sql`bool_or(${garmentWear.day} = ${today} and ${garmentWear.outfitCalendarId} ${entry})`;
+  // The last day's wears, a single one first: one aggregate, no subquery.
+  const lastWornBy = sql`(array_agg(
+    case when ${garmentWear.outfitCalendarId} is null then 'single' else 'entry' end
+    order by ${garmentWear.day} desc, ${garmentWear.outfitCalendarId} desc nulls first
+  ) filter (where ${garmentWear.day} is not null))[1]`;
   return sql<WearSummary>`(
     select json_build_object(
       'worn', count(distinct ${garmentWear.day})::int,
       'sinceWash', (count(distinct ${garmentWear.day}) filter (where ${wornSinceWash}))::int,
       'lastWorn', max(${garmentWear.day})::text,
-      'today', case
-        when ${worn(sql`is null`)} then 'single'
-        when ${worn(sql`is not null`)} then 'entry'
-      end,
+      'lastWornBy', ${lastWornBy},
       'repairCost', ${repairCostSql(garment.id, today)}
     )
     from ${garment}
@@ -605,27 +610,37 @@ export async function setWoreToday(
   return owned.changed ? 'changed' : 'unchanged';
 }
 
+/** What a batch of washes did (markWashed). */
+export interface WashOutcome {
+  /** The garments washed, each with whether its wash moved (a repeat is unchanged). */
+  washed: { id: number; changed: boolean }[];
+  /**
+   * The distinct ids named but not washed, by why (#819). `unseen` is no
+   * garment of the owner's: another's and a deleted or unknown id are one
+   * count, so an answer never tells them apart. An id named twice is
+   * washed once and is no skip.
+   */
+  skipped: { archived: number; wishlist: number; unseen: number };
+}
+
 /**
  * Washes the listed garments of the owner on `day` (every copy: laundry
  * day) at `at`, its instant on that day or null (instantOnDay, #676); the
- * ids of others and of wishlist items ignored like unknown ones. Returns
- * the garments washed, each with whether its wash moved. Monotone: a wash
- * never moves back, so a queued wash replayed after a later one (#178)
- * changes nothing; washed has no undo. On the same day only a later known
- * instant moves it: a timeless wash never erases a known one (an old
- * client's replay must not uncount the evening's wear), and a known one
- * replaces a timeless one. A later day takes its own instant, null or not.
- * The garment page's Washed, the laundry page's batch, the API, MCP's
- * mark_washed and the seed's Sundays.
+ * ids of others and of wishlist items are not washed, and counted by why.
+ * Monotone: a wash never moves back (washMoves, src/wardrobe/availability.ts,
+ * whose SQL twin is the update's condition), so a queued wash replayed after
+ * a later one (#178) changes nothing, and washed has no undo. The garment
+ * page's Washed, the laundry page's batch, select mode's Mark washed, the
+ * API, MCP's mark_washed and the seed's Sundays.
  *
  * An archived garment may be washed (its own page offers Washed, e.g. before
  * it is stored away), so the writer accepts it; a batch acting on "what the
  * grid shows" passes `closetOnly` so a Select all over the archive does not
  * wash what the user did not mean to (#816).
  *
- * One statement: the owner lock, the garments named (owned), and the
- * update of only those whose wash moves, so a repeat tap writes no row
- * and sends no revision to the changes feed.
+ * One statement: the owner lock, the owner's garments named with whether
+ * each may be washed, and the update of only those whose wash moves, so a
+ * repeat tap writes no row and sends no revision to the changes feed.
  */
 export async function markWashed(
   db: Queryable,
@@ -634,27 +649,43 @@ export async function markWashed(
   day: IsoDate,
   at: Date | null,
   { closetOnly = false }: { closetOnly?: boolean } = {},
-): Promise<{ id: number; changed: boolean }[]> {
-  if (ids.length === 0) return [];
-  const laterDay = sql`(${garment.lastWashedOn} is null or ${day}::date > ${garment.lastWashedOn})`;
-  const laterInstant = sql`(${day}::date = ${garment.lastWashedOn} and ${at}::timestamptz is not null and (${garment.washedAt} is null or ${at}::timestamptz > ${garment.washedAt}))`;
-  const { rows } = await db.execute<{ id: number; changed: boolean }>(sql`
+): Promise<WashOutcome> {
+  const skipped = { archived: 0, wishlist: 0, unseen: 0 };
+  if (ids.length === 0) return { washed: [], skipped };
+  // washMoves in SQL: a later day, or the same day and known after it (a
+  // null on either side makes `>` null, which the filter reads as false).
+  const moves = sql`(${garment.lastWashedOn} is null or ${day}::date > ${garment.lastWashedOn} or (${day}::date = ${garment.lastWashedOn} and ${at}::timestamptz > ${garment.washedAt}))`;
+  const { rows } = await db.execute<{
+    id: number;
+    wishlist: boolean;
+    washable: boolean;
+    changed: boolean;
+  }>(sql`
     with ${ownerLockSql(db, ownerId)},
     named as (
-      select ${garment.id} as id from ${garment}
-      where ${and(eq(garment.ownerId, ownerId), inArray(garment.id, ids), closetOnly ? inCloset() : ownedGarment())}
+      select ${garment.id} as id, ${onWishlist()} as wishlist,
+        ${closetOnly ? inCloset() : ownedGarment()} as washable
+      from ${garment}
+      where ${and(eq(garment.ownerId, ownerId), inArray(garment.id, ids))}
         and ${OWNER_LOCKED}
     ),
     moved as (
       update ${garment}
       set last_washed_on = ${day}::date, washed_at = ${at}::timestamptz
-      where ${garment.id} in (select id from named) and ${OWNER_LOCKED}
-        and (${laterDay} or ${laterInstant})
+      where ${garment.id} in (select id from named where washable)
+        and ${OWNER_LOCKED} and ${moves}
       returning ${garment.id} as id
     )
-    select named.id, moved.id is not null as changed
+    select named.id, named.wishlist, named.washable, moved.id is not null as changed
     from named left join moved on moved.id = named.id`);
-  return rows;
+  const washed: WashOutcome['washed'] = [];
+  for (const row of rows) {
+    if (row.washable) washed.push({ id: row.id, changed: row.changed });
+    else if (row.wishlist) skipped.wishlist++;
+    else skipped.archived++;
+  }
+  skipped.unseen = new Set(ids).size - rows.length;
+  return { washed, skipped };
 }
 
 /**

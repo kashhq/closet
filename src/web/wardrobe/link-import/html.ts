@@ -236,7 +236,7 @@ export function plainText(text: string): string | null {
  * Character references: numeric ones and the named ones product pages use.
  * An unknown name or an invalid code point is left as written.
  */
-export function decodeEntities(text: string): string {
+function decodeEntities(text: string): string {
   return text.replace(
     /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]{2,8}));/gi,
     (entity, decimal?: string, hex?: string, named?: string) => {

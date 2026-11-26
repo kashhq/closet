@@ -55,9 +55,24 @@ export interface KeywordToken {
  * follows the database's locale (ASCII only under C), so "café" folded to
  * "caf" there and "café" here, and never matched. Letters in any script stay.
  */
-export const FOLDED_PUNCTUATION =
-  '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~‘’‚“”„–—…·•';
+const FOLDED_PUNCTUATION = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~‘’‚“”„–—…·•';
 const FOLDED = new Set(FOLDED_PUNCTUATION);
+
+/**
+ * The characters that split words, one fixed set for both sides (the
+ * keyword's and the labels' split here, contains' `regexp_replace` in
+ * Postgres): JS's `\s` and Unicode's White_Space together, so a no-break
+ * space or a BOM pasted into a product name splits on both sides. A set,
+ * not `[[:space:]]`: that class follows the collation in force (ASCII only
+ * under C, so it held only while `pg_unicode_fast` reached the regex) and
+ * even under Unicode differs from `\s` (U+0085, U+FEFF), #789.
+ * keyword-search.spec.ts holds it to both definitions.
+ */
+export const WORD_SPACES =
+  '\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+/** WORD_SPACES as a bracket expression, in JS's and Postgres' regex alike (none of its characters is special there). */
+const WORD_SPACE_RUN = `[${WORD_SPACES}]+`;
+const WORD_SPLIT = new RegExp(WORD_SPACE_RUN, 'u');
 
 /**
  * Lower case, FOLDED_PUNCTUATION dropped: "J.Crew" is "jcrew", "T-shirt"
@@ -69,13 +84,13 @@ function fold(text: string): string {
 
 /**
  * Whether a text has a word starting with the token, each word folded: words
- * are split on whitespace only, so "shirt" finds the Shirt type and "Western
+ * are split on WORD_SPACES only, so "shirt" finds the Shirt type and "Western
  * denim shirt" but not "T-shirt" or "Navy crewneck sweatshirt", "coat" finds
  * "Trench coat", and "jcrew" finds "J.Crew". contains is the same rule in
  * Postgres; the two must agree.
  */
 function startsAWord(text: string, token: string): boolean {
-  return text.split(/\s+/).some((word) => fold(word).startsWith(token));
+  return text.split(WORD_SPLIT).some((word) => fold(word).startsWith(token));
 }
 
 function matching<T extends string>(
@@ -100,7 +115,7 @@ const CATEGORIES = Object.values(GarmentCategory);
 /** The keyword's tokens with the keys each one names; none for a blank one. */
 export function keywordTokens(keyword: string | undefined): KeywordToken[] {
   return (keyword ?? '')
-    .split(/\s+/)
+    .split(WORD_SPLIT)
     .filter((word) => word !== '')
     .map((word): KeywordToken => {
       const folded = fold(word);
@@ -139,18 +154,18 @@ function likeLiteral(text: string): string {
 /**
  * A text column matching the token. A folded token starts a word of the
  * column folded the same way, word by word: lower case, FOLDED_PUNCTUATION
- * dropped within words, words split on whitespace (startsAWord in Postgres;
+ * dropped within words, words split on WORD_SPACES (startsAWord in Postgres;
  * " " is prepended so the first word starts after one). Both steps are
  * independent of the database's locale: `pg_unicode_fast` (Postgres 18's
- * builtin collation, Unicode case mapping as toLowerCase) and a fixed
- * `translate` set. A punctuation-only token is contained as itself ("%"
+ * builtin collation, Unicode case mapping as toLowerCase), a fixed
+ * `translate` set and a fixed split set. A punctuation-only token is contained as itself ("%"
  * finds a name with a percent sign, not every garment). A filter over one
  * wardrobe's rows (hundreds): no index or stored folded column at household
  * size.
  */
 function contains(column: AnyPgColumn, token: KeywordToken): SQL {
   if (!token.folded) return ilike(column, `%${likeLiteral(token.text)}%`);
-  const words = sql`' ' || regexp_replace(translate(lower(${column} collate "pg_unicode_fast"), ${FOLDED_PUNCTUATION}::text, ''), '[[:space:]]+', ' ', 'g')`;
+  const words = sql`' ' || regexp_replace(translate(lower(${column} collate "pg_unicode_fast"), ${FOLDED_PUNCTUATION}::text, ''), ${WORD_SPACE_RUN}::text, ' ', 'g')`;
   return sql`${words} like ${`% ${likeLiteral(token.text)}%`}`;
 }
 

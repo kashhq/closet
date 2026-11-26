@@ -6,6 +6,7 @@ import { type SharePermission, user, wardrobeShare } from '../../db/schema';
 import { sessionUserId } from '../auth/require-session';
 import { Forbidden, NotFound, type Resource } from '../refusals';
 import { ROW_ID_MAX } from '../schemas';
+import { type Surface, surfaceOf } from '../surface';
 
 /**
  * What the actor may do with the wardrobe a call addresses. `ownerId` is
@@ -27,10 +28,13 @@ export interface WardrobeAccess {
 
 /**
  * The one definition of a share that opens `ownerId`'s wardrobe to `userId`:
- * an id, or the user column of a statement that has not read it yet (the
- * device token's, authenticateToken).
+ * each an id, or a column of the statement asking (the device token's user,
+ * authenticateToken; a garment's owner, managesWardrobeSql).
  */
-function acceptedShare(ownerId: number, userId: number | AnyPgColumn) {
+function acceptedShare(
+  ownerId: number | AnyPgColumn,
+  userId: number | AnyPgColumn,
+) {
   return and(
     eq(wardrobeShare.grantorId, ownerId),
     eq(wardrobeShare.granteeId, userId),
@@ -84,6 +88,23 @@ export function sharePermissionSql(
 }
 
 /**
+ * Whether `viewerId` may manage the wardrobe of `ownerId` (a row's owner
+ * column), as the resolver's `canManage` answers it: their own, or an
+ * accepted MANAGE share. For a batched read across the wardrobes the
+ * viewer sees (the changes feed's garments, garmentsByIds), where no
+ * resolver runs per row.
+ */
+export function managesWardrobeSql(
+  ownerId: AnyPgColumn,
+  viewerId: number,
+): SQL<boolean> {
+  return sql<boolean>`(${ownerId} = ${viewerId} or exists (
+    select from ${wardrobeShare}
+    where ${and(acceptedShare(ownerId, viewerId), eq(wardrobeShare.permission, 'MANAGE'))}
+  ))`;
+}
+
+/**
  * Keeps what the session statement (or an API request's token read) read,
  * for this request alone: the resolver stores it only for a cookie that
  * opened a session, the API's token hook only for a token it accepted, and
@@ -105,20 +126,45 @@ export function rememberShareReadAhead(
  * pages and /api/v1, `actorOf(ctx)` (src/web/mcp/tool.ts) for MCP. No
  * domain function sees a FastifyRequest.
  */
+/**
+ * The Actor's door: a request's surface, or `cli` for the seed and the audit
+ * fixture (the maintenance CLIs build no Actor), so an audit line tells a command-line
+ * credential from one a person made on a page. Never a request Surface: the
+ * request gates (same-origin, bearer) must not grow a `cli` case.
+ */
+type ActorSurface = Surface | 'cli';
+
 export interface Actor {
   userId: number;
+  /**
+   * The door the call came through (#712): what an action's log line names
+   * (logOp, src/web/op-log.ts), so the action logs once for every surface.
+   * Never an access input: the resolver ignores it.
+   */
+  surface: ActorSurface;
   shareReadAhead?: ShareReadAhead;
+  /**
+   * An own-wardrobe-only agent token's (#701, its TokenScope): every
+   * wardrobe but the user's own resolves as unseen, the unknown id's
+   * NotFound, and no share is listed (sharedWardrobesOf). Only actorOf(ctx)
+   * sets it: a session or device token sees its shares as ever.
+   */
+  ownWardrobeOnly?: true;
 }
 
 /**
  * The request's actor: the device token's user on /api/v1 (only its hook
- * sets `accessToken` there), else the session's. Throws on a public route,
- * as sessionUserId does.
+ * sets `accessToken` there), else the session's, on the request's surface
+ * (surfaceOf: `api` or `page`; MCP builds its own, actorOf(ctx)). Throws on
+ * a public route, as sessionUserId does.
  */
 export function actorOf(request: FastifyRequest): Actor {
   const userId = request.accessToken?.user.id ?? sessionUserId(request);
+  const surface = surfaceOf(request);
   const shareReadAhead = sharesReadAhead.get(request);
-  return shareReadAhead ? { userId, shareReadAhead } : { userId };
+  return shareReadAhead
+    ? { userId, surface, shareReadAhead }
+    : { userId, surface };
 }
 
 /** The actor's share of `ownerId`'s wardrobe: the one read ahead when it is this wardrobe's, else a statement. */
@@ -154,7 +200,11 @@ async function resolveWardrobeAccess(
       canManage: true,
     };
   }
-  const permission = await sharePermission(db, actor, ownerId);
+  // No share read: the scope refuses before any row is asked, so the answer
+  // and its cost are an unknown id's whatever the user was granted.
+  const permission = actor.ownWardrobeOnly
+    ? null
+    : await sharePermission(db, actor, ownerId);
   return {
     ownerId,
     isOwner: false,
@@ -262,11 +312,17 @@ export function toSharedWardrobe(row: SharedWardrobeRow): SharedWardrobe {
   };
 }
 
-/** Wardrobes shared with `userId`: the other tabs' switchers, list_shared_wardrobes (MCP). */
+/**
+ * Wardrobes shared with the actor: the wears page's switcher,
+ * list_shared_wardrobes (MCP), GET /api/v1/shared-wardrobes. None, and no
+ * statement, for an own-wardrobe-only actor: the list resolveWardrobeAccess
+ * would refuse every entry of.
+ */
 export async function sharedWardrobesOf(
   db: Db,
-  userId: number,
+  actor: Actor,
 ): Promise<SharedWardrobe[]> {
+  if (actor.ownWardrobeOnly) return [];
   const rows = await db
     .select({
       grantorId: wardrobeShare.grantorId,
@@ -276,7 +332,7 @@ export async function sharedWardrobesOf(
     })
     .from(wardrobeShare)
     .innerJoin(user, eq(user.id, wardrobeShare.grantorId))
-    .where(acceptedSharesWith(userId))
+    .where(acceptedSharesWith(actor.userId))
     .orderBy(wardrobeShare.id);
   return rows.map(toSharedWardrobe);
 }
@@ -285,7 +341,9 @@ export async function sharedWardrobesOf(
  * sharedWardrobesOf's rows as a scalar subquery (a JSON array, empty for
  * none; map each through toSharedWardrobe), for a page that reads it in
  * one statement with its other lists: the grid's switcher (gridContext,
- * src/web/wardrobe/grid-context.ts).
+ * src/web/wardrobe/grid-context.ts). Pages only, so it takes the session's
+ * user, never scoped: a token's reader is sharedWardrobesOf, which honours
+ * an own-wardrobe-only actor (#701).
  */
 export function sharedWardrobesSql(userId: number): SQL<SharedWardrobeRow[]> {
   return sql<SharedWardrobeRow[]>`(

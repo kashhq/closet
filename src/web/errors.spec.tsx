@@ -12,7 +12,9 @@ import {
   HttpError,
   REQUEST_FAILED_EVENT,
 } from './errors';
-import { t } from './i18n';
+import * as errors from './errors';
+import { t, type Translated } from './i18n';
+import { reasonLed } from './wardrobe/link-import/import';
 import { renderPage } from './render';
 import type { ViewContext } from './view-context';
 
@@ -38,6 +40,7 @@ const ctx: ViewContext = {
   orderReview: false,
   release: 'dev',
   appVersion: 'dev.test',
+  importMap: '{"imports":{}}',
   timeZone: 'America/New_York',
   canonicalUrl: 'http://localhost/boom',
   ogUrl: 'http://localhost/boom',
@@ -74,7 +77,7 @@ describe('createErrorHandler', () => {
       throw new HttpError(404);
     });
     app.get('/busy', () => {
-      throw new HttpError(503, 'Try again in a moment.', {
+      throw new HttpError(503, 'Try again in a moment.' as Translated, {
         logDetail: 'owner 7',
       });
     });
@@ -97,7 +100,7 @@ describe('createErrorHandler', () => {
       throw new Error('connection refused at 10.0.0.5');
     });
     app.get('/curly', () => {
-      throw new HttpError(409, 'Undo “Wore today” first…');
+      throw new HttpError(409, 'Undo “Wore today” first…' as Translated);
     });
     // A multipart part over the size limit fails inside the handler.
     app.get('/too-large', () => {
@@ -152,7 +155,7 @@ describe('createErrorHandler', () => {
     const res = await app.inject({ method: 'GET', url: '/missing' });
     expect(res.statusCode).toBe(404);
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8');
-    expect(res.body).toMatch(/^<!DOCTYPE html><html lang="en">/);
+    expect(res.body).toMatch(/^<!DOCTYPE html><html lang="en"[ >]/);
     expect(res.body).toMatch(/<h1\b[^>]*>Not found<\/h1>/);
     expect(res.body).toContain('>Not Found</p>');
     // No session here: no dock (#662).
@@ -351,3 +354,83 @@ describe('createErrorHandler', () => {
     expect(secondRender).toBe('/twice: reply already sent');
   });
 });
+
+// #842: a query sent before the outage and answered late said the database
+// was back, so the next failure was captured as a second outage.
+describe('reasonLed', () => {
+  it('takes copy only, never English written in code (#1098)', () => {
+    const copy = t('linkImport.TITLE_ONLY_SEND_NAME');
+    expect(reasonLed('title-only', copy)).toBe(`title-only: ${copy}`);
+    // @ts-expect-error a raw string is not Translated
+    reasonLed('title-only', 'Try again');
+    // @ts-expect-error the reason is a refusal word, not free text
+    reasonLed('Try again', copy);
+  });
+});
+
+describe('DatabaseOutage', () => {
+  it('ends only with an answer to something begun after the outage did', () => {
+    const { logger, logs } = captureLogs();
+    let clock = 1_000;
+    const outage = new DatabaseOutage(logger, () => clock);
+    expect(outage.failure()).toBe(true);
+
+    clock = 3_000;
+    outage.recovered(900);
+    expect(outage.failure()).toBe(false);
+    expect(logs.messages('info')).toEqual([]);
+
+    outage.recovered(1_000);
+    expect(logs.messages('info')).toEqual([
+      'Database reachable again after 2 s; 2 request(s) answered busy',
+    ]);
+    expect(outage.failure()).toBe(true);
+  });
+});
+
+// An HttpError's message is `t()` copy (#734), enforced by the type: every
+// line below must fail the typecheck (an unused @ts-expect-error is itself an
+// error), whatever the form of the English or of the subclass. Never called:
+// it exists for the compiler.
+export function httpErrorMessagesAreCopy(
+  flag: boolean,
+  maybe: string | undefined,
+) {
+  // @ts-expect-error a literal
+  new HttpError(404, 'Gone');
+  // @ts-expect-error a conditional
+  new HttpError(404, flag ? 'Gone' : 'Missing');
+  // @ts-expect-error a fallback
+  new HttpError(404, maybe ?? 'Gone');
+  // @ts-expect-error a template
+  new HttpError(404, `Gone ${flag}`);
+  // @ts-expect-error a concatenation
+  new HttpError(404, 'Gone ' + flag);
+  // @ts-expect-error a variable holding English
+  new HttpError(404, maybe);
+
+  const Expression = class extends HttpError {
+    constructor() {
+      // @ts-expect-error a class expression's super()
+      super(404, 'Gone');
+    }
+  };
+  class Member extends errors.HttpError {
+    constructor() {
+      // @ts-expect-error a member-expression superclass
+      super(404, 'Gone');
+    }
+  }
+  class Child extends HttpError {
+    constructor(message: Translated) {
+      super(404, message);
+    }
+  }
+  class Grandchild extends Child {
+    constructor() {
+      // @ts-expect-error a grandchild passes through its parent's parameter
+      super('Gone');
+    }
+  }
+  return [Expression, Member, Grandchild];
+}

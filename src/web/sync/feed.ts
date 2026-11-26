@@ -1,6 +1,10 @@
 import type { Static, TSchema } from '@sinclair/typebox';
 import type { Db, Queryable } from '../../db/client';
-import { SYNC_ROOTS, type SyncResource } from '../../db/sync-tables';
+import {
+  SYNC_ROOTS,
+  SYNC_STAMPS,
+  type SyncResource,
+} from '../../db/sync-tables';
 import {
   SyncedCalendarEntry,
   toSyncedCalendarEntry,
@@ -24,8 +28,8 @@ import {
 } from '../sizes/sizes-resource';
 import { styleProfilesByUserIds } from '../style/queries';
 import {
-  StyleProfileValues,
-  toStyleProfileValues,
+  SyncedStyleProfile,
+  toSyncedStyleProfile,
 } from '../style/style-resource';
 import { tripsByIds } from '../trips/queries';
 import { SyncedTrip, toSyncedTrip } from '../trips/trip-resource';
@@ -34,6 +38,11 @@ import { garmentsByIds } from '../wardrobe/queries';
 import { wearsByIds } from '../wears/queries';
 import { SyncedWear, toSyncedWear } from '../wears/wear-resource';
 import { weekPlansByIds } from '../week-plan/queries';
+import { weekTemplatesByUserIds } from '../week-plan/template';
+import {
+  toWeekTemplate,
+  WeekTemplate,
+} from '../week-plan/week-template-resource';
 import {
   SyncedWeekPlan,
   toSyncedWeekPlan,
@@ -41,6 +50,7 @@ import {
 import {
   type ChangesCursor,
   endOf,
+  type Grant,
   isCurrentEpoch,
   isExpired,
   KIND,
@@ -52,6 +62,7 @@ import {
 import {
   type FeedItem,
   type FeedRoot,
+  type FeedStamp,
   feedItems,
   feedWardrobes,
   inFeedSnapshot,
@@ -63,6 +74,13 @@ import {
  * every synced row and deletion after a cursor, across the caller's own
  * wardrobe and each one shared with them, a page at a time.
  */
+
+/** What the mappers read beside the rows: the server's settings, the same for every page. */
+export interface FeedView {
+  cutoutsEnabled: boolean;
+  /** SITE_URL: the public links (`publicShareUrl`) are absolute on it. */
+  siteUrl: string;
+}
 
 /** A resource's part of the feed: its name, who may read it, and its batched reader. */
 export interface FeedEntry {
@@ -82,7 +100,7 @@ export interface FeedEntry {
     db: Queryable,
     ids: readonly number[],
     viewerId: number,
-    cutoutsEnabled: boolean,
+    view: FeedView,
   ): Promise<{ id: number; data: unknown }[]>;
 }
 
@@ -95,15 +113,16 @@ function feedEntry<S extends TSchema>(entry: {
     db: Queryable,
     ids: readonly number[],
     viewerId: number,
-    cutoutsEnabled: boolean,
+    view: FeedView,
   ): Promise<{ id: number; data: Static<S> }[]>;
 }): FeedEntry {
   return entry;
 }
 
 /**
- * Every resource the feed carries, by its table (src/db/sync-tables.ts): a
- * new synced root fails tsc here until it is registered. Adding one is an
+ * Every resource the feed carries, by its table or stamp
+ * (src/db/sync-tables.ts): a new synced root or stamp fails tsc here until
+ * it is registered; coverage.ts then says which reads it backs. Adding one is an
  * entry: its batched by-id reader beside its per-id one, and its feed shape
  * beside its API resource. `shared` follows src/web/sharing/AGENTS.md's
  * share-aware list: everything but garments and capsules is the owner's.
@@ -113,10 +132,10 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
     name: 'garment',
     shared: true,
     schema: SyncedGarment,
-    read: async (db, ids, viewerId, cutoutsEnabled) =>
+    read: async (db, ids, viewerId, { cutoutsEnabled, siteUrl }) =>
       (await garmentsByIds(db, viewerId, ids)).map((row) => ({
         id: row.id,
-        data: toSyncedGarment(row, cutoutsEnabled),
+        data: toSyncedGarment(row, cutoutsEnabled, siteUrl),
       })),
   }),
   garment_wear: feedEntry({
@@ -144,10 +163,10 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
     name: 'outfit',
     shared: false,
     schema: SyncedOutfit,
-    read: async (db, ids) =>
+    read: async (db, ids, _viewerId, { siteUrl }) =>
       (await outfitsByIds(db, ids)).map((row) => ({
         id: row.id,
-        data: toSyncedOutfit(row),
+        data: toSyncedOutfit(row, siteUrl),
       })),
   }),
   outfit_calendar: feedEntry({
@@ -200,15 +219,29 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
         data: toBrandSizeResource(row),
       })),
   }),
-  // The one-row-per-user tables: the change's id is the user's.
+  // The one-row-per-user tables and the stamp: the change's id is the user's.
+  // A rule's write stamps the profile (SYNC_CHILDREN), so it carries them.
   style_profile: feedEntry({
     name: 'styleProfile',
     shared: false,
-    schema: StyleProfileValues,
+    schema: SyncedStyleProfile,
     read: async (db, ids) =>
-      (await styleProfilesByUserIds(db, ids)).map(({ userId, ...profile }) => ({
+      (await styleProfilesByUserIds(db, ids)).map(
+        ({ userId, rules, ...profile }) => ({
+          id: userId,
+          data: toSyncedStyleProfile(profile, rules),
+        }),
+      ),
+  }),
+  // Every user has one, empty until set: never deleted, never tombstoned.
+  week_template: feedEntry({
+    name: 'weekTemplate',
+    shared: false,
+    schema: WeekTemplate,
+    read: async (db, ids) =>
+      (await weekTemplatesByUserIds(db, ids)).map(({ userId, slots }) => ({
         id: userId,
-        data: toStyleProfileValues(profile),
+        data: toWeekTemplate(slots),
       })),
   }),
   body_measurements: feedEntry({
@@ -225,15 +258,19 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
 
 const OWN_ROOTS: readonly FeedRoot[] = SYNC_ROOTS;
 const SHARED_ROOTS = OWN_ROOTS.filter((root) => FEED[root.table].shared);
+const OWN_STAMPS: readonly FeedStamp[] = SYNC_STAMPS;
+const SHARED_STAMPS = OWN_STAMPS.filter((stamp) => FEED[stamp.resource].shared);
 
 /**
- * Which resources a cursor was answered with, one bit per SYNC_ROOTS entry:
- * a cursor from before a root joined the feed never saw that resource's
- * rows below its positions, so it is expired (a full sync) rather than
- * silently missing them. #608 registering the last eight moved it once.
+ * Which resources a cursor was answered with, one bit per SYNC_ROOTS entry,
+ * then per SYNC_STAMPS entry: a cursor from before a resource joined the
+ * feed never saw its rows below its positions, so it is expired (a full
+ * sync) rather than silently missing them. #608 registering the last eight
+ * moved it once; #716 the week template (whose full sync also gave every
+ * cached style profile its rules).
  */
-export const FEED_COVERAGE = SYNC_ROOTS.reduce(
-  (bits, _root, index) => bits | (1 << index),
+const FEED_COVERAGE = [...SYNC_ROOTS, ...SYNC_STAMPS].reduce(
+  (bits, _resource, index) => bits | (1 << index),
   0,
 );
 
@@ -252,6 +289,11 @@ export interface ChangesPage {
   more: boolean;
   /** Owners in the cursor the caller no longer sees: a share revoked or left. */
   revokedWardrobes: number[];
+  /**
+   * Owners whose grant changed since the cursor (readChanges), read again
+   * from their start. Logged, not answered: to the client it is a resend.
+   */
+  regrantedWardrobes: number[];
   /**
    * On every page of a full sync: the wardrobes it covers (the caller's own,
    * then each accepted share). After its last page the client drops every
@@ -280,7 +322,7 @@ export async function readChanges(
   actor: Actor,
   cursorText: string | undefined,
   limit: number,
-  cutoutsEnabled: boolean,
+  view: FeedView,
 ): Promise<ChangesPage> {
   const cursor =
     cursorText === undefined ? undefined : readChangesCursor(cursorText);
@@ -305,30 +347,45 @@ export async function readChanges(
         `a cursor of epoch ${cursor.epoch ?? 'none'}, not ${epoch.epoch}`,
       );
     }
+    const regranted: number[] = [];
     const reads = wardrobes.map((wardrobe): WardrobeRead => {
-      const at =
+      const held =
         cursor?.positions.get(wardrobe.ownerId) ?? startOf(wardrobe.floor);
       // Past the wardrobe's own revision: a restore the epoch missed, whose
       // next writes would reuse the revisions this cursor is past.
-      if (at.revision > wardrobe.revision) {
+      if (held.revision > wardrobe.revision) {
         throw expired(
-          `owner ${wardrobe.ownerId} at revision ${at.revision}, above its ${wardrobe.revision}`,
+          `owner ${wardrobe.ownerId} at revision ${held.revision}, above its ${wardrobe.revision}`,
         );
       }
-      if (isExpired(at, wardrobe.floor)) {
+      // Checked on the held position even when it is read again below: the
+      // client still holds the rows it was sent, so a deletion pruned since
+      // would leave one behind.
+      if (isExpired(held, wardrobe.floor)) {
         throw expired(
-          `owner ${wardrobe.ownerId} at revision ${at.revision}, floor ${wardrobe.floor}`,
+          `owner ${wardrobe.ownerId} at revision ${held.revision}, floor ${wardrobe.floor}`,
         );
       }
+      // A grant that changed since (a share raised to MANAGE, or revoked
+      // and given again between two syncs) reshapes rows the client holds
+      // (a garment's public link, #959) though none of them moved: the
+      // wardrobe is read again from its start, as a share new to the cursor
+      // is. A share write never touches the owner's rows or revision.
+      const changed =
+        cursor?.positions.has(wardrobe.ownerId) === true &&
+        cursor.grants.get(wardrobe.ownerId) !== wardrobe.grant;
+      if (changed) regranted.push(wardrobe.ownerId);
       return {
         ...wardrobe,
-        at,
-        roots: wardrobe.ownerId === actor.userId ? OWN_ROOTS : SHARED_ROOTS,
+        at: changed ? startOf(wardrobe.floor) : held,
+        ...(wardrobe.ownerId === actor.userId
+          ? { roots: OWN_ROOTS, stamps: OWN_STAMPS }
+          : { roots: SHARED_ROOTS, stamps: SHARED_STAMPS }),
       };
     });
     const items = await feedItems(tx, reads, limit + 1);
     const page = items.slice(0, limit);
-    const data = await hydrate(tx, actor.userId, page, cutoutsEnabled);
+    const data = await hydrate(tx, actor.userId, page, view);
     const owners = wardrobes.map((wardrobe) => wardrobe.ownerId);
     const seen = new Set(owners);
     const more = items.length > limit;
@@ -349,6 +406,7 @@ export async function readChanges(
       revokedWardrobes: cursor
         ? [...cursor.positions.keys()].filter((ownerId) => !seen.has(ownerId))
         : [],
+      regrantedWardrobes: regranted,
       ...(fullSync && { snapshot: { wardrobes: owners } }),
     };
   });
@@ -369,7 +427,7 @@ async function hydrate(
   db: Queryable,
   viewerId: number,
   page: readonly FeedItem[],
-  cutoutsEnabled: boolean,
+  view: FeedView,
 ): Promise<Map<SyncResource, Map<number, unknown>>> {
   const idsOf = new Map<SyncResource, number[]>();
   for (const item of page) {
@@ -378,7 +436,7 @@ async function hydrate(
   }
   const data = new Map<SyncResource, Map<number, unknown>>();
   for (const [resource, ids] of idsOf) {
-    const rows = await FEED[resource].read(db, ids, viewerId, cutoutsEnabled);
+    const rows = await FEED[resource].read(db, ids, viewerId, view);
     data.set(resource, new Map(rows.map((row) => [row.id, row.data])));
   }
   return data;
@@ -428,5 +486,10 @@ function nextCursor(
     // A wardrobe not reached yet stays out: it starts fresh next time, at
     // the floor of then.
   });
-  return { coverage: FEED_COVERAGE, positions };
+  const grants = new Map<number, Grant>(
+    reads
+      .filter((read) => positions.has(read.ownerId))
+      .map((read) => [read.ownerId, read.grant]),
+  );
+  return { coverage: FEED_COVERAGE, positions, grants };
 }

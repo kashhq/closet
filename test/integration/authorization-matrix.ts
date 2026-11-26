@@ -26,6 +26,7 @@ import {
 import { LOGIN_PATH } from '../../src/web/auth/login-path';
 import { addBrandSize } from '../../src/web/sizes/queries';
 import { createInvite } from '../../src/web/sharing/queries';
+import { setPublicShare } from '../../src/web/share/queries';
 import { addRepair } from '../../src/web/wardrobe/repairs';
 import { recordOrderEmail } from '../../src/web/wardrobe/order-mail/queries';
 import { addDays, type IsoDate } from '../../src/calendar-date';
@@ -47,6 +48,7 @@ import {
   uniqueClient,
   userIdOf,
   asFixture,
+  PWA_ENV,
 } from './harness';
 import { jpeg, type LinkSites, startLinkSites } from './link-sites';
 import { deviceToken } from './api';
@@ -151,6 +153,9 @@ export interface Fixture {
   capsuleName: string;
   outfitId: number;
   outfitName: string;
+  /** The garment's and the outfit's public share ids (#669), shared in the fixture. */
+  garmentShareId: string;
+  outfitShareId: string;
   /** An empty outfit of the owner's, on no day: what the entry's Change picks. */
   spareOutfitId: number;
   /** One of Muse's outfits (#335) waiting on the owner, and one set aside. */
@@ -161,7 +166,6 @@ export interface Fixture {
   /** The entry's outfit selfie (#19), and its photo's names. */
   selfieId: number;
   selfieFileName: string;
-  selfieShareableId: string;
   /** A saved look of the owner's (#22) with a photo, and its title and photo's name. */
   inspirationId: number;
   inspirationTitle: string;
@@ -209,8 +213,9 @@ export interface Fixture {
   orderItemName: string;
   /** A batch of the weekly auto-plan of the owner's, all its entries gone. */
   weekPlanId: number;
-  /** An open invite link to the owner's wardrobe, not yet accepted. */
+  /** An open invite link to the owner's wardrobe, not yet accepted, and its token (a bearer secret). */
   inviteShareId: number;
+  inviteToken: string;
   /** A phone photo and a cutout to upload, the file's own for every test. */
   photo: Buffer;
   cutout: Buffer;
@@ -286,7 +291,7 @@ export const OWNER_TOKEN_NAME = 'Owner laptop token';
 export const OWNER_DEVICE_NAME = 'Owner phone app';
 
 /** A feature off by default whose routes exist only with it on. */
-export type Feature = 'weather' | 'orderMail';
+export type Feature = 'weather' | 'orderMail' | 'pwa';
 
 const ORDER_MAIL_TOKEN = 'authorization-matrix';
 
@@ -308,6 +313,7 @@ export async function featureApp(features: ReadonlySet<Feature>): Promise<{
   return {
     env: {
       ...(weather ? { WEATHER_ENABLED: 'true' } : {}),
+      ...(features.has('pwa') ? PWA_ENV : {}),
       ...(jmap
         ? {
             ORDER_MAIL_JMAP_TOKEN: ORDER_MAIL_TOKEN,
@@ -596,7 +602,7 @@ export function describeMatrix(
       if (brandSizeId === 'brand-taken') throw new Error(`${brand} is taken`);
       const outfitRuleId = await addOutfitRule(
         t.db,
-        { userId: t.owner.id },
+        { userId: t.owner.id, surface: 'page' },
         {
           kind: 'never',
           a: { ...NO_MATCHER, garmentId },
@@ -836,6 +842,20 @@ export function describeMatrix(
           .returning({ id: weekPlan.id }),
       );
       const inviteToken = await createInviteLink('VIEW');
+      const garmentShare = await setPublicShare(
+        t.db,
+        'garment',
+        garmentId,
+        t.owner.id,
+        true,
+      );
+      const outfitShare = await setPublicShare(
+        t.db,
+        'outfit',
+        outfitId,
+        t.owner.id,
+        true,
+      );
       const [{ id: inviteShareId }] = await t.db
         .select({ id: wardrobeShare.id })
         .from(wardrobeShare)
@@ -852,13 +872,14 @@ export function describeMatrix(
         capsuleName,
         outfitId,
         outfitName,
+        garmentShareId: garmentShare!.shareableId,
+        outfitShareId: outfitShare!.shareableId,
         spareOutfitId,
         museOutfitId,
         museDeclinedId,
         entryId: entry.id,
         selfieId: ownSelfie.id,
         selfieFileName: ownSelfie.fileName,
-        selfieShareableId: ownSelfie.shareableId,
         inspirationId: look.id,
         inspirationTitle,
         inspirationFileName: look.fileName,
@@ -878,6 +899,7 @@ export function describeMatrix(
         orderItemName,
         weekPlanId,
         inviteShareId,
+        inviteToken,
         photo,
         cutout,
         shopPhotoUrl: sites.url('/photo.jpg'),

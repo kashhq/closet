@@ -1,12 +1,12 @@
 import type { Child } from 'hono/jsx';
-import type { QueueableKind } from '../../offline-writes';
+import { Icon } from '../layout/icon';
 
 /**
  * Building blocks of the account forms (login, registration, email,
  * password, deletion). Every form posts natively (`hx-boost="false"`): a
  * refusal answers 4xx with the page re-rendered as a document of its own,
  * and a real form submission is what makes browsers offer to save or update
- * the password. A boosted registration never did, which cost the owner an
+ * the password (`PostForm`, src/web/form.tsx, is the one native post). A boosted registration never did, which cost the owner an
  * account generated and forgotten by the browser.
  */
 
@@ -25,7 +25,7 @@ export interface FieldProps {
 /**
  * The signed-in account's address beside a current-password field, for
  * password managers to know whose password it is: readonly, never shown,
- * the one hidden control of the step-up forms (guards.conf @hidden-control).
+ * the one hidden control of the step-up forms (closet/no-hidden-control).
  */
 export function UsernameTwin(props: { email: string | null | undefined }) {
   return (
@@ -34,6 +34,7 @@ export function UsernameTwin(props: { email: string | null | undefined }) {
       name="username"
       autocomplete="username"
       value={props.email ?? ''}
+      // eslint-disable-next-line closet/no-hidden-control -- a password manager's reading, never a person's control
       class="hidden"
       readonly
     />
@@ -113,93 +114,14 @@ export function InlineErrors<Field extends string>(props: {
 /** The one message a refused submission shows above the form. */
 export function ErrorAlert({ message }: { message: string }) {
   return (
-    <div role="alert" class="alert alert-error mb-4 w-xs">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-6 w-6 shrink-0 stroke-current"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
+    <div role="alert" class="alert alert-error mb-4 w-full max-w-xs">
+      <Icon
+        paths="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+        class="size-6 shrink-0"
+        weight="2"
+      />
       <span>{message}</span>
     </div>
-  );
-}
-
-/**
- * The one native POST form for the web layer (see above): the layout boosts
- * every form and htmx drops a boosted 4xx, so every form that posts natively
- * goes through this. test/integration/pages.ts fails any page with a native
- * post that is still boosted. `confirm` asks before submitting; the text
- * travels as a data attribute, so nothing is spliced into the handler.
- * Every PostForm submits once (`data-submit-once`, public/js/submit-once.js):
- * its buttons are disabled after the first submit, until the page returns
- * from the back/forward cache.
- *
- * Every PostForm is disabled offline (`data-needs-network`,
- * public/js/connectivity.js), its controls outside it through `form=`
- * included: a cached copy posting without a connection lands on the
- * worker's offline page and loses what was typed (#411). The default since
- * the owner's call of 2026-10-22; it was each caller's opt-in and 15 forms
- * had left it out. `allowOffline` is the one way out, and guards.conf
- * `@post-form-offline` makes it carry its reason as a literal.
- * `offlineQueue` is the other (#178): a write the page's outbox queues
- * offline and replays (src/web/outbox.tsx), which stays enabled.
- *
- * `endsSession` marks the four posts that change whose session this device
- * has (sign-in, registration, sign-out, account deletion) as
- * `data-ends-session`: public/js/pwa.js tells the service worker as one
- * leaves (SESSION_ENDING), so it drops the session caches first, and the
- * outbox holds a sign-out or deletion to sync or discard what is queued.
- * The worker never relays the post itself (#542).
- */
-export function PostForm(props: {
-  action: string;
-  confirm?: string;
-  class?: string;
-  /** For buttons outside the form that submit it through their `form` attribute. */
-  id?: string;
-  /**
-   * Why this form may post while offline, which turns the offline guard
-   * off. Rendered as `data-allow-offline`, so a reader of the page sees it.
-   */
-  allowOffline?: string;
-  /** Queued offline instead of disabled: the laundry, a worn entry. */
-  offlineQueue?: QueueableKind;
-  /** Posts a file (multipart/form-data): selfies, garment photos, the add sheet. */
-  multipart?: boolean;
-  /** Signs in or out (see above): the session caches go as it leaves. */
-  endsSession?: boolean;
-  children?: Child;
-}) {
-  return (
-    <form
-      id={props.id}
-      method="post"
-      action={props.action}
-      enctype={props.multipart ? 'multipart/form-data' : undefined}
-      class={props.class}
-      hx-boost="false"
-      data-confirm={props.confirm}
-      data-needs-network={
-        props.allowOffline === undefined && props.offlineQueue === undefined
-          ? ''
-          : undefined
-      }
-      data-allow-offline={props.allowOffline}
-      data-offline-queue={props.offlineQueue}
-      data-ends-session={props.endsSession ? '' : undefined}
-      // One post per tap: public/js/submit-once.js (the layout loads it).
-      data-submit-once=""
-    >
-      {props.children}
-    </form>
   );
 }
 
@@ -226,7 +148,7 @@ export function Fieldset(props: FieldsetProps) {
       class={
         props.bare
           ? 'fieldset'
-          : 'fieldset bg-base-200 border-base-300 rounded-box w-xs border p-4'
+          : 'fieldset bg-base-200 border-base-300 rounded-box w-full max-w-xs border p-4'
       }
       hx-post={props.validateUrl}
       hx-trigger={props.validateUrl ? 'change' : undefined}

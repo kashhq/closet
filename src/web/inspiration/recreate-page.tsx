@@ -3,14 +3,11 @@ import type {
   PieceMatch,
   Recreation,
 } from '../../wardrobe/recreate';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { inspirationPhotoUrl } from '../files/image-url';
 import type { RecreatePoolGarment } from '../gallery/queries';
-import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { joinCopy, t, type Translated } from '../i18n';
+import { PageShell } from '../layout/page-shell';
 import { GarmentPicture } from '../layout/parts';
 import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import type { ViewContext } from '../view-context';
@@ -57,81 +54,82 @@ export function RecreatePage(props: {
   const name = lookName(look);
   const matched = recreation.pieces.filter((p) => p.matches.length > 0).length;
   return (
-    <Layout ctx={ctx} title={t('inspiration.RECREATE_TITLE', { title: name })}>
-      <AppBar
-        ctx={ctx}
-        title={t('inspiration.RECREATE')}
-        back={inspirationUrl(look.id)}
-      />
-      <PageMain class="p-4 pt-20 pb-24 flex flex-col gap-4">
-        {look.photo && (
-          <img
-            src={inspirationPhotoUrl(look.photo, 'thumb')}
-            alt={t('inspiration.PHOTO_ALT', { title: name })}
-            class="w-full max-h-72 object-contain rounded-box bg-base-200"
-            decoding="async"
-          />
-        )}
-        {look.pieces.length === 0 ? (
-          <div class="flex flex-col gap-2 items-start">
-            <p class="text-sm text-muted">{t('inspiration.RECREATE_EMPTY')}</p>
-            <a
-              href={inspirationPiecesUrl(look.id)}
-              class="btn btn-primary btn-sm"
-            >
-              {t('inspiration.TAG_PIECES')}
-            </a>
-          </div>
-        ) : (
-          <>
-            <p class="font-semibold" data-recreate-count="">
-              {t('inspiration.IN_CLOSET', {
-                matched,
-                of: look.pieces.length,
+    <PageShell
+      ctx={ctx}
+      name="recreate"
+      title={t('inspiration.RECREATE_TITLE', { title: name })}
+      bar={{ title: t('inspiration.RECREATE'), back: inspirationUrl(look.id) }}
+      body={{ gap: 4 }}
+    >
+      {look.photo && (
+        <img
+          src={inspirationPhotoUrl(look.photo, 'thumb')}
+          alt={t('inspiration.PHOTO_ALT', { title: name })}
+          class="w-full max-h-72 object-contain rounded-box bg-base-200"
+          decoding="async"
+        />
+      )}
+      {look.pieces.length === 0 ? (
+        <div class="flex flex-col gap-2 items-start">
+          <p class="text-sm text-muted">{t('inspiration.RECREATE_EMPTY')}</p>
+          <a
+            href={inspirationPiecesUrl(look.id)}
+            class="btn btn-primary btn-sm"
+          >
+            {t('inspiration.TAG_PIECES')}
+          </a>
+        </div>
+      ) : (
+        <>
+          <p class="font-semibold" data-recreate-count="">
+            {t('inspiration.IN_CLOSET', {
+              matched,
+              of: look.pieces.length,
+            })}
+          </p>
+          {recreation.unfixed.length > 0 && (
+            <div role="status" class="alert alert-warning alert-soft text-sm">
+              {t('inspiration.UNFIXED', {
+                pieces: joinCopy(
+                  recreation.unfixed.map((index) =>
+                    pieceName(look.pieces[index]),
+                  ),
+                  ', ',
+                ),
               })}
-            </p>
-            {recreation.unfixed.length > 0 && (
-              <div role="status" class="alert alert-warning alert-soft text-sm">
-                {t('inspiration.UNFIXED', {
-                  pieces: recreation.unfixed
-                    .map((index) => pieceName(look.pieces[index]))
-                    .join(', '),
-                })}
+            </div>
+          )}
+          <PostForm
+            action={saveRecreationPath(look.id)}
+            class="flex flex-col gap-5"
+          >
+            <ol class="flex flex-col gap-5">
+              {look.pieces.map((piece, index) => (
+                <PieceMatches
+                  lookId={look.id}
+                  piece={piece}
+                  matches={recreation.pieces[index].matches}
+                  repicked={recreation.pieces[index].repicked}
+                />
+              ))}
+            </ol>
+            {look.pieces.some((piece, index) =>
+              hasStrip(piece, recreation.pieces[index].matches),
+            ) && (
+              <div class="flex flex-col gap-2">
+                <button type="submit" class="btn btn-primary">
+                  {t('inspiration.SAVE_OUTFIT')}
+                </button>
+                <p class="text-xs text-muted">
+                  {t('inspiration.SAVE_OUTFIT_HINT')}
+                </p>
               </div>
             )}
-            <PostForm
-              action={saveRecreationPath(look.id)}
-              class="flex flex-col gap-5"
-            >
-              <ol class="flex flex-col gap-5">
-                {look.pieces.map((piece, index) => (
-                  <PieceMatches
-                    lookId={look.id}
-                    piece={piece}
-                    matches={recreation.pieces[index].matches}
-                    repicked={recreation.pieces[index].repicked}
-                  />
-                ))}
-              </ol>
-              {look.pieces.some((piece, index) =>
-                hasStrip(piece, recreation.pieces[index].matches),
-              ) && (
-                <div class="flex flex-col gap-2">
-                  <button type="submit" class="btn btn-primary">
-                    {t('inspiration.SAVE_OUTFIT')}
-                  </button>
-                  <p class="text-xs text-muted">
-                    {t('inspiration.SAVE_OUTFIT_HINT')}
-                  </p>
-                </div>
-              )}
-            </PostForm>
-            <SnapStripsInit />
-          </>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+          </PostForm>
+          <SnapStripsInit />
+        </>
+      )}
+    </PageShell>
   );
 }
 
@@ -159,7 +157,7 @@ function PieceMatches(props: {
       data-recreate-piece={piece.position}
       data-missing={matches.length === 0 && !wishlisted(piece) ? '' : undefined}
     >
-      <h2 id={headingId} class="font-medium scroll-mt-20">
+      <h2 id={headingId} class="font-medium scroll-mt-under-bar">
         {name}
       </h2>
       <PieceChoice {...props} name={name} />
@@ -171,7 +169,7 @@ function PieceMatches(props: {
 function PieceChoice(props: {
   lookId: number;
   piece: StoredPiece;
-  name: string;
+  name: Translated;
   matches: readonly PieceMatch<RecreatePoolGarment>[];
   repicked: boolean;
 }) {
@@ -203,7 +201,7 @@ function PieceChoice(props: {
  */
 function ChoiceStrip(props: {
   piece: StoredPiece;
-  name: string;
+  name: Translated;
   matches: readonly PieceMatch<RecreatePoolGarment>[];
   repicked: boolean;
 }) {
@@ -310,6 +308,6 @@ function agreementText(agrees: Agreement): string {
     agrees.color === 'exact' && t('inspiration.AGREES_COLOR'),
     agrees.color === 'close' && t('inspiration.AGREES_CLOSE_COLOR'),
     agrees.pattern && t('inspiration.AGREES_PATTERN'),
-  ].filter((part): part is string => typeof part === 'string');
+  ].filter((part) => typeof part === 'string');
   return parts.length > 0 ? parts.join(' · ') : t('inspiration.AGREES_ROLE');
 }

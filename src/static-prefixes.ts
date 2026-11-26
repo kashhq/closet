@@ -18,7 +18,7 @@ const STATIC_FILES = [
   '/sw.js',
   '/manifest.json',
   // The health endpoints (src/web/health): the connectivity heartbeat
-  // (public/js/connectivity.js, /health/live) and the container healthcheck
+  // (views/assets/page/connectivity.ts, /health/live) and the container healthcheck
   // must never cost a JWT verification or a user query, nor a log line.
   // /healthz is /health/ready's alias for stale clients.
   '/health/live',

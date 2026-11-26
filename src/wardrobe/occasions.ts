@@ -99,17 +99,27 @@ export function occasionDemands(occasion: Occasion): {
 /** Why an active occasion has no outfit for want of activewear (activewearGap). */
 export type ActivewearGap = 'no-activewear' | 'none-available';
 
-/** Whether `garments` lack an active-type garment in a role `active` requires. */
-export function lacksActivewear(
+interface KindOf {
+  category: string;
+  type: string | null;
+}
+
+/**
+ * Whether `garments` lack an activewear garment in a role `active` requires.
+ * `isActivewear` judges one garment: by default its type's purpose, but the
+ * generator also drops bottoms too light for a cold snap (isActivewearFor,
+ * src/weather/match.ts), and a gap must say the same.
+ */
+export function lacksActivewear<G extends KindOf>(
   active: ActiveDemand,
-  garments: readonly { category: string; type: string | null }[],
+  garments: readonly G[],
+  isActivewear: (garment: G) => boolean = (g) =>
+    purposeOf(g.category, g.type) === 'active',
 ): boolean {
   return active.roles.some(
     (role) =>
       !garments.some(
-        (g) =>
-          categoryRole(g.category) === role &&
-          purposeOf(g.category, g.type) === 'active',
+        (g) => categoryRole(g.category) === role && isActivewear(g),
       ),
   );
 }
@@ -117,18 +127,23 @@ export function lacksActivewear(
 /**
  * What an empty answer for an active occasion is owed to, when it is
  * activewear: the closet has none of a required kind ('no-activewear': set
- * garment types), or it has, but none is available (`available`: clean,
- * at home) for the day ('none-available'). Undefined for everyday wear, or
- * when activewear is not what is missing (the weather or a rule is).
+ * garment types, or in a cold snap none warm enough to run in), or it has,
+ * but none is available (`available`: clean, at home) for the day
+ * ('none-available'). Undefined for everyday wear, or when activewear is not
+ * what is missing (the weather or a rule is). `isActivewear` as in
+ * lacksActivewear.
  */
-export function activewearGap(
+export function activewearGap<G extends KindOf>(
   active: ActiveDemand | null,
-  closet: readonly { category: string; type: string | null }[],
-  available: readonly { category: string; type: string | null }[],
+  closet: readonly G[],
+  available: readonly G[],
+  isActivewear?: (garment: G) => boolean,
 ): ActivewearGap | undefined {
   if (active === null) return undefined;
-  if (lacksActivewear(active, closet)) return 'no-activewear';
-  return lacksActivewear(active, available) ? 'none-available' : undefined;
+  if (lacksActivewear(active, closet, isActivewear)) return 'no-activewear';
+  return lacksActivewear(active, available, isActivewear)
+    ? 'none-available'
+    : undefined;
 }
 
 /**

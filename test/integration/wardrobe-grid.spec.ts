@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -64,7 +64,6 @@ describe('wardrobe grid', () => {
             .insert(file)
             .values({
               fileName: `${randomUUID()}.webp`,
-              shareableId: randomUUID(),
               createdOn: new Date().toISOString(),
               createdById: t.owner.id,
             })
@@ -132,7 +131,7 @@ describe('wardrobe grid', () => {
     const named = ids.filter((id) => id !== notesOnly);
     const res = await get('/wardrobe?keyword=garment', HX_FRAGMENT);
     expect(res.headers.vary).toContain('HX-Request');
-    expect(res.body.trimStart()).toMatch(/^<main id="wardrobe-main"/);
+    expect(res.body.trimStart()).toMatch(/^<div id="wardrobe-body"/);
     expect(tileIds(res.html)).toEqual(named.slice(0, GRID_PAGE_SIZE));
     expect(sentinelUrl(res.html)).toBe(
       `/wardrobe/tiles?keyword=garment&before=${named[GRID_PAGE_SIZE - 1]}`,
@@ -180,6 +179,35 @@ describe('wardrobe grid', () => {
       ]);
     } finally {
       await rename({ name, notes: null });
+    }
+  });
+
+  // The SQL split is WORD_SPACES, the keyword's own (#789): `[[:space:]]`
+  // kept a BOM inside a word and split on a NEL the keyword's `\s` keeps.
+  it('splits a stored name on the same spaces as the keyword', async () => {
+    const pasted = await asFixture(t.db, (tx) =>
+      tx
+        .insert(garment)
+        .values(
+          ['Navy\u00a0blazer', 'Navy\ufeffblazer', 'Navy\u0085blazer'].map(
+            (name) => ({
+              shareableId: randomUUID(),
+              ownerId: t.owner.id,
+              name,
+              category: 'outerwear',
+            }),
+          ),
+        )
+        .returning({ id: garment.id }),
+    );
+    const pastedIds = pasted.map((row) => row.id);
+    try {
+      const { html } = await get('/wardrobe?keyword=blazer');
+      expect(tileIds(html).sort()).toEqual([...pastedIds].sort());
+    } finally {
+      await asFixture(t.db, (tx) =>
+        tx.delete(garment).where(inArray(garment.id, pastedIds)),
+      );
     }
   });
 

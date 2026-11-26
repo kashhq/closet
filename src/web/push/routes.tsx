@@ -2,12 +2,13 @@ import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebo
 import { Type } from '@sinclair/typebox';
 import type { Db } from '../../db/client';
 import { loginRequired, sessionUserId } from '../auth/require-session';
-import { endSession, sessionFingerprint } from '../auth/session';
-import { profileSection } from '../auth/urls';
+import { endSession, sessionStamp } from '../auth/session';
 import { t } from '../i18n';
 import type { Logger } from '../../logger';
-import { renderFragment } from '../render';
+import { renderFragment, renderPage } from '../render';
+import { viewContext } from '../view-context';
 import { HttpError } from '../errors';
+import { countAgainst, PUSH_TEST_LIMIT } from '../security/rate-limit';
 import { isReminderChoice, type ReminderKind } from '../../push/reminders';
 import { isPushServiceEndpoint } from './endpoint';
 import {
@@ -18,14 +19,15 @@ import {
 } from './queries';
 import type { PushSender, VapidConfig } from './sender';
 import {
-  PUSH_SETTINGS_ID,
+  PushSettingsPage,
   ReminderSettingsForm,
   ReminderStatus,
   TestResult,
 } from './settings';
+import { PUSH_SETTINGS_PATH } from './urls';
 
 /**
- * The browser's PushSubscription.toJSON(), as public/js/push.js posts it.
+ * The browser's PushSubscription.toJSON(), as views/assets/page/push.ts posts it.
  * Stored as sent and later handed to web-push, so it is held to its real
  * shape here: an https endpoint (every push service is one) and the RFC 8291
  * keys in base64url (browsers write them unpadded), a 65-byte P-256 point
@@ -67,7 +69,7 @@ function reminderTime(
 ): number | null {
   if (on === undefined) return null;
   if (minute === undefined || !isReminderChoice(kind, minute)) {
-    throw new HttpError(400, `body/${kind} must be one of the reminder times`);
+    throw new HttpError(400, t('refusal.form.reminderTime', { kind }));
   }
   return minute;
 }
@@ -87,8 +89,8 @@ export interface PushRouteOptions {
 
 /**
  * /push: Web Push subscriptions of the signed-in user's browsers, each
- * device's reminders (#15) and the test send on the profile page
- * (src/web/push/settings.tsx). Registered only
+ * device's reminders (#15) and the test send, and their page, Profile ›
+ * Notifications (src/web/push/settings.tsx, #728). Registered only
  * when PWA_ENABLED (there is no service worker to receive anything
  * otherwise). Every route needs a session; the writes are fetches and htmx
  * posts, so a signed-out caller gets a 401, and the same-origin check
@@ -99,6 +101,10 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
   { db, logger, appName, vapid, sender },
   done,
 ) => {
+  app.get(PUSH_SETTINGS_PATH, async (_request, reply) =>
+    renderPage(reply, <PushSettingsPage ctx={viewContext(reply)} />),
+  );
+
   // Read by push.js before subscribing and by the service worker when the
   // browser renews a subscription (pushsubscriptionchange).
   app.get('/push/vapid-public-key', async (_request, reply) =>
@@ -123,12 +129,12 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
       const deviceId = await upsertDevice(
         db,
         userId,
-        sessionFingerprint(request),
+        sessionStamp(request),
         request.body,
         request.headers['user-agent']?.slice(0, USER_AGENT_LIMIT),
       );
-      // The password changed after the session gate let this request in
-      // (#512): answered as the gate answers an ended session's fetch.
+      // The password changed, or Sign out everywhere ran, after the session
+      // gate let this request in (#512, #700): answered as the gate answers an ended session's fetch.
       if (deviceId === undefined) {
         logger.info(
           `User ${userId}'s push subscription refused: the session ended under it`,
@@ -225,15 +231,24 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
   );
 
   // An htmx button: always a 200 fragment saying what happened (htmx swaps
-  // no 4xx), sent to the caller's own devices only.
+  // no 4xx), sent to the caller's own devices only. Past PUSH_TEST_LIMIT
+  // the fragment says to try again in a minute and nothing is sent: the
+  // button's own result line, not a refusal toast, since nothing failed.
+  const testLimit = app.createRateLimit(PUSH_TEST_LIMIT);
   app.post('/push/test', async (request, reply) => {
     const userId = sessionUserId(request);
+    if (await countAgainst(testLimit, request)) {
+      logger.warn(
+        `Rate limit reached: POST /push/test for user ${userId}: nothing sent`,
+      );
+      return renderFragment(reply, <TestResult report="rate-limited" />);
+    }
     const report = await sender.sendToUser(
       userId,
       {
         title: t('PUSH_TEST_TITLE', { appName }),
         body: t('PUSH_TEST_BODY'),
-        url: profileSection(PUSH_SETTINGS_ID),
+        url: PUSH_SETTINGS_PATH,
         tag: 'push-test',
       },
       { ttlSeconds: TEST_TTL_SECONDS },

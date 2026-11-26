@@ -10,11 +10,11 @@ import { todayIn } from '../../calendar-date';
 import type { WebOptions } from '../plugin';
 import { renderPage } from '../render';
 import { viewContext } from '../view-context';
-import { InsightsPage } from './insights-page';
-import { readInsights, readRecap } from './queries';
+import { InsightsPage, UnwornPage } from './insights-page';
+import { readDefaultRecap, readInsights, readRecap } from './queries';
 import { RecapPage } from './recap-page';
 import { recapPeriod, recapYear } from './recap-period';
-import { INSIGHTS_PATH, RECAP_PATH } from './urls';
+import { INSIGHTS_PATH, RECAP_PATH, UNWORN_LIST_PATH } from './urls';
 
 // Navigation state (the unworn list's window chips): anything but one of
 // the choices falls back to the default, never a 400, so no length limit
@@ -51,23 +51,49 @@ export const insightsRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   { db, config, logger },
   done,
 ) => {
+  /** The figures both insights pages lay out, logged once per read. */
+  async function readPageInsights(userId: number, unworn?: string) {
+    const today = todayIn(config.timeZone, new Date());
+    const days = unwornDays(unworn);
+    const started = performance.now();
+    const insights = await readInsights(db, userId, today, days);
+    logger.debug(
+      `Insights for user ${userId}: ${insights.closet.garments} garment(s), ${insights.pairs.length} pair(s), unworn ${days} days in ${Math.round(performance.now() - started)} ms`,
+    );
+    return { insights, today };
+  }
+
   app.get(
     INSIGHTS_PATH,
     { schema: { querystring: InsightsQuery } },
-    async (request, reply) => {
-      const userId = sessionUserId(request);
-      const today = todayIn(config.timeZone, new Date());
-      const days = unwornDays(request.query.unworn);
-      const started = performance.now();
-      const insights = await readInsights(db, userId, today, days);
-      logger.debug(
-        `Insights for user ${userId}: ${insights.closet.garments} garment(s), ${insights.pairs.length} pair(s), unworn ${days} days in ${Math.round(performance.now() - started)} ms`,
-      );
-      return renderPage(
+    async (request, reply) =>
+      renderPage(
         reply,
-        <InsightsPage ctx={viewContext(reply)} model={{ insights, today }} />,
-      );
-    },
+        <InsightsPage
+          ctx={viewContext(reply)}
+          model={await readPageInsights(
+            sessionUserId(request),
+            request.query.unworn,
+          )}
+        />,
+      ),
+  );
+
+  // "See all" of the unworn list (#728): the same figures, the whole list.
+  app.get(
+    UNWORN_LIST_PATH,
+    { schema: { querystring: InsightsQuery } },
+    async (request, reply) =>
+      renderPage(
+        reply,
+        <UnwornPage
+          ctx={viewContext(reply)}
+          model={await readPageInsights(
+            sessionUserId(request),
+            request.query.unworn,
+          )}
+        />,
+      ),
   );
 
   app.get(
@@ -76,11 +102,18 @@ export const insightsRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const userId = sessionUserId(request);
       const today = todayIn(config.timeZone, new Date());
-      const period = recapPeriod(recapYear(request.query.year, today), today);
       const started = performance.now();
-      const recap = await readRecap(db, userId, period);
+      // Without ?year= the page opens on the latest year worth recapping.
+      const recap =
+        request.query.year === undefined
+          ? await readDefaultRecap(db, userId, today)
+          : await readRecap(
+              db,
+              userId,
+              recapPeriod(recapYear(request.query.year, today), today),
+            );
       logger.debug(
-        `Recap ${period.year} for user ${userId}: ${recap.wears} wear(s), ${recap.piecesWorn} piece(s), ${recap.additions.count} added in ${Math.round(performance.now() - started)} ms`,
+        `Recap ${recap.period.year} for user ${userId}: ${recap.wears} wear(s), ${recap.piecesWorn} piece(s), ${recap.additions.count} added in ${Math.round(performance.now() - started)} ms`,
       );
       return renderPage(
         reply,

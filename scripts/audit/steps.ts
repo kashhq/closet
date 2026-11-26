@@ -9,6 +9,8 @@ import {
   MCP_LIMIT,
   MCP_LINK_IMPORT_LIMIT,
   PHOTO_UPLOAD_LIMIT,
+  PUSH_TEST_LIMIT,
+  SIGN_IN_ACCOUNT_LIMIT,
   VITALS_LIMIT,
   WEATHER_LOCATION_LIMIT,
   WEATHER_SEARCH_LIMIT,
@@ -119,6 +121,12 @@ const LIMIT = {
     'photo uploads: every upload route (Theo)',
     PHOTO_UPLOAD_LIMIT,
   ),
+  // Both sign-in doors, per account (#705); each run is from a new address.
+  signInAccount: auditLimit(
+    'sign-in account: POST /auth/login and /api/v1/auth/token (Theo)',
+    SIGN_IN_ACCOUNT_LIMIT,
+  ),
+  pushTest: auditLimit('push test: POST /push/test (Theo)', PUSH_TEST_LIMIT),
 } as const;
 
 /** MCP_LIMIT counts per personal access token: the one in `slot` of f.mcpTokens. */
@@ -723,6 +731,16 @@ const pages: Step[] = [
     request: () => get('/outfits'),
     expect: 200,
   }),
+  // outfitActivitySql per page: the first page above, a deep one here.
+  http({
+    ...OUTFITS,
+    name: 'Saved, a deep page (tiles)',
+    kind: 'fragment',
+    route: 'GET /outfits/tiles',
+    request: (f) =>
+      get(`/outfits/tiles?before=${f.ids.savedPageBefore}`, { htmx: true }),
+    expect: 200,
+  }),
   http({
     ...OUTFITS,
     name: 'Saved, picking for a day',
@@ -1123,6 +1141,15 @@ const pages: Step[] = [
     kind: 'page',
     route: 'GET /auth/change-password',
     request: () => get('/auth/change-password'),
+    expect: 200,
+  }),
+  // Its POST is not walked: it would end the persona's other sessions.
+  http({
+    ...ACCOUNT,
+    name: 'Sign out everywhere page',
+    kind: 'page',
+    route: 'GET /auth/sign-out-everywhere',
+    request: () => get('/auth/sign-out-everywhere'),
     expect: 200,
   }),
   http({
@@ -2487,6 +2514,7 @@ const writes: Step[] = [
     name: 'Sign in',
     kind: 'action',
     route: 'POST /auth/login',
+    limits: [LIMIT.signInAccount],
     prepare: () => Promise.resolve({ 'x-forwarded-for': nextClient() }),
     request: (f, headers: Record<string, string>) =>
       post(
@@ -2670,6 +2698,7 @@ const writes: Step[] = [
     name: 'Send a test notification',
     kind: 'action',
     route: 'POST /push/test',
+    limits: [LIMIT.pushTest],
     request: () => post('/push/test', {}, { htmx: true }),
     expect: 200,
   }),

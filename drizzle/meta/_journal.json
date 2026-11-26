@@ -456,6 +456,62 @@
       "when": 1794662855585,
       "tag": "0064_public-share-is-a-state",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1794664737313,
+      "tag": "0065_photo-belongs-to-its-owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1794666495664,
+      "tag": "0066_session-version",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794667755354,
+      "tag": "0067_token-scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1794670978929,
+      "tag": "0068_drop-redundant-owner-indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794688883983,
+      "tag": "0069_outfit-rules-sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1794888850321,
+      "tag": "0070_storage-claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1795628400751,
+      "tag": "0071_order-mail-owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1795629611349,
+      "tag": "0072_drop-file-shareable-id",
+      "breakpoints": true
     }
   ]
 }

@@ -4,12 +4,11 @@ import {
   typesOf,
   WARMTHS,
 } from '../../wardrobe/properties';
+import { Card } from '../card';
 import { AutosaveForm } from '../autosave';
 import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, HangerIcon } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
@@ -45,17 +44,13 @@ export interface TagCardModel {
 export function TagPage(props: { ctx: ViewContext; model: TagCardModel }) {
   const { ctx, model } = props;
   return (
-    <Layout ctx={ctx} title={t('TAG_GARMENTS')}>
-      <AppBar
-        ctx={ctx}
-        title={t('TAG_GARMENTS')}
-        back={wardrobeUrl(model.viewOwner)}
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto">
-        <TagCard model={model} />
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="tag"
+      bar={{ title: t('TAG_GARMENTS'), back: wardrobeUrl(model.viewOwner) }}
+    >
+      <TagCard model={model} />
+    </PageShell>
   );
 }
 
@@ -80,10 +75,7 @@ export function TagCard({ model }: { model: TagCardModel }) {
   return (
     <div id={TAG_CARD_ID} class="flex flex-col gap-4">
       <TagLeft left={model.left} />
-      <a
-        href={garmentUrl(garment.id, viewOwner)}
-        class="card bg-base-100 shadow-sm"
-      >
+      <Card as="a" variant="content" href={garmentUrl(garment.id, viewOwner)}>
         <figure class="aspect-square bg-base-200">
           {garment.photo ? (
             <img
@@ -104,7 +96,7 @@ export function TagCard({ model }: { model: TagCardModel }) {
             {categoryLabel(garment.category)}
           </p>
         </div>
-      </a>
+      </Card>
       {/* Not a native form: nothing here can be refused with a 4xx a person
           could cause (the chips are the only values). */}
       <AutosaveForm

@@ -147,9 +147,9 @@ describe('planned outfits: unavailable pieces', () => {
 
   it("marks the month's cell with a blocking mark, never the wash", async () => {
     const html = await page('/calendar/month');
-    const cell = new RegExp(`data-month-day="${t.today()}"[\\s\\S]*?</a>`).exec(
-      html,
-    )![0];
+    const cell = new RegExp(
+      `data-month-day="${t.today()}"[\\s\\S]*?</td>`,
+    ).exec(html)![0];
     // The cell draws its day's first entry (work before evening) with its
     // own dot, plus one hidden dot for the evening entry's archived piece.
     expect(marksIn(cell)).toEqual(['archived', 'away:lent']);
@@ -175,7 +175,7 @@ describe('planned outfits: unavailable pieces', () => {
       ...form({ away: 'lent', awayNote: '' }),
     });
     const html = await page('/calendar/month');
-    const cell = new RegExp(`data-month-day="${day}"[\\s\\S]*?</a>`).exec(
+    const cell = new RegExp(`data-month-day="${day}"[\\s\\S]*?</td>`).exec(
       html,
     )![0];
     // The cell draws the top only; the bag's warning is one hidden dot.
@@ -211,7 +211,7 @@ describe('planned outfits: unavailable pieces', () => {
       ...form({ away: 'lent', awayNote: '' }),
     });
     const html = await page('/calendar/month');
-    const cell = new RegExp(`data-month-day="${day}"[\\s\\S]*?</a>`).exec(
+    const cell = new RegExp(`data-month-day="${day}"[\\s\\S]*?</td>`).exec(
       html,
     )![0];
     expect(marksIn(cell)).toEqual(['away:lent']);
@@ -219,7 +219,7 @@ describe('planned outfits: unavailable pieces', () => {
   });
 
   it('marks the outfit page, without the wash', async () => {
-    // Once on the collage, once on the "Garments in this outfit" strip.
+    // Once on the collage, once on the "In this outfit" strip.
     const lentPage = await page(`/outfits/${lentOutfit}`);
     expect(marksIn(lentPage)).toEqual(['away:lent', 'away:lent']);
     const strip = lentPage.slice(lentPage.indexOf('outfit-garments-title'));

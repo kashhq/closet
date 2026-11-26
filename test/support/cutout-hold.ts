@@ -2,7 +2,7 @@ import { test as base } from './fixtures';
 import { CUTOUT_STUB_ORIGIN } from './cutout-stub';
 
 /**
- * Holding a cutout pending, for a spec that shows "Removing background…"
+ * Holding a cutout pending, for a spec that shows "Cutting out the background…"
  * (the stub's control, cutout-stub.ts). Only the test server has it: a
  * reused start:dev or start:prod server runs the real model and refuses the
  * connection, which fails the spec rather than letting it race the model.

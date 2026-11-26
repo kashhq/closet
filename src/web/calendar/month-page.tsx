@@ -1,7 +1,4 @@
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
 import { bodyOf, OutfitCollage, outfitLabel } from '../outfits/collage';
 import { hiddenBlocking } from './month-cell';
 import { GarmentMark } from '../layout/garment-mark';
@@ -13,8 +10,10 @@ import {
   WeatherMonthLoader,
 } from '../weather/views';
 import type { MonthDayView, MonthView } from './calendar-view';
-import { PageMain } from '../layout/page-main';
-import { CalendarTabs } from './calendar-tabs';
+import { MONTH_CELL } from '../layout/calendar-grid';
+import { CELL_LINK, LINKED_CELL } from './cell-link';
+import { PageShell } from '../layout/page-shell';
+import { calendarTabs } from './calendar-tabs';
 import { DAY_LETTERS, dayLabel, monthLabel } from '../date-labels';
 import { dayUrl, monthUrl } from './urls';
 
@@ -33,87 +32,98 @@ export function MonthPage(props: { ctx: ViewContext; view: MonthView }) {
   const { ctx, view } = props;
   const title = monthLabel(view.month);
   return (
-    <Layout ctx={ctx} title={t('CALENDAR_PAGE_TITLE')}>
-      <AppBar ctx={ctx} title={t('CALENDAR')} />
-      <PageMain width="wide" class="p-4 pt-20 pb-24">
-        <CalendarTabs active="month" />
-        <WeatherMonthLoader ctx={ctx} days={view.forecast} />
-        <nav
-          class="flex items-center justify-between gap-2 mb-2"
-          aria-label={t('calendar.MONTH_NAV')}
+    <PageShell
+      ctx={ctx}
+      name="month"
+      title={t('CALENDAR_PAGE_TITLE')}
+      bar={{ title: t('CALENDAR'), tabs: calendarTabs('month') }}
+      width="wide"
+    >
+      <WeatherMonthLoader ctx={ctx} days={view.forecast} />
+      <nav
+        class="flex items-center justify-between gap-2 mb-2"
+        aria-label={t('calendar.MONTH_NAV')}
+      >
+        <a
+          href={monthUrl(view.prev)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.PREV_MONTH')}
         >
-          <a
-            href={monthUrl(view.prev)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.PREV_MONTH')}
-          >
-            ‹
-          </a>
-          <h2 class="font-semibold">{title}</h2>
-          <a
-            href={monthUrl(view.next)}
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label={t('calendar.NEXT_MONTH')}
-          >
-            ›
-          </a>
-        </nav>
-        <table class="w-full table-fixed border-separate border-spacing-1 -mx-1">
-          <caption class="sr-only">{title}</caption>
-          <thead>
+          ‹
+        </a>
+        <h2 class="font-semibold">{title}</h2>
+        <a
+          href={monthUrl(view.next)}
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label={t('calendar.NEXT_MONTH')}
+        >
+          ›
+        </a>
+      </nav>
+      <table class="w-full table-fixed border-separate border-spacing-1 -mx-1">
+        <caption class="sr-only">{title}</caption>
+        <thead>
+          <tr>
+            {DAY_LETTERS.map((key) => (
+              <th scope="col" class="text-xs font-medium text-muted">
+                {t(key)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {view.weeks.map((week) => (
             <tr>
-              {DAY_LETTERS.map((key) => (
-                <th scope="col" class="text-xs font-medium text-muted">
-                  {t(key)}
-                </th>
+              {week.map((day) => (
+                <td class="p-0 align-top">
+                  {day && <MonthDay ctx={ctx} day={day} />}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {view.weeks.map((week) => (
-              <tr>
-                {week.map((day) => (
-                  <td class="p-0 align-top">
-                    {day && <MonthDay ctx={ctx} day={day} />}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {ctx.weatherEnabled && view.forecast && (
-          <p class="px-2 pt-2">
-            <OpenMeteoCredit />
-          </p>
-        )}
-      </PageMain>
-      <Dock ctx={ctx} />
-    </Layout>
+          ))}
+        </tbody>
+      </table>
+      {ctx.weatherEnabled && view.forecast && (
+        <p class="px-2 pt-2">
+          <OpenMeteoCredit />
+        </p>
+      )}
+    </PageShell>
   );
 }
 
+/**
+ * A day's cell: the date, the chip, the collage, the worn dot and "+N"
+ * stacked on a phone; from lg the collage beside the others (MONTH_CELL,
+ * layout/calendar-grid.ts).
+ */
 function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
   const [first] = day.entries;
-  // The link's aria-label stands in for its content, so the chip is read as
-  // its description instead.
+  // The link's aria-label says the day, its outfits and worn, so the chip is
+  // read as its description instead; the link holds only the date
+  // (CELL_LINK), the rest is the cell's.
   const weather = ctx.weatherEnabled && day.inForecast;
   const more = day.entries.length - 1;
   const worn = isWorn(day);
   return (
-    <a
-      href={dayUrl(day.date)}
-      class="flex flex-col items-center gap-0.5 min-h-16 p-0.5 lg:min-h-32 lg:p-1 rounded-field overflow-hidden hover:bg-base-200"
-      aria-label={cellLabel(day)}
-      aria-current={day.isToday ? 'date' : undefined}
-      aria-describedby={weather ? weatherDayId(day.date) : undefined}
+    <div
+      class={`flex flex-col items-center gap-0.5 min-h-16 p-0.5 overflow-hidden ${LINKED_CELL} ${MONTH_CELL.day}`}
       data-month-day={day.date}
       data-worn={worn ? '' : undefined}
     >
-      <span
-        class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold lg:size-8 lg:text-sm ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
+      <a
+        href={dayUrl(day.date)}
+        class={CELL_LINK}
+        aria-label={cellLabel(day)}
+        aria-current={day.isToday ? 'date' : undefined}
+        aria-describedby={weather ? weatherDayId(day.date) : undefined}
       >
-        {day.dayNum}
-      </span>
+        <span
+          class={`flex items-center justify-center size-6 rounded-full text-xs font-semibold ${day.isToday ? 'bg-primary text-primary-content' : ''}`}
+        >
+          {day.dayNum}
+        </span>
+      </a>
       {weather && <WeatherCellSlot ctx={ctx} day={day.date} />}
       {first && <CellCollage first={first} entries={day.entries} />}
       {worn && <span class="size-1 rounded-full bg-accent"></span>}
@@ -122,7 +132,7 @@ function MonthDay({ ctx, day }: { ctx: ViewContext; day: MonthDayView }) {
           {t('calendar.MORE', { count: more })}
         </span>
       )}
-    </a>
+    </div>
   );
 }
 
@@ -142,8 +152,8 @@ function CellCollage({
   const drawn = bodyOf(first.pieces);
   const hidden = hiddenBlocking(entries, drawn);
   return (
-    <span class="relative w-full">
-      <OutfitCollage garments={drawn} size="cell" />
+    <span class={`relative w-full ${MONTH_CELL.collage}`}>
+      <OutfitCollage garments={drawn} size="month" decorative />
       {hidden && (
         <span class="absolute bottom-0 right-0" aria-hidden="true">
           <GarmentMark marks={[hidden]} dot />

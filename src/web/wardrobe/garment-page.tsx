@@ -1,39 +1,25 @@
 import type { Child } from 'hono/jsx';
-import { showsCutout } from '../../cutout/state';
 import { garmentMarks } from '../../wardrobe/marks';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { GarmentCapsules } from '../capsules/garment-capsules';
 import type { GarmentCapsule } from '../capsules/queries';
-import type { IsoDate } from '../../calendar-date';
-import { dateLabel } from '../date-labels';
-import { imageUrl } from '../files/image-url';
-import {
-  enlargeLabel,
-  PhotoSet,
-  viewerTrigger,
-  type ViewerPhoto,
-} from '../files/photo-viewer';
+import { DayTime } from '../day-time';
 import { AvoidedPartners } from '../gallery/avoided';
 import { GoesWithSection } from '../gallery/goes-with';
 import type { GoesWithCloset } from '../gallery/ideas';
 import type { AvoidedPartner } from '../gallery/queries';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
 import { GarmentMark } from '../layout/garment-mark';
-import { Layout } from '../layout/layout';
-import { PageMain } from '../layout/page-main';
+import { PageShell } from '../layout/page-shell';
 import {
   CameraIcon,
-  GarmentSilhouette,
   PHOTO_ACCEPT,
   PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
   SavedToast,
-  SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
+import { Sheet, SheetCancel, sheetOpener } from '../layout/sheet';
 import { GarmentOutfitsStrip } from '../outfits/garment-outfits';
 import type { GarmentOutfits } from '../outfits/queries';
 import {
@@ -42,6 +28,12 @@ import {
   ShareLinkButton,
 } from '../share/share-button';
 import { StyleThisLink } from '../styling/style-this';
+import {
+  closesMenu,
+  MASK_EDITOR_IDS,
+  pageModule,
+  photoPick,
+} from '../page-contract';
 import type { ViewContext } from '../view-context';
 import {
   type WearPanel,
@@ -57,6 +49,7 @@ import type { BrandSize } from '../sizes/queries';
 import { BrandSizeNote } from '../sizes/views';
 import { categoryLabel, priceLabel } from './garment';
 import { GarmentCondition } from './garment-condition';
+import { GarmentPhotoView, PHOTO_SHEET_ID } from './garment-photo';
 import { RepairLogSection } from './repair-log';
 import type { RepairLog } from './repairs';
 import { fabricWeightLabel, valueLabel } from './labels';
@@ -71,8 +64,6 @@ import {
 
 export interface GarmentPageModel {
   garment: GarmentDetail;
-  /** The household's date (APP_TIMEZONE), for the dates the page reads out. */
-  today: IsoDate;
   /** The wardrobe's capsules, and whether the garment is in each. */
   capsules: GarmentCapsule[];
   /** The shared wardrobe it is in; undefined for the requester's own. */
@@ -133,28 +124,6 @@ export interface GarmentPageModel {
   decided: DecisionToast | undefined;
 }
 
-type GarmentPhoto = NonNullable<GarmentDetail['photo']>;
-
-const PHOTO_SHEET_ID = 'garment-photo-sheet';
-
-/** Opens the photo sheet (the ⋯ menu's Photo, the empty hero's button). */
-const OPEN_PHOTO_SHEET = `this.closest('details')?.removeAttribute('open'); document.getElementById('${PHOTO_SHEET_ID}').showModal()`;
-
-/**
- * Opens the photo sheet as the page loads, after a rotate (?photoRotated=1),
- * so repeated quarter turns are one tap each. A fixed string, placed after
- * the dialog; StripFlags drops the marker, so a reload does not reopen it.
- */
-const REOPEN_PHOTO_SHEET = `document.getElementById('${PHOTO_SHEET_ID}').showModal();`;
-
-/**
- * The mask editor's pencil (mask-editor.js), as an inline module so it runs
- * again after a boosted navigation back here (a fixed string): delegated on
- * #garment-photo-slot, because the cutout polling swaps the pencil.
- */
-const MASK_SCRIPT = `import { wireUpEditMask } from 'mask-editor';
-wireUpEditMask(document.getElementById('garment-photo-slot'));`;
-
 /** The one-shot flags the garment page's toasts read (GarmentPageQuery). */
 const GARMENT_PAGE_FLAGS = [
   'created',
@@ -172,7 +141,9 @@ const GARMENT_PAGE_FLAGS = [
  * capsules row, "In N outfits", then the details and care; "Shared
  * publicly" under the summary while it has a public link. Everything
  * else (edit, photo, clone, share, archive, delete) is in the app bar's ⋯
- * menu; the photo is taken or chosen in a sheet.
+ * menu; the photo is taken or chosen in a sheet. A `split` page (#1068):
+ * the hero is the subject, first on a phone and left and sticky from lg,
+ * with the rest beside it.
  */
 export function GarmentPage(props: {
   ctx: ViewContext;
@@ -182,62 +153,72 @@ export function GarmentPage(props: {
   const { garment } = model;
   const title = garment.name ?? categoryLabel(garment.category);
   return (
-    <Layout ctx={ctx} title={title}>
-      <AppBar
-        ctx={ctx}
-        title={title}
-        back={backUrl(garment, model.viewOwner)}
-        actions={<GarmentMenu ctx={ctx} model={model} />}
-      />
-      <PageMain class="flex flex-col gap-6 px-4 pt-20 pb-24">
-        <div id="garment-photo-slot">
+    <PageShell
+      ctx={ctx}
+      name="garment"
+      bar={{
+        title,
+        back: backUrl(garment, model.viewOwner),
+        actions: <GarmentMenu ctx={ctx} model={model} />,
+      }}
+      layout="split"
+      aside={
+        // The mask editor (views/assets/page/mask-editor.ts) binds here, on
+        // every visit (page-mount.ts), for whoever may change a photo: the
+        // cutout polling swaps the pencil inside, never the slot.
+        <div
+          id="garment-photo-slot"
+          {...(model.canEdit && garment.photo ? pageModule('mask-editor') : {})}
+        >
           <GarmentPhotoView
             garment={garment}
             viewOwner={model.viewOwner}
             canEdit={model.canEdit}
           />
         </div>
-        <Summary model={model} />
-        {model.canEdit && (
-          <PublicSharePanel
-            siteUrl={ctx.siteUrl}
-            share={publicShareOf(model)}
-          />
-        )}
-        {model.suggestion && (
-          <SuggestionSection
-            garment={garment}
-            suggestion={model.suggestion}
-            isOwner={model.canDelete}
-            canEdit={model.canEdit}
-            viewOwner={model.viewOwner}
-          />
-        )}
-        <Replacement model={model} />
-        {/* A wishlist item is not in the closet: it has no condition, wears,
+      }
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          <PhotoTools model={model} />
+          <Toasts model={model} />
+        </>
+      }
+    >
+      <Summary model={model} />
+      {model.canEdit && (
+        <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(model)} />
+      )}
+      {model.suggestion && (
+        <SuggestionSection
+          garment={garment}
+          suggestion={model.suggestion}
+          isOwner={model.canDelete}
+          canEdit={model.canEdit}
+          viewOwner={model.viewOwner}
+        />
+      )}
+      <Replacement model={model} />
+      {/* A wishlist item is not in the closet: it has no condition, wears,
             capsules or outfits until "Bought it" (the route reads none);
             what it has is how it would go with the closet. */}
-        <GoesWithSection goesWith={model.goesWith} />
-        {garment.status !== 'wishlist' && (
-          <GarmentCapsules
-            garmentId={garment.id}
-            capsules={model.capsules}
-            viewOwner={model.viewOwner}
-            canEdit={model.canEdit}
-          />
-        )}
-        {model.outfits && <GarmentOutfitsStrip outfits={model.outfits} />}
-        <AvoidedPartners
+      <GoesWithSection goesWith={model.goesWith} />
+      {garment.status !== 'wishlist' && (
+        <GarmentCapsules
           garmentId={garment.id}
-          partners={model.styling.avoided}
+          capsules={model.capsules}
+          viewOwner={model.viewOwner}
+          canEdit={model.canEdit}
         />
-        <GarmentDetails garment={garment} today={model.today} />
-        <Care model={model} />
-      </PageMain>
-      <PhotoTools model={model} />
-      <Toasts model={model} />
-      <Dock ctx={ctx} />
-    </Layout>
+      )}
+      {model.outfits && <GarmentOutfitsStrip outfits={model.outfits} />}
+      <AvoidedPartners
+        garmentId={garment.id}
+        partners={model.styling.avoided}
+      />
+      <GarmentDetails garment={garment} />
+      <Care model={model} />
+    </PageShell>
   );
 }
 
@@ -336,26 +317,22 @@ function CareLabelSection({ garment }: { garment: GarmentDetail }) {
 
 /**
  * For whoever may change the photo: the photo sheet, and with a photo the
- * mask editor and the module that wires its pencil.
+ * mask editor (bound on #garment-photo-slot, above).
  */
 function PhotoTools({ model }: { model: GarmentPageModel }) {
   if (!model.canEdit) return null;
   const { garment } = model;
   return (
     <>
-      <PhotoSheet garment={garment} viewOwner={model.viewOwner} />
-      {model.justRotatedPhoto && (
-        <script dangerouslySetInnerHTML={{ __html: REOPEN_PHOTO_SHEET }} />
-      )}
-      {garment.photo && (
-        <>
-          <MaskEditorDialog />
-          <script
-            type="module"
-            dangerouslySetInnerHTML={{ __html: MASK_SCRIPT }}
-          />
-        </>
-      )}
+      {/* After a rotate (?photoRotated=1) the sheet opens again, so repeated
+          quarter turns are one tap each; StripFlags drops the flag, so a
+          reload does not reopen it. */}
+      <PhotoSheet
+        garment={garment}
+        viewOwner={model.viewOwner}
+        opensOnLoad={model.justRotatedPhoto}
+      />
+      {garment.photo && <MaskEditorDialog />}
     </>
   );
 }
@@ -526,7 +503,12 @@ function GarmentMenu({
         )}
         {model.canEdit && (
           <li>
-            <button type="button" onclick={OPEN_PHOTO_SHEET}>
+            <button
+              type="button"
+              {...sheetOpener(PHOTO_SHEET_ID)}
+              // The menu closes as the sheet opens over it.
+              {...closesMenu()}
+            >
               {photoActionLabel(garment)}
             </button>
           </li>
@@ -615,250 +597,6 @@ function OwnerMenuItems({ model }: { model: GarmentPageModel }) {
   );
 }
 
-// The pending photo's poll (#689): every 2 s for its first 30 s (a cutout
-// takes 4 to 7 s), then every 10 s. Past 2 min it stops only while the
-// queue waits for a model it cannot have: that photo finishes later, and an
-// open page must not poll it forever; a working queue that is merely busy
-// (a bulk upload) keeps the 10 s poll, so its cutout still lands on the
-// page. Counted in polls, which the URL carries (`poll`), so the server
-// needs no clock and no per-page state; a reload starts over.
-const FAST_POLL_SECONDS = 2;
-const FAST_PHASE_SECONDS = 30;
-const SLOW_POLL_SECONDS = 10;
-const POLL_CAP_SECONDS = 120;
-const FAST_POLLS = FAST_PHASE_SECONDS / FAST_POLL_SECONDS;
-const MAX_POLL_COUNT = 1000;
-
-/**
- * The `poll` query as a count: anything but digits is 0 (a poll the page
- * never wrote starts the backoff over), and a count past the point where
- * every delay is the same is clamped, so an endless poll never outgrows it.
- */
-export function pollCount(raw: string | undefined): number {
-  if (raw === undefined || !/^\d+$/.test(raw)) return 0;
-  return Math.min(Number(raw), MAX_POLL_COUNT);
-}
-
-/**
- * The seconds until poll number `poll + 1`, or undefined once the polls so
- * far have waited POLL_CAP_SECONDS while `modelUnavailable` (the queue is
- * waiting-for-model): the fragment then stops polling.
- */
-export function cutoutPollDelay(
-  poll: number,
-  modelUnavailable: boolean,
-): number | undefined {
-  const waited =
-    poll <= FAST_POLLS
-      ? poll * FAST_POLL_SECONDS
-      : FAST_PHASE_SECONDS + (poll - FAST_POLLS) * SLOW_POLL_SECONDS;
-  if (waited < FAST_PHASE_SECONDS) return FAST_POLL_SECONDS;
-  if (waited >= POLL_CAP_SECONDS && modelUnavailable) return undefined;
-  return SLOW_POLL_SECONDS;
-}
-
-/**
- * The hero: the cutout (the original when there is none), contained on the
- * plinth at 4:5, with the mask editor's pencil, and where the cutout
- * stands: pending polls GET /wardrobe/:id/cutout?poll=N on the backoff of
- * cutoutPollDelay (this component again, swapped over itself; the answer
- * without the trigger ends the polling: ready, failed, or the cap while
- * the model is unavailable, which says it will finish later), failed offers
- * "Try again". Its own
- * hx-indicator keeps the polls off the app bar's spinner. Without a photo,
- * its role's silhouette, and for whoever may add one the button that opens
- * the photo sheet. `poll`: how many polls led here (0 on the page itself);
- * `modelUnavailable`: the queue's state, read by the poll's route only.
- */
-export function GarmentPhotoView(props: {
-  garment: GarmentDetail;
-  viewOwner: number | undefined;
-  canEdit: boolean;
-  poll?: number;
-  modelUnavailable?: boolean;
-}) {
-  const { garment, viewOwner, canEdit } = props;
-  const photo = garment.photo;
-  if (!photo) {
-    return (
-      <div
-        id="garment-photo"
-        class="rounded-box bg-base-200 aspect-[4/5] w-full flex flex-col items-center justify-center gap-4 text-faint"
-      >
-        <GarmentSilhouette
-          category={garment.category}
-          class="size-20"
-          strokeWidth="1"
-        />
-        {canEdit && (
-          <button
-            type="button"
-            class="btn btn-outline btn-sm"
-            onclick={OPEN_PHOTO_SHEET}
-          >
-            <CameraIcon class="size-4" />
-            {t('garment.ADD_PHOTO')}
-          </button>
-        )}
-      </div>
-    );
-  }
-  const status = photo.cutoutStatus;
-  const pending = status === 'pending';
-  const polling = pending ? nextPoll(props) : undefined;
-  return (
-    <div id="garment-photo" {...polling}>
-      <figure class="relative rounded-box overflow-hidden bg-base-200 aspect-[4/5] w-full">
-        {/* The viewer swipes from the cutout to the photo it was cut from. */}
-        <PhotoSet id="garment-photos" photos={viewerPhotos(garment, photo)} />
-        <button
-          type="button"
-          class="size-full"
-          aria-label={enlargeLabel(garment.name)}
-          {...viewerTrigger('garment-photos', photo, viewerVariant(photo))}
-        >
-          <img
-            src={imageUrl(photo, 'nobg')}
-            alt={garment.name ?? ''}
-            class="object-contain w-full h-full"
-          />
-        </button>
-        {pending && <PendingStatus polling={polling !== undefined} />}
-        {canEdit && !pending && (
-          <EditMaskButton
-            garment={garment}
-            photo={photo}
-            viewOwner={viewOwner}
-          />
-        )}
-      </figure>
-      {status === 'failed' && (
-        <CutoutFailed
-          retryUrl={
-            canEdit
-              ? garmentUrl(garment.id, viewOwner, '/cutout/retry')
-              : undefined
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-// The pending photo's next poll, or undefined past the cap.
-function nextPoll(props: {
-  garment: GarmentDetail;
-  viewOwner: number | undefined;
-  poll?: number;
-  modelUnavailable?: boolean;
-}) {
-  const poll = props.poll ?? 0;
-  const delay = cutoutPollDelay(poll, props.modelUnavailable === true);
-  if (delay === undefined) return undefined;
-  return {
-    'hx-get': garmentUrl(props.garment.id, props.viewOwner, '/cutout', {
-      poll: poll + 1,
-    }),
-    'hx-trigger': `every ${delay}s`,
-    'hx-swap': 'outerHTML',
-    'hx-indicator': '#garment-photo-status',
-  };
-}
-
-/**
- * A pending cutout's line over the photo: removing, while the page polls;
- * past the poll's cap, queued for later, without the spinner.
- */
-function PendingStatus(props: { polling: boolean }) {
-  return (
-    <div
-      id="garment-photo-status"
-      role="status"
-      class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-base-100/80 p-2 text-sm"
-    >
-      {props.polling ? (
-        <>
-          <span class="loading loading-spinner loading-xs"></span>
-          {t('REMOVING_BACKGROUND')}
-        </>
-      ) : (
-        t('CUTOUT_QUEUED')
-      )}
-    </div>
-  );
-}
-
-/** A failed cutout, and "Try again" for whoever may change the photo. */
-function CutoutFailed(props: { retryUrl: string | undefined }) {
-  return (
-    <div
-      role="alert"
-      class="alert alert-warning alert-soft mt-2 w-full flex justify-between"
-    >
-      <span>{t('CUTOUT_FAILED')}</span>
-      {props.retryUrl && (
-        <PostForm action={props.retryUrl}>
-          <button type="submit" class="btn btn-sm">
-            {t('CUTOUT_RETRY')}
-          </button>
-        </PostForm>
-      )}
-    </div>
-  );
-}
-
-/**
- * The pencil: mask-editor.js reads what it edits and where it saves from
- * the data attributes at the tap (the button is swapped with the photo),
- * and writes the new version back into them after a save.
- */
-/** The photo viewer opens on the cutout while one is shown, else on the photo itself. */
-function viewerVariant(photo: GarmentPhoto): 'nobg' | 'original' {
-  return showsCutout(photo.cutoutStatus) ? 'nobg' : 'original';
-}
-
-function viewerPhotos(garment: GarmentDetail, photo: GarmentPhoto) {
-  const alt = garment.name ?? '';
-  const original: ViewerPhoto = { photo, alt, variant: 'original' };
-  return showsCutout(photo.cutoutStatus)
-    ? [{ photo, alt } satisfies ViewerPhoto, original]
-    : [original];
-}
-
-function EditMaskButton(props: {
-  garment: GarmentDetail;
-  photo: GarmentPhoto;
-  viewOwner: number | undefined;
-}) {
-  return (
-    <button
-      id="editMaskBtn"
-      type="button"
-      class="btn btn-circle absolute bottom-3 right-3 btn-neutral opacity-80 hover:opacity-100"
-      title={t('MASK_EDITOR_TITLE')}
-      aria-label={t('MASK_EDITOR_TITLE')}
-      data-original-url={imageUrl(props.photo, 'original')}
-      data-nobg-url={imageUrl(props.photo, 'nobg')}
-      data-save-url={garmentUrl(props.garment.id, props.viewOwner, '/nobg')}
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        class="size-5"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
-        />
-      </svg>
-    </button>
-  );
-}
-
 /**
  * The set properties as one row of chips ("Warmth: Light · Casual · 6 oz ·
  * 203 gsm · Cotton · Short sleeve"); nothing when none is set.
@@ -903,13 +641,7 @@ function PropertyChips({ garment }: { garment: GarmentDetail }) {
  * when it was acquired, notes) and the product link. Nothing when none is
  * set. The care notes are the care label's (CareLabelSection).
  */
-function GarmentDetails({
-  garment,
-  today,
-}: {
-  garment: GarmentDetail;
-  today: IsoDate;
-}) {
+function GarmentDetails({ garment }: { garment: GarmentDetail }) {
   const rows = [
     garment.colors && (
       <Detail label={t('COLOR')}>
@@ -921,7 +653,7 @@ function GarmentDetails({
     ),
     garment.acquiredOn && (
       <Detail label={t('DATE_ACQUIRED')}>
-        {dateLabel(garment.acquiredOn, today)}
+        <DayTime day={garment.acquiredOn} kind="date" />
       </Detail>
     ),
     garment.notes && (
@@ -1033,7 +765,7 @@ function photoActionLabel(garment: GarmentDetail): string {
 /**
  * The photo sheet (the ⋯ menu's Photo): take one with the camera or choose
  * one from the library. Choosing uploads at once: the photo is prepared on
- * the phone (PREPARE_AND_SUBMIT_PHOTO), posted as a native multipart post
+ * the phone (`photoPick`), posted as a native multipart post
  * to POST /wardrobe/:id/photo, and its 303 reloads this page with
  * ?photoSaved=1, its cutout pending. Native, as the add sheet's and the
  * selfies': a refused photo (too large, not an image) is the error page,
@@ -1048,51 +780,46 @@ function photoActionLabel(garment: GarmentDetail): string {
 function PhotoSheet(props: {
   garment: GarmentDetail;
   viewOwner: number | undefined;
+  opensOnLoad: boolean;
 }) {
   const action = garmentUrl(props.garment.id, props.viewOwner, '/photo');
   return (
-    <dialog
+    <Sheet
       id={PHOTO_SHEET_ID}
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="garment-photo-sheet-title"
+      kind="form"
+      labelledBy="garment-photo-sheet-title"
+      gap={3}
+      dismiss="close"
+      opensOnLoad={props.opensOnLoad}
     >
-      <div class="modal-box flex flex-col gap-3 pb-8">
-        <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
-          {photoActionLabel(props.garment)}
-        </h2>
-        <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
-        <div class="group/upload flex flex-col gap-3">
-          <PhotoSource action={action} source="camera" />
-          <PhotoSource action={action} source="library" />
-          <p
-            class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
-            role="status"
-          >
-            <span class="loading loading-spinner loading-sm"></span>
-            {t('garment.PHOTO_UPLOADING')}
-          </p>
-        </div>
-        {props.garment.photo && (
-          <RotateButtons
-            action={garmentUrl(
-              props.garment.id,
-              props.viewOwner,
-              '/photo/rotate',
-            )}
-          />
-        )}
-        <div class="modal-action mt-0">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-        </div>
+      <h2 id="garment-photo-sheet-title" class="font-bold text-lg">
+        {photoActionLabel(props.garment)}
+      </h2>
+      <p class="text-sm text-muted">{t('garment.PHOTO_HINT')}</p>
+      <div class="group/upload flex flex-col gap-3">
+        <PhotoSource action={action} source="camera" />
+        <PhotoSource action={action} source="library" />
+        <p
+          class="hidden items-center gap-2 text-sm group-has-[form[data-submitting]]/upload:flex"
+          role="status"
+        >
+          <span class="loading loading-spinner loading-sm"></span>
+          {t('garment.PHOTO_UPLOADING')}
+        </p>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      {props.garment.photo && (
+        <RotateButtons
+          action={garmentUrl(
+            props.garment.id,
+            props.viewOwner,
+            '/photo/rotate',
+          )}
+        />
+      )}
+      <div class="modal-action mt-0">
+        <SheetCancel />
+      </div>
+    </Sheet>
   );
 }
 
@@ -1120,7 +847,7 @@ function PhotoSource(props: { action: string; source: 'camera' | 'library' }) {
           accept={PHOTO_ACCEPT}
           capture={camera ? 'environment' : undefined}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </PostForm>
@@ -1169,51 +896,74 @@ function RotateButtons(props: { action: string }) {
   );
 }
 
-/** The mask editor (public/js/mask-editor.js), opened by the pencil on the photo. */
+/** The two brushes, erase first and pressed: the module flips `aria-pressed`. */
+const MASK_BRUSHES = [
+  { id: 'erase', label: 'MASK_BRUSH_ERASE', pressed: true },
+  { id: 'restore', label: 'MASK_BRUSH_RESTORE', pressed: false },
+] as const;
+
+/** The brush radius in screen pixels, from a fine edge to a wide sweep. */
+const MASK_BRUSH_SIZE = { min: '4', max: '80', value: '20' } as const;
+
+/**
+ * The mask editor (views/assets/page/mask-editor.ts), opened by the pencil
+ * on the photo. The brushes are toggles whose `aria-pressed` the module
+ * keeps; the canvas takes no touch gestures, so a stroke paints rather than
+ * scrolling the sheet.
+ */
 function MaskEditorDialog() {
+  const ids = MASK_EDITOR_IDS;
   return (
-    <dialog id="maskEditorDialog" class="modal">
-      <div class="modal-box w-full max-w-lg p-4 flex flex-col gap-4">
-        <h3 class="font-bold text-lg">{t('MASK_EDITOR_TITLE')}</h3>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="join">
-            <button id="maskBrushErase" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_ERASE')}
+    <Sheet
+      id={ids.dialog}
+      kind="dialog"
+      labelledBy="mask-editor-title"
+      gap={4}
+      boxClass="w-full max-w-lg p-4"
+      dismiss="close"
+    >
+      <h3 id="mask-editor-title" class="font-bold text-lg">
+        {t('MASK_EDITOR_TITLE')}
+      </h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="join">
+          {MASK_BRUSHES.map((brush) => (
+            <button
+              type="button"
+              id={ids[brush.id]}
+              class={`join-item btn btn-sm${brush.pressed ? ' btn-active' : ''}`}
+              aria-pressed={String(brush.pressed)}
+            >
+              {t(brush.label)}
             </button>
-            <button id="maskBrushRestore" class="btn btn-sm join-item">
-              {t('MASK_BRUSH_RESTORE')}
-            </button>
-          </div>
-          <div class="flex items-center gap-2 flex-1 min-w-32">
-            <span class="text-xs text-muted shrink-0">
-              {t('MASK_BRUSH_SIZE')}
-            </span>
-            <input
-              id="maskBrushSize"
-              type="range"
-              min="4"
-              max="80"
-              value="20"
-              class="range range-xs flex-1"
-            />
-          </div>
+          ))}
         </div>
-        <div class="overflow-auto rounded-box border border-base-300 bg-base-200">
-          <canvas
-            id="maskEditorCanvas"
-            class="mask-checkerboard block max-w-full mx-auto cursor-crosshair"
-          ></canvas>
-        </div>
-        <div class="modal-action mt-0">
-          <button id="maskEditorSkip" class="btn btn-ghost btn-sm">
-            {t('MASK_EDITOR_SKIP')}
-          </button>
-          <button id="maskEditorAccept" class="btn btn-primary btn-sm">
-            {t('MASK_EDITOR_ACCEPT')}
-          </button>
-        </div>
+        <label class="flex items-center gap-2 flex-1 min-w-32">
+          <span class="text-xs text-muted shrink-0">
+            {t('MASK_BRUSH_SIZE')}
+          </span>
+          <input
+            id={ids.size}
+            class="range range-xs flex-1"
+            type="range"
+            {...MASK_BRUSH_SIZE}
+          />
+        </label>
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="rounded-box border border-base-300 bg-base-200 overflow-auto">
+        <canvas
+          id={ids.canvas}
+          class="mask-checkerboard block max-w-full mx-auto cursor-crosshair touch-none"
+        ></canvas>
+      </div>
+      <div class="modal-action mt-0">
+        <button id={ids.skip} type="button" class="btn btn-ghost btn-sm">
+          {t('MASK_EDITOR_SKIP')}
+        </button>
+        <button id={ids.accept} type="button" class="btn btn-primary btn-sm">
+          {t('MASK_EDITOR_ACCEPT')}
+        </button>
+      </div>
+    </Sheet>
   );
 }

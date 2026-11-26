@@ -3,6 +3,8 @@ import { Type } from '@sinclair/typebox';
 import { apiResponses } from '../api/contract';
 import type { ApiOptions } from '../api/plugin';
 import { refusedBody } from '../api/refused-body';
+import { HttpError } from '../errors';
+import { t } from '../i18n';
 import {
   ListCursor,
   ListLimit,
@@ -17,6 +19,7 @@ import { OwnerId } from '../wardrobe/garment-api-input';
 import {
   capsuleAddress,
   createOwnCapsule,
+  createOwnCapsuleOnce,
   deleteOwnCapsule,
   renameCapsule,
   requireCapsule,
@@ -74,6 +77,7 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   { db, logger },
   done,
 ) => {
+  const deps = { db, logger };
   app.get(
     '/capsules',
     {
@@ -144,10 +148,10 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['capsules'],
         summary: 'Creates a capsule',
         description:
-          'In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`.',
+          'In your own wardrobe only (a share is a 403). Judged as the capsule form is: a blank name, or one another of your capsules has in any case, is a 400 naming `body/name`. 201 with its `Location`. With a `clientId`, a retry answers the first capsule of that id (200, its `Location`) and creates nothing; the id of one deleted since is a 410 `gone`.',
         querystring: CapsuleQuery,
         body: NewCapsule,
-        response: apiResponses({ 201: CapsuleCreated }),
+        response: apiResponses({ 200: CapsuleCreated, 201: CapsuleCreated }),
       },
     },
     async (request, reply) => {
@@ -161,15 +165,22 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await authorizeWardrobe(db, actor, ownerId, 'own', 'capsule');
         throw refusedBody(form.errors, POINTER_OF_CAPSULE_FIELD);
       }
-      const created = await createOwnCapsule(db, actor, ownerId, form.fields);
-      if (created === 'name-taken') {
+      const made = clientId
+        ? await createOwnCapsuleOnce(
+            deps,
+            actor,
+            ownerId,
+            form.fields,
+            clientId,
+          )
+        : await createOwnCapsule(deps, actor, ownerId, form.fields);
+      if (made === 'name-taken') {
         throw refusedBody(nameTaken(body).errors, POINTER_OF_CAPSULE_FIELD);
       }
-      logger.info(
-        `Capsule ${created.id} created by user ${created.access.ownerId} (API)${clientId ? `, client id ${clientId.slice(0, 8)}` : ''}`,
-      );
+      if (made === 'gone') throw new HttpError(410, t('CAPSULE_DELETED'));
+      const created = { created: true, ...made };
       return reply
-        .status(201)
+        .status(created.created ? 201 : 200)
         .header('Location', apiCapsuleUrl(created.id, created.viewOwner))
         .send({ id: created.id });
     },
@@ -199,16 +210,13 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         await requireCapsule(db, actor, address, 'own');
         throw refusedBody(form.errors, POINTER_OF_CAPSULE_FIELD);
       }
-      const saved = await renameCapsule(db, actor, address, form.fields);
+      const saved = await renameCapsule(deps, actor, address, form.fields);
       if (saved === 'name-taken') {
         throw refusedBody(
           nameTaken(request.body).errors,
           POINTER_OF_CAPSULE_FIELD,
         );
       }
-      logger.info(
-        `Capsule ${address.id} updated by user ${saved.access.ownerId} (API)`,
-      );
       return toCapsuleResource({ id: address.id, ...form.fields });
     },
   );
@@ -228,13 +236,7 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-      const { access } = await deleteOwnCapsule(
-        db,
-        actorOf(request),
-        capsuleAddress(request),
-      );
-      logger.info(`Capsule ${id} deleted by user ${access.ownerId} (API)`);
+      await deleteOwnCapsule(deps, actorOf(request), capsuleAddress(request));
       return reply.status(204).send(null);
     },
   );
@@ -255,16 +257,12 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { add = [], remove = [] } = request.body;
-      const { access, added, removed } = await setCapsuleMembers(
-        db,
+      const { added, removed } = await setCapsuleMembers(
+        deps,
         actorOf(request),
         capsuleAddress(request),
         { add, remove },
-      );
-      logger.info(
-        `Capsule ${id} garments changed by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): ${added} added, ${removed} removed`,
       );
       return { added, removed };
     },
@@ -286,16 +284,12 @@ export const capsuleApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const { id } = request.params;
       const { add = [], remove = [] } = request.body;
-      const { access, added, removed } = await setGarmentCapsules(
-        db,
+      const { added, removed } = await setGarmentCapsules(
+        deps,
         actorOf(request),
         garmentAddress(request),
         { add, remove },
-      );
-      logger.info(
-        `Garment ${id} capsules changed by user ${actorOf(request).userId} in wardrobe ${access.ownerId} (API): ${added} added, ${removed} removed`,
       );
       return { added, removed };
     },

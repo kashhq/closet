@@ -60,7 +60,7 @@ test('an invite opened signed out is accepted in one pass, the shared wardrobe i
   const grantee = await granteeContext.newPage();
   const invitePage = `/wardrobe-share/invite/${token}`;
   await grantee.goto(invitePage);
-  await grantee.locator('main').getByRole('link', { name: 'Login' }).click();
+  await grantee.locator('main').getByRole('link', { name: 'Sign in' }).click();
   await submitLogin(grantee, granteeEmail);
   // Back on the invite, signed in: Accept is one tap.
   await expect(grantee).toHaveURL(new RegExp(`${invitePage}$`));
@@ -74,7 +74,7 @@ test('an invite opened signed out is accepted in one pass, the shared wardrobe i
   await grantee.locator('#title-menu summary').click();
   await grantee
     .locator('#title-menu')
-    .getByRole('link', { name: /Can edit|View only/ })
+    .getByRole('link', { name: /Can edit|Can view/ })
     .click();
 
   await expect(grantee).toHaveURL(/\/wardrobe\?ownerId=\d+$/);

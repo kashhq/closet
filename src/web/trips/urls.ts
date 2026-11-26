@@ -1,6 +1,7 @@
 import type { Occasion } from '../../wardrobe/occasions';
 import type { IsoDate } from '../../calendar-date';
 import { ideasUrl } from '../gallery/urls';
+import { type OutfitList, withOutfitList } from '../outfits/outfit-list';
 
 /**
  * Where trips live (#10): the Calendar's Trips tab (the redesign's "Calendar
@@ -26,6 +27,24 @@ export function addOutfitUrl(
   return tripUrl(
     tripId,
     `/outfits/new${query.length > 0 ? `?${query.join('&')}` : ''}`,
+  );
+}
+
+/** The add page's saved outfits of `list` below `before` (#660): its sentinel's GET, always a fragment. */
+export function addOutfitMoreUrl(
+  tripId: number,
+  slot: { day?: IsoDate; occasion?: Occasion },
+  list: OutfitList,
+  before: number,
+): string {
+  const query = [
+    slot.day && `day=${slot.day}`,
+    slot.occasion && `occasion=${slot.occasion}`,
+    `before=${before}`,
+  ].filter(Boolean);
+  return withOutfitList(
+    tripUrl(tripId, `/outfits/new/more?${query.join('&')}`),
+    list,
   );
 }
 

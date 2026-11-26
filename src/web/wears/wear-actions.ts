@@ -3,6 +3,7 @@ import type { AwayReason } from '../../wardrobe/availability';
 import type { Db } from '../../db/client';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
+import { type ActionDeps, logOp } from '../op-log';
 import type { Actor } from '../sharing/access';
 import { garmentNotOwnedYet } from '../wardrobe/garment-actions';
 import {
@@ -11,7 +12,7 @@ import {
   garmentWardrobe,
 } from '../wardrobe/garment-access';
 import { findGarment } from '../wardrobe/queries';
-import { markWashed, setAway, setWoreToday } from './queries';
+import { markWashed, setAway, setWoreToday, type WashOutcome } from './queries';
 
 /**
  * The wear path (#188, #193a): Wore today, Washed and away on one garment,
@@ -46,7 +47,7 @@ export interface WearWrite {
 
 /** Wore it on `day` (worn) or its undo that day, the garment's own day-level wear (setWoreToday). */
 export async function wearGarment(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   change: {
@@ -70,7 +71,14 @@ export async function wearGarment(
   if (outcome === 'gone' || outcome === 'client-id-taken') {
     throw new WearClientIdRefusal(outcome);
   }
-  return { ownerId: access.ownerId, changed: outcome === 'changed' };
+  const changed = outcome === 'changed';
+  logOp(logger, actor, change.worn ? 'garment.worn' : 'garment.wear.undone', {
+    garmentId: address.id,
+    day: change.day,
+    changed,
+    clientId: change.clientId,
+  });
+  return { ownerId: access.ownerId, changed };
 }
 
 /**
@@ -78,26 +86,56 @@ export async function wearGarment(
  * wash never moves back, so an older one is unchanged).
  */
 export async function washGarment(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   wash: { day: IsoDate; at: Date | null },
 ): Promise<WearWrite> {
   const { access } = await garmentWardrobe(db, actor, address, 'own');
-  const [washed] = await markWashed(
+  const {
+    washed: [washed],
+  } = await markWashed(db, access.ownerId, [address.id], wash.day, wash.at);
+  if (!washed) throw await refusalOf(db, address.id, access.ownerId);
+  logOp(logger, actor, 'garment.washed', {
+    garmentId: address.id,
+    day: wash.day,
+    changed: washed.changed,
+  });
+  return { ownerId: access.ownerId, changed: washed.changed };
+}
+
+/**
+ * Laundry's batch (the laundry page, `POST /garments/washes`, mark_washed,
+ * select mode's Mark washed with `closetOnly`): the actor's own garments
+ * named, the rest left unwashed and counted by why (WashOutcome).
+ */
+export async function washGarments(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  garmentIds: number[],
+  wash: { day: IsoDate; at: Date | null },
+  options: { closetOnly?: boolean } = {},
+): Promise<WashOutcome> {
+  const outcome = await markWashed(
     db,
-    access.ownerId,
-    [address.id],
+    actor.userId,
+    garmentIds,
     wash.day,
     wash.at,
+    options,
   );
-  if (!washed) throw await refusalOf(db, address.id, access.ownerId);
-  return { ownerId: access.ownerId, changed: washed.changed };
+  logOp(logger, actor, 'garments.washed', {
+    day: wash.day,
+    washed: outcome.washed.length,
+    asked: garmentIds.length,
+    ...outcome.skipped,
+  });
+  return outcome;
 }
 
 /** Away (lent, at the repair shop) with a note, or back in the closet (null): setAway. */
 export async function putGarmentAway(
-  db: Db,
+  { db, logger }: ActionDeps,
   actor: Actor,
   address: GarmentAddress,
   away: { reason: AwayReason; note: string | null } | null,
@@ -106,6 +144,10 @@ export async function putGarmentAway(
   if (!(await setAway(db, access.ownerId, address.id, away))) {
     throw await refusalOf(db, address.id, access.ownerId);
   }
+  logOp(logger, actor, 'garment.away.set', {
+    garmentId: address.id,
+    away: away?.reason ?? null,
+  });
   return { ownerId: access.ownerId };
 }
 

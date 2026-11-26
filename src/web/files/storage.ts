@@ -35,6 +35,24 @@ const TRASH_DAY = /^\d{4}-\d{2}-\d{2}$/;
  */
 export const STORAGE_MARKER = '.closet-storage';
 
+/**
+ * A withdrawn marker is kept, never deleted, as
+ * `.closet-storage.orphan-<id>-<random>` (#1049): a claim that lost its
+ * pairing may have been the real share's, and
+ * `--repair-storage-identity --orphan <id>` puts it back. The only name a
+ * withdrawal ever gives a marker, so a crash anywhere in it leaves the
+ * marker or an orphan, both of which boot and repair read; an orphan is
+ * judged by its content, the name is a hint. list() skips every name
+ * starting with STORAGE_MARKER.
+ */
+const ORPHAN_PREFIX = `${STORAGE_MARKER}.orphan-`;
+
+/** An orphaned marker and the file it is in (orphanedMarkers). */
+export interface OrphanedMarker {
+  name: string;
+  marker: StorageMarker;
+}
+
 export interface StorageMarker {
   /** A random UUID, stable for the life of the storage. */
   installId: string;
@@ -79,6 +97,8 @@ export interface StorageFs {
   writeNew(file: string, text: string): Promise<void>;
   /** A hard link: fails with EEXIST when `to` exists, so never replaces it. */
   link(from: string, to: string): Promise<void>;
+  /** Atomic within the directory; replaces `to`. */
+  rename(from: string, to: string): Promise<void>;
   remove(file: string): Promise<void>;
 }
 
@@ -86,6 +106,7 @@ const NODE_STORAGE_FS: StorageFs = {
   readText: (file) => fs.promises.readFile(file, 'utf8'),
   writeNew: (file, text) => fs.promises.writeFile(file, text, { flag: 'wx' }),
   link: (from, to) => fs.promises.link(from, to),
+  rename: (from, to) => fs.promises.rename(from, to),
   remove: (file) => fs.promises.rm(file, { force: true }),
 };
 
@@ -101,6 +122,32 @@ export interface TrashedSet {
   /** The set's name, with a `~<hex>` suffix when the day already held one. */
   entry: string;
   files: string[];
+}
+
+/** What a restore that went live could not remove from `.trash`. */
+export interface TrashLeftover {
+  /** Under `.trash`: `<day>/<entry>/<file>`, or a directory's. */
+  path: string;
+  error: unknown;
+}
+
+/**
+ * A restore that never went live: the link (or stamp) `cause` failed and
+ * the links made were taken back, except `stranded`, live names that could
+ * not be unlinked (each the trash file itself, so a retry adopts it).
+ */
+export class RestoreFailed extends Error {
+  constructor(
+    cause: unknown,
+    readonly stranded: readonly string[],
+  ) {
+    // The code only: an fs error's message carries its paths.
+    super(
+      `Restore from the trash failed (${String((cause as NodeJS.ErrnoException).code)})`,
+      { cause },
+    );
+    this.name = 'RestoreFailed';
+  }
 }
 
 /**
@@ -149,10 +196,14 @@ export class PhotoStorage {
    * The marker on disk. Any read error but ENOENT is `unreadable` with its
    * code, and so is content that is not a marker (MALFORMED).
    */
-  async readMarker(): Promise<MarkerRead> {
+  readMarker(): Promise<MarkerRead> {
+    return this.readMarkerAt(STORAGE_MARKER);
+  }
+
+  private async readMarkerAt(name: string): Promise<MarkerRead> {
     let text: string;
     try {
-      text = await this.storageFs.readText(this.pathOf(STORAGE_MARKER));
+      text = await this.storageFs.readText(this.pathOf(name));
     } catch (error) {
       const code = String((error as NodeJS.ErrnoException).code);
       if (code === 'ENOENT') return { state: 'absent' };
@@ -209,6 +260,97 @@ export class PhotoStorage {
   }
 
   /**
+   * Moves the marker aside as an orphan only while it is `marker` (same id,
+   * same timestamp): claimStorage's own, written by a claim whose pairing
+   * lost to another install's. Answers whether it did.
+   *
+   * Atomic against a second withdrawer (#1049): one rename takes the marker
+   * straight to its orphan name, a name of this call's own (the random part:
+   * a rename replaces, and another withdrawal of the same id may have left
+   * one), and only then is it read, so what is judged is exactly what was
+   * taken. A read-then-remove let one healer delete the marker another had
+   * just linked. What was taken and is not `marker` is linked back (never
+   * over a marker linked meanwhile: then it stays an orphan). Every name
+   * on the way is the marker's or an orphan's (ORPHAN_PREFIX).
+   * `marker.installId` is always an id a claim minted (randomUUID or a
+   * storage_claim row), so it is a safe name.
+   */
+  async withdrawMarker(marker: StorageMarker): Promise<boolean> {
+    const orphan = `${ORPHAN_PREFIX}${marker.installId}-${randomUUID()}`;
+    try {
+      await this.storageFs.rename(
+        this.pathOf(STORAGE_MARKER),
+        this.pathOf(orphan),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+    const taken = await this.readMarkerAt(orphan);
+    if (
+      taken.state === 'present' &&
+      taken.marker.installId === marker.installId &&
+      taken.marker.createdAt === marker.createdAt
+    ) {
+      this.logger.warn(
+        `${STORAGE_MARKER} of install ${marker.installId} moved aside as ${orphan}`,
+      );
+      return true;
+    }
+    try {
+      await this.storageFs.link(
+        this.pathOf(orphan),
+        this.pathOf(STORAGE_MARKER),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      this.logger.warn(
+        `${STORAGE_MARKER} taken by a withdrawal was replaced meanwhile; kept as ${orphan}`,
+      );
+      return false;
+    }
+    // Back in place; this name is only a second link to it now.
+    await this.storageFs.remove(this.pathOf(orphan));
+    return false;
+  }
+
+  /** The markers withdrawn as orphans (withdrawMarker), for the repair command to offer. */
+  async orphanedMarkers(): Promise<OrphanedMarker[]> {
+    const names = (await fs.promises.readdir(this.directory)).filter((name) =>
+      name.startsWith(ORPHAN_PREFIX),
+    );
+    const orphans: OrphanedMarker[] = [];
+    for (const name of names) {
+      const read = await this.readMarkerAt(name);
+      if (read.state === 'present') orphans.push({ name, marker: read.marker });
+    }
+    return orphans;
+  }
+
+  /**
+   * Puts an orphaned marker back as the marker, linked, so never over one
+   * present. Answers whether it did: false when no orphan carries
+   * `installId` or a marker is there already.
+   */
+  async restoreOrphan(installId: string): Promise<boolean> {
+    const orphan = (await this.orphanedMarkers()).find(
+      ({ marker }) => marker.installId === installId,
+    );
+    if (!orphan) return false;
+    try {
+      await this.storageFs.link(
+        this.pathOf(orphan.name),
+        this.pathOf(STORAGE_MARKER),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+      throw error;
+    }
+    await this.storageFs.remove(this.pathOf(orphan.name));
+    return true;
+  }
+
+  /**
    * Records the marker claimStorage verified (identityProblem compares with
    * it) and whether the database's pairing with it is enforced, which
    * storageIdentityProblem reads (#833: production only).
@@ -251,9 +393,9 @@ export class PhotoStorage {
    * returning, so a file deleted afterwards still streams whole and a
    * missing one is never a stream that fails later.
    */
-  async get(fileName: string): Promise<Readable | undefined> {
+  async get(storedName: string): Promise<Readable | undefined> {
     try {
-      const handle = await fs.promises.open(this.pathOf(fileName), 'r');
+      const handle = await fs.promises.open(this.pathOf(storedName), 'r');
       return handle.createReadStream();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -261,9 +403,9 @@ export class PhotoStorage {
     }
   }
 
-  async exists(fileName: string): Promise<boolean> {
+  async exists(storedName: string): Promise<boolean> {
     const stat = await fs.promises
-      .stat(this.pathOf(fileName))
+      .stat(this.pathOf(storedName))
       .catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT')
           return undefined;
@@ -273,16 +415,16 @@ export class PhotoStorage {
   }
 
   /**
-   * Atomic: until it resolves, readers see no file under `fileName` (or the
+   * Atomic: until it resolves, readers see no file under `storedName` (or the
    * previous one), never a partial write; a rejected store leaves nothing
    * behind. Photo and cutout are written concurrently and the thumb writer
    * reads whichever exists, which is why this matters (AGENTS.md Gotchas).
    */
-  async store(fileName: string, stream: Readable): Promise<void> {
-    const tempPath = path.join(this.incoming, `${randomUUID()}-${fileName}`);
+  async store(storedName: string, stream: Readable): Promise<void> {
+    const tempPath = path.join(this.incoming, `${randomUUID()}-${storedName}`);
     try {
       await pipeline(stream, fs.createWriteStream(tempPath));
-      await fs.promises.rename(tempPath, this.pathOf(fileName));
+      await fs.promises.rename(tempPath, this.pathOf(storedName));
     } catch (error) {
       // `force` covers a stream that failed before the file was opened.
       await fs.promises.rm(tempPath, { force: true });
@@ -294,19 +436,22 @@ export class PhotoStorage {
    * A missing file is not an error: most photos have no cutout, so
    * deleteVariants asks for files that were never written.
    */
-  async delete(fileName: string): Promise<void> {
-    await fs.promises.unlink(this.pathOf(fileName)).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    });
+  async delete(storedName: string): Promise<void> {
+    await fs.promises
+      .unlink(this.pathOf(storedName))
+      .catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      });
   }
 
-  /** Every file in the directory but the marker; the caller filters. */
+  /** Every file in the directory but the markers; the caller filters. */
   async *list(): AsyncIterable<StoredObject> {
     const entries = await fs.promises.readdir(this.directory, {
       withFileTypes: true,
     });
     for (const entry of entries) {
-      if (!entry.isFile() || entry.name === STORAGE_MARKER) continue;
+      // The marker, its orphans and a withdrawal in flight.
+      if (!entry.isFile() || entry.name.startsWith(STORAGE_MARKER)) continue;
       const stat = await fs.promises
         .stat(this.pathOf(entry.name))
         .catch((error: unknown) => {
@@ -389,36 +534,94 @@ export class PhotoStorage {
    * entries by a quarantine that failed mid-set) back into DATA_PATH, where
    * list() finds them, whole or not at all: every file is linked first (a
    * link fails with EEXIST rather than replace a live file), and the trash
-   * lets go only once all are; a failed link unlinks the ones made and
-   * rethrows, leaving storage and the trash as they were. Every restored
-   * file's mtime becomes `now`, so reconciliation's day-old grace starts
-   * at the restore rather than at the upload. Emptied directories go.
+   * lets go only once all are. A failed link unlinks the ones this call
+   * made and throws RestoreFailed, naming any it could not unlink. Every
+   * restored file's mtime becomes `now`, so reconciliation's day-old grace
+   * starts at the restore rather than at the upload.
+   *
+   * Once every file is live the restore has happened, so letting go of the
+   * trash (its names, then emptied directories) is best effort: what stays
+   * is answered as `leftInTrash`, never a rejection (#841). A live name
+   * that already is its trash file (the same inode: an earlier restore
+   * linked it, then could not let go) counts as restored, so running the
+   * restore again finishes the job.
    */
-  async restore(sets: readonly TrashedSet[], now: Date): Promise<void> {
+  async restore(
+    sets: readonly TrashedSet[],
+    now: Date,
+  ): Promise<{ leftInTrash: TrashLeftover[] }> {
     const moves = sets.flatMap((set) =>
       set.files.map((file) => ({
         from: path.join(this.trashEntryPath(set), path.basename(file)),
         to: this.pathOf(file),
       })),
     );
+    // Only names this call made: one live before it is never taken back.
     const linked: string[] = [];
     try {
       for (const { from, to } of moves) {
-        await this.storageFs.link(from, to);
-        linked.push(to);
+        if (await this.linkBack(from, to)) linked.push(to);
       }
-      for (const to of linked) await fs.promises.utimes(to, now, now);
+      for (const { to } of moves) await fs.promises.utimes(to, now, now);
     } catch (error) {
       // Each is a second name of a file the trash still holds.
-      for (const to of linked) await this.storageFs.remove(to);
+      const stranded: string[] = [];
+      for (const to of linked) {
+        await this.storageFs
+          .remove(to)
+          .catch(() => stranded.push(path.basename(to)));
+      }
+      throw new RestoreFailed(error, stranded);
+    }
+    const leftInTrash: TrashLeftover[] = [];
+    const letGo = (where: string, work: Promise<void>) =>
+      work.catch((error: unknown) => {
+        leftInTrash.push({ path: this.trashRelative(where), error });
+      });
+    for (const { from } of moves) {
+      await letGo(from, this.storageFs.remove(from));
+    }
+    for (const set of sets) {
+      const entry = this.trashEntryPath(set);
+      await letGo(entry, removeIfEmpty(entry));
+      // Other sets quarantined that day stay.
+      await letGo(path.dirname(entry), removeIfEmpty(path.dirname(entry)));
+    }
+    return { leftInTrash };
+  }
+
+  /**
+   * The names of `sets`' files whose live name in DATA_PATH is the trash
+   * file itself (a hard link a restore made): restored already, never a
+   * live set the restore would land on.
+   */
+  async liveFromTrash(sets: readonly TrashedSet[]): Promise<Set<string>> {
+    const live = new Set<string>();
+    for (const set of sets) {
+      for (const file of set.files) {
+        const from = path.join(this.trashEntryPath(set), path.basename(file));
+        if (await sameFile(from, this.pathOf(file))) live.add(file);
+      }
+    }
+    return live;
+  }
+
+  // Links a trash file back, answering whether this call made the name:
+  // false when it already is that file (restored before).
+  private async linkBack(from: string, to: string): Promise<boolean> {
+    try {
+      await this.storageFs.link(from, to);
+      return true;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST' && (await sameFile(from, to))) return false;
       throw error;
     }
-    for (const { from } of moves) await this.storageFs.remove(from);
-    for (const set of sets) {
-      await removeIfEmpty(this.trashEntryPath(set));
-      // Other sets quarantined that day stay.
-      await removeIfEmpty(path.dirname(this.trashEntryPath(set)));
-    }
+  }
+
+  // `<day>/<entry>[/<file>]`: what an operator finds under .trash.
+  private trashRelative(where: string): string {
+    return path.relative(path.join(this.directory, TRASH_DIR), where);
   }
 
   private trashEntryPath(set: TrashedSet): string {
@@ -433,9 +636,25 @@ export class PhotoStorage {
   // Names come from our own code (variantFileName of a stored name, or a
   // route segment parseStoredName accepted); basename() is the last line
   // against a path ever leaving the directory.
-  private pathOf(fileName: string): string {
-    return path.join(this.directory, path.basename(fileName));
+  private pathOf(storedName: string): string {
+    return path.join(this.directory, path.basename(storedName));
   }
+}
+
+// Whether two paths name one file (a hard link); false when either is gone.
+async function sameFile(a: string, b: string): Promise<boolean> {
+  const stat = (file: string) =>
+    fs.promises.stat(file).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    });
+  const [first, second] = await Promise.all([stat(a), stat(b)]);
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.dev === second.dev &&
+    first.ino === second.ino
+  );
 }
 
 // The subdirectories of `directory`; none when it does not exist.

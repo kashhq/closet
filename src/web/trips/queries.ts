@@ -9,6 +9,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { Db, Queryable } from '../../db/client';
+import { createOnce } from '../../db/create-once';
 import { lockedOwnerId, ownerLockCte, ownerLocked } from '../../db/owner-lock';
 import {
   outfit,
@@ -245,31 +246,102 @@ export async function createTrip(
 /**
  * A new trip, as the page's POST /trips and the API's create it, in one
  * transaction (#684): the insert (taking the owner's lock first); when the
- * form's picker or the API's `place` chose one, its destination located
- * through setTripDestination, so the trip page shows the forecast on first
- * view and a failed create leaves nothing a retry could duplicate (the
- * place's name replaces the typed destination, as the trip page's Find
- * does); and the planner's unworn auto entries on its days removed
+ * form's picker or the API's `place` chose one and its `locate` allows it,
+ * its destination located through setTripDestination, so the trip page
+ * shows the forecast on first view and a failed create leaves nothing a
+ * retry could duplicate (the caller names the destination after the place
+ * either way, as the trip page's Find does); and the planner's unworn auto
+ * entries on its days removed
  * (removeAutoEntries, the re-plan's rule: the planner never dresses a day
  * away; a person's or an agent's entry stays), from `today` on only:
  * a trip logged after the fact keeps the past plans a person can still
- * mark worn. `away` is how many went.
+ * mark worn. `away` is how many went, `located` whether the place was.
  * createTrip alone is the bare insert the seed and fixtures write.
  */
 export function createTripAt(
   db: Db,
   ownerId: number,
   fields: TripFields,
-  place: { name: string; location: PickedLocation } | null,
+  place: NewTripPlace | null,
   today: IsoDate,
-): Promise<{ id: number; away: number }> {
+): Promise<NewTrip> {
   return db.transaction(async (tx) => {
     const id = await createTrip(tx, ownerId, fields);
-    // Just inserted under the owner's lock this transaction holds: never false.
-    if (place) await setTripDestination(tx, id, ownerId, place);
-    const away = await removeAwayAutoEntries(tx, ownerId, fields, today);
-    return { id, away };
+    return finishNewTrip(tx, id, ownerId, fields, place, today);
   });
+}
+
+/**
+ * A new trip's picked place (addTrip's): `locate` is asked once the trip
+ * row is inserted, so a clientId retry or a 410 never asks it, and false
+ * leaves the trip unlocated (the destination budget's charge, #863).
+ */
+export interface NewTripPlace {
+  name: string;
+  location: PickedLocation;
+  locate: () => Promise<boolean>;
+}
+
+/** A trip createTripAt or createTripOnce wrote, or the retry's first. */
+export interface NewTrip {
+  id: number;
+  away: number;
+  located: boolean;
+}
+
+/** What a new trip carries beyond its row, in the creating transaction. */
+async function finishNewTrip(
+  tx: Queryable,
+  id: number,
+  ownerId: number,
+  fields: TripFields,
+  place: NewTripPlace | null,
+  today: IsoDate,
+): Promise<NewTrip> {
+  const located = place !== null && (await place.locate());
+  // Just inserted under the owner's lock this transaction holds: never false.
+  if (located) await setTripDestination(tx, id, ownerId, place);
+  const away = await removeAwayAutoEntries(tx, ownerId, fields, today);
+  return { id, away, located };
+}
+
+/**
+ * createTripAt for a create that carries the client's own id (the API's, a
+ * retried offline create): see createOnce. A retry answers the first trip
+ * as it was saved (`away` 0, `located` false, nothing else written, its
+ * place's `locate` never asked), whatever the retry's
+ * dates or place say; 'gone' for the id of a trip deleted since.
+ */
+export async function createTripOnce(
+  db: Db,
+  ownerId: number,
+  fields: TripFields,
+  place: NewTripPlace | null,
+  today: IsoDate,
+  clientId: string,
+): Promise<{ row: NewTrip; created: boolean } | 'gone'> {
+  return createOnce(
+    () =>
+      db.transaction(async (tx) => {
+        const lock = ownerLockCte(tx, ownerId);
+        const [row] = await tx
+          .with(lock)
+          .insert(trip)
+          .values({ ownerId: lockedOwnerId(lock), ...fields, clientId })
+          .onConflictDoNothing({ target: [trip.ownerId, trip.clientId] })
+          .returning({ id: trip.id });
+        return row
+          ? finishNewTrip(tx, row.id, ownerId, fields, place, today)
+          : undefined;
+      }),
+    async () => {
+      const [first] = await db
+        .select({ id: trip.id })
+        .from(trip)
+        .where(and(eq(trip.ownerId, ownerId), eq(trip.clientId, clientId)));
+      return first && { id: first.id, away: 0, located: false };
+    },
+  );
 }
 
 /**
@@ -959,7 +1031,7 @@ export function tripsWithItemsSql(
 // ---- The changes feed ------------------------------------------------------------
 
 /** A trip's outfit as stored: the outfit, and the day and occasion it is for. */
-export interface StoredTripOutfit {
+interface StoredTripOutfit {
   id: number;
   outfitId: number;
   day: IsoDate | null;

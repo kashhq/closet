@@ -1,30 +1,26 @@
+import { cardClass } from '../card';
 import {
   LENGTH_UNITS,
-  lengthText,
   type LengthUnit,
   type Measurement,
   MEASUREMENTS,
 } from '../../wardrobe/measurements';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { FieldErrors } from '../auth/validation';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { SettingsPage } from '../layout/settings-page';
 import { FormField, inputAttributes } from '../form-field';
-import { ProfileSection, SavedToast, StripFlags } from '../layout/parts';
+import { SavedToast, StripFlags } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { BRAND_MAX, SIZE_MAX } from '../wardrobe/garment-input';
-import type { BodyMeasurements, BrandSize } from './queries';
+import type { BrandSize } from './queries';
 import {
   BRAND_SIZE_HINT_PATH,
   BRAND_SIZES_PATH,
   brandSizeUrl,
   SIZES_MEASUREMENTS_PATH,
-  SIZES_PATH,
   SIZES_SAVED_FLAG,
   SIZES_SECTION_ID,
-  SIZES_SECTION_PATH,
   SIZES_UNIT_PATH,
   type SizesSaved,
 } from './urls';
@@ -34,17 +30,18 @@ import {
   type BrandSizeField,
   LENGTH_INPUT_MAX,
 } from './validation';
+import { BRAND_SIZE_FIELDS, FIELD_GRID } from '../layout/columns';
 
 /**
- * Sizes (#24; plan section 16): the Profile's section, its editor, and the
- * brand note other pages show. The signed-in user's own: the garment form
+ * Sizes (#24; plan section 16): the editor (Profile › Sizes) and the brand
+ * note other pages show. The signed-in user's own: the garment form
  * and the wishlist render a note only on the user's own wardrobe (never on a
  * shared one, where it would describe the wrong body).
  */
 
 const HINT_ID = 'brand-size-hint';
 
-/** "Sizes": the Profile section's heading and the editor's title. */
+/** "Sizes": the editor's title (Profile's row names it too). */
 const SIZES_TITLE_KEY = 'sizes.TITLE' satisfies StringKey;
 
 /** "Your size in Uniqlo: M · Runs big, never L"; "Uniqlo: Runs big" without a size. */
@@ -101,51 +98,6 @@ export const BRAND_SIZE_HINT_TRIGGER = {
   'hx-indicator': `#${HINT_ID}`,
 } as const;
 
-function lengthLabel(cm: number, unit: LengthUnit): string {
-  return t('sizes.LENGTH', {
-    value: lengthText(cm, unit),
-    unit: t(`sizes.unit.${unit}`),
-  });
-}
-
-/** Profile › Sizes: what is stored, read-only, and the editor's link. */
-export function SizesSection(props: {
-  measurements: BodyMeasurements;
-  brands: BrandSize[];
-}) {
-  const { unit, lengths } = props.measurements;
-  const set = MEASUREMENTS.filter((m) => lengths[m] !== null);
-  return (
-    <ProfileSection id={SIZES_SECTION_ID} heading={t(SIZES_TITLE_KEY)}>
-      <p class="text-sm text-muted">{t('sizes.HINT')}</p>
-      {set.length === 0 ? (
-        <p class="text-sm">{t('sizes.NO_MEASUREMENTS')}</p>
-      ) : (
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          {set.map((m) => (
-            <div class="flex justify-between gap-2">
-              <dt class="text-muted">{t(`sizes.measurement.${m}`)}</dt>
-              <dd>{lengthLabel(lengths[m]!, unit)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {props.brands.length === 0 ? (
-        <p class="text-sm">{t('sizes.NO_BRANDS')}</p>
-      ) : (
-        <ul class="text-sm flex flex-col gap-1" aria-label={t('sizes.BRANDS')}>
-          {props.brands.map((brand) => (
-            <li>{brandSizeText(brand)}</li>
-          ))}
-        </ul>
-      )}
-      <a href={SIZES_PATH} class="btn btn-sm self-start">
-        {t('sizes.EDIT')}
-      </a>
-    </ProfileSection>
-  );
-}
-
 export interface SizesPageModel {
   unit: LengthUnit;
   /** The measurement fields as shown: the stored ones, or what was posted. */
@@ -177,70 +129,71 @@ export function SizesPage(props: { ctx: ViewContext; model: SizesPageModel }) {
   const { ctx, model } = props;
   const refused = model.refusedBrand;
   return (
-    <Layout ctx={ctx} title={t(SIZES_TITLE_KEY)}>
-      <AppBar
-        ctx={ctx}
-        title={t(SIZES_TITLE_KEY)}
-        back={SIZES_SECTION_PATH}
-        formPage
-      />
-      <main class="p-4 pt-20 pb-24 w-full max-w-lg mx-auto flex flex-col gap-6">
-        <p class="text-sm text-muted">{t('sizes.HINT')}</p>
-        <section
-          class="flex flex-col gap-3"
-          aria-labelledby="sizes-measurements-heading"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <h2 id="sizes-measurements-heading" class="text-lg font-semibold">
-              {t('sizes.MEASUREMENTS')}
-            </h2>
-            <UnitSwitch unit={model.unit} />
-          </div>
-          <MeasurementsForm model={model} />
-        </section>
-        <section
-          class="flex flex-col gap-3"
-          aria-labelledby="sizes-brands-heading"
-        >
-          <h2 id="sizes-brands-heading" class="text-lg font-semibold">
-            {t('sizes.BRANDS')}
-          </h2>
-          <p class="text-sm text-muted">{t('sizes.BRANDS_HINT')}</p>
-          {model.brands.map((brand) =>
-            refused?.target === brand.id ? (
-              <BrandForm
-                id={brand.id}
-                values={refused.values}
-                errors={refused.errors}
-              />
-            ) : (
-              <BrandForm
-                id={brand.id}
-                values={{
-                  brand: brand.brand,
-                  size: brand.size ?? '',
-                  note: brand.note ?? '',
-                }}
-              />
-            ),
+    <SettingsPage
+      ctx={ctx}
+      title={t(SIZES_TITLE_KEY)}
+      section={SIZES_SECTION_ID}
+      formPage
+      body={{ gap: 6 }}
+      overlays={
+        <>
+          {model.saved && (
+            <SavedToast id="sizes-toast" text={t(SAVED_TOASTS[model.saved])} />
           )}
-          <h3 class="font-medium">{t('sizes.ADD_BRAND')}</h3>
-          <BrandForm
-            values={
-              refused?.target === 'new'
-                ? refused.values
-                : { brand: '', size: '', note: '' }
-            }
-            errors={refused?.target === 'new' ? refused.errors : undefined}
-          />
-        </section>
-      </main>
-      {model.saved && (
-        <SavedToast id="sizes-toast" text={t(SAVED_TOASTS[model.saved])} />
-      )}
-      <StripFlags names={[SIZES_SAVED_FLAG]} />
-      <Dock ctx={ctx} />
-    </Layout>
+          <StripFlags names={[SIZES_SAVED_FLAG]} />
+        </>
+      }
+    >
+      <p class="text-sm text-muted">{t('sizes.HINT')}</p>
+      <section
+        class="flex flex-col gap-3"
+        aria-labelledby="sizes-measurements-heading"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <h2 id="sizes-measurements-heading" class="text-lg font-semibold">
+            {t('sizes.MEASUREMENTS')}
+          </h2>
+          <UnitSwitch unit={model.unit} />
+        </div>
+        <MeasurementsForm model={model} />
+      </section>
+      <section
+        class="flex flex-col gap-3"
+        aria-labelledby="sizes-brands-heading"
+      >
+        <h2 id="sizes-brands-heading" class="text-lg font-semibold">
+          {t('sizes.BRANDS')}
+        </h2>
+        <p class="text-sm text-muted">{t('sizes.BRANDS_HINT')}</p>
+        {model.brands.map((brand) =>
+          refused?.target === brand.id ? (
+            <BrandForm
+              id={brand.id}
+              values={refused.values}
+              errors={refused.errors}
+            />
+          ) : (
+            <BrandForm
+              id={brand.id}
+              values={{
+                brand: brand.brand,
+                size: brand.size ?? '',
+                note: brand.note ?? '',
+              }}
+            />
+          ),
+        )}
+        <h3 class="font-medium">{t('sizes.ADD_BRAND')}</h3>
+        <BrandForm
+          values={
+            refused?.target === 'new'
+              ? refused.values
+              : { brand: '', size: '', note: '' }
+          }
+          errors={refused?.target === 'new' ? refused.errors : undefined}
+        />
+      </section>
+    </SettingsPage>
   );
 }
 
@@ -259,7 +212,7 @@ function UnitSwitch({ unit }: { unit: LengthUnit }) {
           value={choice}
           class={`btn btn-sm join-item ${choice === unit ? 'btn-active' : ''}`}
           aria-pressed={choice === unit ? 'true' : 'false'}
-          aria-label={t(`sizes.unitName.${choice}`)}
+          aria-label={t(`sizes.unitLabel.${choice}`)}
         >
           {t(`sizes.unit.${choice}`)}
         </button>
@@ -275,7 +228,7 @@ function MeasurementsForm({ model }: { model: SizesPageModel }) {
     <PostForm action={SIZES_MEASUREMENTS_PATH} class="flex flex-col gap-3">
       {/* The unit the numbers are shown in, which is how they are read. */}
       <input type="hidden" name="unit" value={model.unit} />
-      <div class="grid grid-cols-2 gap-3">
+      <div class={FIELD_GRID}>
         {MEASUREMENTS.map((m) => {
           const id = `measurement-${m}`;
           // The unit sits inside the frame, so the frame takes the classes
@@ -324,9 +277,9 @@ function BrandForm(props: {
   return (
     <PostForm
       action={id === undefined ? BRAND_SIZES_PATH : brandSizeUrl(id)}
-      class="card bg-base-200 card-body p-3 gap-2"
+      class={cardClass('inset', 'card-body p-3 gap-2')}
     >
-      <div class="grid grid-cols-[2fr_1fr] gap-2">
+      <div class={BRAND_SIZE_FIELDS}>
         <BrandInput
           id={`${prefix}-brand`}
           name="brand"

@@ -39,6 +39,9 @@ export const OPERATIONS = [
   'logGarmentRepair',
   'deleteGarmentRepair',
   'importGarmentFromLink',
+  // #959: a garment's public link (#669).
+  'shareGarment',
+  'stopSharingGarment',
   // #193a: wears, washes and away, then outfits.
   'wearGarment',
   'unwearGarment',
@@ -51,6 +54,9 @@ export const OPERATIONS = [
   'updateOutfit',
   'deleteOutfit',
   'reactToOutfit',
+  // #959: an outfit's public link (#669).
+  'shareOutfit',
+  'stopSharingOutfit',
   // #193b: the calendar, Today's Wear this, the week plan and its template.
   'listCalendarEntries',
   'createCalendarEntry',
@@ -167,9 +173,7 @@ export function isOperationId(id: string): id is OperationId {
  */
 type EndpointIssue =
   /** Insights, sizes. */
-  | '#195'
-  /** A garment's or outfit's public link: Share and Stop sharing (#669). */
-  | '#959';
+  '#195';
 
 /**
  * A write's API twin: one operation, or each of the few a write that takes
@@ -269,6 +273,7 @@ export const PAGE_WRITES: Readonly<
   'POST /auth/change-password': STEP_UP,
   'POST /auth/update-email': STEP_UP,
   'POST /auth/delete-account': STEP_UP,
+  'POST /auth/sign-out-everywhere': STEP_UP,
   'POST /auth/tokens': STEP_UP,
   'POST /auth/tokens/:id/revoke': AGENT_ACCESS,
   'POST /auth/devices/:id/revoke': AGENT_ACCESS,
@@ -280,8 +285,8 @@ export const PAGE_WRITES: Readonly<
   'DELETE /wardrobe/:id': { api: 'deleteGarment' },
   'POST /wardrobe/:id/archive': { api: 'setGarmentStatus' },
   'POST /wardrobe/:id/restore': { api: 'setGarmentStatus' },
-  'POST /wardrobe/:id/share': { pending: '#959' },
-  'POST /wardrobe/:id/share/stop': { pending: '#959' },
+  'POST /wardrobe/:id/share': { api: 'shareGarment' },
+  'POST /wardrobe/:id/share/stop': { api: 'stopSharingGarment' },
   'POST /wardrobe/:id/clone': { api: 'cloneGarment' },
   'POST /wardrobe/:id/copies': { api: 'addGarmentCopies' },
   'POST /wardrobe/:id/condition': { api: 'setGarmentCondition' },
@@ -306,7 +311,8 @@ export const PAGE_WRITES: Readonly<
   'POST /wardrobe/orders/:id/dismiss': ORDER_MAIL,
 
   // Wears, washes and away.
-  'POST /wardrobe/:id/wear': { api: 'wearGarment' },
+  // `worn=0` takes the day's wear off.
+  'POST /wardrobe/:id/wear': { api: ['wearGarment', 'unwearGarment'] },
   'POST /wardrobe/:id/washed': { api: 'washGarment' },
   'POST /wardrobe/:id/away': { api: 'setGarmentAway' },
   'POST /laundry': { api: 'washGarments' },
@@ -316,8 +322,8 @@ export const PAGE_WRITES: Readonly<
   'POST /outfits': { api: 'createOutfit' },
   'POST /outfits/:id': { api: 'updateOutfit' },
   'DELETE /outfits/:id': { api: 'deleteOutfit' },
-  'POST /outfits/:id/share': { pending: '#959' },
-  'POST /outfits/:id/share/stop': { pending: '#959' },
+  'POST /outfits/:id/share': { api: 'shareOutfit' },
+  'POST /outfits/:id/share/stop': { api: 'stopSharingOutfit' },
   'POST /outfits/:id/love': { api: 'reactToOutfit' },
   'POST /outfits/:id/dismiss': { api: 'reactToOutfit' },
   'POST /outfits/:id/undo': { api: 'reactToOutfit' },
@@ -465,7 +471,7 @@ export type Stamped = 'outfit' | 'calendarEntry' | 'tripOutfit' | 'garment';
  * that writes no stamp, and a `none` tool that writes one), why it stamps
  * nothing, or Muse's round, whose provenance is its own (mcp-muse.spec.ts).
  */
-export type Attribution =
+type Attribution =
   | { readonly stamps: readonly Stamped[] }
   | { readonly none: string }
   | { readonly museRound: true };

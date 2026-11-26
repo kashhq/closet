@@ -19,6 +19,7 @@ const account = {
   email: 'ada@example.com',
   password: '$2b$hash',
   sessionEpoch: null,
+  sessionVersion: 0,
 };
 
 beforeEach(() => {

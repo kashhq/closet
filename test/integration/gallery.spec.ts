@@ -686,24 +686,26 @@ describe('outfit gallery', () => {
     // Rows, as the Style page's form (#21b) will write them: never a blue
     // garment with the brown boots; the white tee always with the sneakers.
     beforeAll(async () => {
-      await t.db.insert(outfitRule).values([
-        {
-          ownerId: t.owner.id,
-          kind: 'never',
-          aColor: 'blue',
-          bColor: 'brown',
-        },
-        {
-          ownerId: t.owner.id,
-          kind: 'always',
-          aGarmentId: tops[0],
-          bGarmentId: shoes[0],
-        },
-      ]);
+      await asFixture(t.db, (tx) =>
+        tx.insert(outfitRule).values([
+          {
+            ownerId: t.owner.id,
+            kind: 'never',
+            aColor: 'blue',
+            bColor: 'brown',
+          },
+          {
+            ownerId: t.owner.id,
+            kind: 'always',
+            aGarmentId: tops[0],
+            bGarmentId: shoes[0],
+          },
+        ]),
+      );
     });
 
     afterAll(async () => {
-      await t.db.delete(outfitRule);
+      await asFixture(t.db, (tx) => tx.delete(outfitRule));
     });
 
     it('every idea keeps them, and they ride in the ideas statement', async () => {

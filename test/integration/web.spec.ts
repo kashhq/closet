@@ -101,9 +101,9 @@ describe('web layer', () => {
       expectFullPage(res);
       expect(res.body).toContain('<title>About</title>');
       expect(pageTitle(res.body)).toBe('About Closet');
-      // The attribution link is the one raw-HTML string on the page.
+      // The link to the source is the one raw-HTML string on the page.
       expect(res.body).toContain(
-        '<a href="https://github.com/lazztech/libre-closet" class="link"',
+        '<a href="https://github.com/kashhq/closet" class="link"',
       );
       expect(res.body).toContain('href="/auth/login"');
       expect(res.body).toContain('id="connectivity-banner"');

@@ -10,6 +10,7 @@ import { scheduleNightly } from './maintenance/nightly';
 import { reconcileStorageWhole } from './maintenance/reconcile';
 import { type ScheduledJob, stopBeforeClose } from './maintenance/scheduled';
 import { pruneSyncTombstones } from './maintenance/sync-prune';
+import { pruneWeatherCaches } from './maintenance/weather-prune';
 import { addDays, todayIn } from './calendar-date';
 import { pruneReminders, sendDueRemindersWhole } from './web/push/reminders';
 import { pollOrderMailWhole } from './web/wardrobe/order-mail/poll';
@@ -106,6 +107,20 @@ export async function serve(
       timeZone: config.APP_TIMEZONE,
       run: metrics.timeJob('sync_prune', () => pruneSyncTombstones(sync)),
       logger: sync.logger,
+    }),
+  );
+  // The weather caches' unused locations (src/maintenance/weather-prune.ts):
+  // database only, so with or without WEATHER_ENABLED or MAINTENANCE_ENABLED.
+  const weatherPrune = { db, logger: logger.child({ logger: 'Weather' }) };
+  jobs.push(
+    scheduleNightly({
+      name: 'Weather cache prune',
+      hour: RECONCILE_HOUR,
+      timeZone: config.APP_TIMEZONE,
+      run: metrics.timeJob('weather_prune', () =>
+        pruneWeatherCaches(weatherPrune, new Date()),
+      ),
+      logger: weatherPrune.logger,
     }),
   );
   // One set of re-plan deps: the minutely run and the morning reminder's

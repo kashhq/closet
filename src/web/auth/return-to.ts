@@ -6,7 +6,7 @@ import { bypassesWorker } from '../page-cache';
 import { safeReturnTo } from '../security/return-to';
 import { originOf, requestOrigin } from '../security/origin';
 import { LOGIN_PATH } from './login-path';
-import { PROFILE_PATH } from './urls';
+import { DEVICES_PATH, PROFILE_PAGE, PROFILE_PATH } from './urls';
 
 /**
  * Where signing in goes next (#661): the page a signed-out visitor was on
@@ -39,12 +39,19 @@ const INVITE_ANSWER = /^\/wardrobe-share\/invite\/[^/?#]+\/(accept|decline)\b/;
  * exports: bypassesWorker's list). Fastify cannot match a concrete path
  * against its route table without its private router, so this is a
  * denylist: a path missed here answers its own 404 page, never a loop.
- * Profile is the one /auth page sign-in returns to (a session that ended
- * mid-settings); the account's forms behind it are reached from it.
+ * Profile and its settings' pages (PROFILE_PAGE, and Devices at DEVICES_PATH, which lives beside the token routes) are the /auth pages
+ * sign-in returns to (a session that ended mid-settings); the account's
+ * forms behind it are reached from it.
  */
 function isLandingPage(path: string): boolean {
   const { pathname } = new URL(path, 'http://return-to.invalid');
-  if (pathname.startsWith('/auth/')) return pathname === PROFILE_PATH;
+  if (pathname.startsWith('/auth/')) {
+    return (
+      pathname === PROFILE_PATH ||
+      pathname === DEVICES_PATH ||
+      PROFILE_PAGE.test(pathname)
+    );
+  }
   if (pathname === '/auth') return false;
   if (INVITE_ANSWER.test(pathname)) return false;
   return !bypassesWorker({ pathname });

@@ -72,7 +72,8 @@ const GridFilters = {
   needsWash: Type.Optional(Type.String({ maxLength: 10 })),
   attention: Type.Optional(Type.String({ maxLength: 10 })),
   // A capsule of the addressed wardrobe (src/web/capsules): a 400 when not
-  // an id, a 404 when not one of the wardrobe's capsules (the route).
+  // an id, a 404 when not one of the wardrobe's capsules (the route). Empty
+  // is no scope (URL state: a hand-cleared `?capsule=` is the closet).
   capsule: Type.Optional(Type.Union([Type.Literal(''), RowId])),
 };
 
@@ -98,6 +99,10 @@ export const GridQuery = Type.Object({
   // One-shot flags from select mode's verbs' redirects (the toast).
   bulkUpdated: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkSkipped: Type.Optional(Type.Integer({ minimum: 0 })),
+  // Mark washed's other skips (#819): wishlist items, and ids that are no
+  // garment of the owner's.
+  bulkWishlist: Type.Optional(Type.Integer({ minimum: 0 })),
+  bulkUnseen: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkArchived: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkWashed: Type.Optional(Type.Integer({ minimum: 0 })),
   bulkAdded: Type.Optional(Type.Integer({ minimum: 0 })),

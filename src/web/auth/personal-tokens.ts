@@ -2,14 +2,18 @@ import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { TOKEN_PREFIX, type TokenKind } from '../../credential-names';
 import type { Db, Queryable } from '../../db/client';
-import type { Logger } from '../../logger';
 import { markSecretChecked } from '../../metrics/request-timing';
 import {
   personalAccessToken,
   type SharePermission,
   user,
 } from '../../db/schema';
-import { type ShareReadAhead, sharePermissionSql } from '../sharing/access';
+import { type ActionDeps, logOp } from '../op-log';
+import {
+  type Actor,
+  type ShareReadAhead,
+  sharePermissionSql,
+} from '../sharing/access';
 import type { SessionUser } from './session';
 
 /**
@@ -22,22 +26,68 @@ import type { SessionUser } from './session';
  * once when created; the database keeps its SHA-256 (hex) and a short
  * prefix to tell tokens apart on Agent Access. A fast hash is right here:
  * the token is 256 random bits, so there is nothing to guess, and a slow
- * one would cost every call. A token acts exactly as its user; a new
- * password revokes every token of both kinds (revokeAllTokensStatement, in
+ * one would cost every call. A token acts as its user within its scope
+ * (TokenScope, an agent token's, fixed at mint: #701); a new
+ * password revokes every token of both kinds (revokeTokensStatement, in
  * updatePasswordHash), as it ends every session; so does a database
- * restore (maintenance:after-restore, #908).
+ * restore (maintenance:after-restore, #908). Sign out everywhere revokes
+ * the device tokens only (#700): an agent token is not a sign-in.
  */
 
 /** Characters of the token the profile shows: the fixed prefix and four more. */
 const DISPLAY_LENGTH = TOKEN_PREFIX.length + 4;
 /** How stale last_used_at may get before a call writes it again. */
 const LAST_USED_RESOLUTION_MS = 60_000;
+/**
+ * A device token unused this long is refused as revoked (#705): a sold
+ * phone or a copied backup stops working by itself. Measured from
+ * last_used_at, or created_at for one never used; LAST_USED_RESOLUTION_MS
+ * is far below it, so a device in use never looks idle. Agent tokens have
+ * no idle expiry: an agent can run monthly, and each is minted behind the
+ * password with its own scope and listed on Agent Access.
+ */
+export const DEVICE_IDLE_DAYS = 90;
+const DEVICE_IDLE_MS = DEVICE_IDLE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a token has gone unused past its idle expiry at `now`: only a
+ * device token has one. authenticateToken refuses it; Profile › Devices
+ * says it is signed out.
+ */
+export function idleExpired(
+  token: { kind: TokenKind; createdAt: Date; lastUsedAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    token.kind === 'device' &&
+    now.getTime() - (token.lastUsedAt ?? token.createdAt).getTime() >=
+      DEVICE_IDLE_MS
+  );
+}
 export const TOKEN_NAME_MAX = 100;
 /**
  * A household's tokens are a handful; this bounds a runaway script. Counted
  * per kind: agent tokens and devices never crowd each other out.
  */
 export const MAX_ACTIVE_TOKENS = 20;
+
+/**
+ * What an agent token may do (#701), chosen at mint and never changed (a
+ * wider scope is a new token, behind the password again). `readOnly`: no
+ * write tool is registered for it (scopedTools, src/web/mcp/tool.ts);
+ * `ownWardrobeOnly`: its actor resolves no shared wardrobe
+ * (src/web/sharing/access.ts). Device tokens are always FULL_SCOPE.
+ */
+export interface TokenScope {
+  readOnly: boolean;
+  ownWardrobeOnly: boolean;
+}
+
+/** Every token minted before 0067, and every device token. */
+export const FULL_SCOPE: TokenScope = {
+  readOnly: false,
+  ownWardrobeOnly: false,
+};
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -51,6 +101,9 @@ export interface TokenListing {
   prefix: string;
   createdAt: Date;
   lastUsedAt: Date | null;
+  /** Agent Access shows it on each token. */
+  readOnly: boolean;
+  ownWardrobeOnly: boolean;
 }
 
 const listingColumns = {
@@ -60,6 +113,8 @@ const listingColumns = {
   prefix: personalAccessToken.tokenPrefix,
   createdAt: personalAccessToken.createdAt,
   lastUsedAt: personalAccessToken.lastUsedAt,
+  readOnly: personalAccessToken.readOnly,
+  ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
 };
 
 const inForce = (userId: number) =>
@@ -129,16 +184,23 @@ export type CreateTokenResult =
   | { created: false; reason: 'password-changed' };
 
 export interface NewToken {
-  userId: number;
   kind: TokenKind;
   /** Already trimmed and bounded (TOKEN_NAME_MAX). */
   name: string;
+  /** Agent Access's choice; a device sign-in's is FULL_SCOPE. */
+  scope: TokenScope;
   /**
    * The full password hash the caller verified the user's password against,
    * from the row read that did it (sessionAccount on a page). Rechecked under
    * the lock: a password changed after the check refuses the mint.
    */
   verifiedPassword: string;
+  /**
+   * The address the mint came from (`request.ip`, which TRUSTED_PROXIES
+   * governs), the audit trail of a credential issued over the network; left
+   * out by the seed CLI.
+   */
+  address?: string;
 }
 
 /**
@@ -161,54 +223,71 @@ export interface NewToken {
  * evicts that kind's least recently used (a native sign-in has no page to
  * ask on), in the same transaction.
  */
-export function createToken(
-  { db, logger }: { db: Db; logger: Logger },
-  { userId, kind, name, verifiedPassword }: NewToken,
+export async function createToken(
+  { db, logger }: ActionDeps,
+  actor: Actor,
+  { kind, name, scope, verifiedPassword, address }: NewToken,
 ): Promise<CreateTokenResult> {
-  return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ password: user.password })
-      .from(user)
-      .where(eq(user.id, userId))
-      .for('update');
-    if (account?.password !== verifiedPassword) {
-      return { created: false, reason: 'password-changed' } as const;
-    }
-    let tokens = await listTokens(tx, userId, kind);
-    let evictedId: number | undefined;
-    if (tokens.length >= MAX_ACTIVE_TOKENS) {
-      if (kind === 'mcp') {
-        return { created: false, reason: 'too-many', tokens } as const;
+  const { userId } = actor;
+  const result = await db.transaction(
+    async (tx): Promise<CreateTokenResult> => {
+      const [account] = await tx
+        .select({ password: user.password })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (account?.password !== verifiedPassword) {
+        return { created: false, reason: 'password-changed' };
       }
-      evictedId = leastRecentlyUsed(tokens).id;
-      await tx
-        .update(personalAccessToken)
-        .set({ revokedAt: new Date() })
-        .where(eq(personalAccessToken.id, evictedId));
-      tokens = tokens.filter((token) => token.id !== evictedId);
-      logger.info(
-        `User ${userId} at ${MAX_ACTIVE_TOKENS} device tokens: evicted ${evictedId}, the least recently used`,
-      );
-    }
-    const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-    const [row] = await tx
-      .insert(personalAccessToken)
-      .values({
-        userId,
-        kind,
-        name,
-        tokenHash: hashToken(token),
-        tokenPrefix: token.slice(0, DISPLAY_LENGTH),
-      })
-      .returning(listingColumns);
-    return {
-      created: true,
-      id: row.id,
-      token,
-      tokens: [row, ...tokens],
-      evictedId,
-    } as const;
-  });
+      let tokens = await listTokens(tx, userId, kind);
+      let evictedId: number | undefined;
+      if (tokens.length >= MAX_ACTIVE_TOKENS) {
+        if (kind === 'mcp') {
+          return { created: false, reason: 'too-many', tokens };
+        }
+        evictedId = leastRecentlyUsed(tokens).id;
+        await tx
+          .update(personalAccessToken)
+          .set({ revokedAt: new Date() })
+          .where(eq(personalAccessToken.id, evictedId));
+        tokens = tokens.filter((token) => token.id !== evictedId);
+      }
+      const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
+      const [row] = await tx
+        .insert(personalAccessToken)
+        .values({
+          userId,
+          kind,
+          name,
+          tokenHash: hashToken(token),
+          tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+          // The app's clock, not the column's default: idleExpired judges it
+          // against the app's `now`, beside last_used_at, which it stamps.
+          createdAt: new Date(),
+          ...scope,
+        })
+        .returning(listingColumns);
+      return {
+        created: true,
+        id: row.id,
+        token,
+        tokens: [row, ...tokens],
+        evictedId,
+      };
+    },
+  );
+  // After the commit: a rollback must leave no line for a token never minted.
+  if (result.created) {
+    logOp(logger, actor, 'token.created', {
+      tokenId: result.id,
+      kind,
+      readOnly: scope.readOnly,
+      ownWardrobeOnly: scope.ownWardrobeOnly,
+      evictedId: result.evictedId,
+      address,
+    });
+  }
+  return result;
 }
 
 /**
@@ -218,11 +297,12 @@ export function createToken(
  * is, and a stale tab's second tap is no error page.
  */
 export async function revokeToken(
-  db: Db,
-  userId: number,
+  { db, logger }: ActionDeps,
+  actor: Actor,
   kind: TokenKind,
   id: number,
 ): Promise<boolean> {
+  const { userId } = actor;
   const revoked = await db
     .update(personalAccessToken)
     .set({ revokedAt: new Date() })
@@ -234,19 +314,26 @@ export async function revokeToken(
       ),
     )
     .returning({ id: personalAccessToken.id });
+  logOp(logger, actor, 'token.revoked', {
+    tokenId: id,
+    kind,
+    changed: revoked.length > 0,
+  });
   return revoked.length > 0;
 }
 
 /**
- * Revokes every token of the user, of both kinds, but `keepTokenId` (the
- * token making the change, once a token-authenticated route can change a
- * password; another user's id keeps nothing), returning each revoked
- * token's kind: a new password, in updatePasswordHash.
+ * Revokes the user's tokens in force: every one of both kinds, or only
+ * `kind`'s, but `keepTokenId` (the token making the change, once a
+ * token-authenticated route can change a password; another user's id keeps
+ * nothing), returning each revoked token's kind. A new password revokes
+ * both kinds, Sign out everywhere only the device tokens (revokeSignIns,
+ * queries.ts).
  */
-export function revokeAllTokensStatement(
+export function revokeTokensStatement(
   db: Queryable,
   userId: number,
-  keepTokenId?: number,
+  only: { kind?: TokenKind; keepTokenId?: number } = {},
 ) {
   return db
     .update(personalAccessToken)
@@ -254,9 +341,12 @@ export function revokeAllTokensStatement(
     .where(
       and(
         inForce(userId),
-        keepTokenId === undefined
+        only.kind === undefined
           ? undefined
-          : ne(personalAccessToken.id, keepTokenId),
+          : eq(personalAccessToken.kind, only.kind),
+        only.keepTokenId === undefined
+          ? undefined
+          : ne(personalAccessToken.id, only.keepTokenId),
       ),
     )
     .returning({ kind: personalAccessToken.kind });
@@ -264,7 +354,7 @@ export function revokeAllTokensStatement(
 
 /**
  * Every user's tokens in force, of both kinds, revoked in one transaction,
- * per user through revokeAllTokensStatement (a new password's), keeping
+ * per user through revokeTokensStatement (a new password's), keeping
  * none: the post-restore command's (#908). Returns each user's revoked
  * kinds, in id order. No user lock, unlike a password change: a token
  * minted meanwhile is one its owner just stepped up for against the
@@ -281,7 +371,7 @@ export function revokeEveryonesTokens(
       .orderBy(personalAccessToken.userId);
     const revoked: { userId: number; kinds: TokenKind[] }[] = [];
     for (const { userId } of holders) {
-      const rows = await revokeAllTokensStatement(tx, userId);
+      const rows = await revokeTokensStatement(tx, userId);
       revoked.push({ userId, kinds: rows.map((row) => row.kind) });
     }
     return revoked;
@@ -292,11 +382,14 @@ export interface TokenAuth {
   user: SessionUser;
   /** The token's row id: what logs and the rate limit name, never the token. */
   tokenId: number;
+  /** Read with the token, so a scope costs no statement (#701). */
+  scope: TokenScope;
 }
 
 /**
  * Why a presented token opens nothing. `revoked` and `wrong kind` match a
- * real row (a device signed out, an agent token on /api): the bearer gate
+ * real row (a device signed out or idle past DEVICE_IDLE_DAYS, an agent
+ * token on /api): the bearer gate
  * always answers those with the 401 that says sign in again, never its 429
  * (src/web/auth/bearer-gate.ts). `unknown` is everything else, a deleted
  * user's token included.
@@ -310,7 +403,9 @@ export interface TokenRefusal {
  * (the caller answers each with the same 401, and a refused token's use is
  * never recorded). One indexed read, by the hash alone, so a revoked or
  * other-kind row is told from an unknown one; a second statement records
- * the use when the last one is a minute old. `shareOf` (shareToReadAhead)
+ * the use when the last one is a minute old. A device token idle past
+ * DEVICE_IDLE_DAYS (idleExpired) is refused as revoked, judged on the
+ * same row, so expiry costs no statement. `shareOf` (shareToReadAhead)
  * reads the token user's share of that wardrobe in the same read, as the
  * session statement does (#170): `share` then answers it, unless the
  * wardrobe is the user's own.
@@ -328,7 +423,10 @@ export async function authenticateToken(
       tokenId: personalAccessToken.id,
       kind: personalAccessToken.kind,
       revokedAt: personalAccessToken.revokedAt,
+      createdAt: personalAccessToken.createdAt,
       lastUsedAt: personalAccessToken.lastUsedAt,
+      readOnly: personalAccessToken.readOnly,
+      ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
       userId: user.id,
       email: user.email,
       ...(shareOf === undefined
@@ -339,8 +437,8 @@ export async function authenticateToken(
     .innerJoin(user, eq(user.id, personalAccessToken.userId))
     .where(eq(personalAccessToken.tokenHash, hashToken(token)));
   if (!row) return { refused: 'unknown' };
-  if (row.revokedAt !== null) return { refused: 'revoked' };
-  if (row.kind !== kind) return { refused: 'wrong kind' };
+  const refusal = refusalOf(row, kind, now);
+  if (refusal) return refusal;
   if (usedLongAgo(row.lastUsedAt, now)) {
     await db
       .update(personalAccessToken)
@@ -351,8 +449,31 @@ export async function authenticateToken(
   return {
     user: { id: row.userId, email: row.email },
     tokenId: row.tokenId,
+    scope: { readOnly: row.readOnly, ownWardrobeOnly: row.ownWardrobeOnly },
     ...(share && { share }),
   };
+}
+
+/**
+ * Why a token's row opens nothing for `kind`, if it does not. An idle
+ * device token is a revoked one to its caller (and so to the bearer gate's
+ * 401-never-429 rule): it learns to sign in again.
+ */
+function refusalOf(
+  row: {
+    kind: TokenKind;
+    revokedAt: Date | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  },
+  kind: TokenKind,
+  now: Date,
+): TokenRefusal | undefined {
+  if (row.revokedAt !== null || idleExpired(row, now)) {
+    return { refused: 'revoked' };
+  }
+  if (row.kind !== kind) return { refused: 'wrong kind' };
+  return undefined;
 }
 
 /** The share the token's read answered: none asked, or the user's own wardrobe. */

@@ -175,9 +175,15 @@ describe('calendar', () => {
       expect(
         [...html.matchAll(/href="#day-(\d{4}-\d{2}-\d{2})"/g)].map((m) => m[1]),
       ).toEqual(WEEK);
+      // The tabs are links in a labelled nav, never a tab widget (#726).
+      expect(html).toMatch(
+        /<nav class="tabs tabs-border[^"]*" aria-label="Calendar views"/,
+      );
+      expect(html).not.toContain('role="tab');
+      expect(html).not.toContain('aria-selected');
       // The tabs: Week (this page), Month and Trips.
       expect(html).toMatch(
-        /<a role="tab" href="\/calendar" class="tab tab-active"/,
+        /<a href="\/calendar" class="tab tab-active" aria-current="page"/,
       );
       expect(html).toContain('href="/calendar/month"');
       expect(html).toContain('href="/trips"');
@@ -267,7 +273,7 @@ describe('calendar', () => {
       expect(unescapeHtml(tuesday)).toContain(
         `/styling?outfit=${brunch}&returnTo=%2Fcalendar%3Fweek%3D2030-10-08%23day-2030-10-08"`,
       );
-      expect(hasText(saturday, 'Untitled Outfit')).toBe(true);
+      expect(hasText(saturday, 'Untitled outfit')).toBe(true);
       expect(saturday).toContain(`hx-post="/calendar/${untitledEntry}/delete"`);
       // 2030 is ahead: a planned day has no worn pill.
       expect(saturday).not.toContain(`/calendar/${untitledEntry}/worn`);
@@ -277,7 +283,7 @@ describe('calendar', () => {
           expect(hasText(column, 'Brunch look')).toBe(false);
         }
         if (date !== '2030-10-12') {
-          expect(hasText(column, 'Untitled Outfit')).toBe(false);
+          expect(hasText(column, 'Untitled outfit')).toBe(false);
         }
       }
 
@@ -309,9 +315,7 @@ describe('calendar', () => {
     it("each day's + Plan opens its sheet: the occasion, then Ideas, a saved outfit or Styling, all for that day", async () => {
       const html = await weekPage();
       const sheets = [
-        ...html.matchAll(
-          /<dialog[^>]*data-plan-sheet="([\d-]+)"[\s\S]*?<\/dialog>/g,
-        ),
+        ...html.matchAll(/<dialog id="plan-sheet-([\d-]+)"[\s\S]*?<\/dialog>/g),
       ];
       expect(sheets.map((m) => m[1])).toEqual(WEEK);
       const wednesday = sheets[3][0];
@@ -342,7 +346,7 @@ describe('calendar', () => {
       ).toEqual(['/outfits/ideas', '/outfits', '/styling']);
       // The day's button names the radio it checks before opening the sheet.
       expect(dayColumns(html).get('2030-10-09')).toMatch(
-        /data-plan="plan-2030-10-09-all-day" data-day-plan="2030-10-09"/,
+        /data-sheet-open="plan-sheet-2030-10-09"[^>]*data-checks="plan-2030-10-09-all-day"[^>]*data-day-plan="2030-10-09"/,
       );
     });
 
@@ -375,7 +379,7 @@ describe('calendar', () => {
         expect(open('2026-09-25')).toEqual(['evening']);
         expect(open('2026-09-26')).toEqual([]);
         expect(columns.get('2026-09-25')).toContain(
-          'data-plan="plan-2026-09-25-evening"',
+          'data-checks="plan-2026-09-25-evening"',
         );
         // A day with open slots has them as its one way into the sheet,
         // with or without an outfit already; without any, its "+ Plan".
@@ -458,7 +462,7 @@ describe('calendar', () => {
         ]);
         expect(openers('2026-09-26')).toEqual(['work', 'evening', 'night-out']);
         expect(columns.get('2026-09-26')).toContain(
-          'data-plan="plan-2026-09-26-work"',
+          'data-checks="plan-2026-09-26-work"',
         );
         expect(html).toMatch(
           /<div class="hidden lg:flex lg:flex-col lg:row-start-3" data-cell="work">/,
@@ -488,7 +492,7 @@ describe('calendar', () => {
       const html = await monthPage('?month=2030-10');
       expect(html).toMatch(/<h2[^>]*>\s*October 2030\s*</);
       expect(html).toMatch(
-        /<a role="tab" href="\/calendar\/month" class="tab tab-active"/,
+        /<a href="\/calendar\/month" class="tab tab-active" aria-current="page"/,
       );
       const days = [...html.matchAll(/data-month-day="([\d-]+)"/g)].map(
         (m) => m[1],
@@ -528,17 +532,17 @@ describe('calendar', () => {
       );
 
       const html = await monthPage('?month=2029-03');
-      const cell = /<a[^>]*data-month-day="2029-03-14"[\s\S]*?<\/a>/.exec(
+      const cell = /<div[^>]*data-month-day="2029-03-14"[\s\S]*?<\/td>/.exec(
         html,
       )![0];
       // All day comes before the evening: its collage is the one shown.
       expect(extractImgSrcs(cell)).toHaveLength(1);
       expect(cell).toContain('+1');
-      expect(cell).toMatch(/<a[^>]*data-worn=""/);
+      expect(cell).toMatch(/<div[^>]*data-worn=""/);
       expect(cell).toContain(
         'aria-label="Wednesday, Mar 14, Month pictured, Month another, Worn"',
       );
-      const empty = /<a[^>]*data-month-day="2029-03-15"[\s\S]*?<\/a>/.exec(
+      const empty = /<div[^>]*data-month-day="2029-03-15"[\s\S]*?<\/td>/.exec(
         html,
       )![0];
       expect(extractImgSrcs(empty)).toEqual([]);
@@ -555,7 +559,7 @@ describe('calendar', () => {
           const html = await monthPage(query);
           expect(html, query).toMatch(/>\s*September 2026\s*</);
           expect(html).toMatch(
-            /aria-current="date" data-month-day="2026-09-25"/,
+            /data-month-day="2026-09-25"[^>]*>\s*<a[^>]*aria-current="date"/,
           );
         }
       } finally {
@@ -730,6 +734,9 @@ describe('calendar', () => {
         headers: hx,
       });
       expect(restored.statusCode).toBe(200);
+      expect(
+        JSON.parse(String(restored.headers['hx-trigger']))['closet:status'],
+      ).toMatchObject({ message: 'Put back on the calendar' });
       expect(hxLocationPath(restored)).toBe('/calendar?week=2030-10-14');
       expect(await entriesOf(outfit)).toMatchObject([
         { day: '2030-10-14', occasion: 'all-day', plannedBy: 'user' },
@@ -743,6 +750,54 @@ describe('calendar', () => {
         headers: hx,
       });
       expect(await entriesOf(outfit)).toHaveLength(1);
+    });
+
+    // #892: an outfit is on a day once, so Undo after it was planned there
+    // again inserts nothing, and the toast says what the day shows.
+    it('says Undo found the outfit planned on the day again, under the occasion it kept', async () => {
+      const outfit = await createOutfit('Planned again');
+      const entry = await schedule(outfit, '2030-10-16');
+      const hx = { ...form({}).headers, 'hx-request': 'true' };
+      const removed = await t.inject({
+        method: 'POST',
+        url: `/calendar/${entry}/delete`,
+        ...form({ week: '2030-10-16' }),
+        headers: hx,
+      });
+      const { token } = JSON.parse(String(removed.headers['hx-trigger']))[
+        'closet:status'
+      ].undo.fields as { token: string };
+      const again = await t.inject({
+        method: 'POST',
+        url: '/calendar',
+        ...form({
+          outfitId: String(outfit),
+          date: '2030-10-16',
+          occasion: 'evening',
+        }),
+      });
+      expect(again.statusCode).toBe(302);
+
+      t.logs.clear();
+      const undone = await t.inject({
+        method: 'POST',
+        url: '/calendar/restore',
+        ...form({ token }),
+        headers: hx,
+      });
+      expect(undone.statusCode).toBe(200);
+      expect(
+        JSON.parse(String(undone.headers['hx-trigger']))['closet:status'],
+      ).toMatchObject({
+        message: 'Already planned on this day (Evening)',
+      });
+      expect(await entriesOf(outfit)).toMatchObject([
+        { day: '2030-10-16', occasion: 'evening' },
+      ]);
+      expect(t.logs.ops('calendar.entry.restored').at(-1)).toMatchObject({
+        changed: false,
+        occasion: 'evening',
+      });
     });
 
     it('restores only what the server held: a forged entry, another account’s token and a reused token are refused', async () => {
@@ -828,7 +883,7 @@ describe('calendar', () => {
         ),
       ).toMatch(
         new RegExp(
-          `hx-post="/calendar/${entry}/delete"[^>]*hx-confirm="Remove this scheduled outfit\\?"`,
+          `hx-post="/calendar/${entry}/delete"[^>]*hx-confirm="Take this outfit off the calendar\\?"`,
         ),
       );
       // A page rendered before the wear still posts without `confirmed`: the
@@ -843,7 +898,7 @@ describe('calendar', () => {
       expect(
         JSON.parse(String(stale.headers['hx-trigger']))['closet:confirm'],
       ).toEqual({
-        question: 'Remove this scheduled outfit?',
+        question: 'Take this outfit off the calendar?',
         label: 'Remove from calendar',
         action: `/calendar/${entry}/delete`,
         fields: { week: '2020-10-07', confirmed: '1' },

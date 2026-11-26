@@ -15,26 +15,36 @@ import {
 import { ShownId } from '../checklist';
 import { CARE_WASH } from '../../wardrobe/care';
 import { garmentMarks } from '../../wardrobe/marks';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { Chips } from '../form-field';
 import type { CapsuleRef } from '../capsules/queries';
 import { type StringKey, t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageSentinel } from '../page-sentinel';
 import { GALLERY_GRID } from '../layout/columns';
+import type { ActionBarProps } from '../layout/action-bar';
 import { GarmentMark } from '../layout/garment-mark';
-import { PageColumn, PageMain } from '../layout/page-main';
+import {
+  type PageAsideFrame,
+  type PageBodyFrame,
+  PageFragment,
+  PageShell,
+  type PageShellProps,
+  regionId,
+} from '../layout/page-shell';
 import {
   EmptyState,
   PlinthImage,
   SavedToast,
-  SheetBackdrop,
   StripFlags,
 } from '../layout/parts';
+import {
+  dockedFiltersOpener,
+  Sheet,
+  SheetCancel,
+  sheetOpener,
+} from '../layout/sheet';
 import type { SharedWardrobe } from '../sharing/access';
 import type { ViewContext } from '../view-context';
-import { WeatherSlot } from '../weather/views';
 import { categoryLabel } from './garment';
 import { type LabelledProperty, valueLabel } from './labels';
 import { type GridCursor, gridCursorText } from './grid-cursor';
@@ -49,7 +59,20 @@ import {
   wardrobeUrl,
 } from './urls';
 import { BULK_PROPERTIES, type BulkProperty } from './grid-schemas';
-import { WardrobeHeader, WardrobeMenu, WardrobeTabs } from './wardrobe-header';
+import {
+  WardrobeAddSheet,
+  wardrobeBar,
+  type WardrobeHeaderProps,
+  WardrobeMenu,
+} from './wardrobe-header';
+import {
+  nativeWithout,
+  needsNetwork,
+  pageModule,
+  searchShortcut,
+  submitsVia,
+} from '../page-contract';
+import { Icon } from '../layout/icon';
 
 /**
  * The grid's filters as the page echoes them into its links and forms. The
@@ -160,13 +183,23 @@ const NO_SELECTION: Selection = { ids: new Set(), all: false };
 
 /** What a select-mode verb did, for its toast (the redirect's flags). */
 export type BulkOutcome =
-  | { verb: 'set' | 'wash'; count: number; skipped: number }
+  | { verb: 'set'; count: number; skipped: number }
+  | {
+      verb: 'wash';
+      count: number;
+      /** The archived (closetOnly); the rest by why, as markWashed counts them (#819). */
+      skipped: number;
+      wishlist: number;
+      unseen: number;
+    }
   | { verb: 'archive' | 'capsule'; count: number };
 
 /** The one-shot flags select mode's verbs' redirects carry (GridQuery). */
 const BULK_FLAGS = [
   'bulkUpdated',
   'bulkSkipped',
+  'bulkWishlist',
+  'bulkUnseen',
   'bulkArchived',
   'bulkWashed',
   'bulkAdded',
@@ -178,10 +211,25 @@ const BATCH_FLAGS = ['checked'] as const;
 /** Tiles above the fold on a phone load eagerly; the rest when scrolled near. */
 const EAGER_TILES = 8;
 
-// Filter links and the search form replace #wardrobe-main and push the URL;
-// their href/action keep them working without JavaScript.
-const SWAP_MAIN = {
-  'hx-target': '#wardrobe-main',
+/**
+ * The shell's name for the Closet tab: its body, `#wardrobe-body`, is what
+ * filtering swaps. The page's and the fragment's frame alike. Flush: the
+ * sticky scope row sits right under the tabs, edge to edge, and the grid
+ * pads itself.
+ */
+const WARDROBE = 'wardrobe';
+const WARDROBE_BODY: PageBodyFrame = { gutter: 'flush' };
+
+// Filter links, the search form and the filter sheet replace the body and
+// push the URL; their href/action keep them working without JavaScript.
+// The answer brings the facets too (PageFragment's aside), whoever asked.
+// So every request that answers the facets sends the filter form's own
+// fields (`fromFilters`, `SEARCH_THROUGH_FILTERS`): a facet ticked and not
+// yet applied is in the URL the answer pushes and checked in the facets
+// it brings, never dropped (#1144). Their `href`/`action` stay the
+// no-script path.
+const SWAP_BODY = {
+  'hx-target': `#${regionId(WARDROBE, 'body')}`,
   'hx-swap': 'outerHTML',
   'hx-push-url': 'true',
 } as const;
@@ -198,50 +246,83 @@ export function searchParams(search: GridSearch): Record<string, string> {
 /**
  * GET /wardrobe: the Closet tab (docs/plans/2026-09-26-redesign.md, section
  * 3, "Wardrobe"). Browsing, it is the Wardrobe's header (the switcher in
- * the title, ⋯ and ＋), the tabs, today's weather (#14; outside
- * #wardrobe-main, so filtering never reloads it) and the swappable main.
- * Select mode and the capsule picker are tasks, not the closet: their own
- * bar (the task's title and Cancel) over the checkbox grid, no tabs.
+ * the title, ⋯ and ＋), the tabs, and the swappable main beside its facets
+ * (no weather: it has no job on the catalog, #732): the `facets` layout,
+ * whose aside is the filter sheet, docked as the left column from lg and
+ * the bottom sheet on a phone (docs/plans/2026-11-16-desktop-layout.md §4,
+ * #1067). Select mode and the capsule picker are tasks, not the closet:
+ * their own bar (the task's title and Cancel) over the checkbox grid, no
+ * tabs and no filters, so a `single` page with the select bar.
  */
 export function WardrobePage(props: {
   ctx: ViewContext;
   model: WardrobeModel;
 }) {
   const { ctx, model } = props;
-  return (
-    <Layout ctx={ctx} title={t('WARDROBE')}>
-      {model.selecting ? (
-        <TaskBar ctx={ctx} model={model} />
-      ) : (
-        <WardrobeHeader
-          ctx={ctx}
-          tab="closet"
-          viewOwner={model.viewOwner}
-          sharedWardrobes={model.sharedWardrobes}
-          canEdit={model.canEdit}
-          selectUrl={selectUrl(model)}
-        />
-      )}
-      <div class="pt-16">
-        {!model.selecting && (
-          <PageColumn width="wide">
-            <WardrobeTabs active="closet" viewOwner={model.viewOwner} />
-            <div class="px-2 pt-3">
-              <WeatherSlot ctx={ctx} />
-            </div>
-          </PageColumn>
-        )}
+  const header: WardrobeHeaderProps = {
+    ctx,
+    tab: 'closet',
+    viewOwner: model.viewOwner,
+    sharedWardrobes: model.sharedWardrobes,
+    canEdit: model.canEdit,
+    selectUrl: selectUrl(model),
+  };
+  const frame = {
+    ctx,
+    name: WARDROBE,
+    title: t('WARDROBE'),
+    body: WARDROBE_BODY,
+  };
+  if (model.selecting) {
+    return (
+      <PageShell
+        {...frame}
+        bar={taskBar(model)}
+        width="wide"
+        actionBar={selectBar(model)}
+      >
         <WardrobeMain model={model} />
-      </div>
-      <Dock ctx={ctx} />
-    </Layout>
+      </PageShell>
+    );
+  }
+  const facets = wardrobeFacets(model);
+  return (
+    <PageShell
+      {...frame}
+      bar={wardrobeBar(header)}
+      layout={facets.layout}
+      aside={facets.content}
+      asideLabel={facets.label}
+      overlays={<WardrobeAddSheet {...header} />}
+    >
+      <WardrobeMain model={model} />
+    </PageShell>
   );
+}
+
+/** The Closet tab's facets: the page's aside and its fragments' alike. */
+function wardrobeFacets(
+  model: WardrobeModel,
+): PageAsideFrame & { layout: 'facets'; label: string } {
+  return {
+    layout: 'facets',
+    label: t('FILTERS'),
+    content: (
+      <FilterSheet
+        search={model.search}
+        options={model.options}
+        viewOwner={model.viewOwner}
+        ownerView={model.ownerView}
+      />
+    ),
+  };
 }
 
 /**
  * GET /wardrobe's answer to a fragment request (the scope row's search,
- * chips and scope menu, the filter modal): the main, and the ⋯ menu out
- * of band, so its Select keeps the filters the grid now shows.
+ * chips and scope menu, the facets): the main, with select mode's bar and,
+ * browsing, the facets out of band (`PageFragment`), and the ⋯ menu out of
+ * band, so its Select keeps the filters the grid now shows.
  */
 export function WardrobeFragment({
   ctx,
@@ -252,7 +333,14 @@ export function WardrobeFragment({
 }) {
   return (
     <>
-      <WardrobeMain model={model} />
+      <PageFragment
+        name={WARDROBE}
+        {...WARDROBE_BODY}
+        actionBar={selectBar(model)}
+        aside={model.selecting ? undefined : wardrobeFacets(model)}
+      >
+        <WardrobeMain model={model} />
+      </PageFragment>
       {!model.selecting && (
         <WardrobeMenu
           viewOwner={model.viewOwner}
@@ -279,71 +367,61 @@ function selectUrl(model: WardrobeModel): string | undefined {
  * Select mode's and the picker's bar: what the task is, and Cancel back
  * to where it began (the grid as filtered, or the picker's capsule).
  */
-function TaskBar(props: { ctx: ViewContext; model: WardrobeModel }) {
-  const { search, viewOwner, picking } = props.model;
+function taskBar(model: WardrobeModel): PageShellProps['bar'] {
+  const { search, viewOwner, picking } = model;
   const cancel = picking
     ? capsuleUrl(picking.capsuleId, viewOwner)
     : wardrobeUrl(viewOwner, searchParams(search));
-  return (
-    <AppBar
-      ctx={props.ctx}
-      title={
-        picking
-          ? t('PICK_GARMENTS_FOR', { name: picking.name })
-          : t('SELECT_GARMENTS')
-      }
-      actions={
-        <a href={cancel} class="btn btn-ghost btn-sm">
-          {t('CANCEL')}
-        </a>
-      }
-    />
-  );
+  return {
+    title: picking
+      ? t('PICK_GARMENTS_FOR', { name: picking.name })
+      : t('SELECT_GARMENTS'),
+    actions: (
+      <a href={cancel} class="btn btn-ghost btn-sm">
+        {t('CANCEL')}
+      </a>
+    ),
+  };
 }
 
 /**
- * The swappable part of the Closet tab: the sticky scope row (the capsule
- * scope, the active filters, search, the filter sheet and the count), the
- * slim prompts, the first page of the grid and the filter modal; in select
- * mode the checkbox grid and its bar. GET /wardrobe answers htmx fragment
- * requests with this element (WardrobeFragment), so filtering and searching
- * never re-render the app bar, the tabs and the dock, and always start
- * again from the first page.
+ * The swappable part of the Closet tab, inside the shell's body (`#wardrobe-body`):
+ * the sticky scope row (the capsule scope, the active filters, search, the
+ * filter sheet's opener and the count), the slim prompts and the first page
+ * of the grid; in select mode the checkbox grid and its sheets. The filter
+ * sheet is the shell's aside, not the body's (`wardrobeFacets`). GET
+ * /wardrobe answers htmx fragment requests with the body (WardrobeFragment),
+ * so filtering and searching never re-render the app bar, the tabs and the
+ * dock, and always start again from the first page.
  */
 function WardrobeMain({ model }: { model: WardrobeModel }) {
-  const { viewOwner, selecting } = model;
+  const { selecting } = model;
   return (
-    <PageMain id="wardrobe-main" width="wide" class="pb-24">
+    <>
       {!selecting && <ScopeRow model={model} />}
       <div class="px-4 pt-3">
         {!selecting && <Prompts model={model} />}
         <Tiles model={model} />
       </div>
       {model.selecting && !model.picking && <BulkDialog />}
-      {!selecting && (
-        <FilterModal
-          search={model.search}
-          options={model.options}
-          viewOwner={viewOwner}
-          ownerView={model.ownerView}
-        />
-      )}
       {model.selecting && !model.picking && <BulkActions model={model} />}
       {model.bulkOutcome && <BulkToast outcome={model.bulkOutcome} />}
-    </PageMain>
+    </>
   );
 }
 
 /**
- * The slim prompts above the grid (the plan's "slim banner"): "4 photos
- * waiting to be added · Continue" for someone with drafts here (#200), "12
- * garments need details · Tag them" for someone who can tag, "3 garments
- * need a wash · Laundry" for the owner.
+ * What waits for the user, one row of chips above the grid ("1 to tag", "3
+ * to wash", "4 photos to add"), each a link to where it is done: photos
+ * waiting to be added (#200, Continue the batch), garments to tag (an
+ * editor), garments to wash (the owner). A row, not a banner each: the
+ * first garment stays near the app bar on a phone (#732).
  */
 function Prompts({ model }: { model: WardrobeModel }) {
   const { toTag, toWash, drafts } = model;
+  if (!drafts && toTag === 0 && toWash === 0) return null;
   return (
-    <>
+    <div id="wardrobe-prompts" class="mb-3 chip-row">
       {drafts && (
         <Prompt
           text={
@@ -352,7 +430,6 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('drafts.WAITING', { count: drafts.count })
           }
           href={draftUrl(model.viewOwner, drafts.first, [])}
-          action={t('drafts.CONTINUE')}
         />
       )}
       {toTag > 0 && (
@@ -363,7 +440,6 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('TAG_PROMPT', { count: toTag })
           }
           href={wardrobeUrl(model.viewOwner, {}, TAG_PATH)}
-          action={t('TAG_PROMPT_ACTION')}
         />
       )}
       {toWash > 0 && (
@@ -374,10 +450,9 @@ function Prompts({ model }: { model: WardrobeModel }) {
               : t('wear.LAUNDRY_PROMPT', { count: toWash })
           }
           href={LAUNDRY_PATH}
-          action={t('wear.LAUNDRY')}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -396,16 +471,6 @@ function Tiles({ model }: { model: WardrobeModel }) {
     const batch = model.page.tiles.filter((tile) =>
       model.batchSaved.has(tile.id),
     ).length;
-    const shown = new Set(model.page.tiles.map((tile) => tile.id));
-    // A kept selection's garments this page does not show (a later page, or
-    // a filter a verb's change moved them out of) still count and post.
-    const carried = model.selection.all
-      ? []
-      : [...model.selection.ids].filter((id) => !shown.has(id));
-    const checked = model.selection.all
-      ? model.count
-      : model.page.tiles.filter((tile) => isChecked(tile, model)).length +
-        carried.length;
     return (
       <>
         {batch > 0 && (
@@ -421,9 +486,9 @@ function Tiles({ model }: { model: WardrobeModel }) {
             <StripFlags names={BATCH_FLAGS} />
           </>
         )}
-        <BulkForm model={model} checked={checked}>
+        <BulkForm model={model}>
           <SelectAll count={model.count} checked={model.selection.all} />
-          {carried.map((id) => (
+          {carriedIds(model).map((id) => (
             <input type="hidden" name="ids" value={id} data-carried="true" />
           ))}
           <Grid model={model} />
@@ -432,6 +497,27 @@ function Tiles({ model }: { model: WardrobeModel }) {
     );
   }
   return <Grid model={model} />;
+}
+
+/**
+ * A kept selection's garments this page does not show (a later page, or a
+ * filter a verb's change moved them out of): they still count and post.
+ */
+function carriedIds(model: WardrobeModel): number[] {
+  if (model.selection.all) return [];
+  const shown = new Set(model.page.tiles.map((tile) => tile.id));
+  return [...model.selection.ids].filter((id) => !shown.has(id));
+}
+
+/** Boxes checked as rendered: the picker's members, or select mode's selection. */
+function checkedCount(model: WardrobeModel): number {
+  if (model.picking)
+    return model.page.tiles.filter((tile) => tile.member).length;
+  if (model.selection.all) return model.count;
+  return (
+    model.page.tiles.filter((tile) => isChecked(tile, model)).length +
+    carriedIds(model).length
+  );
 }
 
 /** A select-mode tile checked as the page renders it: a batch's garment (#200), or the selection a verb kept. */
@@ -465,7 +551,7 @@ function NoTiles({ model }: { model: WardrobeModel }) {
     const clear = wardrobeUrl(viewOwner, { capsule: search.capsule });
     return (
       <EmptyState message={t('NO_GARMENTS_MATCH')}>
-        <a href={clear} hx-get={clear} {...SWAP_MAIN} class="btn btn-sm">
+        <a href={clear} hx-get={clear} {...SWAP_BODY} class="btn btn-sm">
           {t('CLEAR_FILTERS')}
         </a>
       </EmptyState>
@@ -485,18 +571,12 @@ function NoTiles({ model }: { model: WardrobeModel }) {
   );
 }
 
-/** One prompt: what needs doing, and the link that does it. */
-function Prompt(props: { text: string; href: string; action: string }) {
+/** One chip: what needs doing, and the link that does it. */
+function Prompt(props: { text: string; href: string }) {
   return (
-    <p
-      role="status"
-      class="mb-3 flex items-center justify-between gap-3 rounded-box bg-base-200 px-3 py-2 text-sm"
-    >
-      <span>{props.text}</span>
-      <a href={props.href} class="link font-medium shrink-0">
-        {props.action}
-      </a>
-    </p>
+    <a href={props.href} class="btn btn-sm btn-soft rounded-full">
+      {props.text}
+    </a>
   );
 }
 
@@ -567,22 +647,17 @@ export function GarmentTiles(props: {
         );
       })}
       {page.before !== undefined && (
-        <div
+        <PageSentinel
+          as="div"
           class="col-span-full flex justify-center py-6"
-          hx-get={tilesUrl(viewOwner, search, page.before, {
+          href={tilesUrl(viewOwner, search, page.before, {
             selecting,
             picking,
             selection: props.selection,
           })}
-          hx-trigger="revealed"
-          hx-swap="outerHTML"
-          data-wardrobe-more=""
-        >
-          <span
-            class="loading loading-dots loading-md text-muted"
-            aria-label={t('LOADING_MORE')}
-          ></span>
-        </div>
+          trigger="revealed"
+          marker="wardrobe"
+        />
       )}
     </>
   );
@@ -765,8 +840,7 @@ function FilterPill(props: {
   return (
     <a
       href={href}
-      hx-get={href}
-      {...SWAP_MAIN}
+      {...fromFilters({ drop: props.drop })}
       class={`badge badge-sm shrink-0 gap-1 whitespace-nowrap cursor-pointer no-underline ${props.class}`}
     >
       {props.label} &times;
@@ -820,26 +894,53 @@ function PropertyPills(props: {
   );
 }
 
-// The filter modal's form and its "Clear" send the search box's keyword
-// along, typed or not yet searched.
+// The filter sheet's form and its "Clear" send the search box's keyword
+// along, typed or not yet searched: the page's one keyword field.
 const INCLUDE_KEYWORD = "#search-form [name='keyword']";
+const FILTER_SHEET_ID = 'filter-modal';
+const FILTER_FORM_ID = 'filter-form';
+
+/**
+ * A scope-row request built from the filter form as it stands (its ticks,
+ * applied or not; the owner and the capsule it carries) and the keyword,
+ * `change` naming what this control changes: `drop` a filter (a chip's ×),
+ * `set` values over the form's (the capsule menu). The request is bare
+ * `/wardrobe`: an href's query would repeat the form's fields (#1144).
+ * Without the filter form it is the link's href, followed natively
+ * (`nativeWithout`, actions.ts: the scope row and the facets render
+ * together today, browsing only, but a link must not depend on it).
+ */
+function fromFilters(change: {
+  drop?: keyof GridSearch;
+  set?: Partial<Record<keyof GridSearch, string>>;
+}) {
+  return {
+    'hx-get': '/wardrobe',
+    'hx-include': `#${FILTER_FORM_ID}, ${INCLUDE_KEYWORD}`,
+    'hx-params': change.drop ? `not ${change.drop}` : undefined,
+    'hx-vals': change.set ? JSON.stringify(change.set) : undefined,
+    ...SWAP_BODY,
+    ...nativeWithout(FILTER_FORM_ID),
+  };
+}
 
 /**
  * The scope row, sticky under the app bar (the plan's replacement for the
  * fixed bar above the dock): the capsule scope, the active filters as
- * chips (each drops itself), search, the filter sheet and the count.
- * Search expands in place over the chips while it has the focus, and stays
- * open while it holds a keyword. Every filter's chip is one tone (primary,
- * as its checked choice in the modal); only the care filters keep the
- * colour of the tile mark they find (wash, attention) and archived its
- * warning.
+ * chips (each drops itself), search, the filter sheet's opener and the
+ * count. Search expands in place over the chips while it has the focus,
+ * and stays open while it holds a keyword. From lg the opener gives way to
+ * the docked facets (#1067); search stays here at every width.
+ * Every filter's chip is one tone (primary, as its checked choice in the
+ * sheet); only the care filters keep the colour of the tile mark they find
+ * (wash, attention) and archived its warning.
  */
 function ScopeRow({ model }: { model: WardrobeModel }) {
   const { search, viewOwner } = model;
   return (
     <div
       id="scope-row"
-      class="group/scope sticky top-16 z-10 flex items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
+      class="group/scope sticky top-bar z-10 flex items-center gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
     >
       {model.capsules.length > 0 && (
         <CapsuleScope
@@ -848,32 +949,23 @@ function ScopeRow({ model }: { model: WardrobeModel }) {
           capsules={model.capsules}
         />
       )}
-      <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto group-has-[#search-form:focus-within]/scope:hidden">
+      {/* Stretched to the row: the scroller clips, so a chip's 44 px area
+          (main.css, Touch hit areas) needs the row's height, not its own. */}
+      <div class="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-x-auto group-has-[#search-form:focus-within]/scope:hidden">
         <FilterChips search={search} viewOwner={viewOwner} />
       </div>
       <SearchForm search={search} viewOwner={viewOwner} />
       <button
         type="button"
-        onclick="document.getElementById('filter-modal').showModal()"
+        {...dockedFiltersOpener(FILTER_SHEET_ID)}
         class="btn btn-ghost btn-sm btn-square shrink-0"
         aria-label={t('FILTERS')}
-        aria-haspopup="dialog"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
+        <Icon
+          paths="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
           class="size-5"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
-          />
-        </svg>
+          weight="1.5"
+        />
       </button>
       {/* The number alone on screen; "64 results" to a screen reader. */}
       <span class="shrink-0 text-sm tabular-nums text-muted">
@@ -901,20 +993,28 @@ function CapsuleScope(props: {
   const current = props.capsules.find(
     (capsule) => String(capsule.id) === search.capsule,
   );
+  // The summary's text, which its aria-label starts from (#1210).
+  const scope = current ? current.name : t('ALL_GARMENTS');
+  // The closet ("All") drops the scope rather than sending it empty: the
+  // pushed URL then carries no `capsule=` (the form's hidden capsule goes
+  // too, through hx-params).
   const scoped = (capsule: string) => {
     const href = wardrobeUrl(viewOwner, {
       ...searchParams(search),
       capsule,
     });
-    return { href, 'hx-get': href, ...SWAP_MAIN };
+    const change = capsule
+      ? { set: { capsule } }
+      : { drop: 'capsule' as const };
+    return { href, ...fromFilters(change) };
   };
   return (
     <details class="dropdown shrink-0" id="capsule-scope">
       <summary
         class={`btn btn-sm rounded-full max-w-32 flex-nowrap ${current ? 'btn-primary' : 'btn-outline'}`}
-        aria-label={t('CAPSULE')}
+        aria-label={t('CAPSULE_SCOPE_LABEL', { scope })}
       >
-        <span class="truncate">{current ? current.name : t('CLOSET')}</span>
+        <span class="truncate">{scope}</span>
         <span aria-hidden="true">▾</span>
       </summary>
       <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-300 z-20 w-56 mt-1 p-2">
@@ -924,7 +1024,7 @@ function CapsuleScope(props: {
             aria-current={current ? undefined : 'true'}
             class={current ? undefined : 'menu-active'}
           >
-            {t('CLOSET')}
+            {t('ALL_GARMENTS')}
           </a>
         </li>
         {props.capsules.map((capsule) => (
@@ -1011,8 +1111,19 @@ function FilterChips(props: {
 /**
  * Search, collapsed to its icon until tapped: the field grows over the
  * chips while it has the focus (the row's group-has rule hides them) and
- * keeps some width while it holds a keyword. Enter submits; every other
- * filter rides along as a hidden field.
+ * keeps some width while it holds a keyword. Enter submits the filter form
+ * instead (`SEARCH_THROUGH_FILTERS`), which sends this keyword with its
+ * own fields (Apply's request), so a facet ticked and not yet applied is
+ * searched with, never dropped by the facets the answer brings (#1144):
+ * `submitsVia`, actions.ts, with htmx loaded and the filter form on the
+ * page (the search must not depend on it); else the form's native GET.
+ * Its Apply, the default button, may sit in the phone's closed sheet,
+ * which `requestSubmit()` does not need.
+ * Not this form's `hx-include` of the filter form: its hidden filters would
+ * go too, a filter sent twice (a 400). They stay for the no-script GET.
+ * The page's only keyword field at every width, from lg too beside the
+ * docked facets (#1067): two would each hold a keyword, and the filter
+ * sheet's Apply could post only one.
  */
 function SearchForm(props: {
   search: GridSearch;
@@ -1023,8 +1134,12 @@ function SearchForm(props: {
     <form
       method="get"
       action="/wardrobe"
-      hx-get="/wardrobe"
-      {...SWAP_MAIN}
+      {...submitsVia(FILTER_FORM_ID)}
+      // `/` focuses the search (views/assets/page/search-shortcut.ts; owner
+      // decision 5 of the desktop plan): the module loads with this form.
+      {...pageModule('search-shortcut')}
+      // Not boosted: htmx would send this form's own request as well.
+      hx-boost="false"
       id="search-form"
       role="search"
       class="flex shrink-0 justify-end focus-within:flex-1"
@@ -1038,21 +1153,11 @@ function SearchForm(props: {
         <input type="hidden" name="ownerId" value={viewOwner} />
       )}
       <label class="input input-sm w-9 gap-1 px-2 transition-[width] duration-150 focus-within:w-full has-[input:not(:placeholder-shown)]:w-32 motion-reduce:transition-none">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
+        <Icon
+          paths="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
           class="size-4 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-          />
-        </svg>
+          weight="1.5"
+        />
         <input
           type="text"
           name="keyword"
@@ -1062,6 +1167,7 @@ function SearchForm(props: {
           aria-label={t('SEARCH')}
           enterkeyhint="search"
           class="min-w-0 grow"
+          {...searchShortcut()}
         />
       </label>
     </form>
@@ -1069,13 +1175,18 @@ function SearchForm(props: {
 }
 
 /**
- * The filters as a GET form of their own: applying submits it into
- * #wardrobe-main like the search form (the swap takes the open dialog with
- * it), with the search box's keyword; "Clear" asks for the grid with only
- * the keyword and the capsule scope. Without JavaScript it is a plain GET
- * to /wardrobe.
+ * The filters as a GET form of their own, the one `filters` sheet (#1067):
+ * the bottom sheet on a phone, the docked facet column from lg, the same
+ * element at both (layout/sheet.tsx). Applying submits it into
+ * #wardrobe-body with the search box's keyword, and the answer's facets
+ * replace this one's content (PageFragment), so the form always holds what
+ * the URL asks for, in the markup a history snapshot keeps too; the open
+ * sheet goes with it, as it went with the body before it docked. Apply and
+ * Clear keep their ids, so htmx gives the docked column's focus back to
+ * the new one. "Clear" asks for the grid with only the keyword and the
+ * capsule scope. Without JavaScript it is a plain GET to /wardrobe.
  */
-function FilterModal(props: {
+function FilterSheet(props: {
   search: GridSearch;
   options: FilterOptions;
   viewOwner: number | undefined;
@@ -1083,10 +1194,11 @@ function FilterModal(props: {
 }) {
   const { search, options, viewOwner } = props;
   return (
-    <dialog
-      id="filter-modal"
-      class="modal modal-bottom sm:modal-middle"
-      aria-labelledby="filter-modal-title"
+    <Sheet
+      id={FILTER_SHEET_ID}
+      kind="filters"
+      labelledBy="filter-modal-title"
+      dismiss="close"
     >
       {/* group/filter: the chosen category reveals its type chips (TYPE_GROUP_REVEAL). */}
       <form
@@ -1094,8 +1206,9 @@ function FilterModal(props: {
         action="/wardrobe"
         hx-get="/wardrobe"
         hx-include={INCLUDE_KEYWORD}
-        {...SWAP_MAIN}
-        class="modal-box group/filter"
+        {...SWAP_BODY}
+        id={FILTER_FORM_ID}
+        class="group/filter"
       >
         <h3 id="filter-modal-title" class="font-bold text-lg mb-4">
           {t('FILTERS')}
@@ -1159,20 +1272,24 @@ function FilterModal(props: {
         <div class="modal-action">
           <button
             type="button"
+            id="filter-clear"
             class="btn btn-ghost btn-sm"
             hx-get={wardrobeUrl(viewOwner, { capsule: search.capsule })}
             hx-include={INCLUDE_KEYWORD}
-            {...SWAP_MAIN}
+            {...SWAP_BODY}
           >
             {t('CLEAR_FILTERS')}
           </button>
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button
+            type="submit"
+            id="filter-apply"
+            class="btn btn-primary btn-sm"
+          >
             {t('APPLY_FILTERS')}
           </button>
         </div>
       </form>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+    </Sheet>
   );
 }
 
@@ -1307,7 +1424,7 @@ function FilterGroup(props: {
       >
         {props.title}
       </h4>
-      <div class="flex flex-wrap gap-2">{props.children}</div>
+      <div class="chip-row">{props.children}</div>
     </div>
   );
 }
@@ -1319,7 +1436,7 @@ function Toggle(props: {
   label: string;
 }) {
   return (
-    <label class="cursor-pointer flex items-center gap-2">
+    <label class="flex gap-2 items-center cursor-pointer">
       <input
         type="checkbox"
         name={props.name}
@@ -1333,51 +1450,81 @@ function Toggle(props: {
 }
 
 const BULK_FORM_ID = 'bulk-form';
+// Select mode's two sheets: its verbs (BulkActions) and "Set…" (BulkDialog).
+const BULK_ACTIONS_ID = 'bulk-actions';
+const BULK_SET_ID = 'bulk-dialog';
 
 /**
  * Select mode's form: the grid's checkbox tiles (later pages arrive inside
- * it too) and the bar above the dock with the live count and the mode's
- * action. A native post carrying what the page needs back in its action's
- * query. The count is the one line of script: it re-counts the checked
- * boxes on every change, and once when it loads.
+ * it too), a native post carrying what the page needs back in its action's
+ * query. Its bar (`selectBar`) is the page's action bar, outside the form:
+ * the live count and the mode's actions, joined to it through `form=` and
+ * `data-select-count`. The count is public/js/select-count.js, loaded with
+ * the form (page-mount.ts): it re-counts the checked boxes on every change
+ * and the pages the sentinel appends, and once when it loads.
  */
-const SELECT_COUNT_IMPORT = "import 'select-count';";
+const PICK_FORM_ID = 'pick-form';
+const SELECTED_COUNT_ID = 'selected-count';
 
-function SelectForm(props: {
-  id: string;
-  action: string;
-  /** Boxes checked as rendered (the picker's members on this page). */
-  checked: number;
-  button: Child;
-  children: Child;
-}) {
+function SelectForm(props: { id: string; action: string; children: Child }) {
   return (
     <PostForm id={props.id} action={props.action}>
-      {/* The count follows toggles and the pages the sentinel appends
-          (public/js/select-count.js, through the importmap for its versioned
-          URL). A fixed string with nothing interpolated. */}
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: SELECT_COUNT_IMPORT }}
-      />
-      <div data-select-count>
+      <div
+        data-select-count={SELECTED_COUNT_ID}
+        {...pageModule('select-count')}
+      >
         {props.children}
-        <div class="fixed bottom-dock left-rail right-0 bg-base-100 border-t border-base-300 z-20 px-4 py-3 flex items-center justify-between gap-2">
-          <span class="text-sm">
-            <span
-              id="selected-count"
-              class="font-semibold"
-              data-select-count-value
-            >
-              {props.checked}
-            </span>{' '}
-            {t('SELECTED')}
-          </span>
-          {props.button}
-        </div>
       </div>
     </PostForm>
   );
+}
+
+/**
+ * Select mode's and the picker's action bar, while there are tiles to
+ * check: the live count (`#selected-count`, which select-count.js keeps)
+ * and the mode's actions, the bulk verbs' sheets or the picker's Save.
+ */
+function selectBar(model: WardrobeModel): ActionBarProps | undefined {
+  if (!model.selecting || model.page.tiles.length === 0) return undefined;
+  return {
+    align: 'between',
+    children: (
+      <>
+        <span class="text-sm">
+          <span id={SELECTED_COUNT_ID} class="font-semibold">
+            {checkedCount(model)}
+          </span>{' '}
+          {t('SELECTED')}
+        </span>
+        {model.picking ? (
+          <button
+            type="submit"
+            form={PICK_FORM_ID}
+            class="btn btn-primary btn-sm"
+          >
+            {t('SAVE')}
+          </button>
+        ) : (
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="btn btn-sm"
+              {...sheetOpener(BULK_ACTIONS_ID)}
+            >
+              {t('BULK_ACTIONS')}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              {...sheetOpener(BULK_SET_ID)}
+            >
+              {t('BULK_SET')}
+            </button>
+          </div>
+        )}
+      </>
+    ),
+  };
 }
 
 /**
@@ -1386,36 +1533,12 @@ function SelectForm(props: {
  * its own `formaction`, all with the filters in the query, so the redirect
  * lands back in select mode on the same grid.
  */
-function BulkForm(props: {
-  model: WardrobeModel;
-  /** Boxes checked as rendered (a batch's garments, #200, or a kept selection). */
-  checked: number;
-  children: Child;
-}) {
+function BulkForm(props: { model: WardrobeModel; children: Child }) {
   const { search, viewOwner } = props.model;
   return (
     <SelectForm
       id={BULK_FORM_ID}
       action={wardrobeUrl(viewOwner, searchParams(search), '/wardrobe/bulk')}
-      checked={props.checked}
-      button={
-        <div class="flex gap-2">
-          <button
-            type="button"
-            class="btn btn-sm"
-            onclick="document.getElementById('bulk-actions').showModal()"
-          >
-            {t('BULK_ACTIONS')}
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            onclick="document.getElementById('bulk-dialog').showModal()"
-          >
-            {t('BULK_SET')}
-          </button>
-        </div>
-      }
     >
       {props.children}
     </SelectForm>
@@ -1431,7 +1554,7 @@ function BulkForm(props: {
  */
 function SelectAll(props: { count: number; checked: boolean }) {
   return (
-    <label class="flex items-center gap-2 text-sm mb-3 cursor-pointer w-fit">
+    <label class="tap-row flex items-center gap-2 text-sm mb-3 cursor-pointer w-fit">
       <input
         type="checkbox"
         name="all"
@@ -1460,70 +1583,68 @@ function BulkActions({ model }: { model: WardrobeModel }) {
   const verbUrl = (verb: string) =>
     wardrobeUrl(viewOwner, searchParams(search), `/wardrobe/bulk/${verb}`);
   return (
-    <dialog id="bulk-actions" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">{t('BULK_ACTIONS_TITLE')}</h3>
-        <p class="text-sm text-muted mb-3" data-offline-note="">
-          {t('BULK_NEEDS_NETWORK')}
-        </p>
-        <div class="flex flex-col gap-4" data-needs-network="">
-          {capsules.length > 0 && (
-            <div class="flex items-end gap-2">
-              <label class="flex-1 min-w-0">
-                <span class="label text-sm mb-1">{t('CAPSULE')}</span>
-                <select
-                  name="capsuleId"
-                  form={BULK_FORM_ID}
-                  class="select select-sm w-full"
-                >
-                  {capsules.map((capsule) => (
-                    <option value={String(capsule.id)}>{capsule.name}</option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
+    <Sheet
+      id={BULK_ACTIONS_ID}
+      kind="choice"
+      labelledBy={`${BULK_ACTIONS_ID}-title`}
+      dismiss="close"
+    >
+      <h3 id={`${BULK_ACTIONS_ID}-title`} class="font-bold text-lg mb-4">
+        {t('BULK_ACTIONS_TITLE')}
+      </h3>
+      <p class="text-sm text-muted mb-3" data-offline-note="">
+        {t('BULK_NEEDS_NETWORK')}
+      </p>
+      <div class="flex flex-col gap-4" {...needsNetwork()}>
+        {capsules.length > 0 && (
+          <div class="flex items-end gap-2">
+            <label class="flex-1 min-w-0">
+              <span class="label text-sm mb-1">{t('CAPSULE')}</span>
+              <select
+                name="capsuleId"
                 form={BULK_FORM_ID}
-                formaction={verbUrl('capsule')}
-                class="btn btn-sm"
+                class="select select-sm w-full"
               >
-                {t('BULK_ADD_TO_CAPSULE')}
-              </button>
-            </div>
-          )}
-          {model.ownerView && (
-            <div class="flex gap-2">
-              <button
-                type="submit"
-                form={BULK_FORM_ID}
-                formaction={verbUrl('washed')}
-                class="btn btn-sm flex-1"
-              >
-                {t('BULK_MARK_WASHED')}
-              </button>
-              <button
-                type="submit"
-                form={BULK_FORM_ID}
-                formaction={verbUrl('archive')}
-                class="btn btn-sm flex-1"
-              >
-                {t('BULK_ARCHIVE')}
-              </button>
-            </div>
-          )}
-        </div>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-        </div>
+                {capsules.map((capsule) => (
+                  <option value={String(capsule.id)}>{capsule.name}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('capsule')}
+              class="btn btn-sm"
+            >
+              {t('BULK_ADD_TO_CAPSULE')}
+            </button>
+          </div>
+        )}
+        {model.ownerView && (
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('washed')}
+              class="btn btn-sm flex-1"
+            >
+              {t('BULK_MARK_WASHED')}
+            </button>
+            <button
+              type="submit"
+              form={BULK_FORM_ID}
+              formaction={verbUrl('archive')}
+              class="btn btn-sm flex-1"
+            >
+              {t('BULK_ARCHIVE')}
+            </button>
+          </div>
+        )}
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="modal-action">
+        <SheetCancel size="sm" />
+      </div>
+    </Sheet>
   );
 }
 
@@ -1536,14 +1657,8 @@ function PickForm(props: {
   const { model, picking } = props;
   return (
     <SelectForm
-      id="pick-form"
+      id={PICK_FORM_ID}
       action={capsuleUrl(picking.capsuleId, model.viewOwner, '/garments')}
-      checked={model.page.tiles.filter((tile) => tile.member).length}
-      button={
-        <button type="submit" class="btn btn-primary btn-sm">
-          {t('SAVE')}
-        </button>
-      }
     >
       {props.children}
     </SelectForm>
@@ -1616,81 +1731,79 @@ function labelled(
  */
 function BulkDialog() {
   return (
-    <dialog id="bulk-dialog" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-2">{t('BULK_TITLE')}</h3>
-        <p class="text-sm text-muted mb-4">{t('BULK_HINT')}</p>
-        <p class="text-sm text-muted mb-4" data-offline-note="">
-          {t('BULK_NEEDS_NETWORK')}
-        </p>
-        <div role="tablist" class="tabs tabs-box tabs-sm flex-wrap">
-          {BULK_PROPERTIES.map((property, index) => {
-            const choice = BULK_CHOICES[property];
-            return (
-              <>
-                <input
-                  type="radio"
-                  name="property"
-                  value={property}
-                  form={BULK_FORM_ID}
-                  role="tab"
-                  class="tab"
-                  aria-label={t(choice.label)}
-                  checked={index === 0}
-                />
-                <div class="tab-content pt-4">
-                  {property === 'materials' && (
-                    <p class="text-xs text-muted mb-2">
-                      {t('BULK_MATERIALS_ADD')}
-                    </p>
+    <Sheet
+      id={BULK_SET_ID}
+      kind="form"
+      labelledBy={`${BULK_SET_ID}-title`}
+      dismiss="close"
+    >
+      <h3 id={`${BULK_SET_ID}-title`} class="font-bold text-lg mb-2">
+        {t('BULK_TITLE')}
+      </h3>
+      <p class="text-sm text-muted mb-4">{t('BULK_HINT')}</p>
+      <p class="text-sm text-muted mb-4" data-offline-note="">
+        {t('BULK_NEEDS_NETWORK')}
+      </p>
+      <div role="tablist" class="tabs tabs-box tabs-sm flex-wrap">
+        {BULK_PROPERTIES.map((property, index) => {
+          const choice = BULK_CHOICES[property];
+          return (
+            <>
+              <input
+                type="radio"
+                name="property"
+                value={property}
+                form={BULK_FORM_ID}
+                role="tab"
+                class="tab"
+                aria-label={t(choice.label)}
+                checked={index === 0}
+              />
+              <div class="tab-content pt-4">
+                {property === 'materials' && (
+                  <p class="text-xs text-muted mb-2">
+                    {t('BULK_MATERIALS_ADD')}
+                  </p>
+                )}
+                <div class="chip-row">
+                  {choice.clearable && (
+                    <input
+                      type="radio"
+                      name={choice.field}
+                      value=""
+                      form={BULK_FORM_ID}
+                      class="btn btn-sm btn-ghost rounded-full"
+                      aria-label={t('NOT_SET')}
+                    />
                   )}
-                  <div class="flex flex-wrap gap-2">
-                    {choice.clearable && (
-                      <input
-                        type="radio"
-                        name={choice.field}
-                        value=""
-                        form={BULK_FORM_ID}
-                        class="btn btn-sm btn-ghost rounded-full"
-                        aria-label={t('NOT_SET')}
-                      />
-                    )}
-                    {choice.values.map((value) => (
-                      <input
-                        type="radio"
-                        name={choice.field}
-                        value={String(value)}
-                        form={BULK_FORM_ID}
-                        class="btn btn-sm rounded-full"
-                        aria-label={choice.labelOf(value)}
-                      />
-                    ))}
-                  </div>
+                  {choice.values.map((value) => (
+                    <input
+                      type="radio"
+                      name={choice.field}
+                      value={String(value)}
+                      form={BULK_FORM_ID}
+                      class="btn btn-sm rounded-full"
+                      aria-label={choice.labelOf(value)}
+                    />
+                  ))}
                 </div>
-              </>
-            );
-          })}
-        </div>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            onclick="this.closest('dialog').close()"
-          >
-            {t('CANCEL')}
-          </button>
-          <button
-            type="submit"
-            form={BULK_FORM_ID}
-            class="btn btn-primary btn-sm"
-            data-needs-network=""
-          >
-            {t('APPLY')}
-          </button>
-        </div>
+              </div>
+            </>
+          );
+        })}
       </div>
-      <SheetBackdrop label={t('CLOSE')} />
-    </dialog>
+      <div class="modal-action">
+        <SheetCancel size="sm" />
+        <button
+          type="submit"
+          form={BULK_FORM_ID}
+          class="btn btn-primary btn-sm"
+          {...needsNetwork()}
+        >
+          {t('APPLY')}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -1730,7 +1843,16 @@ function bulkOutcomeText(outcome: BulkOutcome): string {
         ? (`${outcome.verb}Skipped` as const)
         : outcome.verb
     ];
-  return count === 1
-    ? t(keys.one, { skipped })
-    : t(keys.many, { count, skipped });
+  const text =
+    count === 1 ? t(keys.one, { skipped }) : t(keys.many, { count, skipped });
+  if (outcome.verb !== 'wash') return text;
+  // Not archived, so not "archived skipped" (#819): a wishlist item, and an
+  // id that is no garment of the owner's (another's or a deleted one, alike).
+  const also = [
+    outcome.wishlist > 0 &&
+      t('BULK_WASHED_SKIPPED_WISHLIST', { count: outcome.wishlist }),
+    outcome.unseen > 0 &&
+      t('BULK_WASHED_SKIPPED_UNSEEN', { count: outcome.unseen }),
+  ].filter((part) => part !== false);
+  return [text, ...also].join(' · ');
 }

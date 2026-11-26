@@ -109,7 +109,7 @@ describe('auth, account and push statements (#171)', () => {
       expect(record.rows).toBe(1);
       const [lookup] = record.sql;
       expect(lookup).toMatch(
-        /^select "id", "email", right\("password", \$\d\), nullif\(coalesce\(\(select case when "bumped_at" .* from "sync_epoch"\), \$\d\), .*\) from "user"/,
+        /^select "id", "email", right\("password", \$\d\), nullif\(coalesce\(\(select case when "bumped_at" .* from "sync_epoch"\), \$\d\), .*\), "session_version" from "user"/,
       );
       // The hash as a column of its own (the checksPassword shape below).
       expect(lookup).not.toMatch(/, "password"(,| from)/);
@@ -124,6 +124,7 @@ describe('auth, account and push statements (#171)', () => {
         email: t.owner.email,
         fingerprint: passwordFingerprint(hash),
         sessionEpoch: null,
+        sessionVersion: 0,
       });
       expect(await findSessionAccount(t.db, id, { withHash: true })).toEqual({
         ...account,
@@ -330,6 +331,43 @@ describe('auth, account and push statements (#171)', () => {
     expect(t.logs.messages('info', 'Web')).toContain(
       `Password changed for user ${id}: other sessions, 1 MCP tokens, 1 device tokens, 0 other push devices and 0 unanswered invites revoked`,
     );
+  });
+
+  // #700: the same shape, the bump in place of the hash; agent tokens stay.
+  it('sign out everywhere is the lookup and a transaction: the bump, then one statement that revokes the device tokens and pushes', async () => {
+    const email = 'everywhere-statements@example.com';
+    const cookie = await t.register(email);
+    const id = await userIdOf(t, email);
+    await mintToken(t, id, 'Laptop');
+    await mintToken(t, id, 'Phone', 'device');
+    const record = await recordQueries(async () => {
+      const res = await t.inject({
+        method: 'POST',
+        url: '/auth/sign-out-everywhere',
+        payload: { currentPassword: TEST_PASSWORD },
+        headers: { cookie },
+      });
+      expect(res.statusCode).toBe(302);
+    });
+    expect(record.statements).toBe(1 + 4);
+    expect(record.sql[2]).toMatch(
+      /^update "user" set "session_version" = "user"\."session_version" \+ 1/,
+    );
+    expect(record.sql[3]).toMatch(/^with "revoked_tokens" as \(update/);
+    expect(record.sql[3]).not.toMatch(/wardrobe_share/);
+    const tokens = await t.db
+      .select({
+        kind: personalAccessToken.kind,
+        revokedAt: personalAccessToken.revokedAt,
+      })
+      .from(personalAccessToken)
+      .where(eq(personalAccessToken.userId, id));
+    expect(
+      tokens.map((token) => [token.kind, token.revokedAt !== null]).sort(),
+    ).toEqual([
+      ['device', true],
+      ['mcp', false],
+    ]);
   });
 
   it('a password written for an account that is gone is a 404, never a half-read row', async () => {

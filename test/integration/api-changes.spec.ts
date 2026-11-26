@@ -111,6 +111,11 @@ async function syncAll(
 }
 
 const keyOf = (item: Item) => `${item.resource}:${item.id}`;
+/**
+ * Every user's week template: one per user, set or not, at revision 0
+ * until first written (#716), so first in a full sync of an untouched one.
+ */
+const templateOf = (userId: number) => `weekTemplate:${userId}`;
 const changeKeys = (pages: Page[]) =>
   pages.flatMap((page) => page.changes.map(keyOf));
 const deletionKeys = (pages: Page[]) =>
@@ -185,6 +190,7 @@ describe('the delta', () => {
         `garment:${deleted}`,
         `garment:${edited}`,
         `garment:${kept}`,
+        templateOf(a.id),
       ].sort(),
     );
     expect(deletionKeys(first.pages)).toEqual([]);
@@ -304,11 +310,11 @@ describe('the delta', () => {
     const first = await syncAll(a.device, { limit: 2 });
     expect(first.pages).toHaveLength(2);
     expect(changeKeys(first.pages).sort()).toEqual(
-      ids.map((id) => `garment:${id}`).sort(),
+      [...ids.map((id) => `garment:${id}`), templateOf(a.id)].sort(),
     );
     expect(
       first.pages.flatMap((page) => page.changes.map((c) => c.revision)),
-    ).toEqual([0, 0, 0]);
+    ).toEqual([0, 0, 0, 0]);
     expect(await changes(a.device, { cursor: first.cursor })).toMatchObject({
       changes: [],
       deletions: [],
@@ -324,8 +330,11 @@ describe('the delta', () => {
       await newGarment(a.device, 'Unsent'),
     ];
     const committed = await revisionOf(a.id);
-    const page1 = await changes(a.device, { limit: 1 });
-    expect(page1.changes.map(keyOf)).toEqual([`garment:${sent}`]);
+    const page1 = await changes(a.device, { limit: 2 });
+    expect(page1.changes.map(keyOf)).toEqual([
+      templateOf(a.id),
+      `garment:${sent}`,
+    ]);
 
     // The writer holds its transaction (and its revision) open on another
     // connection, as a slow request would, over one garment already sent
@@ -439,6 +448,7 @@ describe("the owner's own resources (#196b-2)", () => {
         `garment:${top}`,
         `outfit:${outfitId}`,
         `weekPlan:${weekPlanId}`,
+        templateOf(a.id),
       ].sort(),
     );
     expect(dataOf(first.pages, 'outfit')).toEqual([
@@ -652,10 +662,11 @@ describe("the owner's own resources (#196b-2)", () => {
         `brandSize:${brandId}`,
         `measurements:${a.id}`,
         `styleProfile:${a.id}`,
+        templateOf(a.id),
       ].sort(),
     );
     expect(dataOf(first.pages, 'styleProfile')).toEqual([
-      { styles: ['classic'], palette: ['black'] },
+      { styles: ['classic'], palette: ['black'], rules: [] },
     ]);
     expect(dataOf(first.pages, 'measurements')).toEqual([
       { unit: 'in', measurements: { waist: 80 } },
@@ -674,6 +685,69 @@ describe("the owner's own resources (#196b-2)", () => {
     expect(changeKeys(delta.pages)).toEqual([`measurements:${a.id}`]);
     expect(dataOf(delta.pages, 'measurements')[0].unit).toBe('cm');
     expect(deletionKeys(delta.pages)).toEqual([`brandSize:${brandId}`]);
+  });
+
+  it('the week template and outfit rules (#716): a write on one device is the other device’s delta, the rules in the profile', async () => {
+    const a = await account('changes-week@example.com');
+    const emptyWeek = {
+      days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, around: [] })),
+    };
+    // Never set: every user has one, sent empty in a full sync.
+    const first = await syncAll(a.device, { limit: 100 });
+    expect(changeKeys(first.pages)).toEqual([`weekTemplate:${a.id}`]);
+    expect(dataOf(first.pages, 'weekTemplate')).toEqual([emptyWeek]);
+
+    const saved = await api(a.other, 'PUT', '/week-template', {
+      days: [{ weekday: 1, day: 'work', around: ['workout'] }],
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const week = await syncAll(a.device, { cursor: first.cursor, limit: 100 });
+    expect(changeKeys(week.pages)).toEqual([`weekTemplate:${a.id}`]);
+    expect(dataOf(week.pages, 'weekTemplate')).toEqual([saved.json()]);
+
+    // A rule before any profile: the profile row it creates carries it.
+    const added = await api(a.other, 'POST', '/outfit-rules', {
+      kind: 'never',
+      a: { color: 'red' },
+      b: { category: 'footwear' },
+    });
+    expect(added.statusCode, added.body).toBe(201);
+    const ruleId = added.json<{ id: number }>().id;
+    const rule = await syncAll(a.device, { cursor: week.cursor, limit: 100 });
+    expect(changeKeys(rule.pages)).toEqual([`styleProfile:${a.id}`]);
+    expect(dataOf(rule.pages, 'styleProfile')).toEqual([
+      {
+        styles: [],
+        palette: [],
+        rules: [
+          {
+            id: ruleId,
+            kind: 'never',
+            a: { color: 'red' },
+            b: { category: 'footwear' },
+          },
+        ],
+      },
+    ]);
+
+    expect(
+      (await api(a.other, 'DELETE', `/outfit-rules/${ruleId}`)).statusCode,
+    ).toBe(204);
+    expect(
+      (await api(a.other, 'PUT', '/week-template', { days: [] })).statusCode,
+    ).toBe(200);
+    const cleared = await syncAll(a.device, {
+      cursor: rule.cursor,
+      limit: 100,
+    });
+    // Two transactions, two revisions; neither is a deletion.
+    expect(changeKeys(cleared.pages)).toEqual([
+      `styleProfile:${a.id}`,
+      `weekTemplate:${a.id}`,
+    ]);
+    expect(deletionKeys(cleared.pages)).toEqual([]);
+    expect(dataOf(cleared.pages, 'styleProfile')[0].rules).toEqual([]);
+    expect(dataOf(cleared.pages, 'weekTemplate')).toEqual([emptyWeek]);
   });
 });
 
@@ -731,7 +805,10 @@ describe('the cursor', () => {
     );
 
     const fresh = await syncAll(b.device, { limit: 100 });
-    expect(changeKeys(fresh.pages)).toEqual([`garment:${own}`]);
+    expect(changeKeys(fresh.pages)).toEqual([
+      templateOf(b.id),
+      `garment:${own}`,
+    ]);
     expect(fresh.pages[0].snapshot).toEqual({ wardrobes: [b.id] });
     // a's own cursor still reads.
     expect(await changes(a.device, { cursor: cursorOfA })).toMatchObject({
@@ -781,7 +858,10 @@ describe('the cursor', () => {
     // the floor (the client held none of their rows), and pages on past
     // revisions below the floor without expiring.
     const fresh = await syncAll(a.device, { limit: 1 });
-    expect(changeKeys(fresh.pages)).toEqual(kept.map((id) => `garment:${id}`));
+    expect(changeKeys(fresh.pages)).toEqual([
+      templateOf(a.id),
+      ...kept.map((id) => `garment:${id}`),
+    ]);
     expect(deletionKeys(fresh.pages)).toEqual([]);
 
     await newGarment(a.device, 'After');
@@ -831,7 +911,10 @@ describe('the cursor', () => {
       );
     }
     const fresh = await syncAll(a.device, { limit: 100 });
-    expect(changeKeys(fresh.pages)).toEqual([`garment:${kept}`]);
+    expect(changeKeys(fresh.pages)).toEqual([
+      templateOf(a.id),
+      `garment:${kept}`,
+    ]);
     expect(fresh.pages[0].snapshot).toEqual({ wardrobes: [a.id] });
     expect(cursorFields(fresh.cursor).e).toBe(epoch);
     expect(await changes(a.device, { cursor: fresh.cursor })).toMatchObject({
@@ -906,7 +989,10 @@ describe('a full sync', () => {
     for (const page of full.pages) {
       expect(page.snapshot).toEqual({ wardrobes: [a.id] });
     }
-    expect(changeKeys(full.pages)).toEqual(kept.map((id) => `garment:${id}`));
+    expect(changeKeys(full.pages)).toEqual([
+      templateOf(a.id),
+      ...kept.map((id) => `garment:${id}`),
+    ]);
     expect(deletionKeys(full.pages)).toEqual([]);
 
     // Its end cursor is an incremental sync's: never marked.
@@ -966,12 +1052,14 @@ describe("a grantee's feed", () => {
     const all = synced.pages.flatMap((page) => page.changes);
     // Their own first, then the shared wardrobe by revision: the repair
     // touched the garment after the capsule's members.
+    // The owner's template is theirs alone.
     expect(all.map((c) => [c.ownerId, keyOf(c)])).toEqual([
+      [grantee.id, templateOf(grantee.id)],
       [grantee.id, `garment:${own}`],
       [owner.id, `capsule:${capsuleId}`],
       [owner.id, `garment:${shared}`],
     ]);
-    const sharedGarment = all[2].data;
+    const sharedGarment = all[3].data;
     expect(sharedGarment).toMatchObject({ id: shared, name: 'Shared' });
     expect(sharedGarment).not.toHaveProperty('care');
     expect(sharedGarment).not.toHaveProperty('repairs');

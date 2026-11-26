@@ -1,5 +1,6 @@
+import { cardClass } from '../card';
 import { REPAIR_KINDS } from '../../wardrobe/care';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { dateParts } from '../../calendar-date';
 import { shortDayLabel } from '../date-labels';
 import { t } from '../i18n';
@@ -9,6 +10,7 @@ import { valueLabel } from './labels';
 import type { RepairEntry, RepairLog, RepairPanel } from './repairs';
 import { garmentUrl } from './urls';
 import { CARE_NOTE_MAX, PRICE_INPUT_MAX } from './garment-input';
+import { FIELD_GRID } from '../layout/columns';
 
 /**
  * The repair and alteration log's views (#23): the garment page's section
@@ -93,7 +95,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
   return (
     <section
       id={REPAIRS_ANCHOR}
-      class="flex flex-col gap-4 mt-8 scroll-mt-20"
+      class="flex flex-col gap-4 mt-8 scroll-mt-under-bar"
       aria-labelledby="garment-repairs-editor-title"
     >
       <div>
@@ -119,10 +121,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
           ))}
         </ul>
       )}
-      <PostForm
-        action={action}
-        class="card bg-base-200 p-4 flex flex-col gap-3"
-      >
+      <PostForm action={action} class={cardClass('inset', 'p-4 gap-3')}>
         <h3 class="font-medium">{t('care.REPAIR_ADD_TITLE')}</h3>
         <div role="group" aria-label={t('care.REPAIR_KIND')} class="flex gap-2">
           {REPAIR_KINDS.map((kind) => (
@@ -152,7 +151,7 @@ export function RepairEditor({ panel }: { panel: RepairPanel }) {
             placeholder={t('care.REPAIR_NOTE_PLACEHOLDER')}
           />
         </FormField>
-        <div class="grid grid-cols-2 gap-3">
+        <div class={FIELD_GRID}>
           <FormField
             id="repair-day"
             label={t('care.REPAIR_DAY')}

@@ -1,10 +1,11 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   link,
   mkdir,
   mkdtemp,
   readdir,
   readFile,
+  rename,
   rm,
   unlink,
   utimes,
@@ -225,6 +226,7 @@ describe('photo storage on disk', () => {
       readText: (file) => readFile(file, 'utf8'),
       writeNew: (file, content) => writeFile(file, content, { flag: 'wx' }),
       link: (from, to) => link(from, to),
+      rename: (from, to) => rename(from, to),
       remove: (file) => rm(file, { force: true }),
     };
     const errno = (code: string) =>
@@ -309,6 +311,53 @@ describe('photo storage on disk', () => {
       ).toEqual(secondMarker);
       // Neither temp file is left behind.
       expect(await incoming()).toEqual([]);
+    });
+
+    // #1049: two healers of one orphan. The second read the orphan, then is
+    // held before its rename while the first moves it aside and links a new
+    // marker: the second must take that one, see it is not the orphan, and
+    // put it back.
+    it('two withdrawers of one marker never remove the marker linked between them', async () => {
+      const markerPath = join(directory, STORAGE_MARKER);
+      const orphan = { installId: randomUUID(), createdAt: 'then' };
+      await writeFile(markerPath, JSON.stringify(orphan));
+      let release!: () => void;
+      const renameAllowed = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let held = false;
+      const second = new PhotoStorage(directory, captureLogs().logger, {
+        ...nodeFs,
+        rename: async (from, to) => {
+          if (!held) {
+            held = true;
+            await renameAllowed;
+          }
+          return nodeFs.rename(from, to);
+        },
+      });
+      const first = new PhotoStorage(directory, captureLogs().logger, nodeFs);
+
+      expect(await second.readMarker()).toEqual({
+        state: 'present',
+        marker: orphan,
+      });
+      const secondWithdrew = second.withdrawMarker(orphan);
+      expect(await first.withdrawMarker(orphan)).toBe(true);
+      const created = await first.createMarker();
+      release();
+      expect(await secondWithdrew).toBe(false);
+
+      expect(await first.readMarker()).toEqual(created);
+      expect((await first.orphanedMarkers()).map((o) => o.marker)).toEqual([
+        orphan,
+      ]);
+      // The marker and the one orphan: the second's take was put back.
+      expect(
+        (await readdir(directory)).filter((name) =>
+          name.startsWith(STORAGE_MARKER),
+        ),
+      ).toHaveLength(2);
     });
 
     // #649: restoring from the trash is whole or nothing.

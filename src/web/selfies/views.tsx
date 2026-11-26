@@ -1,14 +1,11 @@
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import type { IsoDate } from '../../calendar-date';
 import { dayLabel } from '../date-labels';
 import { selfieUrl } from '../files/image-url';
 import { t } from '../i18n';
-import {
-  CameraIcon,
-  PhotoLibraryIcon,
-  PREPARE_AND_SUBMIT_PHOTO,
-  SheetBackdrop,
-} from '../layout/parts';
+import { CameraIcon, PhotoLibraryIcon } from '../layout/parts';
+import { photoPick } from '../page-contract';
+import { Sheet, sheetOpener } from '../layout/sheet';
 import type { SelfieRef } from './queries';
 
 /**
@@ -56,7 +53,7 @@ function SelfieUpload(props: {
         class={
           props.labelled
             ? 'relative btn btn-sm btn-outline'
-            : 'relative btn btn-ghost btn-xs btn-square'
+            : 'relative btn btn-ghost btn-sm btn-square'
         }
         title={label}
         data-selfie-upload={source}
@@ -70,7 +67,7 @@ function SelfieUpload(props: {
           accept="image/*"
           capture={source === 'camera' ? 'environment' : undefined}
           class="sr-only"
-          onchange={PREPARE_AND_SUBMIT_PHOTO}
+          {...photoPick()}
         />
       </label>
     </PostForm>
@@ -99,8 +96,7 @@ export function SelfieView(props: {
       <button
         type="button"
         class="shrink-0 rounded-box overflow-hidden"
-        data-dialog={dialogId}
-        onclick="document.getElementById(this.dataset.dialog).showModal()"
+        {...sheetOpener(dialogId)}
         aria-label={t('selfie.VIEW', { day: dayLabel(day) })}
         data-selfie={selfie.id}
       >
@@ -114,51 +110,56 @@ export function SelfieView(props: {
           decoding="async"
         />
       </button>
-      <dialog id={dialogId} class="modal">
-        <div class="modal-box p-3 max-w-sm">
-          <img
-            src={selfieUrl(selfie.photo, 'original')}
-            alt={alt}
-            class="w-full rounded-box"
-            loading="lazy"
-            decoding="async"
-          />
-          <p class="text-sm text-muted mt-2 px-1">{dayLabel(day)}</p>
-          <div class="flex flex-wrap items-center gap-2 mt-3">
-            {entryId !== null && (
-              <>
-                <SelfieUpload
-                  entryId={entryId}
-                  returnTo={returnTo}
-                  source="camera"
-                  labelled
-                />
-                <SelfieUpload
-                  entryId={entryId}
-                  returnTo={returnTo}
-                  source="library"
-                  labelled
-                />
-              </>
-            )}
-            <PostForm
-              action={`/selfies/${selfie.id}/delete`}
-              confirm={t('selfie.REMOVE_CONFIRM')}
-            >
-              <input type="hidden" name="returnTo" value={returnTo} />
-              <button type="submit" class="btn btn-sm btn-error btn-outline">
-                {t('selfie.REMOVE')}
-              </button>
-            </PostForm>
-            <form method="dialog" class="ml-auto">
-              <button type="submit" class="btn btn-sm btn-ghost">
-                {t('selfie.CLOSE')}
-              </button>
-            </form>
-          </div>
+      <Sheet
+        id={dialogId}
+        kind="dialog"
+        labelledBy={`${dialogId}-day`}
+        boxClass="p-3 max-w-sm"
+        dismiss="close"
+      >
+        <img
+          src={selfieUrl(selfie.photo, 'original')}
+          alt={alt}
+          class="w-full rounded-box"
+          loading="lazy"
+          decoding="async"
+        />
+        <p id={`${dialogId}-day`} class="text-sm text-muted mt-2 px-1">
+          {dayLabel(day)}
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mt-3">
+          {entryId !== null && (
+            <>
+              <SelfieUpload
+                entryId={entryId}
+                returnTo={returnTo}
+                source="camera"
+                labelled
+              />
+              <SelfieUpload
+                entryId={entryId}
+                returnTo={returnTo}
+                source="library"
+                labelled
+              />
+            </>
+          )}
+          <PostForm
+            action={`/selfies/${selfie.id}/delete`}
+            confirm={t('selfie.REMOVE_CONFIRM')}
+          >
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <button type="submit" class="btn btn-sm btn-error btn-outline">
+              {t('selfie.REMOVE')}
+            </button>
+          </PostForm>
+          <form method="dialog" class="ml-auto">
+            <button type="submit" class="btn btn-sm btn-ghost">
+              {t('selfie.CLOSE')}
+            </button>
+          </form>
         </div>
-        <SheetBackdrop label={t('selfie.CLOSE')} />
-      </dialog>
+      </Sheet>
     </>
   );
 }
@@ -192,7 +193,9 @@ export function EntrySelfie(props: {
   }
   if (!props.canTake) return null;
   return (
-    <div class="flex items-center gap-0.5" data-selfie-take={entryId}>
+    // btn-sm squares 2.5 apart: each one's hit area reaches 4.4 px past it
+    // on a phone, so a closer pair's areas meet (#1210).
+    <div class="flex items-center gap-2.5" data-selfie-take={entryId}>
       <SelfieUpload entryId={entryId} returnTo={returnTo} source="camera" />
       <SelfieUpload entryId={entryId} returnTo={returnTo} source="library" />
     </div>

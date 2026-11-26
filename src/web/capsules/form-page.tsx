@@ -66,8 +66,8 @@ export function CapsuleFormPage(props: {
       <FormField id="capsule-notes" label={t('NOTES')}>
         <textarea
           id="capsule-notes"
-          name="notes"
           class="textarea textarea-bordered w-full"
+          name="notes"
           rows={3}
           maxlength={CAPSULE_NOTES_MAX}
           placeholder={t('CAPSULE_NOTES_PLACEHOLDER')}

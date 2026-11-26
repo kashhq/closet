@@ -1,11 +1,10 @@
 import { t } from './i18n';
-import { AppBar } from './layout/app-bar';
-import { Dock, sectionLabel } from './layout/dock';
-import { Layout } from './layout/layout';
-import { PageMain } from './layout/page-main';
+import { sectionLabel } from './layout/dock';
+import { PageShell } from './layout/page-shell';
 import { EmptyState } from './layout/parts';
 import { SECTION_HOME, sectionOf } from './layout/sections';
 import type { ViewContext } from './view-context';
+import { historyBack } from './page-contract';
 
 export type ErrorClass =
   | 'missing'
@@ -29,7 +28,7 @@ export function classOf(status: number): ErrorClass {
 
 /**
  * The error page (#644): a sentence, then the way on. Back goes back in
- * history like the app bar's arrow (`data-history-back`, public/js/back.js;
+ * history like the app bar's arrow (`data-history-back`, views/assets/page/back.ts;
  * its href is the cold-entry fallback), and the section's home link is the
  * way in when there is nothing to go back to. "Try again" is the request's
  * own GET URL (`retryHref`, chosen by the error handler: absent for a write
@@ -57,31 +56,31 @@ export function ErrorPage(props: {
           }),
         };
   return (
-    <Layout ctx={props.ctx}>
-      <AppBar ctx={props.ctx} title={t(`errorPage.title.${kind}`)} />
-      <PageMain class="pb-20">
-        <EmptyState message={props.message}>
-          <div class="flex flex-wrap justify-center gap-2">
-            {props.retryHref !== undefined && kind === 'retry' && (
-              <a href={props.retryHref} class="btn btn-primary">
-                {t('errorPage.TRY_AGAIN')}
-              </a>
-            )}
-            <a href={home.href} class="btn btn-ghost" data-history-back="">
-              {t('BACK')}
+    <PageShell
+      ctx={props.ctx}
+      name="error"
+      bar={{ title: t(`errorPage.title.${kind}`) }}
+    >
+      <EmptyState message={props.message}>
+        <div class="flex flex-wrap justify-center gap-2">
+          {props.retryHref !== undefined && kind === 'retry' && (
+            <a href={props.retryHref} class="btn btn-primary">
+              {t('errorPage.TRY_AGAIN')}
             </a>
-            <a href={home.href} class="btn btn-outline">
-              {home.label}
-            </a>
-          </div>
-          {props.status >= 500 && (
-            <p class="text-xs text-muted select-all">
-              {t('REQUEST_ID')}: {props.requestId}
-            </p>
           )}
-        </EmptyState>
-      </PageMain>
-      <Dock ctx={props.ctx} />
-    </Layout>
+          <a href={home.href} class="btn btn-ghost" {...historyBack()}>
+            {t('BACK')}
+          </a>
+          <a href={home.href} class="btn btn-outline">
+            {home.label}
+          </a>
+        </div>
+        {props.status >= 500 && (
+          <p class="text-xs text-muted select-all">
+            {t('REQUEST_ID')}: {props.requestId}
+          </p>
+        )}
+      </EmptyState>
+    </PageShell>
   );
 }

@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { captureLogs } from '../../../../test/support/log-capture';
 import { HttpError } from '../../errors';
+import type { Translated } from '../../i18n';
 import { MAX_INPUT_PIXELS } from '../../files/photos';
 import {
   type FetchedResource,
@@ -66,7 +67,7 @@ function shop(candidates: readonly Candidate[], fetchDelays: number[] = []) {
       async inputPixels(source) {
         const candidate = candidates[await indexOfSource(source.stream)];
         if (typeof candidate === 'number') return candidate;
-        throw new HttpError(400, 'Unreadable image');
+        throw new HttpError(400, 'Unreadable image' as Translated);
       },
       async preview(source) {
         const index = await indexOfSource(source.stream);

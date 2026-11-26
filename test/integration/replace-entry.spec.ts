@@ -234,9 +234,18 @@ describe('changing a planned outfit in place', () => {
       ]);
       // The outfit it held was the person's: it stays in their list.
       expect(await outfitExists(first)).toBe(true);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${entryId} (${day} evening) changed by user ${t.owner.id}: outfit ${first} -> outfit ${second}`,
-      );
+      expect(t.logs.ops('calendar.entry.changed').at(-1)).toMatchObject({
+        userId: t.owner.id,
+        surface: 'page',
+        entryId,
+        day,
+        occasion: 'evening',
+        previousOutfitId: first,
+        outfitId: second,
+        changed: true,
+        outfitCreated: false,
+        plannerOutfitsRemoved: 0,
+      });
     });
 
     it('refuses the outfit already on the day, naming its occasion, and changes nothing', async () => {
@@ -372,9 +381,12 @@ describe('changing a planned outfit in place', () => {
       );
       expect(await entriesFor(day, 'all-day')).toEqual([changed]);
       expect(await t.db.$count(outfit)).toBe(2);
-      expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `Calendar entry ${entryId} (${day} all-day) already holds outfit ${changed.outfitId} for user ${t.owner.id}; nothing changed`,
-      );
+      expect(t.logs.ops('calendar.entry.changed').at(-1)).toMatchObject({
+        entryId,
+        outfitId: changed.outfitId,
+        changed: false,
+        adopted: false,
+      });
     });
 
     it('two replaces at the same moment change the entry once', async () => {
@@ -383,12 +395,12 @@ describe('changing a planned outfit in place', () => {
       const entryId = await plan(planned, day, 'evening');
       const idea = [tops[1], bottoms[1], shoes[0]];
       const target = { entryId, day, occasion: 'evening' as const };
-      const owner = { userId: t.owner.id };
+      const owner = { userId: t.owner.id, surface: 'page' as const };
       const [first, second] = await interleave(
         t.db,
         (tx) =>
           replaceEntryOutfit(
-            tx,
+            { db: tx, logger: t.logger },
             owner,
             target,
             {
@@ -399,7 +411,7 @@ describe('changing a planned outfit in place', () => {
           ),
         () =>
           replaceEntryOutfit(
-            t.db,
+            { db: t.db, logger: t.logger },
             owner,
             target,
             {
@@ -507,6 +519,51 @@ describe('changing a planned outfit in place', () => {
         },
       ]);
       expect(await outfitExists(auto.outfitId)).toBe(false);
+    });
+
+    // #883: the flag describes the outfit the entry holds, so a later remove
+    // prunes only an outfit this entry made.
+    it('sets the entry’s created flag for the outfit it now holds, and keeps it when the same outfit is chosen again', async () => {
+      const day = addDays(t.today(), 1);
+      const createdFlag = async (entryId: number) =>
+        (
+          await t.db
+            .select({ outfitCreated: outfitCalendar.outfitCreated })
+            .from(outfitCalendar)
+            .where(eq(outfitCalendar.id, entryId))
+        )[0].outfitCreated;
+      const taken = await planAuto(
+        [tops[0], bottoms[0], shoes[0]],
+        day,
+        'work',
+      );
+      expect(await createdFlag(taken.entryId)).toBe(true);
+      // The person chooses the planner's outfit again: taken over, nothing else.
+      expect(
+        (
+          await post('/calendar', {
+            date: day,
+            outfitId: String(taken.outfitId),
+            occasion: 'work',
+            replace: String(taken.entryId),
+          })
+        ).statusCode,
+      ).toBe(302);
+      expect(await entriesFor(day, 'work')).toMatchObject([
+        { id: taken.entryId, outfitId: taken.outfitId, plannedBy: 'user' },
+      ]);
+      expect(await createdFlag(taken.entryId)).toBe(true);
+
+      // A saved outfit in its place was not made by the entry.
+      const saved = await outfitOf([tops[1], bottoms[1], shoes[1]]);
+      const replaced = await post('/calendar', {
+        date: day,
+        outfitId: String(saved),
+        occasion: 'work',
+        replace: String(taken.entryId),
+      });
+      expect(replaced.statusCode).toBe(302);
+      expect(await createdFlag(taken.entryId)).toBe(false);
     });
 
     it('keeps a planner-made outfit another entry still holds, and one the person took over', async () => {

@@ -1,17 +1,39 @@
 // @ts-check
-import eslint from '@eslint/js';
+import js from '@eslint/js';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import globals from 'globals';
+import knownGlobals from 'globals';
 import sonarjs from 'eslint-plugin-sonarjs';
-import tseslint from 'typescript-eslint';
+import typescriptEslint from 'typescript-eslint';
 import base, {
   sonarjsRules,
   sonarjsTestRules,
 } from './devkit/lint/eslint.base.mjs';
+import forgedCopy from './scripts/lint/forged-copy.mjs';
+import hiddenControl from './scripts/lint/hidden-control.mjs';
+import webImports from './scripts/lint/web-imports.mjs';
+
+// One plugin object for every block: flat config refuses a name bound twice.
+const closet = {
+  rules: {
+    ...webImports.rules,
+    ...forgedCopy.rules,
+    ...hiddenControl.rules,
+  },
+};
 
 // esquery regexes (no `/` inside) for the theme rule in no-restricted-syntax.
 const PALETTE_CLASS =
   '/\\b(?:(?:bg|text|border|ring|outline|fill|stroke|from|via|to|divide|decoration|accent|caret|placeholder|shadow)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\\d{2,3}|(?:bg|text|border|fill|stroke)-(?:white|black))\\b/';
+// A shadow class on anything but a floating layer: a dropdown, a toast (an
+// alert) or a sheet (modal-box). The theme is flat (#727); a card is `Card`.
+// The lookahead lets a string naming one of those through. A class token is
+// `shadow` bare or `shadow-*`, with an optional `inset-`, `text-` or `drop-`
+// (a drop shadow is a shadow too), any variant prefix (`hover:`) and
+// Tailwind's important marker, leading (`!shadow-md`) or trailing (`shadow-md!`).
+const SHADOW_CLASS =
+  '/^(?![^]*(?:dropdown-content|\\balert\\b|modal-box))[^]*(?:^|[\\s:])!?(?:(?:inset|text|drop)-)?shadow(?:-\\S+)?!?(?=\\s|$)/';
+const FLAT_THEME =
+  'The theme is flat (views/assets/AGENTS.md, Cards): no shadow outside a dropdown, a toast or a sheet. A card is src/web/card.tsx (#727).';
 const RETIRED_CHIP_CLASS = '/\\bchip-\\d\\b/';
 const INLINE_COLOUR =
   '/#[0-9a-fA-F]{3,8}\\b|\\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color-mix)\\(/';
@@ -22,6 +44,116 @@ const THEME_TOKENS_ONLY =
 const FAINT_TEXT_CLASS = '/\\btext-base-content\\x2F(?:\\d|[1-6]\\d)\\b/';
 const MUTED_TEXT =
   'Muted text is text-muted (WCAG AA on every base in both themes); a decorative graphic that carries no information is text-faint (views/assets/main.css, #88).';
+
+// A grid's or a CSS columns' count as a class token, bare or behind a variant
+// (`lg:grid-cols-[...]`, `xl:columns-3`).
+const COLUMN_CLASS = '/(?:^|[\\s:])(?:grid-cols|columns)-/';
+const NAMED_COLUMNS =
+  "A grid's columns are named once in src/web/layout/columns.ts (#1064): use its step, or add a named one there.";
+
+// The CSP allows no inline script (#672, src/web/security/csp.ts), so the
+// views (src/web, specs aside: a fake IndexedDB request has an `onerror`,
+// and jsx.spec renders a <script> to prove the escaping) write no `on*`
+// attribute (written, or a key of the props spread onto an element; an
+// explicit list, since `once` and `online` are keys too) and no <script>
+// without `src`, data included: htmx drops every <script> a swap brings
+// (`allowScriptTags: false`), so a JSON island in a page body vanishes on a
+// boosted navigation. Only the layout writes one, in <head> (the importmap,
+// which guards.conf `@importmap` keeps there, and a public page's
+// schema.org data). A behaviour is a data-* action
+// (views/assets/page/actions.ts) or a page module (`data-page-module`,
+// page-mount.ts), and data an attribute. expectFullPage checks the rendered
+// pages too.
+const DOM_HANDLER =
+  '/^on(click|dblclick|auxclick|contextmenu|change|input|beforeinput|invalid|submit|reset|close|cancel|toggle|load|error|abort|focus|blur|focusin|focusout|key(down|up|press)|pointer[a-z]+|mouse[a-z]+|touch[a-z]+|drag[a-z]*|drop|scroll|scrollend|wheel|select|copy|cut|paste|animation[a-z]+|transition[a-z]+)$/';
+const NO_INLINE_SCRIPT =
+  'The CSP allows no inline script (#672): use a data-* action (views/assets/page/actions.ts) or data-page-module (page-mount.ts).';
+
+const INLINE_HANDLER = [
+  {
+    selector: 'JSXAttribute[name.name=/^on[a-z]/]',
+    message: NO_INLINE_SCRIPT,
+  },
+  {
+    selector: `Property[key.name=${DOM_HANDLER}]`,
+    message: NO_INLINE_SCRIPT,
+  },
+  {
+    selector: `Property[key.value=${DOM_HANDLER}]`,
+    message: NO_INLINE_SCRIPT,
+  },
+];
+const INLINE_SCRIPT = [
+  ...INLINE_HANDLER,
+  {
+    selector:
+      "JSXOpeningElement[name.name='script']:not(:has(JSXAttribute[name.name='src']))",
+    message:
+      "No <script> without src outside the layout's <head> (#672): htmx drops every <script> a swap brings, data included. Pass data as a data-* attribute.",
+  },
+];
+
+// no-restricted-syntax entries every file obeys.
+const RESTRICTED_SYNTAX = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(slice|substring|substr|split)$/][callee.object.callee.property.name='toISOString']",
+    message:
+      "A UTC date is not the household's day: use todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).",
+  },
+  {
+    selector: "CallExpression[callee.property.name='toLocaleDateString']",
+    message:
+      'A day from an instant comes from todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).',
+  },
+  // Colour comes from the two daisyUI themes in views/assets/main.css
+  // (#81): semantic tokens only (bg-base-200, text-error), so both
+  // schemes and every contrast figure hold. A Tailwind palette class
+  // or a colour in a style attribute is the same in light and dark.
+  // The retired calendar chips (chip-0..5) cycled hues per entry.
+  ...[PALETTE_CLASS, RETIRED_CHIP_CLASS].flatMap((pattern) => [
+    {
+      selector: `Literal[value=${pattern}]`,
+      message: THEME_TOKENS_ONLY,
+    },
+    {
+      selector: `TemplateElement[value.raw=${pattern}]`,
+      message: THEME_TOKENS_ONLY,
+    },
+  ]),
+  {
+    selector: `Literal[value=${SHADOW_CLASS}]`,
+    message: FLAT_THEME,
+  },
+  {
+    selector: `TemplateElement[value.raw=${SHADOW_CLASS}]`,
+    message: FLAT_THEME,
+  },
+  // Below /70 the base content fails AA on some base (#88): muted
+  // text is the one text-muted tone, faint the decorative graphics.
+  {
+    selector: `Literal[value=${FAINT_TEXT_CLASS}]`,
+    message: MUTED_TEXT,
+  },
+  {
+    selector: `TemplateElement[value.raw=${FAINT_TEXT_CLASS}]`,
+    message: MUTED_TEXT,
+  },
+  {
+    selector: `JSXAttribute[name.name='style'] Literal[value=${INLINE_COLOUR}]`,
+    message: THEME_TOKENS_ONLY,
+  },
+  {
+    selector: `JSXAttribute[name.name='style'] TemplateElement[value.raw=${INLINE_COLOUR}]`,
+    message: THEME_TOKENS_ONLY,
+  },
+];
+
+// Every file but columns.ts, which is where the counts live. Specs are
+// exempt, like the HttpError copy rule.
+const COLUMN_STEPS = ['Literal[value', 'TemplateElement[value.raw'].map(
+  (node) => ({ selector: `${node}=${COLUMN_CLASS}]`, message: NAMED_COLUMNS }),
+);
 
 const HONO_RAW_HTML_PATHS = [
   {
@@ -51,30 +183,31 @@ const NODE_BUILTINS = [
 const NO_IO =
   'The pure layers do no I/O and read no clock, environment or crypto: the caller passes it in (docs/web-layer.md).';
 
-export default tseslint.config(
+export default typescriptEslint.config(
   {
     // The cutout-children are stand-in model processes (plain .mjs, outside
     // the TypeScript project): lint:check never covered them, and devkit's
     // changed-lint failed to parse one whenever it changed.
     ignores: [
       'eslint.config.mjs',
-      './test/support/legacy-migrations/**/*',
+      'scripts/lint/web-imports.mjs',
+      'scripts/lint/forged-copy.mjs',
+      'scripts/lint/hidden-control.mjs',
       './test/fixtures/cutout-children/*.mjs',
     ],
   },
   // devkit's base first (devkit/lint/README.md): no-console, no-eval, no-implied-eval and the
   // innerHTML / outerHTML / insertAdjacentHTML sinks. Later layers relax it per glob.
   ...base,
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+  js.configs.recommended,
+  ...typescriptEslint.configs.recommendedTypeChecked,
   // Turns off the stylistic rules prettier owns; prettier itself runs as format:check (Makefile ci-lint).
   eslintConfigPrettier,
   {
+    // The type-aware rules find each file's tsconfig through the project service.
     languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-      sourceType: 'commonjs',
+      globals: knownGlobals.node,
+      sourceType: 'commonjs', // what tsc emits for the server (tsconfig.json)
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
@@ -85,15 +218,9 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      // My custom rules
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      'no-unsafe-optional-chaining': 'off',
-      complexity: ['warn', { max: 10 }],
-      'max-depth': ['warn', { max: 3 }],
+      // Warnings, not errors: the metrics report counts them (make ci-metrics).
+      complexity: ['warn', 10],
+      'max-depth': ['warn', 3],
       // One assertion style: `<T>value` does not parse in .tsx files, so
       // `as` everywhere.
       '@typescript-eslint/consistent-type-assertions': [
@@ -104,53 +231,7 @@ export default tseslint.config(
       // APP_TIMEZONE (src/calendar-date.ts; t.today() in the
       // integration specs, householdToday() in Playwright's). A UTC date is
       // tomorrow every evening in New York: main went red at 00:01 UTC.
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "CallExpression[callee.property.name=/^(slice|substring|substr|split)$/][callee.object.callee.property.name='toISOString']",
-          message:
-            "A UTC date is not the household's day: use todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).",
-        },
-        {
-          selector: "CallExpression[callee.property.name='toLocaleDateString']",
-          message:
-            'A day from an instant comes from todayIn(APP_TIMEZONE, now) (AGENTS.md, Gotchas).',
-        },
-        // Colour comes from the two daisyUI themes in views/assets/main.css
-        // (#81): semantic tokens only (bg-base-200, text-error), so both
-        // schemes and every contrast figure hold. A Tailwind palette class
-        // or a colour in a style attribute is the same in light and dark.
-        // The retired calendar chips (chip-0..5) cycled hues per entry.
-        ...[PALETTE_CLASS, RETIRED_CHIP_CLASS].flatMap((pattern) => [
-          {
-            selector: `Literal[value=${pattern}]`,
-            message: THEME_TOKENS_ONLY,
-          },
-          {
-            selector: `TemplateElement[value.raw=${pattern}]`,
-            message: THEME_TOKENS_ONLY,
-          },
-        ]),
-        // Below /70 the base content fails AA on some base (#88): muted
-        // text is the one text-muted tone, faint the decorative graphics.
-        {
-          selector: `Literal[value=${FAINT_TEXT_CLASS}]`,
-          message: MUTED_TEXT,
-        },
-        {
-          selector: `TemplateElement[value.raw=${FAINT_TEXT_CLASS}]`,
-          message: MUTED_TEXT,
-        },
-        {
-          selector: `JSXAttribute[name.name='style'] Literal[value=${INLINE_COLOUR}]`,
-          message: THEME_TOKENS_ONLY,
-        },
-        {
-          selector: `JSXAttribute[name.name='style'] TemplateElement[value.raw=${INLINE_COLOUR}]`,
-          message: THEME_TOKENS_ONLY,
-        },
-      ],
+      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...COLUMN_STEPS],
       // hono/jsx escapes every text child and attribute value. The one way to
       // emit markup as-is is `dangerouslySetInnerHTML` (greppable, reviewed
       // per use; see AGENTS.md, Web layer). hono's `raw()` would be a second,
@@ -160,6 +241,31 @@ export default tseslint.config(
         {
           paths: HONO_RAW_HTML_PATHS,
         },
+      ],
+    },
+  },
+  {
+    files: ['src/web/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...RESTRICTED_SYNTAX,
+        ...COLUMN_STEPS,
+        ...INLINE_SCRIPT,
+      ],
+    },
+  },
+  {
+    // The layout writes the <head>, the one place a <script> without src
+    // may sit (the importmap, a public page's schema.org data).
+    files: ['src/web/layout/layout.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...RESTRICTED_SYNTAX,
+        ...COLUMN_STEPS,
+        ...INLINE_HANDLER,
       ],
     },
   },
@@ -207,12 +313,66 @@ export default tseslint.config(
       ],
     },
   },
+  // The web layer's import direction (#718, docs/web-layer.md, Code no feature owns): no
+  // intra-web layers, but a feature never draws another feature's page or routes module, and the
+  // API and agent surfaces never import a view. Resolved on disk by scripts/lint/web-imports.mjs
+  // (direct imports only). Specs build fixtures and are exempt.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
+    plugins: { closet },
+    rules: { 'closet/no-foreign-page-import': 'error' },
+  },
+  {
+    files: [
+      'src/web/**/api-routes.ts',
+      'src/web/**/*-resource.ts',
+      'src/web/**/*-api-input.ts',
+      'src/web/api/**/*.ts',
+      'src/web/sync/**/*.ts',
+      'src/web/mcp/**/*.ts',
+    ],
+    ignores: ['**/*.spec.ts'],
+    plugins: { closet },
+    rules: { 'closet/no-view-import': 'error' },
+  },
+  // Copy is made by t(), joinCopy() and tKey() (src/web/i18n.ts) and the status-code fallback in
+  // src/web/errors.tsx: an assertion anywhere else that produces the brand launders English written
+  // in code into an HttpError's message (#734, #1100). Type-aware (scripts/lint/forged-copy.mjs),
+  // so no spelling of the cast slips past. Specs are exempt: they forge arbitrary copy to test the
+  // error handler and the problem documents, and nothing ships or imports a spec, so a forged
+  // value there never reaches a user.
+  {
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}', 'src/web/i18n.ts', 'src/web/errors.tsx'],
+    plugins: { closet },
+    rules: { 'closet/no-forged-copy': 'error' },
+  },
+  // A form control is never `display: none` (#674): scripts/lint/hidden-control.mjs reads every
+  // class a control's JSX can produce, computed ones included (it replaced guards.conf's
+  // @hidden-control grep, which a conditional `class={...}` slipped past, #1067). The two controls
+  // hidden by design say why at the site.
+  {
+    files: ['src/web/**/*.tsx'],
+    plugins: { closet },
+    rules: { 'closet/no-hidden-control': 'error' },
+  },
   // devkit's sonarjs rule maps (devkit/lint/README.md "sonarjs"). The plugin must be registered
   // in the same files scope as its rules, so it is registered here for every linted file.
   {
     files: ['**/*.{ts,tsx}'],
     plugins: { sonarjs },
     rules: sonarjsRules,
+  },
+  {
+    files: ['**/*.spec.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX] },
+  },
+  {
+    files: ['src/web/layout/columns.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...INLINE_SCRIPT],
+    },
   },
   // Repeated literals in specs (titles, fixture ids, expected text) are the readable form.
   {
@@ -237,6 +397,14 @@ export default tseslint.config(
     // sinks are carried over before the vi bans.
     files: ['test/integration/**/*.{ts,tsx}'],
     rules: {
+      // Off here only (#710): response bodies are parsed JSON asserted by
+      // value; a typed JSON helper for them is what would turn these on.
+      ...Object.fromEntries(
+        ['assignment', 'member-access', 'return', 'call'].map((use) => [
+          `@typescript-eslint/no-unsafe-${use}`,
+          'off',
+        ]),
+      ),
       'no-restricted-properties': [
         ...base[0].rules['no-restricted-properties'],
         ...['mock', 'doMock', 'unmock', 'doUnmock', 'resetModules'].map(

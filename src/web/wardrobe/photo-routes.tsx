@@ -12,8 +12,8 @@ import {
   saveEditedGarmentCutout,
   turnGarmentPhoto,
 } from './garment-actions';
-import { shownPhoto } from './cutout-shown';
-import { GarmentPhotoView, pollCount } from './garment-page';
+import { withShownPhoto } from './cutout-shown';
+import { GarmentPhotoView, photoPlace, pollCount } from './garment-photo';
 import { batchEnd } from './draft-redirects';
 import { nextDraft } from './draft-queue';
 import { refuseOtherWardrobesDraft } from './render-form';
@@ -136,14 +136,10 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       return renderFragment(
         reply,
         <GarmentPhotoView
-          garment={{
-            ...garment,
-            photo:
-              garment.photo &&
-              shownPhoto(garment.photo, options.cutouts.enabled),
-          }}
+          garment={withShownPhoto(garment, options.cutouts.enabled)}
           viewOwner={viewOwner}
           canEdit={access.canManage}
+          place={photoPlace(request.query.place)}
           poll={pollCount(request.query.poll)}
           modelUnavailable={options.cutouts.state.name === 'waiting-for-model'}
         />,
@@ -160,18 +156,11 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     { schema: { params: GarmentParams, querystring: OwnerQuery } },
     async (request, reply) => {
       const { id } = request.params;
-      const { viewOwner, outcome } = await retryGarmentCutout(
+      const { viewOwner } = await retryGarmentCutout(
         deps,
         actorOf(request),
         garmentAddress(request),
       );
-      if (outcome.ok) {
-        logger.info(
-          `Garment ${id} cutout requeued by user ${sessionUserId(request)}`,
-        );
-      } else {
-        logger.info(`Garment ${id} cutout retry ignored (${outcome.reason})`);
-      }
       return reply.redirect(garmentUrl(id, viewOwner), 303);
     },
   );
@@ -234,7 +223,7 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
-  // The mask editor's save (public/js/mask-editor.js): the edited cutout
+  // The mask editor's save (views/assets/page/mask-editor.ts): the edited cutout
   // replaces the stored one; the answer is the photo's new URLs (signed:
   // imageUrl), which the page points at. `version` stays for a page whose
   // script predates them (it rewrites `v`, which the signature covers, so
@@ -246,15 +235,11 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       schema: { params: GarmentParams, querystring: OwnerQuery },
     },
     async (request, reply) => {
-      const { id } = request.params;
       const edited = await saveEditedGarmentCutout(
         deps,
         actorOf(request),
         garmentAddress(request),
         () => request.file(),
-      );
-      logger.info(
-        `Garment ${id} cutout replaced, photo version ${edited.version}`,
       );
       return reply.send({
         version: edited.version,

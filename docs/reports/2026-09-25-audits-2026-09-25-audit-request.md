@@ -102,13 +102,9 @@ natural home.
 ### Finding 2 — Ownership/sharing authorization logic duplicated 6× in `WardrobeController`, absent from `OutfitController`/`CalendarController` (M, high impact)
 `wardrobe.controller.ts` repeats this exact shape inline in `create` (150-156),
 `editForm` (240-245), `update` (363-369), `uploadPhoto` (397-403), and
-`updateNobg` (445-451):
-```ts
-if (userId != null && viewOwner != null && viewOwner !== userId) {
-  const canManage = await this.shareService.canManage(userId, viewOwner);
-  if (!canManage) throw new ForbiddenException();
-}
-```
+`updateNobg` (445-451): when a signed-in user acts on another owner's
+wardrobe, ask the share service whether the user may manage it, and refuse
+with a 403 when not.
 plus a second, differently-shaped variant in `show` (202-214) that computes
 `canEdit`/`canDelete`/`canClone` from `getSharePermission`. `GarmentService.findOne`
 (garment.service.ts:97-117) does a *third*, independent version of the same
@@ -163,10 +159,9 @@ prevent a future contributor from either "fixing" it into a breaking change
 or copying the no-guard pattern onto something that does need protection.
 
 ### Finding 5 — `ErrorViewFilter` re-derives context that's already on the reply (S, low impact but wrong precedent)
-`error-view.filter.ts:41-43`:
-```ts
-const context = (response as any).locals || (await this.viewContextService.buildContext(request));
-```
+`error-view.filter.ts:41-43` takes the view context from the reply's
+`locals`, cast through `any`, and builds it again from the request when that
+is missing.
 `response` **is** the `FastifyReply` decorated with `locals` by the root
 preHandler (main.ts:33-36), which always runs before a route handler can
 throw. The fallback branch is dead in every real request path (it would only

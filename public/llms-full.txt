@@ -1,68 +1,76 @@
-# Closet - Full Content
+# Closet, in full
 
-> Private, self-hosted household wardrobe organizer. Catalog garments with photos, build outfits, schedule them on a calendar, and share a wardrobe between users.
+> A household's wardrobe on its own server: photographed garments, the outfits made from them, a calendar of what to wear, and a wardrobe one person can share with another.
 
-## Overview
+## In short
 
-Closet is a self-hosted fork of Libre Closet, licensed under the AGPL-3.0. It is a server-rendered progressive web app intended to be installed on a phone and used by a household. All data stays in a PostgreSQL database on the host that runs it.
+Closet is MIT-licensed, self-hosted software. It is a progressive web app rendered on the server and meant to be installed on a phone and used by the people of one household. Everything it stores lives in its own PostgreSQL database and data directory on the machine that runs it.
 
-## Features
+## What it does
 
-### Garment catalog
-Each garment has a photo, category, brand, size, colors, washing details, acquisition date and notes. Photos have their background removed on upload and are stored as optimized WebP. Categories are customizable and filterable.
+### Garments
+A garment carries a photo, its category and type, brand, size, colours, care, the date it was acquired and notes. The server cuts each uploaded photo out of its background (BiRefNet) and keeps it as WebP; the browser never processes a photo. Custom categories sit beside the built-in ones, and every one is a filter.
 
-### Outfit builder
-Combine garments into saved outfits with a visual builder.
+### Outfits
+Garments are put together into saved outfits, by hand or from ideas drawn from what the wardrobe holds.
 
-### Outfit calendar
-Schedule outfits on a calendar to plan the week and see what has been worn.
+### The calendar
+Outfits are planned onto days, a week or a month at a time, and what was worn is recorded.
 
-### Wardrobe sharing
-Share a wardrobe with another user through an invite link, with view-only or edit permission.
+### Sharing a wardrobe
+An invite link gives another account a view of the wardrobe, or the right to edit it.
 
-### Offline-tolerant PWA
-Installs to the home screen and renders cached reads without a connection. Web Push notifications are supported when VAPID keys are configured.
+### Offline and installed
+Installed on the home screen, it shows what it has cached without a connection and says how fresh it is. With VAPID keys set it sends Web Push notifications.
 
-### Multilingual
-English, Italian, French, Russian, German and Spanish.
+### Wears, washes and trips
+Wears and washes are logged, availability follows from them, and a trip gets its packing list.
 
-## Routes
+### Wishlist and inspiration
+A wishlist holds what to buy next; saved looks can be recreated from the garments already owned.
 
-- /wardrobe - garment catalog (the root path redirects here)
+### Agents
+`/mcp` lets Claude and other agents work with the wardrobe through personal access tokens.
+
+### Language
+English.
+
+## Pages
+
+- / - Today, the home screen
+- /wardrobe - the garments
 - /outfits - saved outfits and the outfit builder
-- /calendar - outfit schedule
-- /about - about and license attribution
-- /auth/login - sign in (always required)
+- /calendar - the planned week and month
+- /about - what Closet is and its licence
+- /auth/login - sign in (every page needs it)
 
-## Self-hosting
+## Running it yourself
 
 ```bash
-docker run -d \
-  -p 3000:3000 \
-  -v closet_data:/app/data \
-  -e ACCESS_TOKEN_SECRET="$(openssl rand -hex 32)" \
-  -e DATABASE_HOST=<postgres host> -e DATABASE_NAME=closet \
-  -e DATABASE_USER=closet -e DATABASE_PASS=<password> \
+docker run --detach --publish 3000:3000 \
+  --volume closet_data:/app/data --env DATA_PATH=/app/data \
+  --env ACCESS_TOKEN_SECRET="$(openssl rand -hex 32)" \
+  --env DATABASE_HOST=<postgres host> --env DATABASE_NAME=closet \
+  --env DATABASE_USER=closet --env DATABASE_PASS=<password> \
   ghcr.io/kashhq/closet:latest
 ```
 
-It needs a PostgreSQL database and a session signing secret of at least 32
-characters. See the README for docker-compose and environment variable options.
+It needs a PostgreSQL database and a session signing secret of 32 characters
+or more. The README has a Compose file and every environment variable.
 
-## Tech Stack
+## Built with
 
-- **License:** AGPL-3.0
-- **Backend:** Fastify (TypeScript), server-rendered JSX (hono/jsx)
-- **Frontend:** htmx + hyperscript, Tailwind + daisyUI (server-rendered, no client framework)
-- **Database:** PostgreSQL (Drizzle ORM)
-- **Images:** client-side background removal (ONNX runtime), sharp for WebP
-- **Offline:** Workbox service worker, Web Push
-- **Storage:** local disk
-- **Auth:** JWT session cookie, login always required
-- **Deploy:** Docker image on GHCR
+- **Licence:** MIT
+- **Server:** TypeScript on Fastify, pages rendered as JSX (hono/jsx)
+- **Pages:** htmx, Tailwind CSS and daisyUI, all rendered on the server with no client framework
+- **Database:** PostgreSQL through Drizzle ORM
+- **Photos:** background removal on the server (BiRefNet under ONNX Runtime, in a child process) and sharp for WebP; no photo is processed in the browser
+- **Offline:** a Workbox service worker; Web Push
+- **Storage:** photo files on local disk
+- **Sign-in:** a JWT in a session cookie; every page needs it
+- **Shipped as:** a Docker image on GHCR
 
-## Links
+## Where to find it
 
-- Repository: https://github.com/kashhq/closet
-- Container: ghcr.io/kashhq/closet
-- Upstream: https://github.com/lazztech/libre-closet
+- Source: https://github.com/kashhq/closet
+- Image: ghcr.io/kashhq/closet

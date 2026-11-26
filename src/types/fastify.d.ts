@@ -4,6 +4,7 @@ import type { TokenAuth } from '../web/auth/personal-tokens';
 import type { AuthContext } from '../web/auth/session';
 import type { ViewContext } from '../web/view-context';
 
+// What the root hooks (app.ts) and the bearer surfaces add to Fastify's own types.
 declare module 'fastify' {
   interface FastifyRequest {
     /** Session resolved once per request by the preValidation hook in app.ts (createSessionResolver, src/web/auth/session.ts). Undefined on static paths and for anonymous requests; requireSession guarantees it on every protected route. Read through sessionUserId(). */

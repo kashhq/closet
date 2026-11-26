@@ -60,7 +60,7 @@ export interface PushSender {
   ): Promise<SendReport[]>;
 }
 
-export interface SendEachOptions {
+interface SendEachOptions {
   /**
    * Called as each message's sends finish, before the batch's last one does:
    * a caller that gives up on the batch (shutdown) knows which messages

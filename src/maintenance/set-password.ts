@@ -6,7 +6,7 @@ import { passwordProblems, setPassword } from '../web/auth/passwords';
 import {
   findUserByEmail,
   normalizeEmail,
-  type PasswordChange,
+  type SessionsEnded,
 } from '../web/auth/queries';
 import { t } from '../web/i18n';
 
@@ -85,7 +85,7 @@ async function setPasswordByEmail(
   db: Db,
   email: string,
   password: string,
-): Promise<PasswordChange> {
+): Promise<SessionsEnded> {
   const problems = passwordProblems(password);
   if (problems.length) {
     throw new SetPasswordRefused(problems.map((key) => t(key)).join('. '));

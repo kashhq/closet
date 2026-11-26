@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import * as z from 'zod';
 import { selectScalars } from '../../../db/select-scalars';
 import { compareOccasions } from '../../../wardrobe/occasions';
@@ -11,12 +12,63 @@ import {
 } from '../../weather/queries';
 import { userWeatherFrom } from '../../weather/service';
 import { markEntryWorn } from '../../calendar/entry-actions';
-import { laundryList, markWashed, setWoreToday } from '../../wears/queries';
+import { laundryList } from '../../wears/queries';
+import { washGarments, wearGarment } from '../../wears/wear-actions';
 import { actorOf, defineTool, wardrobeFor } from '../tool';
 import { isoDate, ownerIdInput, rowId } from './common';
 import { type DayWeatherOf, reachesForecast, weatherOfDays } from './weather';
-import { garmentNotFound } from '../../wardrobe/garment-access';
-import { agentNameOf } from '../../write-origin';
+import { type Projection, project } from '../../api/resource';
+import type { CalendarEntry } from '../../calendar/calendar-view';
+import {
+  CalendarEntryResource,
+  calendarEntryRecord,
+  type CalendarEntryRecord,
+} from '../../calendar/entry-resource';
+import { outfitGarmentForAgent } from './outfits';
+
+/**
+ * A calendar entry as an agent reads it (#711): the API's record
+ * (entry-resource.ts), nulls kept; never the selfie itself, and `agent`
+ * the agent's bare name, as every tool's.
+ */
+export const CALENDAR_ENTRY_FOR_MCP = {
+  id: 'keep',
+  day: 'keep',
+  occasion: 'keep',
+  worn: 'keep',
+  plannedBy: 'keep',
+  agent: 'own',
+  // Answered as `selfie`: whether a mirror photo was taken (#19).
+  selfieId: 'omit',
+  selfiePhoto: 'omit',
+  outfit: 'own',
+} as const satisfies Projection<CalendarEntryRecord>;
+
+export const CALENDAR_ENTRY_OUTFIT_FOR_MCP = {
+  id: 'keep',
+  name: 'keep',
+  garments: 'own',
+} as const satisfies Projection<CalendarEntryRecord['outfit']>;
+
+function entryForAgent(
+  entry: CalendarEntry,
+  weather: ReturnType<DayWeatherOf> | undefined,
+) {
+  const record = calendarEntryRecord(entry);
+  return project(record, CalendarEntryResource, CALENDAR_ENTRY_FOR_MCP, {
+    agent: record.agent?.name ?? null,
+    outfit: project(
+      record.outfit,
+      CalendarEntryResource.properties.outfit,
+      CALENDAR_ENTRY_OUTFIT_FOR_MCP,
+      {
+        garments: record.outfit.garments.map(outfitGarmentForAgent),
+      },
+    ),
+    selfie: record.selfieId !== null,
+    weather,
+  });
+}
 
 /**
  * The calendar and the wears are the caller's own records (src/web/wears):
@@ -28,7 +80,7 @@ export const calendarTools = [
   defineTool({
     name: 'get_calendar',
     title: 'Get my calendar',
-    description: `Your calendar from one day to another (inclusive, at most ${MAX_CALENDAR_DAYS} days): each entry's id, day, occasion (the part of the day: a day can hold several outfits, listed in occasion order), outfit, whether it was worn, whether you took an outfit selfie of it (a mirror photo; the photo itself is never given), and who planned it (plannedBy: user; auto for "Plan my week"'s picks, which its daily re-plan may swap until you edit or wear them; or agent for what an agent planned through these tools, with agent naming its token). Without dates: this week, from today. Days are the household's (its time zone). With weather on and a location set, an entry within the forecast also has the day's weather and what it asks of that occasion's outfit (as get_weather gives it).`,
+    description: `Your calendar from one day to another (inclusive, at most ${MAX_CALENDAR_DAYS} days): each entry's id, day, occasion (the part of the day: a day can hold several outfits, listed in occasion order), outfit (its id, name and garments), whether it was worn, whether you took an outfit selfie of it (a mirror photo; the photo itself is never given), and who planned it (plannedBy: user; auto for "Plan my week"'s picks, which its daily re-plan may swap until you edit or wear them; or agent for what an agent planned through these tools, with agent naming its token). Without dates: this week, from today. Days are the household's (its time zone). With weather on and a location set, an entry within the forecast also has the day's weather and what it asks of that occasion's outfit (as get_weather gives it).`,
     input: z.object({
       from: isoDate().optional().describe('First day, YYYY-MM-DD.'),
       to: isoDate().optional().describe('Last day, YYYY-MM-DD.'),
@@ -43,7 +95,7 @@ export const calendarTools = [
       if (days < 1 || days > MAX_CALENDAR_DAYS) {
         throw new HttpError(
           400,
-          `Ask for 1 to ${MAX_CALENDAR_DAYS} days, from before to`,
+          t('api.DAY_RANGE', { max: MAX_CALENDAR_DAYS }),
         );
       }
       // The entries and, when the range reaches the forecast, the settings
@@ -85,18 +137,9 @@ export const calendarTools = [
               a.day.localeCompare(b.day) ||
               compareOccasions(a.occasion, b.occasion),
           )
-          .map((entry) => ({
-            id: entry.id,
-            day: entry.day,
-            occasion: entry.occasion,
-            worn: entry.worn,
-            // Whether a mirror photo was taken (#19); never the image.
-            selfie: entry.selfie !== null,
-            plannedBy: entry.plannedBy,
-            agent: agentNameOf(entry.agent),
-            outfit: { id: entry.outfit.id, name: entry.outfit.name },
-            weather: weatherOf?.(entry.day, entry.occasion),
-          })),
+          .map((entry) =>
+            entryForAgent(entry, weatherOf?.(entry.day, entry.occasion)),
+          ),
       };
     },
   }),
@@ -147,37 +190,26 @@ export const calendarTools = [
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
       if (entryId !== undefined) {
-        const outcome = await markEntryWorn(ctx.db, actorOf(ctx), {
+        const deps = { db: ctx.db, logger: ctx.webLogger };
+        const outcome = await markEntryWorn(deps, actorOf(ctx), {
           entryId,
           worn: true,
           at: now,
           today,
         });
         if (outcome === 'future') {
-          throw new HttpError(400, 'A day still to come cannot be worn yet');
+          throw new HttpError(400, t('refusal.day.futureNotWorn'));
         }
-        ctx.webLogger.info(
-          `Calendar entry ${entryId} marked worn by user ${ctx.userId} (MCP): ${outcome.wears} wears`,
-        );
         return { entryId, worn: true, garmentsRecorded: outcome.wears };
       }
       // Wears are the owner's own: a shared wardrobe's garment is refused
       // as the garment page's Wore today refuses it.
-      await wardrobeFor(ctx, ownerId, 'own');
-      const saved = await setWoreToday(ctx.db, {
-        garmentId: garmentId!,
-        ownerId: ctx.userId,
-        day: today,
-        worn: true,
+      await wearGarment(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
+        { id: garmentId!, ownerId, unseen: 'wardrobe' },
         // Now is on today: today is its date.
-        wornAt: now,
-      });
-      if (saved === 'not-found') throw garmentNotFound();
-      if (saved === 'wishlist') {
-        throw new HttpError(409, 'On the wishlist: not bought yet');
-      }
-      ctx.webLogger.info(
-        `Garment ${garmentId} worn on ${today} by user ${ctx.userId} (MCP)`,
+        { day: today, worn: true, wornAt: now },
       );
       return { garmentId, day: today };
     },
@@ -198,15 +230,11 @@ export const calendarTools = [
       await wardrobeFor(ctx, ownerId, 'own');
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
-      const washed = await markWashed(
-        ctx.db,
-        ctx.userId,
+      const { washed } = await washGarments(
+        { db: ctx.db, logger: ctx.webLogger },
+        actorOf(ctx),
         garmentIds,
-        today,
-        now,
-      );
-      ctx.webLogger.info(
-        `Laundry by user ${ctx.userId} on ${today} (MCP): ${washed.length} washed of ${garmentIds.length} asked`,
+        { day: today, at: now },
       );
       return { washed: washed.map((row) => row.id), day: today };
     },

@@ -2,6 +2,7 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { garment } from '../../src/db/schema';
+import { GARMENT_COLORS } from '../../src/wardrobe/properties';
 import { variantFileName } from '../../src/web/files/image-variant';
 import { garmentRow, jpegPhoto, uploadPhoto } from './garments';
 import {
@@ -139,6 +140,19 @@ describe('garment edit, clone and archive', () => {
       expect(html).not.toMatch(/name="color" value="red"\s+checked/);
     });
 
+    // color-picker.ts only shows and hides the pills the server rendered.
+    it('renders every colour pill, shown only for the ticked colours', async () => {
+      const res = await get(`/wardrobe/${garmentId}/edit`, alice.cookie);
+      const tag = (attribute: string) =>
+        res.body.match(new RegExp(`<span[^>]*${attribute}[^>]*>`))?.[0];
+      for (const color of GARMENT_COLORS) {
+        const pill = tag(`data-color-pill="${color}"`);
+        expect(pill, color).toBeDefined();
+        expect(/\shidden/.test(pill!), color).toBe(!FORM.color.includes(color));
+      }
+      expect(tag('data-color-picker-part="placeholder"')).toMatch(/\shidden/);
+    });
+
     // Not in any wardrobe carol can see: as unknown as a missing id.
     it('does not exist for a user without a share', async () => {
       const res = await get(`/wardrobe/${garmentId}/edit`, carol.cookie);
@@ -259,6 +273,41 @@ describe('garment edit, clone and archive', () => {
         category: 'outer layer',
         acquiredOn: null,
       });
+    });
+
+    // The form shows a built-in category by its label ("Tops") and posts what
+    // it shows; the stored key must survive a save and a suggestion pick (#729).
+    it('keeps a built-in category when the form is posted back unchanged or a suggestion is picked', async () => {
+      const id = await createFullGarment({ category: 'tops' });
+      const form = (await get(`/wardrobe/${id}/edit`, alice.cookie)).body;
+      const shown = /name="category"[^>]*value="([^"]*)"/.exec(form)?.[1];
+      expect(shown).toBeDefined();
+
+      const unchanged = await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: shown },
+        alice.cookie,
+      );
+      expect(unchanged.statusCode).toBe(302);
+      expect((await load(id)).category).toBe('tops');
+
+      const suggestions = [...form.matchAll(/<option value="([^"]*)"/g)].map(
+        (match) => match[1],
+      );
+      const picked = suggestions.find((value) => /^tops$/i.test(value));
+      expect(picked).toBeDefined();
+      await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: 'jacket' },
+        alice.cookie,
+      );
+      const pickedRes = await post(
+        `/wardrobe/${id}`,
+        { ...FORM, category: picked },
+        alice.cookie,
+      );
+      expect(pickedRes.statusCode).toBe(302);
+      expect((await load(id)).category).toBe('tops');
     });
 
     it('refuses a field longer than the form allows with a 400, writing nothing', async () => {

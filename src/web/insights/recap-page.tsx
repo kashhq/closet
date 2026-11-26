@@ -4,17 +4,22 @@ import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { dateParts, type IsoDate } from '../../calendar-date';
 import { dateLabel, shortDayLabel, weekRangeLabel } from '../date-labels';
 import { CALENDAR_PATH } from '../calendar/urls';
-import { jsonForScript } from '../html';
+import { pageModule } from '../page-contract';
 import { t } from '../i18n';
-import { AppBar } from '../layout/app-bar';
-import { Dock } from '../layout/dock';
-import { Layout } from '../layout/layout';
+import { PageShell } from '../layout/page-shell';
 import { EmptyState, GarmentThumb } from '../layout/parts';
 import type { ViewContext } from '../view-context';
 import { priceLabel } from '../wardrobe/garment';
 import { garmentUrl } from '../wardrobe/urls';
-import { Card, GarmentList, garmentName, perWearLine, Strip } from './parts';
+import {
+  InsightCard,
+  GarmentList,
+  garmentName,
+  perWearLine,
+  Strip,
+} from './parts';
 import { recapUrl } from './urls';
+import { STAT_GRID } from '../layout/columns';
 
 export interface RecapPageModel {
   recap: YearRecap<SignablePhotoRef>;
@@ -37,26 +42,20 @@ const IMAGE_MOST_WORN = 3;
 export function RecapPage(props: { ctx: ViewContext; model: RecapPageModel }) {
   const { ctx, model } = props;
   const { recap } = model;
-  const { period } = recap;
   return (
-    <Layout ctx={ctx} title={t('recap.TITLE')}>
-      <AppBar ctx={ctx} title={t('recap.TITLE')} back="/wardrobe" />
-      <main
-        class="p-4 pt-20 pb-24 w-full sm:max-w-lg sm:mx-auto flex flex-col gap-4"
-        id="recap"
-        data-year={period.year}
-        data-from={period.from}
-        data-to={period.to}
-      >
-        <YearNav model={model} />
-        {recap.enough ? (
-          <Figures model={model} appName={ctx.appName} />
-        ) : (
-          <Empty recap={recap} />
-        )}
-      </main>
-      <Dock ctx={ctx} />
-    </Layout>
+    <PageShell
+      ctx={ctx}
+      name="recap"
+      bar={{ title: t('recap.TITLE'), back: '/wardrobe' }}
+      body={{ gap: 4 }}
+    >
+      <YearNav model={model} />
+      {recap.enough ? (
+        <Figures model={model} appName={ctx.appName} />
+      ) : (
+        <Empty recap={recap} />
+      )}
+    </PageShell>
   );
 }
 
@@ -91,7 +90,13 @@ function YearNav({ model }: { model: RecapPageModel }) {
       )}
       <div class="text-center">
         <h2 class="text-xl font-semibold">{yearTitle(recap)}</h2>
-        <p class="text-xs text-muted" id="recap-range">
+        <p
+          class="text-xs text-muted"
+          id="recap-range"
+          data-year={year}
+          data-from={recap.period.from}
+          data-to={recap.period.to}
+        >
           {/* The week's heading formats any span of days: "Jan 1 – Sep 27, 2026". */}
           {weekRangeLabel(recap.period.from, recap.period.to)}
         </p>
@@ -151,16 +156,16 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
   return (
     <>
       <Summary model={model} appName={props.appName} />
-      <Card id="recap-most-worn" title={t('recap.MOST_WORN')}>
+      <InsightCard id="recap-most-worn" title={t('recap.MOST_WORN')}>
         <GarmentList
           rows={recap.mostWorn.map((garment) => ({
             garment,
             detail: yearWears(garment),
           }))}
         />
-      </Card>
+      </InsightCard>
       {additions.count > 0 && (
-        <Card id="recap-additions" title={t('recap.ADDITIONS')}>
+        <InsightCard id="recap-additions" title={t('recap.ADDITIONS')}>
           <GarmentList
             rows={additions.garments.map((garment) => ({
               garment,
@@ -181,10 +186,10 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               })}
             </p>
           )}
-        </Card>
+        </InsightCard>
       )}
       {recap.bestValue.length > 0 && (
-        <Card id="recap-best-value" title={t('recap.BEST_VALUE')}>
+        <InsightCard id="recap-best-value" title={t('recap.BEST_VALUE')}>
           <p class="text-xs text-muted">
             {t('recap.BEST_VALUE_NOTE', {
               date: shortDayLabel(recap.period.to),
@@ -196,10 +201,10 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               detail: perWearLine(entry),
             }))}
           />
-        </Card>
+        </InsightCard>
       )}
       {recap.colours.length > 0 && (
-        <Card id="recap-colours" title={t('recap.COLOURS')}>
+        <InsightCard id="recap-colours" title={t('recap.COLOURS')}>
           <Strip
             name="worn"
             title={t('insights.COLOURS_WORN')}
@@ -211,17 +216,17 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
             {recap.colours.map((colour) => (
               <li class="flex items-center gap-1">
                 <span
-                  class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 ms-swatch--${colour.colour}`}
+                  class={`size-3 shrink-0 rounded-full ring-1 ring-base-300 swatch--${colour.colour}`}
                 />
                 <span class="capitalize">{colour.colour}</span>
                 <span class="text-muted">{colour.worn}%</span>
               </li>
             ))}
           </ul>
-        </Card>
+        </InsightCard>
       )}
       {recap.pair && (
-        <Card id="recap-pair" title={t('recap.PAIR')}>
+        <InsightCard id="recap-pair" title={t('recap.PAIR')}>
           <div
             class="flex items-center gap-2"
             data-pair={`${recap.pair.a.id}-${recap.pair.b.id}`}
@@ -239,7 +244,7 @@ function Figures(props: { model: RecapPageModel; appName: string }) {
               </span>
             </span>
           </div>
-        </Card>
+        </InsightCard>
       )}
     </>
   );
@@ -250,8 +255,8 @@ function Summary(props: { model: RecapPageModel; appName: string }) {
   const { model } = props;
   const { recap } = model;
   return (
-    <Card id="recap-summary" title={t('recap.NUMBERS')}>
-      <div class="grid grid-cols-3 gap-2 text-center">
+    <InsightCard id="recap-summary" title={t('recap.NUMBERS')}>
+      <div class={`${STAT_GRID} text-center`}>
         {stats(recap).map((stat) => (
           <div class="rounded-box bg-base-200 p-2" data-stat={stat.key}>
             <p class="text-2xl font-bold">{stat.value}</p>
@@ -260,7 +265,7 @@ function Summary(props: { model: RecapPageModel; appName: string }) {
         ))}
       </div>
       <Export recap={recap} appName={props.appName} />
-    </Card>
+    </InsightCard>
   );
 }
 
@@ -276,15 +281,11 @@ function stats(recap: YearRecap<SignablePhotoRef>) {
   ];
 }
 
-// The image's drawing (public/js/recap-export.js, through the importmap):
-// an inline module, so it runs again after a boosted navigation brings the
-// page. A fixed string with nothing interpolated.
-const RECAP_EXPORT_INIT = `import { prepareRecapExport } from 'recap-export';
-prepareRecapExport(document.getElementById('recap-export'));`;
-
 /**
- * "Save image": public/js/recap-export.js draws the card from the data
- * island on a canvas as the page opens and enables the button once the PNG
+ * "Save image": public/js/recap-export.js (page-mount.ts, on every visit)
+ * draws the card from the button's `data-card` (JSON: an attribute, not a
+ * data island, since htmx drops every `<script>` a swap brings, #672) on a
+ * canvas as the page opens and enables the button once the PNG
  * is made, so the tap hands a ready file to the share sheet (WebKit's
  * share needs the tap's activation). The light theme's probe gives the
  * card its colours whatever the phone's scheme.
@@ -299,6 +300,8 @@ function Export(props: {
         type="button"
         class="btn btn-primary btn-sm self-start"
         id="recap-export"
+        data-card={JSON.stringify(cardData(props.recap, props.appName))}
+        {...pageModule('recap-export')}
         disabled
       >
         {t('recap.SAVE_IMAGE')}
@@ -307,18 +310,6 @@ function Export(props: {
         {t('recap.SAVE_IMAGE_NOTE')}
       </p>
       <div data-theme="closet-light" data-recap-theme="" hidden />
-      {/* Inline JSON through jsonForScript: it cannot close its <script>. */}
-      <script
-        type="application/json"
-        id="recap-card-data"
-        dangerouslySetInnerHTML={{
-          __html: jsonForScript(cardData(props.recap, props.appName)),
-        }}
-      />
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: RECAP_EXPORT_INIT }}
-      />
     </div>
   );
 }

@@ -1,7 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connectionOptions } from '../../src/db/client';
 import {
   outfitRule,
   styleProfile,
@@ -9,9 +7,12 @@ import {
   wardrobeShare,
 } from '../../src/db/schema';
 import { deviceToken, expectProblem } from './api';
-import { waitForBlockedOn } from './interleave';
+import { addOutfitRule } from '../../src/web/style/queries';
+import { NO_MATCHER } from '../../src/web/style/validation';
+import { interleave } from './interleave';
 import { createGarment } from './garments';
 import {
+  asFixture,
   createTestApp,
   type TestApp,
   TEST_PASSWORD,
@@ -275,35 +276,33 @@ describe('POST /outfit-rules', () => {
     expect((await rule('red', 'blue')).statusCode).toBe(200);
   });
 
-  it('two identical adds at once leave one row: the second waits on the unique index, then adds nothing', async () => {
+  it('two identical adds at once leave one row: the second waits on the owner lock, then adds nothing', async () => {
     const ownerId = accounts.viewer.id;
-    const first = new Client(connectionOptions(t.database));
-    await first.connect();
-    try {
-      // The first add, as addOutfitRule's insert leaves it, not committed
-      // (a never-rule's sides in stored order: blue before green).
-      await first.query('begin');
-      const firstPid = (
-        await first.query<{ pid: number }>('select pg_backend_pid() as pid')
-      ).rows[0].pid;
-      await first.query(
-        `insert into outfit_rule (owner_id, kind, a_color, b_color) values ($1, 'never', 'blue', 'green')`,
-        [ownerId],
-      );
-      const second = api(
-        'POST',
-        '/outfit-rules',
-        { kind: 'never', a: { color: 'blue' }, b: { color: 'green' } },
-        accounts.viewer.token,
-      );
-      await waitForBlockedOn(t.db, firstPid);
-      await first.query('commit');
-      const res = await second;
-      expect(res.statusCode, res.body).toBe(200);
-      expect(res.json()).toEqual({ added: false });
-    } finally {
-      await first.end();
-    }
+    // The first add holds its transaction (and the owner lock) open until
+    // the second, the API's, is queued behind it.
+    const [first, second] = await interleave(
+      t.db,
+      (tx) =>
+        addOutfitRule(
+          tx,
+          { userId: ownerId, surface: 'page' },
+          {
+            kind: 'never',
+            a: { ...NO_MATCHER, color: 'blue' },
+            b: { ...NO_MATCHER, color: 'green' },
+          },
+        ),
+      () =>
+        api(
+          'POST',
+          '/outfit-rules',
+          { kind: 'never', a: { color: 'blue' }, b: { color: 'green' } },
+          accounts.viewer.token,
+        ),
+    );
+    expect(first).toEqual(expect.any(Number));
+    expect(second.statusCode, second.body).toBe(200);
+    expect(second.json()).toEqual({ added: false });
     expect(await rulesOf(ownerId)).toHaveLength(1);
   });
 
@@ -415,15 +414,17 @@ describe("a grantee's ?ownerId= on the owner-only routes", () => {
     async (who) => {
       const as = accounts[who].token;
       const q = `?ownerId=${t.owner.id}`;
-      const [{ id: ruleId }] = await t.db
-        .insert(outfitRule)
-        .values({
-          ownerId: t.owner.id,
-          kind: who === 'viewer' ? 'never' : 'always',
-          aColor: 'gold',
-          bColor: 'silver',
-        })
-        .returning({ id: outfitRule.id });
+      const [{ id: ruleId }] = await asFixture(t.db, (tx) =>
+        tx
+          .insert(outfitRule)
+          .values({
+            ownerId: t.owner.id,
+            kind: who === 'viewer' ? 'never' : 'always',
+            aColor: 'gold',
+            bColor: 'silver',
+          })
+          .returning({ id: outfitRule.id }),
+      );
       const profile = await profileOf(t.owner.id);
       const rules = await rulesOf(t.owner.id);
       for (const [method, url, body] of [

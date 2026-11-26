@@ -24,6 +24,14 @@ interface SessionClaims {
    * fingerprint cannot: the restore brings back the old hashes too.
    */
   sep?: string;
+  /**
+   * The user's session version the token was issued under (the
+   * `session_version` column). Absent in tokens issued before #700, which
+   * verify() reads as 0, the column's default, so the deploy signed nobody
+   * out. "Sign out everywhere" and a new password bump it, so the resolver
+   * refuses every token issued before, without a session table.
+   */
+  sv: number;
 }
 
 /** A token's lifetime; the cookie's Max-Age is the same span in seconds. */
@@ -47,12 +55,46 @@ export function passwordFingerprint(passwordHash: string): string {
  */
 export const passwordFingerprintSql = sql<string>`right(${user.password}, ${PASSWORD_FINGERPRINT_LENGTH})`;
 
+/**
+ * What a session was opened with, for a write that must not outlive it: its
+ * token's password fingerprint and session version. sessionStillOpenSql
+ * rechecks both against the `user` row it locked.
+ */
+export interface SessionStamp {
+  fingerprint: string;
+  version: number;
+}
+
+/**
+ * Whether the `user` row in scope still opens a session stamped `stamp`:
+ * the password and the session version unchanged since it was issued. The
+ * writes that recheck their session under the user's row lock take it
+ * (upsertDevice, createInvite), so a bump committed while they waited
+ * stores nothing.
+ */
+export function sessionStillOpenSql(stamp: SessionStamp) {
+  return sql`(${passwordFingerprintSql} = ${stamp.fingerprint} and ${user.sessionVersion} = ${stamp.version})`;
+}
+
+/** An optional claim: absent, or of its type. A claim of another type is a forged or garbled token. */
+function absentOr(value: unknown, valid: (value: unknown) => boolean): boolean {
+  return value === undefined || valid(value);
+}
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
 export interface SessionTokens {
+  /**
+   * `user` is a row its caller read or wrote in the statement that decided
+   * the session (a sign-in's lookup, the insert, a bump's RETURNING), so a
+   * token always carries the version current at that statement.
+   */
   issue(user: {
     id: number;
     email: string | null;
     password: string;
     sessionEpoch: string | null;
+    sessionVersion: number;
   }): string;
   /** The claims of a valid, unexpired token signed with our secret; else undefined. */
   verify(token: string): SessionClaims | undefined;
@@ -71,6 +113,7 @@ export function createSessionTokens(secret: string): SessionTokens {
         email: user.email,
         pwf: passwordFingerprint(user.password),
         ...(user.sessionEpoch === null ? {} : { sep: user.sessionEpoch }),
+        sv: user.sessionVersion,
       };
       return jwt.sign(claims, secret, {
         algorithm: 'HS256',
@@ -90,7 +133,8 @@ export function createSessionTokens(secret: string): SessionTokens {
         typeof decoded === 'string' ||
         typeof decoded.userId !== 'number' ||
         typeof decoded.pwf !== 'string' ||
-        (decoded.sep !== undefined && typeof decoded.sep !== 'string')
+        !absentOr(decoded.sep, isString) ||
+        !absentOr(decoded.sv, Number.isInteger)
       ) {
         return undefined;
       }
@@ -99,6 +143,7 @@ export function createSessionTokens(secret: string): SessionTokens {
         email: typeof decoded.email === 'string' ? decoded.email : null,
         pwf: decoded.pwf,
         ...(typeof decoded.sep === 'string' ? { sep: decoded.sep } : {}),
+        sv: typeof decoded.sv === 'number' ? decoded.sv : 0,
       };
     },
   };

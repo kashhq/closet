@@ -1,0 +1,169 @@
+import type { Child } from 'hono/jsx';
+import { t } from '../i18n';
+import { closesSheet, pageModule, resetsOnClose } from '../page-contract';
+import { SheetBackdrop } from './parts';
+
+/**
+ * Where a sheet sits, by what it holds (docs/plans/2026-11-16-desktop-layout.md
+ * §3.3). Below lg every kind is the bottom sheet; from lg:
+ *  - `choice`: centred, daisyUI's modal width (a question and its answers:
+ *    the confirmation, a Plan sheet, Styling's Save, the bulk verbs).
+ *  - `form`: a full-height panel at the right edge, `max-w-md` (fields to
+ *    fill or pick: the photo sheet, bulk "Set…").
+ *  - `menu`: hung under the control that opened it (CSS anchor positioning,
+ *    main.css; centred where a browser has none): the Wardrobe's Add.
+ *  - `dialog`: centred at every size, the phone included, for what is shown
+ *    rather than asked or filled in (the mask editor's canvas, a selfie).
+ *  - `filters`: the bottom sheet below lg; from lg never opened at all,
+ *    but shown in place, closed, in a `facets` page's aside (main.css
+ *    docks it there and hides its opener, `dockedFiltersOpener`, and its
+ *    backdrop), so the one form is the phone's sheet and the desktop's
+ *    facet column: the Wardrobe's filters (#1067). It must sit in
+ *    `PageShell`'s `aside`, never in `overlays` (`expectDockedFilters`).
+ * main.css finds every kind by `dialog[data-sheet=<kind>]`.
+ */
+export type SheetKind = 'choice' | 'form' | 'menu' | 'dialog' | 'filters';
+
+// Whole class names, so Tailwind finds them. The dialog is daisyUI's
+// `modal`, the box its `modal-box`: guards.conf `@sheet` keeps both here.
+const DIALOG_CLASS: Readonly<Record<SheetKind, string>> = {
+  choice: 'modal modal-bottom lg:modal-middle',
+  form: 'modal modal-bottom lg:modal-end',
+  menu: 'modal modal-bottom lg:modal-middle',
+  dialog: 'modal',
+  filters: 'modal modal-bottom',
+};
+const BOX_CLASS: Readonly<Record<SheetKind, string>> = {
+  choice: '',
+  form: ' lg:w-full lg:max-w-md',
+  menu: '',
+  dialog: '',
+  filters: '',
+};
+
+/**
+ * The box's flow, by name: absent, its children flow as blocks (daisyUI's
+ * padding); a `gap` stacks them in a column that far apart. A stacked
+ * choice or form leaves 2rem below its last row, a menu its rows' own
+ * padding. The block sheets (the filters, the bulk verbs and "Set…") kept
+ * daisyUI's 1.5rem: the phone was held unchanged when the sheets moved here
+ * (#1062), so evening these out is a deliberate phone change of its own.
+ */
+export type SheetGap = 3 | 4;
+
+const GAP_CLASS: Readonly<Record<SheetGap, string>> = {
+  3: ' flex flex-col gap-3',
+  4: ' flex flex-col gap-4',
+};
+
+function boxClass(
+  kind: SheetKind,
+  gap: SheetGap | undefined,
+  extra: string | undefined,
+): string {
+  const flow = gap === undefined ? '' : GAP_CLASS[gap];
+  const foot =
+    gap !== undefined && (kind === 'choice' || kind === 'form') ? ' pb-8' : '';
+  return `modal-box group/sheet${flow}${foot}${BOX_CLASS[kind]}${extra === undefined ? '' : ` ${extra}`}`;
+}
+
+export interface SheetProps {
+  id: string;
+  kind: SheetKind;
+  /** The id of the sheet's heading (or, for the confirmation, its question): its accessible name. */
+  labelledBy: string;
+  gap?: SheetGap;
+  /** A `dialog`'s own width and padding (a viewer sizes to what it shows); the other kinds are sized by their kind. */
+  boxClass?: string;
+  /**
+   * The tap-outside close's name (SheetBackdrop): `close` on a sheet that
+   * shows or offers, `cancel` on one that asks for a choice.
+   */
+  dismiss: 'close' | 'cancel';
+  /** Open as the page loads (page-mount.ts's `open-sheet`): the garment's photo sheet after a rotate. */
+  opensOnLoad?: boolean;
+  children: Child;
+}
+
+/*
+ * A `filters` sheet closed without Apply (its Close, the backdrop, Escape)
+ * drops the ticks it was not asked to apply (`resetsOnClose`, actions.ts):
+ * `reset()` restores the server-rendered state, the applied filters. The page's other requests
+ * send the filter form's fields (the Wardrobe's search, chips and capsule
+ * menu, #1144), so a tick left in a closed phone sheet would otherwise be
+ * applied by them. Docked from lg the sheet is never opened, so never
+ * closed: there the live ticks ride along. Apply's own request has read
+ * the form before anything closes.
+ */
+
+/**
+ * Every app sheet's `<dialog>` and box (#1062): a page brings the content,
+ * never a modal class. Opened by a control carrying `sheetOpener(id)`;
+ * public/js/confirm-sheet.js owns the behaviour every sheet shares
+ * (`openSheet`: Tab cycles inside, a menu's trigger is its anchor, and the
+ * trigger takes focus back on close). Escape, the first focus (an `autofocus` control, else the first
+ * one) and the inert page behind are `showModal()`'s; the page's scroll is
+ * locked by daisyUI's `modal[open]` rule. The box is `group/sheet`, for
+ * content that reacts to something in it (the add sheet's "Uploading…").
+ * The photo viewer is not a sheet: a full-screen dialog of its own.
+ */
+export function Sheet(props: SheetProps) {
+  return (
+    <dialog
+      id={props.id}
+      class={DIALOG_CLASS[props.kind]}
+      data-sheet={props.kind}
+      aria-labelledby={props.labelledBy}
+      {...resetsOnClose(props.kind === 'filters')}
+      {...(props.opensOnLoad ? pageModule('open-sheet') : {})}
+    >
+      <div class={boxClass(props.kind, props.gap, props.boxClass)}>
+        {props.children}
+      </div>
+      <SheetBackdrop
+        label={t(props.dismiss === 'close' ? 'CLOSE' : 'CANCEL')}
+      />
+    </dialog>
+  );
+}
+
+/**
+ * What a control that opens sheet `id` carries: confirm-sheet.js's click
+ * listener opens it with the control as its trigger. Spread it on a
+ * `<button type="button">`; a `checksOnTap` beside it runs first (the
+ * calendar's opener checks its occasion before the sheet shows).
+ */
+export function sheetOpener(id: string) {
+  return { 'data-sheet-open': id, 'aria-haspopup': 'dialog' } as const;
+}
+
+/**
+ * The opener of a `filters` sheet: `sheetOpener`, and gone where a facets
+ * page docks the sheet (from lg, main.css's docking block), so a page never
+ * names that breakpoint (the page-level `lg:` ratchet,
+ * scripts/ci/lg_count.conf).
+ */
+export function dockedFiltersOpener(id: string) {
+  return { ...sheetOpener(id), 'data-filters-opener': '' } as const;
+}
+
+/**
+ * A sheet's own Cancel, beside its action: closes it, nothing posted
+ * (`closesSheet`, actions.ts). A `type="button"`, never a dialog form or a
+ * submit, so it posts nothing wherever it sits: a sheet's action row is
+ * usually inside the sheet's form, and a form nested there would be dropped
+ * by the parser, its Cancel submitting the outer form (`nestedForms`,
+ * test/integration/pages.ts). A sheet opens only through `showModal()`, so
+ * without script there is no sheet to close.
+ */
+export function SheetCancel(props: { size?: 'sm' }) {
+  return (
+    <button
+      type="button"
+      class={props.size === 'sm' ? 'btn btn-ghost btn-sm' : 'btn btn-ghost'}
+      {...closesSheet()}
+    >
+      {t('CANCEL')}
+    </button>
+  );
+}

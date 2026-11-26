@@ -4,7 +4,6 @@ import { DAY_OCCASIONS, OCCASIONS } from '../../wardrobe/occasions';
 import {
   AROUND_OCCASIONS,
   type TemplateDay,
-  templateDays,
   templateSlots,
   WEEKDAYS,
 } from '../../wardrobe/week';
@@ -15,13 +14,14 @@ import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { IsoDateSchema, RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
+import type { PlannedEntry } from './plan';
 import {
-  type PlannedEntry,
-  type PlannedNow,
-  planMyWeekNow,
-  undoWeekPlan,
-} from './plan';
-import { findWeekTemplate, saveWeekTemplate } from './template';
+  planWeekFor,
+  saveWeekTemplateFor,
+  undoWeekPlanFor,
+} from './plan-actions';
+import { findWeekTemplate } from './template';
+import { toWeekTemplate, WeekTemplate } from './week-template-resource';
 
 const Occasion = literals(OCCASIONS);
 
@@ -118,42 +118,6 @@ const WeekPlanUndone = Type.Object(
   { title: 'WeekPlanUndone' },
 );
 
-const TemplateDayResource = Type.Object(
-  {
-    weekday: CloneType(literals(WEEKDAYS), {
-      description: '0 is Sunday … 6 Saturday',
-    }),
-    day: Type.Optional(
-      CloneType(literals(DAY_OCCASIONS), {
-        description:
-          "The day's outfit: at most one of all day, work, daytime; absent, none",
-      }),
-    ),
-    around: Type.Array(literals(AROUND_OCCASIONS), {
-      description:
-        'The occasions around it (a workout, an evening, a night out)',
-    }),
-  },
-  { title: 'WeekTemplateDay' },
-);
-
-const WeekTemplate = Type.Object(
-  { days: Type.Array(TemplateDayResource, { minItems: 7, maxItems: 7 }) },
-  {
-    title: 'WeekTemplate',
-    description:
-      'Your week, Sunday first: the slots Plan my week fills. Empty on every day until you set it',
-  },
-);
-
-function toWeekTemplate(days: readonly TemplateDay[]) {
-  return {
-    days: days.map(({ weekday, day, around }) =>
-      withoutNulls({ weekday, day, around }),
-    ),
-  };
-}
-
 const TemplateDayInput = Type.Object(
   {
     weekday: CloneType(literals(WEEKDAYS), {
@@ -202,28 +166,10 @@ function templateDaysOf(
   }));
 }
 
-/** POST /week-plans' log line: the page's words, marked (API). */
-function planLine(
-  ownerId: number,
-  { today, forecast, result }: PlannedNow,
-  elapsed: number,
-): string {
-  if (!result.templateSet) {
-    return `Week not planned for user ${ownerId} (API): no week template`;
-  }
-  const ms = Math.round(elapsed);
-  const unfilled = `${result.unfilled.length} slot(s) unfilled`;
-  if (result.weekPlanId === null) {
-    return `Week plan for user ${ownerId} from ${today} (API): nothing to plan, ${unfilled} in ${ms} ms`;
-  }
-  const entries = result.planned.map((p) => p.entryId).join(', ');
-  return `Week planned for user ${ownerId} from ${today} (API) (plan ${result.weekPlanId}): ${result.planned.length} outfit(s) (entries ${entries}), ${unfilled}, forecast for ${forecast.days.size} day(s) in ${ms} ms`;
-}
-
 /**
  * The weekly auto-plan on /api/v1 (#193b; plan section 6), registered by
- * apiPlugin, each calling what its page twin calls: planMyWeekNow (the
- * calendar's Plan my week and plan_week), undoWeekPlan, and the template's
+ * apiPlugin, each calling what its page twin calls: planWeekFor (the
+ * calendar's Plan my week and plan_week), undoWeekPlanFor, and the template's
  * one writer. The token's user's own, like the pages: there is no
  * `?ownerId=`, and another's plan is the 404 of an unknown id.
  */
@@ -245,19 +191,10 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const ownerId = actorOf(request).userId;
-      const started = performance.now();
-      const { today, forecast, result } = await planMyWeekNow(
-        { db, weather, timeZone: config.timeZone },
-        ownerId,
+      const { today, forecast, result } = await planWeekFor(
+        { db, logger, weather, timeZone: config.timeZone },
+        actorOf(request),
         new Date(),
-      );
-      logger.info(
-        planLine(
-          ownerId,
-          { today, forecast, result },
-          performance.now() - started,
-        ),
       );
       return {
         from: today,
@@ -287,10 +224,7 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
     async (request) => {
       const actor = actorOf(request);
       const { id } = request.params;
-      const undone = await undoWeekPlan(db, actor, id);
-      logger.info(
-        `Week plan ${id} undone by user ${actor.userId} (API): ${undone.entries} entr(ies) and ${undone.outfits} outfit(s) removed`,
-      );
+      const undone = await undoWeekPlanFor({ db, logger }, actor, id);
       return {
         entriesRemoved: undone.entries,
         outfitsRemoved: undone.outfits,
@@ -309,9 +243,7 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) =>
-      toWeekTemplate(
-        templateDays(await findWeekTemplate(db, actorOf(request).userId)),
-      ),
+      toWeekTemplate(await findWeekTemplate(db, actorOf(request).userId)),
   );
 
   app.put(
@@ -328,13 +260,9 @@ export const weekPlanApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       },
     },
     async (request) => {
-      const userId = actorOf(request).userId;
       const slots = templateSlots(templateDaysOf(request.body.days));
-      await saveWeekTemplate(db, userId, slots);
-      logger.info(
-        `Week template saved by user ${userId} (API): ${slots.length} slot(s) on ${new Set(slots.map((s) => s.weekday)).size} day(s)`,
-      );
-      return toWeekTemplate(templateDays(slots));
+      await saveWeekTemplateFor({ db, logger }, actorOf(request), slots);
+      return toWeekTemplate(slots);
     },
   );
 

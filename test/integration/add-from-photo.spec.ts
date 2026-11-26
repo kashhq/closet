@@ -157,7 +157,7 @@ describe('adding a garment from a photo', () => {
           `<form id="add-photo-${source}" method="post" action="/wardrobe/new/photo" enctype="multipart/form-data" hx-boost="false" data-needs-network="" data-submit-once="">`,
         );
       }
-      expect(sheet).toContain("import('photo-input')");
+      expect(sheet).toContain('data-photo-pick=""');
       expect(sheet).toContain(text('garment.PHOTO_CAMERA'));
       expect(sheet).toContain(text('garment.PHOTO_LIBRARY'));
       // Link import and "Enter details" are still there.
@@ -262,7 +262,7 @@ describe('adding a garment from a photo', () => {
         headers: { cookie },
       });
       expect(page.statusCode).toBe(200);
-      expect(page.body).toContain('Removing background…');
+      expect(page.body).toContain('Cutting out the background…');
       expect(page.body).toContain('hx-trigger="every 2s"');
 
       t.cutouts.start(fakeRunner());

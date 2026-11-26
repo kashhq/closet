@@ -27,6 +27,13 @@ import { planEntry, takeSelfie } from './selfies';
 /** A `lang.KEY` that reached the HTML untranslated. */
 const RAW_I18N_KEY = /\blang\.[A-Z_]{3,}/;
 
+/** The sections' tab bars' names (their builders: `wardrobeBar`, `calendarTabs`, `outfitTabs`). */
+const SECTION_TAB_LABELS = [
+  text('NAV_WARDROBE_VIEWS'),
+  text('NAV_CALENDAR_VIEWS'),
+  text('NAV_OUTFIT_VIEWS'),
+];
+
 export const HX_FRAGMENT = { 'hx-request': 'true' };
 export const HX_BOOSTED = { 'hx-request': 'true', 'hx-boosted': 'true' };
 
@@ -182,7 +189,7 @@ export interface PageRoute {
   /**
    * An add or edit page, which its save is done with: its app bar says so
    * (`AppBar formPage`, `data-form-page`), and the back arrow of the page
-   * the save lands on skips it (public/js/back.js). `expectFormPageFlag`.
+   * the save lands on skips it (views/assets/page/back.ts). `expectFormPageFlag`.
    */
   formPage: boolean;
 }
@@ -261,14 +268,20 @@ export function pageRoutes(f: PageFixture, inviteToken: string): PageRoute[] {
     app(`/outfits/ideas?for=trip:${f.tripId}`),
     app('/wardrobe/insights'),
     app('/wardrobe/insights?unworn=30'),
+    app('/wardrobe/insights/unworn'),
+    app('/wardrobe/insights/unworn?unworn=180'),
     app('/wardrobe/recap'),
     app('/wardrobe/recap?year=2025'),
     app('/auth/profile'),
     form('/auth/profile/style'),
     form('/auth/profile/sizes'),
+    form('/auth/profile/sharing'),
+    form('/auth/profile/week'),
+    form('/auth/devices'),
     app('/auth/update-email'),
     app('/auth/delete-account'),
     app('/auth/change-password'),
+    app('/auth/sign-out-everywhere'),
     form('/auth/tokens'),
     // Public, but a signed-out visitor is sent to log in like any app page.
     app('/auth/logout'),
@@ -280,6 +293,87 @@ export function pageRoutes(f: PageFixture, inviteToken: string): PageRoute[] {
     open(`/share?shareableId=${f.garmentShareableId}&type=garment`),
     open(`/share?shareableId=${f.outfitShareableId}&type=outfit`),
   ];
+}
+
+/**
+ * One page frame (#1059): a page framed by `PageShell` has exactly one
+ * `.page-shell`, and it is the page's only `<main>`. Which pages are framed
+ * is guards.conf's `@page-main` (a `<main>` outside page-shell.tsx is debt
+ * with a `known` line), not a list here. Its regions sit in the desktop's
+ * visual order (#1068): a region placed left of the body (`split`'s subject,
+ * `facets`, `index`) comes before it in the DOM, `panel`'s after, so the
+ * keyboard, a reader and the phone's stack read what the desktop shows.
+ */
+export function expectPageShell(res: LightMyRequestResponse): void {
+  const shells = res.body.match(/<main class="page-shell\b/g)?.length ?? 0;
+  expect(shells).toBeLessThanOrEqual(1);
+  if (shells === 0) return;
+  expect(res.body.match(/<main\b/g)).toHaveLength(1);
+  const layout = /<main class="page-shell\b[^>]*data-layout="([a-z]+)"/.exec(
+    res.body,
+  )?.[1];
+  const aside = res.body.search(/ class="page-aside"/);
+  if (aside === -1) return;
+  const body = res.body.search(/ class="page-body"/);
+  expect({ layout, asideFirst: aside < body }).toEqual({
+    layout,
+    asideFirst: layout !== 'panel',
+  });
+}
+
+/**
+ * At most one action bar a page, the shell's (#1063, layout/action-bar.tsx),
+ * and no page fixes its own controls above the dock (`bottom-dock`): such a
+ * bar sat at the viewport's far edge on a desktop, 400 px from the rows it
+ * acted on, and outside the room main.css keeps for `.action-bar`. The
+ * share page's credit line holds no control, so it is not one.
+ */
+export function expectActionBar(res: LightMyRequestResponse): void {
+  expect(
+    res.body.match(/class="action-bar"/g)?.length ?? 0,
+  ).toBeLessThanOrEqual(1);
+  for (const bar of res.body.matchAll(/<div class="[^"]*\bbottom-dock\b/g)) {
+    expect(divAt(res.body, bar.index)).not.toMatch(
+      /<(button|a|input|select|textarea)\b/,
+    );
+  }
+}
+
+/**
+ * A `filters` sheet (#1067, layout/sheet.tsx) is docked, closed, in its
+ * page's facets aside from lg: main.css shows it there only while it is not
+ * `open`, so markup that opens it would be a modal over the grid on a
+ * desktop, and one outside the aside would never dock. At most one a page.
+ */
+export function expectDockedFilters(res: LightMyRequestResponse): void {
+  const sheets = [
+    ...res.body.matchAll(/<dialog\b[^>]*data-sheet="filters"[^>]*>/g),
+  ];
+  expect(sheets.length).toBeLessThanOrEqual(1);
+  const [sheet] = sheets;
+  if (!sheet) return;
+  expect(sheet[0]).not.toMatch(/\sopen\b/);
+  expect(res.body).toMatch(
+    /<main class="page-shell\b[^>]*data-layout="facets"/,
+  );
+  const before = res.body.slice(0, sheet.index);
+  const asideOpens = before.lastIndexOf('<aside ');
+  expect(asideOpens).toBeGreaterThan(-1);
+  expect(before.slice(asideOpens)).toMatch(
+    /^<aside id="[a-z-]+-aside" class="page-aside"/,
+  );
+  expect(before.slice(asideOpens)).not.toContain('</aside>');
+}
+
+/** The `<div>` element that starts at `start`, through its closing tag. */
+function divAt(html: string, start: number): string {
+  const rest = html.slice(start);
+  let depth = 0;
+  for (const tag of rest.matchAll(/<div\b|<\/div>/g)) {
+    depth += tag[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return rest.slice(0, tag.index + tag[0].length);
+  }
+  return rest;
 }
 
 /** The app bar marks exactly the pages `pageRoutes` lists as form pages. */
@@ -297,7 +391,7 @@ export function expectFormPageFlag(
 /**
  * An add or edit page's writes are disabled offline (#411, `FormPage`): its
  * native post to `action` and any `hx-delete` carry `data-needs-network`,
- * which public/js/connectivity.js disables while the heartbeat fails. A
+ * which views/assets/page/connectivity.ts disables while the heartbeat fails. A
  * cached copy posting without a connection lands on the worker's offline
  * page and loses what was typed.
  */
@@ -334,7 +428,13 @@ export function expectFullPage(res: LightMyRequestResponse): void {
   expectInPlaceWritesKeepFocus(res);
   expectOneStatusRegion(res);
   expectNoScriptNavigation(res);
+  expect(inlineScripts(res.body)).toEqual([]);
+  expect(res.body.match(/<script type="importmap">/g)).toHaveLength(1);
+  expect(nestedForms(res.body)).toEqual([]);
   expectAppBar(res);
+  expectPageShell(res);
+  expectActionBar(res);
+  expectDockedFilters(res);
   // _hyperscript left the app (2026-09-26): an `_=` attribute would do
   // nothing at all.
   expect(res.body).not.toMatch(/\s_="/);
@@ -351,6 +451,7 @@ export function expectAppBar(res: LightMyRequestResponse): void {
   expect(body.match(/<header class="app-bar\b/g)).toHaveLength(1);
   expect(body.match(/<h1\b/g)).toHaveLength(1);
   expect(body).not.toContain('drawer-toggle');
+  expectSectionTabsInBar(body);
   if (res.headers['x-page-account']) {
     expect(body.match(/<a href="\/auth\/profile" id="avatar"/g)).toHaveLength(
       1,
@@ -362,6 +463,26 @@ export function expectAppBar(res: LightMyRequestResponse): void {
       /(?:href|action)="\/auth\/(?:login|register)(?:\?returnTo=[^"]+)?"/,
     );
   }
+}
+
+const SECTION_TABS = new RegExp(
+  `<nav [^>]*aria-label="(?:${SECTION_TAB_LABELS.join('|')})"`,
+  'g',
+);
+
+/**
+ * A section's tabs are the bar's (#1061): drawn inside the header, never by
+ * the page, so sibling pages show them in one place.
+ */
+function expectSectionTabsInBar(body: string): void {
+  const header =
+    /<header class="app-bar\b[\s\S]*?<\/header>/.exec(body)?.[0] ?? '';
+  const count = (html: string, pattern: RegExp) =>
+    html.match(pattern)?.length ?? 0;
+  expect(count(body, SECTION_TABS)).toBe(count(header, SECTION_TABS));
+  expect(count(body, /\bapp-bar-tabs\b/g)).toBe(
+    count(header, /\bapp-bar-tabs\b/g),
+  );
 }
 
 /** The app bar's title, the page's h1, as text. */
@@ -377,6 +498,54 @@ export function pageTitle(body: string): string | undefined {
  */
 export function expectNoScriptNavigation(res: LightMyRequestResponse): void {
   expect(res.body).not.toMatch(/\blocation(\.href)?\s*=/);
+}
+
+/**
+ * What the CSP or htmx would refuse in a page or a fragment (#672,
+ * src/web/security/csp.ts): an `on*` attribute anywhere, and a `<script>`
+ * outside `<head>`, data included, since htmx drops every one a swap brings
+ * (`allowScriptTags: false`). In the head only a `src`, the layout's
+ * importmap (allowed by its hash) or schema.org data. A fragment has no
+ * head, so all of it is body. ESLint refuses these in the source; this
+ * catches what it cannot see, a translated string's markup or props built
+ * elsewhere. Each offending tag, cut to 120 characters.
+ */
+export function inlineScripts(html: string): string[] {
+  const headEnd = html.indexOf('</head>');
+  const head = headEnd === -1 ? '' : html.slice(0, headEnd);
+  const body = headEnd === -1 ? html : html.slice(headEnd);
+  const tags = (part: string) => part.match(/<[a-z][^>]*>/gi) ?? [];
+  const handler = (tag: string) => /\son[a-z]+\s*=/i.test(tag);
+  const script = (tag: string) => /^<script\b/i.test(tag);
+  const headOffenders = tags(head).filter(
+    (tag) =>
+      handler(tag) ||
+      (script(tag) &&
+        !/\ssrc="/.test(tag) &&
+        !/\stype="(importmap|application\/ld\+json)"/.test(tag)),
+  );
+  const bodyOffenders = tags(body).filter((tag) => handler(tag) || script(tag));
+  return [...headOffenders, ...bodyOffenders].map((tag) => tag.slice(0, 120));
+}
+
+/**
+ * Each `<form>` opened inside another. The parser drops a nested form's
+ * tag, so its controls belong to the outer one: a Cancel meant to close a
+ * sheet would submit, and maybe post, the form around it (#672). Each
+ * offending tag, cut to 120 characters.
+ */
+export function nestedForms(html: string): string[] {
+  const nested: string[] = [];
+  let depth = 0;
+  for (const [tag] of html.matchAll(/<\/?form\b[^>]*>/gi)) {
+    if (tag.startsWith('</')) {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth > 0) nested.push(tag.slice(0, 120));
+    depth += 1;
+  }
+  return nested;
 }
 
 /**
@@ -399,7 +568,7 @@ export function expectNativePostForms(res: LightMyRequestResponse): void {
 /**
  * The posts that change whose session this device has. The service worker
  * never sees them (#542), so each form says so itself (`PostForm`
- * `endsSession`, `data-ends-session`): public/js/pwa.js tells the worker as
+ * `endsSession`, `data-ends-session`): views/assets/page/pwa.ts tells the worker as
  * it posts, and the worker drops the session caches before the landing
  * page. One missing the mark leaves the previous account's pages cached.
  */
@@ -427,7 +596,7 @@ const QUEUED_FORM = new RegExp(
 /**
  * The `PostForm`s (marked by their `data-submit-once`) a page renders that
  * would post while offline: neither `data-needs-network`, which
- * public/js/connectivity.js disables offline with every control that
+ * views/assets/page/connectivity.ts disables offline with every control that
  * submits the form, nor an `allowOffline` reason (`data-allow-offline`),
  * nor a write the outbox queues (`data-offline-queue`, #178).
  * Disabled is the default (#411; owner, 2026-10-22): a cached form posting
@@ -477,7 +646,7 @@ export function expectAutosaveControls(res: LightMyRequestResponse): void {
  * (expectFragment): a swap that brought one would replace it, and a region
  * inserted with its message is not reliably read.
  */
-export function expectOneStatusRegion(res: LightMyRequestResponse): void {
+function expectOneStatusRegion(res: LightMyRequestResponse): void {
   const regions = res.body.match(/<div\b[^>]*\bid="toast-host"[^>]*>/g);
   expect(regions).toHaveLength(1);
   expect(regions![0]).toContain('role="status"');
@@ -536,6 +705,10 @@ export function expectFragment(res: LightMyRequestResponse): void {
   expect(res.body).not.toContain('id="toast-host"');
   expect(res.body.trim().length).toBeGreaterThan(0);
   expectNoRawI18nKeys(res);
+  // htmx drops every <script> a swap brings (allowScriptTags: false, #672):
+  // a fragment's setup is a data-page-module element (page-mount.ts).
+  expect(inlineScripts(res.body)).toEqual([]);
+  expect(nestedForms(res.body)).toEqual([]);
 }
 
 /**

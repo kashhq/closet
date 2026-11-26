@@ -1,4 +1,4 @@
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { t } from '../i18n';
 import { categoryLabel } from '../wardrobe/garment';
 import type { AvoidedPartner } from './queries';
@@ -20,7 +20,7 @@ export function AvoidedPartners(props: {
       <h2 class="text-sm text-muted mb-2">{t('gallery.AVOIDED_HEADING')}</h2>
       <ul class="flex flex-col gap-1">
         {props.partners.map((partner) => (
-          <li class="flex items-center justify-between gap-2">
+          <li class="tap-row flex items-center justify-between gap-2">
             <a href={`/wardrobe/${partner.id}`} class="link link-hover">
               {partner.name ?? categoryLabel(partner.category)}
             </a>

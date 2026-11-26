@@ -148,7 +148,7 @@ describe('loadConfig', () => {
       ['false', 'off'],
     ])('reads DATABASE_SSL=%j as %s, silently', (raw, mode) => {
       expect(loadWarned({ DATABASE_SSL: raw })).toEqual({
-        config: expect.objectContaining({ DATABASE_SSL: mode }),
+        config: expect.objectContaining({ DATABASE_SSL: mode }) as unknown,
         warnings: [],
       });
     });
@@ -166,11 +166,13 @@ describe('loadConfig', () => {
       expect(
         loadWarned({ DATABASE_NAME: undefined, DATABASE_SCHEMA: 'old' }),
       ).toEqual({
-        config: expect.objectContaining({ DATABASE_NAME: 'old' }),
+        config: expect.objectContaining({ DATABASE_NAME: 'old' }) as unknown,
         warnings: ['DATABASE_SCHEMA is deprecated: rename it DATABASE_NAME'],
       });
       expect(loadWarned({ DATABASE_SCHEMA: 'old' })).toEqual({
-        config: expect.objectContaining({ DATABASE_NAME: 'closet_db' }),
+        config: expect.objectContaining({
+          DATABASE_NAME: 'closet_db',
+        }) as unknown,
         warnings: [
           'DATABASE_SCHEMA is ignored: DATABASE_NAME is set; remove DATABASE_SCHEMA',
         ],

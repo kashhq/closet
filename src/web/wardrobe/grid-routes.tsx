@@ -26,15 +26,9 @@ import {
   garmentGuard,
   taggedGarmentIn,
 } from './garment-access';
-import { tagGarment } from './garment-actions';
-import { markWashed } from '../wears/queries';
-import {
-  bulkSetProperty,
-  type GridFilters,
-  gridIds,
-  gridPage,
-  nextToTag,
-} from './queries';
+import { bulkSetGarments, tagGarment } from './garment-actions';
+import { washGarments } from '../wears/wear-actions';
+import { type GridFilters, gridIds, gridPage, nextToTag } from './queries';
 import { type GridContextPart, gridContext } from './grid-context';
 import {
   type GarmentScope,
@@ -142,7 +136,7 @@ function propertyFilters(
   };
 }
 
-/** The grid's garments: the closet, or with "Show archived" the archive too. */
+/** The grid's garments: the closet, or with "Include archived" the archive too. */
 function scopeOf(search: GridSearch): GarmentScope {
   return search.archived === 'true' ? 'owned' : 'closet';
 }
@@ -164,6 +158,8 @@ function bulkOutcome(query: GridQuery): BulkOutcome | undefined {
       verb: 'wash',
       count: query.bulkWashed,
       skipped: query.bulkSkipped ?? 0,
+      wishlist: query.bulkWishlist ?? 0,
+      unseen: query.bulkUnseen ?? 0,
     };
   }
   if (query.bulkAdded !== undefined) {
@@ -210,7 +206,7 @@ function listedCapsule(capsules: CapsuleRef[], id: number): CapsuleRef {
 /**
  * What GET /wardrobe's answer renders around its tiles (GridContext):
  * browsing, all of it the requester may see, the app bar's switcher only
- * on a full page (a fragment swaps #wardrobe-main and the ⋯ menu). The
+ * on a full page (a fragment swaps #wardrobe-body and the ⋯ menu). The
  * picker reads only the capsules (to refuse another wardrobe's `?pick=` and
  * to name it); select mode the count ("Select all N") and the capsules
  * (its "Add to capsule", and a foreign `?capsule=`).
@@ -258,9 +254,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   // Filtering and searching are navigation state: malformed values fall
   // back or are dropped, except a colour outside the built-in set (400,
   // GridQuery) and a capsule that is not the wardrobe's (404). An htmx
-  // fragment request (the scope row, the filter modal) gets #wardrobe-main
-  // and the ⋯ menu out of band; the first page only, always. `?pick=` (owner and MANAGE) is the
-  // capsule picker: select mode with the capsule's members checked.
+  // fragment request (the scope row, the facets) gets #wardrobe-body, and
+  // the facets and the ⋯ menu out of band; the first page only, always.
+  // `?pick=` (owner and MANAGE) is the capsule picker: select mode with the
+  // capsule's members checked.
   app.get(
     '/wardrobe',
     { schema: { querystring: GridQuery } },
@@ -404,12 +401,12 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const selection = await selected(access, request);
       const { ids } = selection;
       const change = readBulkChange(request.body);
-      const result =
-        change && ids.length > 0
-          ? await bulkSetProperty(db, access.ownerId, ids, change)
-          : { updated: 0, skipped: 0 };
-      logger.info(
-        `Bulk ${request.body.property} by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${result.updated} set, ${result.skipped} skipped, ${ids.length} selected${allNote(selection)}`,
+      const result = await bulkSetGarments(
+        { db, logger },
+        actorOf(request),
+        access.ownerId,
+        ids,
+        change,
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
@@ -453,37 +450,34 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   );
 
   // Mark washed: the owner's own record (wears and washes are never a
-  // grantee's), today, as the laundry's batch (markWashed). The closet's
-  // garments only: Select all on "Show archived" must not wash the archive
-  // (#816; a garment's own page still may). Not queued
-  // offline like the laundry's: "Select all" is resolved here, so the
-  // verbs need the server (data-needs-network on the bar).
+  // grantee's), today, as the laundry's batch (washGarments). The closet's
+  // garments only: Select all on "Include archived" must not wash the archive
+  // (#816; a garment's own page still may), and the toast names each skip by
+  // its reason (#819): one deleted in another tab, or a hand-built post's
+  // wishlist or foreign id, is not "archived". Not queued offline like the laundry's: "Select all" is
+  // resolved here, so the verbs need the server (data-needs-network on the
+  // bar).
   app.post(
     '/wardrobe/bulk/washed',
     { schema: { querystring: GridQuery, body: SelectionBody } },
     async (request, reply) => {
       const { access, viewOwner } = await authorize(request, 'own');
       const selection = await selected(access, request);
-      const { ids } = selection;
       const day = todayIn(config.timeZone, new Date());
-      const washed =
-        ids.length > 0
-          ? await markWashed(
-              db,
-              access.ownerId,
-              ids,
-              day,
-              postedInstant(request, undefined, day, config.timeZone),
-              { closetOnly: true },
-            )
-          : [];
-      logger.info(
-        `Bulk wash by user ${sessionUserId(request)} on ${day}: ${washed.length} washed, ${ids.length} selected${allNote(selection)}`,
+      const { washed, skipped } = await washGarments(
+        { db, logger },
+        actorOf(request),
+        selection.ids,
+        { day, at: postedInstant(request, undefined, day, config.timeZone) },
+        { closetOnly: true },
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
           bulkWashed: washed.length,
-          bulkSkipped: ids.length - washed.length,
+          bulkSkipped: skipped.archived,
+          // Only when there are any: a hand-built post's, or a tab's stale selection.
+          ...(skipped.wishlist > 0 && { bulkWishlist: skipped.wishlist }),
+          ...(skipped.unseen > 0 && { bulkUnseen: skipped.unseen }),
         }),
         303,
       );
@@ -501,13 +495,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const selection = await selected(access, request);
       const { capsuleId } = request.body;
       const { added } = await setCapsuleMembers(
-        db,
+        { db, logger },
         actorOf(request),
         { id: capsuleId, ownerId: request.query.ownerId },
         { add: selection.ids, remove: [] },
-      );
-      logger.info(
-        `Bulk capsule ${capsuleId} by user ${sessionUserId(request)} in wardrobe ${access.ownerId}: ${added} added, ${selection.ids.length} selected${allNote(selection)}`,
       );
       return reply.redirect(
         backToSelection(viewOwner, selection.search, selection, {
@@ -557,17 +548,12 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { next, ...tags } = request.body;
       // Only what differs from the stored garment: the card posts its
       // checked chips every time, Next included.
-      const { access, viewOwner, changed } = await tagGarment(
-        db,
+      const { access, viewOwner } = await tagGarment(
+        { db, logger },
         actorOf(request),
         garmentAddress(request),
         tags,
       );
-      if (changed.length > 0) {
-        logger.info(
-          `Garment ${id} tagged by user ${sessionUserId(request)}: ${changed.join(', ')}`,
-        );
-      }
       if (next) {
         logger.info(
           `Tagging: user ${sessionUserId(request)} moved on from garment ${id}`,

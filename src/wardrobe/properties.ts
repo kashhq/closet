@@ -11,17 +11,24 @@
  * Design: docs/plans/2026-09-26-wardrobe-features.md, section 6.
  */
 
-/** The built-in categories, in the order pages list them. Others are free text. */
-export enum GarmentCategory {
-  ACCESSORIES = 'accessories',
-  BAGS = 'bags',
-  OUTERWEAR = 'outerwear',
-  DRESSES = 'dresses',
-  TOPS = 'tops',
-  BOTTOMS = 'bottoms',
-  FOOTWEAR = 'footwear',
-  OTHER = 'other',
-}
+/**
+ * The built-in categories, in the order pages list them; others are free
+ * text. A const object rather than an enum: `GarmentCategory.TOPS` reads
+ * the same, the values are plain strings, and it is erasable syntax (a
+ * type-stripping runtime has nothing to compile).
+ */
+export const GarmentCategory = {
+  ACCESSORIES: 'accessories',
+  BAGS: 'bags',
+  OUTERWEAR: 'outerwear',
+  DRESSES: 'dresses',
+  TOPS: 'tops',
+  BOTTOMS: 'bottoms',
+  FOOTWEAR: 'footwear',
+  OTHER: 'other',
+} as const;
+export type GarmentCategory =
+  (typeof GarmentCategory)[keyof typeof GarmentCategory];
 
 const BUILT_IN: readonly string[] = Object.values(GarmentCategory);
 
@@ -179,8 +186,7 @@ export type Condition = (typeof CONDITIONS)[number];
  * The only colours a garment may carry, in the order a colour set is stored
  * and shown. A garment's and a style profile's colours are
  * all text[] sets checked against this list (src/db/schema.ts), so adding
- * one is a migration. Each has a swatch class in views/assets/main.css
- * (`.ms-swatch--<name>`).
+ * one is a migration, and a `.swatch--<name>` rule in views/assets/main.css.
  */
 export const GARMENT_COLORS = [
   'red',

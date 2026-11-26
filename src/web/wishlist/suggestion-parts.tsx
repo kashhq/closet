@@ -5,10 +5,10 @@ import {
   OWNER_DISMISS_REASONS,
   type OwnerDismissReason,
 } from '../../wardrobe/suggestions';
-import { PostForm } from '../auth/form';
+import { PostForm } from '../form';
 import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { unlocksText } from '../gallery/goes-with';
-import { t } from '../i18n';
+import { t, type Translated } from '../i18n';
 import { type AgentLabel, museName } from '../write-origin';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import { priceLabel } from '../wardrobe/garment';
@@ -44,7 +44,7 @@ export function decisionToastOf(
 }
 
 /** Why something was set aside, as the owner reads it; null for one the plans' review set aside before #337 (its words are the note). */
-export function reasonText(reason: DismissReason | null): string {
+export function reasonText(reason: DismissReason | null): Translated {
   return t(`muse.reason.${reason ?? 'none'}`);
 }
 
