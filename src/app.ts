@@ -8,6 +8,7 @@ import Fastify, {
   LogController,
   type RouteOptions,
 } from 'fastify';
+import { onlyLoopback } from './allowed-hosts';
 import { type BuildInfo, loadBuildInfo } from './build-info';
 import {
   allowedHosts,
@@ -229,6 +230,13 @@ export async function createApp(
   boot.info(`Trusted proxies: ${trustProxy.join(', ')}`);
   const hosts = allowedHosts(config);
   boot.info(`Allowed hosts: ${[...hosts, 'loopback'].join(', ')}`);
+  // An install from before #702 on the default SITE_URL, opened by a LAN
+  // address or .local name, now answers every browser 421.
+  if (config.NODE_ENV === 'production' && onlyLoopback(hosts)) {
+    boot.warn(
+      'SITE_URL is a localhost URL and ALLOWED_HOSTS is empty: every request not addressed to localhost is refused with 421. Set SITE_URL to the address the household opens, or list each other name in ALLOWED_HOSTS',
+    );
+  }
   const build = buildInfoFor(config);
   boot.info(`Release ${build.release}, static cache key ${build.assetVersion}`);
 

@@ -168,7 +168,9 @@ The nightly reconciliation never deletes a photo set that has no `file` row: it 
 
 ## Allowed hosts
 
-Closet answers only requests addressed to `SITE_URL`'s host, an `ALLOWED_HOSTS` entry or loopback; any other Host is a bodiless 421 (DNS rebinding, #702; Request security). A reverse proxy passes the client's Host on (Caddy's `reverse_proxy` does by default), so every name anyone reaches the server by is an entry: the plain-HTTP twin, the MCP gate's public host, and the metrics scraper's `closet:3000` (a port other than 80 or 443 is part of the entry). The boot logs `Allowed hosts: ...`; a refused name is one `Security` warning, `Refused a request for host "<host>" with 421`. **Fix:** add it to `ALLOWED_HOSTS` and redeploy.
+Closet answers only requests addressed to `SITE_URL`'s host, an `ALLOWED_HOSTS` entry or loopback; any other Host, or none, is a 421 whose plain-text body names `ALLOWED_HOSTS` and `SITE_URL` (DNS rebinding, #702; Request security). A reverse proxy passes the client's Host on (Caddy's `reverse_proxy` does by default), so every name anyone reaches the server by is an entry: the plain-HTTP twin, the MCP gate's public host, and the metrics scraper's `closet:3000` (a port other than 80 or 443 is part of the entry). The boot logs `Allowed hosts: ...`; a refused name is one `Security` warning, `Refused a request for host "<host>" with 421`. **Fix:** add it to `ALLOWED_HOSTS` and redeploy.
+
+**Upgrading an install from before #702:** one left on the default `SITE_URL` (`http://localhost:3000`) and opened by a LAN address or `.local` name now answers that browser 421 (`This server does not answer for this host name`), and a production boot warns `SITE_URL is a localhost URL and ALLOWED_HOSTS is empty`. Set `SITE_URL` to the address the household opens, or list every name and address in `ALLOWED_HOSTS` (`closet.local,192.0.2.20:3000`; a port other than 80 or 443 is part of the entry).
 
 ## Trusted proxies
 

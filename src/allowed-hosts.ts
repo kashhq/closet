@@ -71,3 +71,15 @@ export function hostAllowlist(
     return LOOPBACK.has(authority.hostname) || keys.has(keyOf(authority));
   };
 }
+
+/**
+ * Whether `allowed` (host keys) names nothing but loopback: the server then
+ * answers only localhost, as an install still on the default SITE_URL with
+ * no ALLOWED_HOSTS does. createApp warns at boot in production.
+ */
+export function onlyLoopback(allowed: readonly string[]): boolean {
+  return allowed.every((key) => {
+    const authority = parseAuthority(key);
+    return authority !== undefined && LOOPBACK.has(authority.hostname);
+  });
+}

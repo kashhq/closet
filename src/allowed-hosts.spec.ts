@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostAllowlist } from './allowed-hosts';
+import { hostAllowlist, onlyLoopback } from './allowed-hosts';
 
 describe('hostAllowlist (#702)', () => {
   const allows = hostAllowlist(['closet.example.com', 'closet:3000']);
@@ -34,5 +34,16 @@ describe('hostAllowlist (#702)', () => {
     'user@closet.example.com',
   ])('refuses %j', (host) => {
     expect(allows(host)).toBe(false);
+  });
+});
+
+describe('onlyLoopback, the boot warning (#702)', () => {
+  it.each([
+    [['localhost:3000'], true],
+    [['127.0.0.1'], true],
+    [['localhost:3000', 'closet.home.arpa'], false],
+    [['closet.example.com'], false],
+  ])('%j: %s', (hosts, expected) => {
+    expect(onlyLoopback(hosts)).toBe(expected);
   });
 });

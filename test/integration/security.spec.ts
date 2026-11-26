@@ -1,3 +1,4 @@
+import { connect } from 'node:net';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { garment, outfitCalendar, user } from '../../src/db/schema';
@@ -234,13 +235,69 @@ describe('request security', () => {
       ['MCP', { method: 'POST', url: '/mcp', payload: {} }],
       ['a static path', { method: 'GET', url: '/js/connectivity.js' }],
     ] as const)(
-      'refuses %s for a foreign Host with a bodiless 421',
+      'refuses %s for a foreign Host with a 421 that names the fix',
       async (_label, request) => {
         const res = await forHost(ATTACKER, request);
         expect(res.statusCode).toBe(421);
-        expect(res.body).toBe('');
+        expect(res.headers['content-type']).toBe('text/plain; charset=utf-8');
+        expect(res.headers['x-content-type-options']).toBe('nosniff');
+        expect(res.body).toContain('ALLOWED_HOSTS');
+        expect(res.body).not.toContain(ATTACKER);
       },
     );
+
+    it('refuses a request with no Host at all with the 421, not a 500', async () => {
+      t.logs.clear();
+      // inject() always sends a Host, and HTTP/1.1 requires one, so this is
+      // HTTP/1.0 over a real socket.
+      const address = await t.app.listen({ host: '127.0.0.1', port: 0 });
+      const { hostname, port } = new URL(address);
+      const answer = await new Promise<string>((resolve, reject) => {
+        const socket = connect(Number(port), hostname, () => {
+          socket.end(['GET /outfits HTTP/1.0', '', ''].join('\r\n'));
+        });
+        let received = '';
+        socket.on('data', (chunk) => (received += chunk.toString()));
+        socket.on('end', () => resolve(received));
+        socket.on('error', reject);
+      });
+      expect(answer).toMatch(/^HTTP\/1\.1 421 /);
+      expect(t.logs.messages('warn', 'Security')).toContainEqual(
+        expect.stringContaining('"(none)"'),
+      );
+    });
+
+    it('reads X-Forwarded-Host only from a trusted proxy', async () => {
+      const outfits = (
+        headers: Record<string, string>,
+        remoteAddress?: string,
+      ) =>
+        t.inject({
+          method: 'GET',
+          url: '/outfits',
+          anonymous: true,
+          headers,
+          remoteAddress,
+        });
+      // Fastify's request.host takes X-Forwarded-Host only when the direct
+      // peer is in TRUSTED_PROXIES (127.0.0.1 here, inject's default).
+      const listed = { 'x-forwarded-host': 'localhost:3000' };
+      expect(
+        (await outfits({ host: ATTACKER, ...listed }, '203.0.113.9'))
+          .statusCode,
+      ).toBe(421);
+      expect((await outfits({ host: ATTACKER, ...listed })).statusCode).toBe(
+        302,
+      );
+      expect(
+        (
+          await outfits({
+            host: 'localhost:3000',
+            'x-forwarded-host': ATTACKER,
+          })
+        ).statusCode,
+      ).toBe(421);
+    });
 
     it('refuses a rebound registration before it writes', async () => {
       const email = 'rebound@example.com';
