@@ -15,6 +15,11 @@ import { SyncedCapsule, toSyncedCapsule } from '../capsules/capsule-resource';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { outfitsByIds } from '../outfits/queries';
+import { agentRequestsByIds } from '../requests/queries';
+import {
+  SyncedAgentRequest,
+  toSyncedAgentRequest,
+} from '../requests/request-resource';
 import { SyncedOutfit, toSyncedOutfit } from '../outfits/outfit-resource';
 import { selfiesByIds } from '../selfies/queries';
 import { SyncedSelfie, toSyncedSelfie } from '../selfies/selfie-resource';
@@ -244,6 +249,17 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
         data: toWeekTemplate(slots),
       })),
   }),
+  // The asker's alone, like the rest; no agent names (SyncedAgentRequest).
+  agent_request: feedEntry({
+    name: 'agentRequest',
+    shared: false,
+    schema: SyncedAgentRequest,
+    read: async (db, ids) =>
+      (await agentRequestsByIds(db, ids)).map((row) => ({
+        id: row.id,
+        data: toSyncedAgentRequest(row),
+      })),
+  }),
   body_measurements: feedEntry({
     name: 'measurements',
     shared: false,
@@ -267,7 +283,7 @@ const SHARED_STAMPS = OWN_STAMPS.filter((stamp) => FEED[stamp.resource].shared);
  * feed never saw its rows below its positions, so it is expired (a full
  * sync) rather than silently missing them. #608 registering the last eight
  * moved it once; #716 the week template (whose full sync also gave every
- * cached style profile its rules).
+ * cached style profile its rules); #1285 agent requests.
  */
 const FEED_COVERAGE = [...SYNC_ROOTS, ...SYNC_STAMPS].reduce(
   (bits, _resource, index) => bits | (1 << index),

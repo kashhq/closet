@@ -158,6 +158,14 @@ export const OPERATIONS = [
   'addOutfitRule',
   'deleteOutfitRule',
   'listSharedWardrobes',
+  // #1285 (#681 B1): "Ask your agent", the asker's side. The page twins
+  // (POST /requests, its withdraw and seen) join PAGE_WRITES with #1286;
+  // the agent's claim and answer are MCP_WRITES' agentOnly with #1287.
+  'listAgentRequests',
+  'createAgentRequest',
+  'getAgentRequest',
+  'withdrawAgentRequest',
+  'markAgentRequestSeen',
   // #196b: the changes feed (a native client's sync; no page twin).
   'listChanges',
 ] as const;

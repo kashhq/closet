@@ -37,6 +37,7 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Some types ar
                        and which origins Saved keeps (#659). See Outfits
                        look-reaction.ts: an agent outfit's reaction machine
                        (lookReactionTransition, pure; first the plans' looks, #290). See Outfits
+                       agent-requests.ts: requestMove, pure. See Agent requests
                        money.ts: prices in cents (toCents, fromCents): insights' costs and
                        a need's budget fit
                        week.ts: the week template (weekdays, their occasions, the derived

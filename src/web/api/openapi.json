@@ -8955,6 +8955,202 @@
           }
         }
       },
+      "AgentRequestSubject": {
+        "title": "AgentRequestSubject",
+        "description": "What it is about: one of your garments or a garment of a wardrobe shared with you, one of your trips, or one of your wishlist needs",
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "garment",
+              "trip",
+              "need"
+            ]
+          },
+          "id": {
+            "type": "integer"
+          }
+        }
+      },
+      "AgentRequest": {
+        "title": "AgentRequest",
+        "description": "Something you asked your agent: any of your agent tokens finds it over MCP, claims it and answers it. `subject` is absent with none or once you no longer see it (a share ended, the garment deleted); `claimedBy` names the agent working on it only while `claimed`, `answeredBy` the one that answered",
+        "type": "object",
+        "required": [
+          "id",
+          "body",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "clientId": {
+            "format": "uuid",
+            "description": "Your id for its create",
+            "type": "string"
+          },
+          "body": {
+            "description": "What you asked, trimmed",
+            "type": "string"
+          },
+          "status": {
+            "description": "`open` until one of your agent tokens claims it (`claimed`, held 30 minutes, then free for another agent), then `answered`; `withdrawn` once you take it back",
+            "type": "string",
+            "enum": [
+              "open",
+              "claimed",
+              "answered",
+              "withdrawn"
+            ]
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentRequestSubject"
+          },
+          "claimedBy": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "claimedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "answer": {
+            "description": "The agent's reply, as it wrote it",
+            "type": "string"
+          },
+          "answeredBy": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "answeredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "answerSeenAt": {
+            "format": "date-time",
+            "description": "When you said Got it",
+            "type": "string"
+          },
+          "withdrawnAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "AgentRequestList": {
+        "title": "AgentRequestList",
+        "description": "A page of your requests to your agent, newest first",
+        "type": "object",
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRequest"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "NewAgentRequest": {
+        "title": "NewAgentRequest",
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S",
+            "description": "What you ask, in your words; stored trimmed",
+            "type": "string"
+          },
+          "subject": {
+            "description": "What it is about: one of your garments or a garment of a wardrobe shared with you, one of your trips, or one of your wishlist needs. One you cannot see is the 404 of its kind",
+            "type": "object",
+            "required": [
+              "kind",
+              "id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "garment",
+                  "trip",
+                  "need"
+                ]
+              },
+              "id": {
+                "minimum": 1,
+                "maximum": 2147483647,
+                "type": "integer"
+              }
+            }
+          },
+          "clientId": {
+            "format": "uuid",
+            "description": "Your id for this create, for retrying it offline: a retry answers the first request of that id (200)",
+            "type": "string"
+          }
+        }
+      },
+      "AgentRequestCreated": {
+        "title": "AgentRequestCreated",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        }
+      },
+      "AgentRequestOutcome": {
+        "title": "AgentRequestOutcome",
+        "description": "Where the request is after the call",
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "changed"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "status": {
+            "description": "`open` until one of your agent tokens claims it (`claimed`, held 30 minutes, then free for another agent), then `answered`; `withdrawn` once you take it back",
+            "type": "string",
+            "enum": [
+              "open",
+              "claimed",
+              "answered",
+              "withdrawn"
+            ]
+          },
+          "changed": {
+            "description": "False when it was there already (withdrawn, or seen)",
+            "type": "boolean"
+          }
+        }
+      },
       "SyncedGarmentCare": {
         "title": "SyncedGarmentCare",
         "description": "The owner's own care records as stored: only on their own wardrobe. What the wears and repairs add up to is the client's to derive",
@@ -10083,6 +10279,99 @@
           }
         }
       },
+      "SyncedAgentRequest": {
+        "title": "SyncedAgentRequest",
+        "description": "Something you asked your agent, as stored",
+        "type": "object",
+        "required": [
+          "id",
+          "body",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "description": "`open` until one of your agent tokens claims it (`claimed`, held 30 minutes, then free for another agent), then `answered`; `withdrawn` once you take it back",
+            "type": "string",
+            "enum": [
+              "open",
+              "claimed",
+              "answered",
+              "withdrawn"
+            ]
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentRequestSubject"
+          },
+          "claimedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "answeredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "answerSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "withdrawnAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "AgentRequestChange": {
+        "title": "AgentRequestChange",
+        "type": "object",
+        "required": [
+          "resource",
+          "ownerId",
+          "id",
+          "revision",
+          "data"
+        ],
+        "properties": {
+          "resource": {
+            "type": "string",
+            "enum": [
+              "agentRequest"
+            ]
+          },
+          "ownerId": {
+            "description": "The wardrobe it belongs to: yours, or one shared with you",
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "clientId": {
+            "format": "uuid",
+            "description": "The id your create carried, when it carried one",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Its owner's revision when it was last written or deleted",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SyncedAgentRequest"
+          }
+        }
+      },
       "SyncedMeasurements": {
         "title": "SyncedMeasurements",
         "description": "Your body measurements and how you read them: never anyone else’s",
@@ -10168,6 +10457,7 @@
               "brandSize",
               "styleProfile",
               "weekTemplate",
+              "agentRequest",
               "measurements"
             ]
           },
@@ -10239,6 +10529,9 @@
                   "$ref": "#/components/schemas/WeekTemplateChange"
                 },
                 {
+                  "$ref": "#/components/schemas/AgentRequestChange"
+                },
+                {
                   "$ref": "#/components/schemas/MeasurementsChange"
                 }
               ],
@@ -10256,6 +10549,7 @@
                   "brandSize": "#/components/schemas/BrandSizeChange",
                   "styleProfile": "#/components/schemas/StyleProfileChange",
                   "weekTemplate": "#/components/schemas/WeekTemplateChange",
+                  "agentRequest": "#/components/schemas/AgentRequestChange",
                   "measurements": "#/components/schemas/MeasurementsChange"
                 }
               }
@@ -17806,6 +18100,295 @@
         }
       }
     },
+    "/api/v1/agent-requests": {
+      "get": {
+        "operationId": "listAgentRequests",
+        "summary": "Your requests to your agent, newest first",
+        "tags": [
+          "agent requests"
+        ],
+        "description": "Every request you asked, whatever its status: open, claimed by one of your agent tokens, answered or withdrawn.",
+        "parameters": [
+          {
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "description": "The previous page's `pagination.nextCursor`"
+          },
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "How many a page holds: 20 unless asked, at most 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of your requests to your agent, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequestList"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAgentRequest",
+        "summary": "Asks your agent for something",
+        "tags": [
+          "agent requests"
+        ],
+        "description": "Waits `open` until one of your agent tokens connects over MCP, claims it and answers it; it is asked whether or not an agent is connected now. A `subject` you cannot see is the 404 of its kind. 201 with its `Location`. With a `clientId`, a retry answers the first request of that id (200, its `Location`) and creates nothing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewAgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequestCreated"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequestCreated"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent-requests/{id}": {
+      "get": {
+        "operationId": "getAgentRequest",
+        "summary": "One of your requests to your agent",
+        "tags": [
+          "agent requests"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Something you asked your agent: any of your agent tokens finds it over MCP, claims it and answers it. `subject` is absent with none or once you no longer see it (a share ended, the garment deleted); `claimedBy` names the agent working on it only while `claimed`, `answeredBy` the one that answered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequest"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent-requests/{id}/withdraw": {
+      "post": {
+        "operationId": "withdrawAgentRequest",
+        "summary": "Takes a request back",
+        "tags": [
+          "agent requests"
+        ],
+        "description": "An open or claimed request is `withdrawn`, and an agent answering it after is refused. Set-state: one withdrawn already answers `changed: false`; an answered one is a 409.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the request is after the call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequestOutcome"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent-requests/{id}/seen": {
+      "post": {
+        "operationId": "markAgentRequestSeen",
+        "summary": "Says you read the answer (\"Got it\")",
+        "tags": [
+          "agent requests"
+        ],
+        "description": "Stamps `answerSeenAt` on an answered request. Set-state: one seen already answers `changed: false`; one not answered yet is a 409.",
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the request is after the call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRequestOutcome"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "A problem (RFC 9457): switch on `code`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/changes": {
       "get": {
         "operationId": "listChanges",
@@ -17813,7 +18396,7 @@
         "tags": [
           "sync"
         ],
-        "description": "Rows and deletions after `cursor`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its `cursor`; call again while `more`. A 410 `cursor_expired` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), the feed has carried more since (a new resource), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry `snapshot`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules. The style profile (with its outfit rules), the measurements and the week template are one per user, the change's `id` yours; the week template is never deleted, only emptied.\n\nWhat the feed keeps fresh, and what you fetch online each time:\n\n| What | Reads | Kept fresh by |\n| --- | --- | --- |\n| Garments (a share's too) | `listGarments`, `getGarment` | this feed: `garment`, `wear`, `capsule` |\n| Wears, washes and away | none: the feed only | this feed: `wear`, `garment` |\n| Outfits, the agent’s proposals included | `listOutfits`, `getOutfit` | this feed: `outfit`, `garment`, `calendarEntry` |\n| The calendar and its selfies | `listCalendarEntries` | this feed: `calendarEntry`, `outfit`, `selfie` |\n| Plan my week's batches (for their undo) | none: the feed only | this feed: `weekPlan` |\n| The week template | `getWeekTemplate` | this feed: `weekTemplate` |\n| Trips and their packing | `listTrips`, `getTrip` | this feed: `trip`, `outfit`, `garment`, `calendarEntry` |\n| Capsules (a share's too) | `listCapsules`, `getCapsule` | this feed: `capsule`, `garment` |\n| Sizes and measurements | `getSizes`, `listBrandSizes` | this feed: `brandSize`, `measurements` |\n| The style profile and its outfit rules | `getStyleProfile` | this feed: `styleProfile` |\n| Today | `getToday` | fetching it online: its forecast and suggestions; its entries are the feed's calendarEntry |\n| Ideas, clashes and avoided pairs | `listIdeas`, `getGoesWith` | fetching it online: generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile |\n| The wishlist: the agent’s inbox and needs | `getWishlist`, `getWishlistNeed` | fetching it online: the needs and suggestions are not synced; its garments are the feed's garment |\n| Saved looks and their photos | `listLooks`, `getLook`, `getLookRecreation`, `getLookPhoto` | fetching it online: not synced (owner decision, 2026-11-13) |\n| Selfie photos | `getSelfiePhoto` | fetching it online: image bytes, fetched when shown |\n| Insights and the year's recap | `getInsights`, `getRecap` | fetching it online: figures computed on the server over the whole history |\n| Weather, places and a trip's forecast | `getWeather`, `searchPlaces`, `getTripWeather` | fetching it online: a live forecast and the weather settings |\n| Shared wardrobes | `listSharedWardrobes` | fetching it online: who shares with you and how; a sync's `snapshot` lists their ids |\n| You, and this API's spec | `getMe`, `getOpenApi` | fetching it online: the account and the server's features, read at sign-in |",
+        "description": "Rows and deletions after `cursor`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its `cursor`; call again while `more`. A 410 `cursor_expired` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), the feed has carried more since (a new resource), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry `snapshot`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules. The style profile (with its outfit rules), the measurements and the week template are one per user, the change's `id` yours; the week template is never deleted, only emptied.\n\nWhat the feed keeps fresh, and what you fetch online each time:\n\n| What | Reads | Kept fresh by |\n| --- | --- | --- |\n| Garments (a share's too) | `listGarments`, `getGarment` | this feed: `garment`, `wear`, `capsule` |\n| Wears, washes and away | none: the feed only | this feed: `wear`, `garment` |\n| Outfits, the agent’s proposals included | `listOutfits`, `getOutfit` | this feed: `outfit`, `garment`, `calendarEntry` |\n| The calendar and its selfies | `listCalendarEntries` | this feed: `calendarEntry`, `outfit`, `selfie` |\n| Plan my week's batches (for their undo) | none: the feed only | this feed: `weekPlan` |\n| The week template | `getWeekTemplate` | this feed: `weekTemplate` |\n| Trips and their packing | `listTrips`, `getTrip` | this feed: `trip`, `outfit`, `garment`, `calendarEntry` |\n| Capsules (a share's too) | `listCapsules`, `getCapsule` | this feed: `capsule`, `garment` |\n| Sizes and measurements | `getSizes`, `listBrandSizes` | this feed: `brandSize`, `measurements` |\n| The style profile and its outfit rules | `getStyleProfile` | this feed: `styleProfile` |\n| Requests to your agent | `listAgentRequests`, `getAgentRequest` | this feed: `agentRequest`, `garment`, `trip` |\n| Today | `getToday` | fetching it online: its forecast and suggestions; its entries are the feed's calendarEntry |\n| Ideas, clashes and avoided pairs | `listIdeas`, `getGoesWith` | fetching it online: generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile |\n| The wishlist: the agent’s inbox and needs | `getWishlist`, `getWishlistNeed` | fetching it online: the needs and suggestions are not synced; its garments are the feed's garment |\n| Saved looks and their photos | `listLooks`, `getLook`, `getLookRecreation`, `getLookPhoto` | fetching it online: not synced (owner decision, 2026-11-13) |\n| Selfie photos | `getSelfiePhoto` | fetching it online: image bytes, fetched when shown |\n| Insights and the year's recap | `getInsights`, `getRecap` | fetching it online: figures computed on the server over the whole history |\n| Weather, places and a trip's forecast | `getWeather`, `searchPlaces`, `getTripWeather` | fetching it online: a live forecast and the weather settings |\n| Shared wardrobes | `listSharedWardrobes` | fetching it online: who shares with you and how; a sync's `snapshot` lists their ids |\n| You, and this API's spec | `getMe`, `getOpenApi` | fetching it online: the account and the server's features, read at sign-in |",
         "parameters": [
           {
             "schema": {

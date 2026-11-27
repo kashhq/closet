@@ -82,6 +82,12 @@ export const READ_COVERAGE: readonly CoverageRow[] = [
     feed: ['styleProfile'],
   },
   {
+    what: 'Requests to your agent',
+    reads: ['listAgentRequests', 'getAgentRequest'],
+    // The agent's name is the read's: no request write follows a token's rename.
+    feed: ['agentRequest', 'garment', 'trip'],
+  },
+  {
     what: 'Today',
     reads: ['getToday'],
     onlineOnly:

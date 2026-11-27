@@ -17,6 +17,7 @@ import { t, type StringKey } from './i18n';
 /** One message per resource, so every surface words a refusal the same way. */
 const NOT_FOUND_MESSAGE = {
   account: 'refusal.notFound.account',
+  agentRequest: 'refusal.notFound.agentRequest',
   avoidedPair: 'refusal.notFound.avoidedPair',
   brand: 'refusal.notFound.brand',
   calendarEntry: 'refusal.notFound.calendarEntry',

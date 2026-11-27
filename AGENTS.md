@@ -84,6 +84,7 @@ Each area's detail lives in an `AGENTS.md` beside its code, with `CLAUDE.md` a s
 | Inspiration | `src/web/inspiration/AGENTS.md` |
 | Today | `src/web/today/AGENTS.md` |
 | Weekly auto-plan | `src/web/week-plan/AGENTS.md` |
+| Agent requests | `src/web/requests/AGENTS.md` |
 | Web Push | `src/push/AGENTS.md` |
 | MCP server | `src/web/mcp/AGENTS.md` |
 | Changes feed | `src/web/sync/AGENTS.md` |

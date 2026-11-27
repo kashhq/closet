@@ -60,6 +60,8 @@ export const SYNC_ROOTS = [
     id: 'user_id',
     clientId: false,
   },
+  // "Ask your agent" (#681 B1): the asker's; its client id is the outbox's (#1286).
+  { table: 'agent_request', owner: 'owner_id', id: 'id', clientId: true },
 ] as const satisfies readonly SyncRoot[];
 
 export const SYNC_CHILDREN = [
