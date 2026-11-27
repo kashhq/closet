@@ -1,12 +1,13 @@
 import { t, type Translated } from '../i18n';
 import { SAVED_PATH } from '../outfits/urls';
 import { WISHLIST_PATH } from '../wardrobe/urls';
+import { type AgentLabel, agentName } from '../write-origin';
 import type { RoundCounts } from './rounds';
 
 /**
- * How a round of Muse's is said and where it leads (#337), the same on
+ * How an agent's round is said and where it leads (#337), the same on
  * Today's card and in its notification: "3 outfits, 7 pieces", and the
- * Outfits tab (Muse's outfits first) when it brought any, else the
+ * Outfits tab (the agent's outfits first) when it brought any, else the
  * Wishlist inbox.
  */
 
@@ -23,6 +24,28 @@ export function roundWhat({ outfits, pieces }: RoundCounts): Translated {
   if (pieces === 0) return outfitText;
   if (outfits === 0) return pieceText;
   return t('muse.round.BOTH', { outfits: outfitText, pieces: pieceText });
+}
+
+/**
+ * "Dana’s agent: 3 outfits to consider" on Today's card and in the push
+ * body. Sentence-initial, so an agent with no token ("Your agent") has its
+ * own key rather than a capitalised fallback name.
+ */
+export function roundCard(
+  agent: AgentLabel | null,
+  counts: RoundCounts,
+): Translated {
+  const what = roundWhat(counts);
+  return agent
+    ? t('muse.round.CARD', { agent: agentName(agent), what })
+    : t('muse.round.CARD_UNNAMED', { what });
+}
+
+/** The push title: the same two-key split as roundCard. */
+export function roundPushTitle(agent: AgentLabel | null): Translated {
+  return agent
+    ? t('muse.round.PUSH_TITLE', { agent: agentName(agent) })
+    : t('muse.round.PUSH_TITLE_UNNAMED');
 }
 
 /** Where Review goes: the outfits first (doc section 1), else the options. */
