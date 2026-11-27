@@ -55,7 +55,7 @@ import { callTool, mcpRequest, mintToken, scopeFields } from './mcp';
  * weather on, each call made once untimed and then counted, so a write
  * counts its repeat and a forecast is warm. Every count includes the
  * token's own read (authenticateToken). The tools' behaviour is mcp.spec,
- * mcp-muse.spec and mcp-photos.spec's; this one pins
+ * mcp-agent.spec and mcp-photos.spec's; this one pins
  * the statements, and proves the reads #172 dropped are gone. With every
  * tool's arguments at hand it also holds the token scopes (#701): a
  * read-only token's reads write nothing, an own-wardrobe-only token is
@@ -391,9 +391,9 @@ describe('MCP statements per tool (#172)', () => {
     ['compare_with_shared_wardrobe', () => ({ ownerId: ids.dana }), 4],
     ['get_style_profile', () => ({}), 2], // 3
     ['get_sizes', () => ({}), 3],
-    // Muse's (#337). The closet, as a plan's gap view read it.
+    // The agent's (#337). The closet, as a plan's gap view read it.
     ['get_closet_coverage', () => ({ targets: [{ category: 'tops' }] }), 2],
-    // The inbox's one statement (readInbox) and the Outfits tab's Muse
+    // The inbox's one statement (readInbox) and the Outfits tab's agent
     // outfits beside it, in parallel.
     ['list_suggestions', () => ({}), 3],
     // Every list and the cursor's move in one statement.

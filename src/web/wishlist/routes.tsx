@@ -55,7 +55,7 @@ function readPurchase(
 }
 
 /**
- * "Bought it" (#18, plan section 11; the Wishlist tab itself is Muse's
+ * "Bought it" (#18, plan section 11; the Wishlist tab itself is the agent's
  * inbox, inbox-routes.tsx). Wishlist items
  * are the wardrobe's garments with status 'wishlist', so they are shared
  * like the rest of it (owner decision, #18): a VIEW grantee reads the
@@ -126,7 +126,7 @@ export const wishlistRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   );
 
   // Into the closet (buyWishlistItem: buyGarment's buy and, when asked, the
-  // replaced garment's archive, then a Muse pick's need settled, in one
+  // replaced garment's archive, then an agent pick's need settled, in one
   // transaction), then its page with a toast. A grantee asking for the
   // archive is a 403 before anything is written; an item already bought is
   // a 409.

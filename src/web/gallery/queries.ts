@@ -520,7 +520,7 @@ export function readGoesWithInputs(json: GoesWithInputsJson): GoesWithInputs {
 /**
  * GoesWithInputs for many wishlist items at once: the owner's wishlist
  * garments `which` picks (a condition on garment), with one closet, one
- * avoid list and one rule list for all of them. The Muse inbox's "Unlocks
+ * avoid list and one rule list for all of them. The agent inbox's "Unlocks
  * N" and a need's options side by side (src/web/wishlist/inbox.ts) read it
  * with their other lists in one statement.
  */
@@ -605,8 +605,8 @@ type SavedSlot = [outfitId: number, garmentId: number, category: string];
  * src/web/outfits/references.ts) is left out: the rule compares the drawn
  * roles only, so one whose piece to buy is a layer would otherwise keep
  * the closet garments it shares from ever being suggested together.
- * Muse's proposals count, declined ones too (#335): Ideas never offers a
- * set Muse proposed or the owner turned down, nor the week planner one it
+ * The agent's proposals count, declined ones too (#335): Ideas never offers a
+ * set the agent proposed or the owner turned down, nor the week planner one it
  * would then plan unsaved (outfitMayBeHeld refuses a proposal).
  */
 function savedSlotsSql(ownerId: number): SQL<SavedSlot[]> {

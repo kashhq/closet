@@ -610,7 +610,7 @@ export function judgeGoesWithCloset({
 /**
  * "Unlocks N" for many wishlist items over one closet read
  * (goesWithManyInputsSql): each item's outfitCount, by garment id. The
- * Muse inbox's option thumbs (src/web/wishlist/inbox.ts). One search each,
+ * The agent inbox's option thumbs (src/web/wishlist/inbox.ts). One search each,
  * about 3 ms over the demo closet (#333: 120 options in ~360 ms).
  */
 export function unlocksOf({
@@ -629,7 +629,7 @@ export function unlocksOf({
 
 /**
  * Each item's count and best few outfits (bestOutfits) over one closet
- * read, by garment id: a Muse need's options side by side (C,
+ * read, by garment id: an agent need's options side by side (C,
  * src/web/wishlist/group-page.tsx). The same search and seed as the item's
  * own page, so the counts agree.
  */

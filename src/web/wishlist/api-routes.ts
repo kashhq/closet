@@ -48,18 +48,18 @@ function noteOf(note: string | undefined): string | null {
 }
 
 /**
- * The wishlist and Muse's inbox on /api/v1 (#194b; plan section 6),
+ * The wishlist and the agent's inbox on /api/v1 (#194b; plan section 6),
  * registered by apiPlugin, each calling what its page twin calls
  * (operations.ts names the twin): readInbox and requireNeed for the tab and
  * a need's screen, makeDecision for every decision the owner makes,
- * buyWishlistItem for "Bought it", markNeedsSeen for "New from Muse",
+ * buyWishlistItem for "Bought it", markNeedsSeen for "New from the agent",
  * goesWithCloset for a wishlist item's "Goes with my closet". Each refuses
  * itself. The wishlist is shared like the rest of the wardrobe
- * (src/web/wishlist/AGENTS.md): a VIEW share reads it and Muse's notes, a
+ * (src/web/wishlist/AGENTS.md): a VIEW share reads it and the agent's notes, a
  * MANAGE share buys, and every decision, the unlocks and goes-with are the
  * owner's alone. A new item is POST /garments with `destination`
  * `wishlist`; "Bought a different one" is POST /garments with
- * `boughtForNeedId`. Muse's own writes stay MCP's (agentOnly).
+ * `boughtForNeedId`. The agent's own writes stay MCP's (agentOnly).
  */
 export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
@@ -74,9 +74,9 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       schema: {
         operationId: 'getWishlist',
         tags: ['wishlist'],
-        summary: "The wishlist, as Muse's inbox",
+        summary: 'The wishlist, as the agent’s inbox',
         description:
-          "Ready to buy, Muse's needs with their options, your own items, the needs Muse is still looking for, and what was set aside. A share reads it without the unlocks (they judge the owner's closet).",
+          "Ready to buy, the agent’s needs with their options, your own items, the needs the agent is still looking for, and what was set aside. A share reads it without the unlocks (they judge the owner's closet).",
         querystring: WishlistQuery,
         response: apiResponses({ 200: Wishlist }),
       },
@@ -107,7 +107,7 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       schema: {
         operationId: 'markWishlistSeen',
         tags: ['wishlist'],
-        summary: '"New from Muse": what came in since you last looked',
+        summary: '"New from the agent": what came in since you last looked',
         description:
           'Your own inbox: answers the open needs with options suggested since the last call (every one the first time), and marks them seen, so the next call answers only newer ones.',
         response: apiResponses({ 200: NewNeedsSeen }),
@@ -160,7 +160,7 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       schema: {
         operationId: 'decideWishlistPick',
         tags: ['wishlist'],
-        summary: "Decides one of Muse's options",
+        summary: 'Decides one of the agent’s options',
         description:
           "This one (`choose`), Not for me (`dismiss`, with your reason) or its Undo, the owner's alone (a share is a 403). An option outside the wardrobe is a 404; a move its state does not take (a double tap, a stale screen) a 409.",
         params: GarmentParams,
@@ -234,7 +234,7 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['wishlist'],
         summary: '"Bought it": a wishlist item into the closet',
         description:
-          "With the day and the price paid, and for one of Muse's options its need settled. Your own wardrobe or a MANAGE share; `archiveReplaced` the owner's alone. A garment no longer on the wishlist (bought already: a retry) is a 409.",
+          "With the day and the price paid, and for one of the agent’s options its need settled. Your own wardrobe or a MANAGE share; `archiveReplaced` the owner's alone. A garment no longer on the wishlist (bought already: a retry) is a 409.",
         params: GarmentParams,
         querystring: WishlistQuery,
         body: PurchaseInput,
@@ -268,7 +268,8 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       schema: {
         operationId: 'returnGarment',
         tags: ['wishlist'],
-        summary: "Returned it: one of Muse's options taken back after buying",
+        summary:
+          'Returned it: one of the agent’s options taken back after buying',
         description:
           "Archived and set aside as returned, its need open again: the owner's alone. A garment that is no bought option is a 409.",
         params: GarmentParams,

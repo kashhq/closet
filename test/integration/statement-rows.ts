@@ -84,7 +84,7 @@ export async function repairedGarment(
   return { id, repairId: logged.json<{ id: number }>().id };
 }
 
-/** A loose garment (`bare`), and an outfit (`id`) holding another: Muse's proposal for `proposal`. */
+/** A loose garment (`bare`), and an outfit (`id`) holding another: the agent's proposal for `proposal`. */
 export async function outfitRows(t: TestApp, given?: 'proposal') {
   const bare = await garment(t, 'Counted', 'shirt');
   const id = await outfitOf(t, await garment(t, 'Held', 'shirt'));

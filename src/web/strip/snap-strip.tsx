@@ -11,7 +11,7 @@ import { pageModule } from '../page-contract';
  * strip's hidden input. A page needs no script of its own. See ./AGENTS.md.
  *
  * Used by Styling's rows (src/web/styling/styling-row.tsx), Recreate's
- * pieces, Ideas, Today, Goes-with's best outfits and a Muse need's options.
+ * pieces, Ideas, Today, Goes-with's best outfits and an agent need's options.
  */
 
 /**
@@ -58,7 +58,7 @@ const SIZES = {
       'lg:before:mr-0 lg:after:ml-0 lg:before:w-[calc(50%-10rem)] lg:after:w-[calc(50%-10rem)]',
   },
   // The same card with the next one peeking in on a phone (Today's rows, a
-  // Muse need's options), flush left: the first card cannot be centred there.
+  // The agent need's options), flush left: the first card cannot be centred there.
   peek: {
     item: 'w-[85%]',
     lgItem: 'lg:w-72',
@@ -100,7 +100,7 @@ export type SnapSize = keyof typeof SIZES;
  *    Short browse rows (Goes-with).
  *  - `grid`: nothing scrolls; the items flow into `IDEA_GRID` and the step
  *    buttons hide. A paging sentinel among the items loads the next page as
- *    the grid's last row scrolls in (Ideas, Today, a Muse need's options).
+ *    the grid's last row scrolls in (Ideas, Today, an agent need's options).
  * The strip carries it as `data-snap-desktop` (absent for `strip`), and
  * snap-strip.js watches no `row` or `grid` strip at `lg`: nothing there is
  * chosen by scrolling.

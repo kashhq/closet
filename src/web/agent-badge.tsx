@@ -12,20 +12,20 @@ import { type AgentLabel, agentName } from './write-origin';
  */
 export function AgentBadge({
   agent,
-  byMuse = false,
+  byAgent = false,
 }: {
   agent: AgentLabel | null;
   /**
-   * The row is one of Muse's: `suggested_at` (a garment) or `proposed_at`
+   * The row is one of the agent's: `suggested_at` (a garment) or `proposed_at`
    * (an outfit), the explicit marker, never a token on the row (#821). Its
-   * own "From Muse" says who made it, so it gets no second badge; a
-   * surface that can show a Muse row states its marker here, so the rule is
+   * own "From the agent" says who made it, so it gets no second badge; a
+   * surface that can show an agent row states its marker here, so the rule is
    * decided in this one place (calendar entries and trip outfits are never
-   * Muse's).
+   * The agent's).
    */
-  byMuse?: boolean;
+  byAgent?: boolean;
 }) {
-  if (agent === null || byMuse) return null;
+  if (agent === null || byAgent) return null;
   const name = agentName(agent);
   return (
     <span

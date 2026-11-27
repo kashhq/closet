@@ -34,12 +34,12 @@ type Db = WebOptions['db'];
 
 /**
  * The suggestion access path (#188; docs/plans/2026-11-12-json-api.md
- * section 4): a need read, every decision the owner makes on Muse's
+ * section 4): a need read, every decision the owner makes on the agent's
  * suggestions, and the agent's writes of them, each taking the Actor and
  * enforcing access itself, so a page, an MCP tool and the API refuse alike.
- * A need is read by whoever reads the wishlist (a VIEW grantee sees Muse's
+ * A need is read by whoever reads the wishlist (a VIEW grantee sees the agent's
  * notes, owner decision 2026-10-05); every decision is the owner's alone.
- * Muse's writes are the caller's own wardrobe (no ownerId: a token acts as
+ * The agent's writes are the caller's own wardrobe (no ownerId: a token acts as
  * its user). The writers underneath (decisions.ts) trust their `ownerId`.
  * "Bought it" is purchase.ts's, "Bought a different one" destination.ts's.
  */
@@ -122,7 +122,7 @@ export async function makeDecision(
     if (outcome.reason === 'not-found') {
       throw new NotFound(subject.resource, { logDetail });
     }
-    throw new HttpError(409, t('muse.STALE'), { logDetail });
+    throw new HttpError(409, t('agent.STALE'), { logDetail });
   }
   logOp(logger, actor, 'suggestion.decided', {
     decision: decision.kind,
@@ -141,7 +141,7 @@ export async function makeDecision(
 }
 
 /**
- * "New from Muse" (markSuggestionsSeen): the open needs with picks the
+ * "New from the agent" (markSuggestionsSeen): the open needs with picks the
  * owner has not looked at, and their marker moved. One line only when
  * there was something new.
  */

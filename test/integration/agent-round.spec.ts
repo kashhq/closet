@@ -12,7 +12,7 @@ import {
 } from 'vitest';
 import webpush, { type PushSubscription } from 'web-push';
 import {
-  museRound,
+  agentRound,
   personalAccessToken,
   userDevice,
 } from '../../src/db/schema';
@@ -33,10 +33,10 @@ import {
 import { callTool, createAccessToken, tool } from './mcp';
 
 /**
- * The moment a round lands (#337; docs/plans/2026-10-05-muse-suggestions.md
- * section 4 A): finish_round stores the round (muse_round), moves the
+ * The moment a round lands (#337; docs/plans/2026-10-05-agent-suggestions.md
+ * section 4 A): finish_round stores the round (agent_round), moves the
  * agent's feedback cursor to the `until` it hands back, and sends one
- * notification, tagged muse-round, to the devices that turned Muse's
+ * notification, tagged agent-round, to the devices that turned the agent's
  * rounds on; Today shows one card while anything of the round waits,
  * counted live, in its three statements. web-push's sendNotification is
  * stubbed: nothing leaves the process.
@@ -54,14 +54,14 @@ interface Finished {
   feedbackRead: boolean;
 }
 
-describe('a round of Muse’s', () => {
+describe('a round of the agent’s', () => {
   let t: TestApp;
   let token: string;
   let tokenId: number;
   let tee: number;
   let jeans: number;
   let sent: Sent[];
-  let museDevice: string;
+  let agentDevice: string;
   let morningDevice: string;
   let seq = 0;
 
@@ -82,7 +82,7 @@ describe('a round of Muse’s', () => {
     return endpoint;
   };
 
-  /** A need with `count` options, each a wishlist garment marked as Muse's. */
+  /** A need with `count` options, each a wishlist garment marked as the agent's. */
   async function suggest(count: number): Promise<number[]> {
     const need = await createOptionGroup(t.db, t.owner.id, {
       name: `Need ${++seq}`,
@@ -125,7 +125,7 @@ describe('a round of Muse’s', () => {
 
   beforeAll(async () => {
     t = await createTestApp(PWA_ENV);
-    token = await createAccessToken(t, { name: 'Muse' });
+    token = await createAccessToken(t, { name: 'Stylist' });
     const [row] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -133,7 +133,7 @@ describe('a round of Muse’s', () => {
     tokenId = row.id;
     tee = await createGarment(t, { name: 'White tee', category: 'tops' });
     jeans = await createGarment(t, { name: 'Raw jeans', category: 'bottoms' });
-    museDevice = await subscribe();
+    agentDevice = await subscribe();
     morningDevice = await subscribe();
     const save = (fields: Record<string, string>) =>
       t.inject({
@@ -143,7 +143,7 @@ describe('a round of Muse’s', () => {
         headers: { 'hx-request': 'true' },
       });
     expect(
-      (await save({ endpoint: museDevice, museRoundsOn: '1' })).statusCode,
+      (await save({ endpoint: agentDevice, agentRoundsOn: '1' })).statusCode,
     ).toBe(200);
     expect(
       (await save({ endpoint: morningDevice, morningOn: '1', morning: '420' }))
@@ -173,12 +173,12 @@ describe('a round of Muse’s', () => {
 
   it('with nothing new is no round: no row, no card, no notification', async () => {
     expect(await finish()).toEqual({ round: null, feedbackRead: false });
-    expect(await t.db.select().from(museRound)).toEqual([]);
+    expect(await t.db.select().from(agentRound)).toEqual([]);
     expect(sent).toEqual([]);
-    expect(await todayHtml()).not.toContain('data-muse-round');
+    expect(await todayHtml()).not.toContain('data-agent-round');
   });
 
-  it('stores the round and notifies the devices that take Muse’s rounds, once, tagged', async () => {
+  it('stores the round and notifies the devices that take the agent’s rounds, once, tagged', async () => {
     await suggest(2);
     const outfit = await tool<{ id: number }>(t, token, 'suggest_outfit', {
       garmentIds: [tee, jeans],
@@ -191,8 +191,8 @@ describe('a round of Muse’s', () => {
     });
     const [row] = await t.db
       .select()
-      .from(museRound)
-      .where(eq(museRound.id, finished.round!.id));
+      .from(agentRound)
+      .where(eq(agentRound.id, finished.round!.id));
     expect(row).toMatchObject({
       ownerId: t.owner.id,
       tokenId,
@@ -201,12 +201,12 @@ describe('a round of Muse’s', () => {
     });
     expect(sent).toEqual([
       {
-        endpoint: museDevice,
+        endpoint: agentDevice,
         payload: {
-          title: 'Muse finished a round',
-          body: 'Muse: 1 outfit, 2 pieces to consider',
+          title: 'Stylist finished a round',
+          body: 'Stylist: 1 outfit, 2 pieces to consider',
           url: '/outfits',
-          tag: 'muse-round',
+          tag: 'agent-round',
         },
         ttl: 24 * 60 * 60,
       },
@@ -228,22 +228,22 @@ describe('a round of Muse’s', () => {
   it('counts only what came since the last round', async () => {
     const [previous] = await t.db
       .select()
-      .from(museRound)
-      .orderBy(desc(museRound.id))
+      .from(agentRound)
+      .orderBy(desc(agentRound.id))
       .limit(1);
     await suggest(1);
     const finished = await finish();
     expect(finished.round).toMatchObject({ outfits: 0, pieces: 1 });
     expect(sent.map((s) => s.payload)).toEqual([
       expect.objectContaining({
-        body: 'Muse: 1 piece to consider',
+        body: 'Stylist: 1 piece to consider',
         url: '/wardrobe/wishlist',
       }),
     ]);
     const [row] = await t.db
-      .select({ since: museRound.since })
-      .from(museRound)
-      .where(eq(museRound.id, finished.round!.id));
+      .select({ since: agentRound.since })
+      .from(agentRound)
+      .where(eq(agentRound.id, finished.round!.id));
     expect(row.since).toEqual(previous.finishedAt);
   });
 
@@ -292,21 +292,21 @@ describe('a round of Muse’s', () => {
       const record = await recordQueries(() => get('/'));
       expect(record.statements).toBe(3);
       const html = await todayHtml();
-      expect(html).toContain(`data-muse-round="${roundId}"`);
-      expect(html).toContain('Muse: 1 outfit, 2 pieces to consider');
+      expect(html).toContain(`data-agent-round="${roundId}"`);
+      expect(html).toContain('Stylist: 1 outfit, 2 pieces to consider');
       expect(html).toContain('Office basics');
       expect(html).toMatch(/href="\/outfits" class="btn btn-primary/);
-      // One Muse card: the needs' waits behind the round's.
-      expect(html).not.toContain('data-muse-needs');
+      // One the agent card: the needs' waits behind the round's.
+      expect(html).not.toContain('data-agent-needs');
 
       // The owner decides: the counts shrink, live.
       await post(`/outfits/${outfit.id}/dismiss`, { reason: 'colour' });
       await decide(t.db, t.owner.id, { kind: 'choose', garmentId: picks[0] });
       const shrunk = await todayHtml();
-      expect(shrunk).not.toContain(`data-muse-round="${roundId}"`);
+      expect(shrunk).not.toContain(`data-agent-round="${roundId}"`);
       // Nothing of the round waits: the card is gone, and the needs' card
       // (an earlier round's option, still open) takes the slot again.
-      expect(shrunk).toContain('data-muse-needs');
+      expect(shrunk).toContain('data-agent-needs');
     });
 
     it('is the owner’s alone', async () => {
@@ -316,7 +316,7 @@ describe('a round of Muse’s', () => {
         url: '/',
         headers: { cookie },
       });
-      expect(res.body).not.toContain('data-muse-round');
+      expect(res.body).not.toContain('data-agent-round');
     });
   });
 
@@ -336,26 +336,26 @@ describe('a round of Muse’s', () => {
     it('starts off, saves with the form, and goes off when the device moves to another account', async () => {
       const endpoint = await subscribe();
       const blank = await form(endpoint);
-      expect(blank).toContain('name="museRoundsOn"');
-      expect(blank).not.toMatch(/name="museRoundsOn" value="1" checked/);
+      expect(blank).toContain('name="agentRoundsOn"');
+      expect(blank).not.toMatch(/name="agentRoundsOn" value="1" checked/);
       expect(blank).toContain('When your agent finishes a round');
 
       const saved = await t.inject({
         method: 'POST',
         url: '/push/reminders',
-        payload: { endpoint, museRoundsOn: '1' },
+        payload: { endpoint, agentRoundsOn: '1' },
         headers: { 'hx-request': 'true' },
       });
       // The toggle alone: no word about a time starting tomorrow.
       expect(saved.body).toContain('Saved.');
       expect(saved.body).not.toContain('starts tomorrow');
       expect(await form(endpoint)).toMatch(
-        /name="museRoundsOn" value="1" checked/,
+        /name="agentRoundsOn" value="1" checked/,
       );
       const row = async () =>
         (
           await t.db
-            .select({ on: userDevice.museRounds, user: userDevice.userId })
+            .select({ on: userDevice.agentRounds, user: userDevice.userId })
             .from(userDevice)
             .where(eq(userDevice.pushEndpoint, endpoint))
         )[0];

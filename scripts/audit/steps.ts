@@ -3002,7 +3002,7 @@ const tools: Step[] = [
   mcp('compare_with_shared_wardrobe', (f) => ({ ownerId: f.ids.dana.id })),
   mcp('get_style_profile', () => ({})),
   mcp('get_sizes', () => ({})),
-  // Muse's (#337).
+  // The agent's (#337).
   mcp('get_closet_coverage', () => ({
     targets: [{ category: 'tops' }, { category: 'footwear', type: 'boots' }],
   })),

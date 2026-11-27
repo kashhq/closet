@@ -425,7 +425,7 @@ describe('Today', () => {
     const today = res.json<Today>();
     expect(today.today).toBe(REFERENCE_ANCHOR);
     expect(today.weather?.days.map((d) => d.day)).toEqual([REFERENCE_ANCHOR]);
-    expect(today).not.toHaveProperty('muse');
+    expect(today).not.toHaveProperty('agent');
     const [ideas] = today.rows;
     expect(ideas).toMatchObject({ kind: 'ideas', occasion: 'all-day' });
     expect(ideas.ideas).toHaveLength(3);

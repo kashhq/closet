@@ -11,7 +11,7 @@ import {
   vi,
 } from 'vitest';
 import webpush, { type PushSubscription } from 'web-push';
-import { museRound, personalAccessToken } from '../../src/db/schema';
+import { agentRound, personalAccessToken } from '../../src/db/schema';
 import { parsePushPayload, type PushPayload } from '../../src/web/push/payload';
 import {
   createOptionGroup,
@@ -57,7 +57,7 @@ describe('a round its agent left open', () => {
   let tokenId: number;
   let tee: number;
   let jeans: number;
-  let museDevice: string;
+  let agentDevice: string;
   let sent: Sent[];
   let seq = 0;
 
@@ -68,7 +68,7 @@ describe('a round its agent left open', () => {
     closeQuietRounds(deps, new Date(Date.now() + QUIET_PERIOD_MS + 1_000));
 
   const rounds = () =>
-    t.db.select().from(museRound).orderBy(desc(museRound.id));
+    t.db.select().from(agentRound).orderBy(desc(agentRound.id));
 
   const cursor = async () =>
     (
@@ -83,7 +83,7 @@ describe('a round its agent left open', () => {
       .map((record) => record.msg ?? '')
       .filter((msg) => /quiet/i.test(msg));
 
-  /** A need with `count` options, each a wishlist garment marked as Muse's. */
+  /** A need with `count` options, each a wishlist garment marked as the agent's. */
   async function suggest(count: number): Promise<number[]> {
     const need = await createOptionGroup(t.db, t.owner.id, {
       name: `Need ${++seq}`,
@@ -119,9 +119,9 @@ describe('a round its agent left open', () => {
     deps = {
       db: t.db,
       push: t.push,
-      logger: t.logger.child({ logger: 'Muse' }),
+      logger: t.logger.child({ logger: 'Stylist' }),
     };
-    token = await createAccessToken(t, { name: 'Muse' });
+    token = await createAccessToken(t, { name: 'Stylist' });
     const [row] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -129,12 +129,12 @@ describe('a round its agent left open', () => {
     tokenId = row.id;
     tee = await createGarment(t, { name: 'White tee', category: 'tops' });
     jeans = await createGarment(t, { name: 'Raw jeans', category: 'bottoms' });
-    museDevice = `https://fcm.googleapis.com/fcm/send/${randomUUID()}`;
+    agentDevice = `https://fcm.googleapis.com/fcm/send/${randomUUID()}`;
     const subscribed = await t.inject({
       method: 'POST',
       url: '/push/subscribe',
       payload: {
-        endpoint: museDevice,
+        endpoint: agentDevice,
         keys: {
           p256dh: createECDH('prime256v1').generateKeys().toString('base64url'),
           auth: randomBytes(16).toString('base64url'),
@@ -145,7 +145,7 @@ describe('a round its agent left open', () => {
     const saved = await t.inject({
       method: 'POST',
       url: '/push/reminders',
-      payload: { endpoint: museDevice, museRoundsOn: '1' },
+      payload: { endpoint: agentDevice, agentRoundsOn: '1' },
       headers: { 'hx-request': 'true' },
     });
     expect(saved.statusCode).toBe(200);
@@ -212,12 +212,12 @@ describe('a round its agent left open', () => {
     expect(record.statements).toBe(6);
     expect(sent).toEqual([
       {
-        endpoint: museDevice,
+        endpoint: agentDevice,
         payload: {
-          title: 'Muse finished a round',
-          body: 'Muse: 1 outfit, 2 pieces to consider',
+          title: 'Stylist finished a round',
+          body: 'Stylist: 1 outfit, 2 pieces to consider',
           url: '/outfits',
-          tag: 'muse-round',
+          tag: 'agent-round',
         },
       },
     ]);
@@ -300,7 +300,7 @@ describe('a round its agent left open', () => {
     const email = 'quiet-other@example.com';
     const cookie = await t.register(email);
     const otherId = await userIdOf(t, email);
-    await createAccessToken(t, { cookie, name: 'Muse' });
+    await createAccessToken(t, { cookie, name: 'Stylist' });
     const [otherToken] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -328,7 +328,7 @@ describe('a round its agent left open', () => {
     // The first owner's finishRound (owners in id order) fails; the run is
     // timed as server.ts times it.
     vi.spyOn(t.db, 'transaction').mockRejectedValueOnce(new Error('down'));
-    const run = t.metrics.timeJob('muse_rounds', (now: Date) =>
+    const run = t.metrics.timeJob('agent_rounds', (now: Date) =>
       closeQuietRounds(deps, now),
     );
     const later = new Date(Date.now() + QUIET_PERIOD_MS + 1_000);
@@ -342,7 +342,7 @@ describe('a round its agent left open', () => {
     );
     const { body } = await t.metrics.exposition();
     expect(body).toMatch(
-      /^job_duration_seconds_count\{name="muse_rounds",outcome="failure"\} 1$/m,
+      /^job_duration_seconds_count\{name="agent_rounds",outcome="failure"\} 1$/m,
     );
 
     // The next minute closes it.

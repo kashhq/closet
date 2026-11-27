@@ -90,7 +90,7 @@ export interface Replaced {
   previousOutfitId: number;
   /** The outfit existed already: a saved one, or an idea's garments pickIdea found saved. */
   alreadySaved: boolean;
-  /** That outfit was one of Muse's proposals the pick made the owner's (#335). */
+  /** That outfit was one of the agent's proposals the pick made the owner's (#335). */
   adoptedProposal: boolean;
   /** The selfie kept as a look on the day, if the entry had one. */
   selfieDetached?: number;

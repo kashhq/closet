@@ -181,7 +181,7 @@ export function brandSizesByIds(
 
 /**
  * brandSizesOf as a scalar subquery (a JSON array, empty for none), for a
- * page that reads it with its other lists in one statement (the Muse
+ * page that reads it with its other lists in one statement (the agent
  * inbox, src/web/wishlist/inbox.ts).
  */
 export function brandSizesSql(userId: number): SQL<BrandSize[]> {

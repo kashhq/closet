@@ -4,7 +4,7 @@
  * page, and is replaced (`outerHTML`) by that page and its own sentinel,
  * none after the last. Every paged list uses it: the wardrobe grid, the
  * Saved tab and the outfit pickers, the Ideas strip, Styling's rows and
- * the Muse inbox. `revealed` watches the window's scroll, which a list in
+ * the agent inbox. `revealed` watches the window's scroll, which a list in
  * the page's flow needs; a sentinel inside a scroll container (a strip)
  * must use `intersect once`, as `revealed` never fires there
  * (src/web/gallery/AGENTS.md). Offline, a page never fetched before fails

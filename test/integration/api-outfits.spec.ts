@@ -273,7 +273,7 @@ describe('outfits', () => {
     );
   });
 
-  it("lists Muse's waiting proposals with proposed=true, to their owner only, and leaves the default list as it was", async () => {
+  it('lists the agent’s waiting proposals with proposed=true, to their owner only, and leaves the default list as it was', async () => {
     const [shirt, jeans] = await pair();
     const waiting = (
       await create({ slots: [{ category: 'any', garmentId: shirt }] })

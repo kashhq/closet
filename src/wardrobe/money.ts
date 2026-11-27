@@ -1,7 +1,7 @@
 /**
  * Money in cents. Prices arrive as the numeric column's strings ('49.90',
  * at most two decimals), so sums and comparisons in cents never pick up a
- * float's error. Used by insights' costs and a Muse need's budget fit.
+ * float's error. Used by insights' costs and an agent need's budget fit.
  */
 
 /** '49.90' as 4990. */

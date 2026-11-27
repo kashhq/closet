@@ -19,7 +19,7 @@ import { callTool, createAccessToken, tool } from './mcp';
 import { BY_PERSON } from '../../src/web/write-origin';
 
 /**
- * Outfits holding pieces not bought yet (#335, phase 2 of the Muse epic;
+ * Outfits holding pieces not bought yet (#335, phase 2 of the agent epic;
  * the rule: src/web/outfits/references.ts). An outfit may hold a wishlist
  * garment only while nothing holds it, so a planned, packed or worn
  * outfit is always complete. Every surface that plans, packs or wears an
@@ -104,7 +104,7 @@ describe('incomplete outfits', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    mcpToken = await createAccessToken(t, { name: 'Muse' });
+    mcpToken = await createAccessToken(t, { name: 'Stylist' });
     day = addDays(t.today(), 3);
     tee = await createGarment(t, { name: 'White tee', category: 'tops' });
     jeans = await createGarment(t, { name: 'Raw jeans', category: 'bottoms' });
@@ -641,7 +641,7 @@ describe('what chooses outfits on its own never meets an incomplete one', () => 
 
   beforeAll(async () => {
     t = await createTestApp();
-    mcpToken = await createAccessToken(t, { name: 'Muse' });
+    mcpToken = await createAccessToken(t, { name: 'Stylist' });
     // The closet makes one idea: this tee, these jeans, these shoes.
     tee = await createGarment(t, { name: 'White tee', category: 'tops' });
     jeans = await createGarment(t, { name: 'Raw jeans', category: 'bottoms' });

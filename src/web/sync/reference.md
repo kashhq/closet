@@ -4,7 +4,7 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
 
 - **A feed shape is the API resource minus what tables that never move its revision derive** (decisions 2026-11-13); the client derives those from the feed's other resources. Per resource (`Synced…` beside its API resource):
   - `garment`: no `worn`, `wornSinceWash`, `lastWorn`, `cost`, `costPerWear`, `capsules` (wears, capsules).
-  - `outfit`: `slots` (category, `garmentId`) for `garments` and `toBuy` (the garments'); no proposal `agent` (the token's name), `planned` or `worn` (the entries'). Muse's proposals are in it, with their reaction (decided on #607). `origin` (#659): migration 0053 re-sent only the rows it moved off `person`, so **a cached outfit without `origin` is `person`**.
+  - `outfit`: `slots` (category, `garmentId`) for `garments` and `toBuy` (the garments'); no proposal `agent` (the token's name), `planned` or `worn` (the entries'). The agent's proposals are in it, with their reaction (decided on #607). `origin` (#659): migration 0053 re-sent only the rows it moved off `person`, so **a cached outfit without `origin` is `person`**.
   - `calendarEntry`: `outfitId` for `outfit` (its name and garments); no `selfieId`/`selfiePhoto` (the `selfie` names its entry).
   - `trip`: its stored fields, `outfits` flat (for `days`/`anyDay`), `extras`, `packedGarmentIds` (stale marks included: the reads ignore them); no `phase` (the day's), outfit garments, `wornTodayEntryId` (the calendar's) or `packing`, derived from the outfits' slots and garments.
   - `weekPlan` (no API resource): `createdAt`, `entries` (`entryId`, `outfitCreated`); not the planner's targets, the re-plan's own input.

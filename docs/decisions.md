@@ -1839,6 +1839,12 @@ Why: "Muse" is a Meta product (Muse app, Meta Model API), and Closet is agent-ag
 Decision: no brand. Copy names the agent from its token's label (`agentName`); with none the fallback is "your agent" (`museName`, mid-sentence). A sentence-initial string has an `_UNNAMED` key ("Your agent has ...": Today's cards, the round push) rather than a capitalised or string-munged fallback. `/auth/tokens` lists Claude Code, Claude and Meta's Muse as clients; `copy-voice.spec.ts` fails on any lang.json value saying Muse except that one.
 Consequence: a new agent-facing string with a `{agent}` at its start needs an `_UNNAMED` twin. Keys, files, `muse_round` and the push setting's column keep their names until #1282; API/OpenAPI descriptions still say Muse until then.
 
+## 2026-11-27 — Muse is gone from the code, the schema and the API (#1282, rename part 2)
+
+Why: #1281 took the brand out of the copy; leaving it in identifiers, file names, i18n keys, MCP and OpenAPI text and the schema kept it one grep away and in every agent-facing description.
+Decision: `muse` is `agent` throughout (`AgentPick`, `agentRound`, `suggestingAgentName` for `museName`, i18n `agent.*`, `agent-cards.tsx`, `agent-*.spec.ts`). Migration 0074 only renames: `muse_round` is `agent_round` with its sequence, key, foreign keys, check and indexes, and `user_device.muse_rounds` is `agent_rounds`; no trigger, function or view named them. The `/api/v1` wire names follow (`fromAgent`, `agentNote`, Today's `agent` card, the push setting `agentRounds`): the API is pre-0.1 with no shipped client, so a stable brand-free spec beats a legacy alias. Test tokens named Muse are "Stylist". Shipped migrations 0040-0044 keep their names and bodies.
+Consequence: only `lang.json`'s "Meta’s Muse" (one MCP client among others), `copy-voice.spec.ts`, dated decisions/reports and migration history still say Muse. Rollback of 0074 is the inverse renames; the old code needs the old names, so roll back code and migration together.
+
 ## 2026-11-27 — Agents reach Closet only over MCP; phones attach with OAuth (#681)
 
 Why: owner decision on #681: Closet stays agent-agnostic (no server-side runner tied to one vendor), and a household member with only a phone must be able to ask an agent and to connect one.

@@ -33,7 +33,7 @@ import { privateColumns } from '../wardrobe/private-fields';
  *   that grows.
  *
  * **The cursor** is the calling token's `feedback_read_at`: null before
- * its first call, so a new token (Muse's rotated one) hears everything.
+ * its first call, so a new token (the agent's rotated one) hears everything.
  * A row whose time is null (the plan looks' reactions 0041 migrated, a
  * purchase before 0042) is older than any cursor: it is told on a first
  * call only, or with `all`.

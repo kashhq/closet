@@ -172,7 +172,7 @@ describe('a need is read by whoever reads the wishlist', () => {
   });
 });
 
-describe("Muse's writes are the caller's own wardrobe", () => {
+describe("the agent’s writes are the caller's own wardrobe", () => {
   const same = {
     id: 12,
     sourceUrl: 'https://shop.example/tee',

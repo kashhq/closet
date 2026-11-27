@@ -58,8 +58,8 @@ const RemindersBody = Type.Object({
   morning: Type.Optional(Type.Integer()),
   eveningOn: Type.Optional(Type.Literal('1')),
   evening: Type.Optional(Type.Integer()),
-  // Muse's rounds (#337): a toggle, no time.
-  museRoundsOn: Type.Optional(Type.Literal('1')),
+  // The agent's rounds (#337): a toggle, no time.
+  agentRoundsOn: Type.Optional(Type.Literal('1')),
 });
 
 function reminderTime(
@@ -205,7 +205,7 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
           request.body.eveningOn,
           request.body.evening,
         ),
-        museRounds: request.body.museRoundsOn === '1',
+        agentRounds: request.body.agentRoundsOn === '1',
       };
       const saved = await saveReminderSettings(
         db,
@@ -221,7 +221,7 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
       const time = (minute: number | null) =>
         minute === null ? 'off' : String(minute);
       logger.info(
-        `User ${userId} set reminders on push device ${saved.deviceId}: morning ${time(settings.morning)}, evening ${time(settings.evening)} (minutes after midnight), Muse's rounds ${settings.museRounds ? 'on' : 'off'}`,
+        `User ${userId} set reminders on push device ${saved.deviceId}: morning ${time(settings.morning)}, evening ${time(settings.evening)} (minutes after midnight), the agent’s rounds ${settings.agentRounds ? 'on' : 'off'}`,
       );
       return renderFragment(
         reply,

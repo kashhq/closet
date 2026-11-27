@@ -136,7 +136,7 @@ function countOf(found: number): OutfitCount {
   };
 }
 
-/** How many outfits the item makes: "Unlocks N" on the Muse inbox's options. */
+/** How many outfits the item makes: "Unlocks N" on the agent inbox's options. */
 export function outfitCount<G extends IdeaGarment>(
   request: GoesWithRequest<G>,
 ): OutfitCount {
@@ -150,7 +150,7 @@ function bestOf<G extends IdeaGarment>(ideas: Idea<G>[]): BestOutfits<G> {
 /**
  * The count and the best few from the same search, without goesWith's
  * roles (whose layer checks are each a search of their own): the options
- * of a Muse need side by side (src/web/wishlist/group-page.tsx).
+ * of an agent need side by side (src/web/wishlist/group-page.tsx).
  */
 export function bestOutfits<G extends IdeaGarment>(
   request: GoesWithRequest<G>,

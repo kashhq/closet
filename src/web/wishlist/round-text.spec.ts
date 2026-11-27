@@ -5,7 +5,7 @@ import { roundReviewPath, roundWhat } from './round-text';
 
 // Every shape of a round here, not only the ones the integration specs'
 // rounds happen to reach: a round of outfits alone was covered only when the
-// gate's clock shift closed an earlier round first (muse-round-close.spec.ts).
+// gate's clock shift closed an earlier round first (agent-round-close.spec.ts).
 describe('roundWhat', () => {
   it.each([
     [{ outfits: 3, pieces: 7 }, '3 outfits, 7 pieces'],

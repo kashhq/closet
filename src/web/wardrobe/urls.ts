@@ -107,7 +107,7 @@ export interface Destination {
    */
   orderItem?: number;
   /**
-   * The owner's open Muse need a new closet garment was bought for, instead
+   * The owner's open the agent need a new closet garment was bought for, instead
    * of its picks ("Bought a different one", #333): the need is settled by
    * the garment when it is saved, in its transaction (decide's `bought`).
    */
@@ -161,7 +161,7 @@ export function garmentUrl(
 }
 
 /**
- * A Muse need's decision screen (src/web/wishlist/group-page.tsx), or one of
+ * An agent need's decision screen (src/web/wishlist/group-page.tsx), or one of
  * its decisions (`suffix`: '/dismiss', '/undo').
  */
 export function needUrl(

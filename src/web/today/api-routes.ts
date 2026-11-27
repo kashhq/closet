@@ -81,7 +81,7 @@ export const todayApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['calendar'],
         summary: 'Today, as the home screen shows it',
         description:
-          "The household's day (GET /me's `today`): your weather, Muse's card, and a row per part of the day. A row per occasion planned today with its entries (Wore it: PUT /calendar-entries/{id}/worn; Change: PUT /calendar-entries/{id}/outfit); while nothing that dresses the day (all day, work, daytime) is planned, an all-day row of ideas first. No ETag: it moves with the day and the forecast.",
+          "The household's day (GET /me's `today`): your weather, the agent’s card, and a row per part of the day. A row per occasion planned today with its entries (Wore it: PUT /calendar-entries/{id}/worn; Change: PUT /calendar-entries/{id}/outfit); while nothing that dresses the day (all day, work, daytime) is planned, an all-day row of ideas first. No ETag: it moves with the day and the forecast.",
         response: apiResponses({ 200: TodayResource }),
       },
     },

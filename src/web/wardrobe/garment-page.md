@@ -15,7 +15,7 @@ Production reaches Postgres over a link that costs a round trip per statement (a
   - `own`: **the owner's records, read only for the owner of an owned garment**: the wear line (`wearSummarySql`, its repair sum included), "In N outfits" (`outfitsWithGarmentSql`: the count and the newest `GARMENT_OUTFITS_SHOWN` with their garments; no notes or shareable id, which the strip never showed), "Never paired with" (`avoidedWithSql`) and the repair log (`repairLogSql`; "Spent on it" is the wear line's sum, `RepairLog.total`);
   - `goesWith`: "Goes with my closet"'s inputs for the owner's wishlist item (`goesWithInputsSql`: the item, the whole closet, the avoided pairs; `judgeGoesWithCloset` searches them after the statement);
   - `brandSize`: the owner's note for a wishlist item's brand (`brandSizeSql`);
-  - `suggestion`: a Muse suggestion's provenance and its need with the need's picks (`suggestionContextSql`, #333), for anyone who sees it, read only when `suggested_at` is set (`findGarment` carries it).
+  - `suggestion`: an agent suggestion's provenance and its need with the need's picks (`suggestionContextSql`, #333), for anyone who sees it, read only when `suggested_at` is set (`findGarment` carries it).
 - **So**: the owner's closet garment and their wishlist item are 3 statements, and so is a grantee's page (4 until #170). Before #160 the owner's page was 9 (seven reads in parallel after the garment, each its own round trip and pool connection) and the wishlist item 7.
 
 ## Wore today, Washed and Where it is

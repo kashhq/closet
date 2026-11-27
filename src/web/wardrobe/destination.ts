@@ -23,7 +23,7 @@ import { type DestinationQuery } from './garment-schemas';
 import { garmentNotFound } from './garment-access';
 
 /**
- * The Muse need `needId` a new closet garment is bought for ("Bought a
+ * The agent need `needId` a new closet garment is bought for ("Bought a
  * different one", #333): the requester's own need still to buy for (open,
  * or chosen and unbought), in their own wardrobe (decisions are the
  * owner's); anything else a 404 like an unknown id, before anything is
@@ -45,7 +45,7 @@ async function resolveNeed(
  * A new garment's post's destination (POST /wardrobe): the closet or the
  * wishlist; for an order's "Add to closet" (#25) the order item, checked
  * before anything is stored (resolveOrderItem) and marked added in the
- * garment's own transaction; for a Muse need's "Bought a different one"
+ * garment's own transaction; for an agent need's "Bought a different one"
  * (#333) the need (resolveNeed), settled by the garment in that
  * transaction through decide, the one writer of a decision. `db` is the
  * pool, or the transaction the checks must share with the write
@@ -75,7 +75,7 @@ export async function postedDestination(
         });
         // Settled meanwhile (chosen or set aside on another phone): the
         // garment rolls back with this, and the form says why.
-        if (!settled.ok) throw new HttpError(409, t('muse.STALE'));
+        if (!settled.ok) throw new HttpError(409, t('agent.STALE'));
       },
     };
   }
@@ -163,7 +163,7 @@ export async function resolveDestination(
 /**
  * A new garment form's values: blank (the closet's, or a wishlist item's),
  * or prefilled from `prefill` (the garment a wishlist item replaces, or a
- * Muse need's pick for "Bought a different one") with what describes the
+ * The agent need's pick for "Bought a different one") with what describes the
  * kind of garment (category, type and the other properties, brand,
  * colours, size), never what belonged to that one (its name, notes,
  * dates, price, link, care).

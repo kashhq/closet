@@ -413,7 +413,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['garments'],
         summary: 'Deletes a garment and its photo',
         description:
-          'The owner only: a share, MANAGE included, is a 403. A garment already gone is a 404, which a retry may read as done. A Muse suggestion is a 409: it is set aside, never deleted.',
+          'The owner only: a share, MANAGE included, is a 403. A garment already gone is a 404, which a retry may read as done. An agent suggestion is a 409: it is set aside, never deleted.',
         params: GarmentParams,
         querystring: GarmentQuery,
         response: apiResponses({ 204: Type.Null({ description: 'Deleted' }) }),

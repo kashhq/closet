@@ -38,7 +38,7 @@ import {
  * ones newest first, #659; the other one-offs are only kept), the pages with
  * queueable controls (#657: the laundry and the trips ahead or on, nearest
  * first, right after next week, since they are few and what a phone offline
- * needs most), the Muse inbox
+ * needs most), the agent inbox
  * (#333: the Wishlist tab, its needs' decision screens and the pages of
  * what is still wanted, capped), the closet grid's later pages, and the
  * thumbs they show. Never a tab root

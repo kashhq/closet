@@ -402,7 +402,7 @@ describe('productUrlKey', () => {
     ['www.', 'https://www.shop.example/p/blazer'],
     ['m.', 'https://m.shop.example/p/blazer'],
     ['the host’s case', 'https://Shop.Example/p/blazer'],
-    ['utm_*', 'https://shop.example/p/blazer?utm_source=muse&utm_medium=x'],
+    ['utm_*', 'https://shop.example/p/blazer?utm_source=agent&utm_medium=x'],
     [
       'gclid, fbclid, msclkid',
       'https://shop.example/p/blazer?gclid=a&fbclid=b&msclkid=c',

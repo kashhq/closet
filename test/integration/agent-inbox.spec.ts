@@ -14,15 +14,15 @@ import {
 } from './harness';
 
 /**
- * Muse phase 1B (#333; docs/plans/2026-10-05-muse-suggestions.md, section
- * 4 C, D, F): the Wishlist tab as Muse's inbox, a need's decision screen,
+ * The agent phase 1B (#333; docs/plans/2026-10-05-agent-suggestions.md, section
+ * 4 C, D, F): the Wishlist tab as the agent's inbox, a need's decision screen,
  * a suggestion's page, and every decision over HTTP, each through decide()
- * with its rows asserted. Also "New from Muse" (never in the bare page,
+ * with its rows asserted. Also "New from the agent" (never in the bare page,
  * doc section 9), the statements each page sends, Today's card, the
  * offline warm list and the export.
  */
 
-describe('the Muse inbox', () => {
+describe('the agent inbox', () => {
   let t: TestApp;
   let ownerId: number;
 
@@ -64,7 +64,7 @@ describe('the Muse inbox', () => {
     const marked = await markSuggestion(t.db, ownerId, id, {
       tokenId: null,
       groupId,
-      note: `Muse: ${name} goes with your jeans`,
+      note: `Stylist: ${name} goes with your jeans`,
       rank,
     });
     expect(marked).toBe('marked');
@@ -133,7 +133,7 @@ describe('the Muse inbox', () => {
       own = await createWishlistItem(t, { name: 'My own scarf' });
     });
 
-    it('shows Ready to buy, Muse’s picks, your wishlist, still looking and set aside, in that order', async () => {
+    it('shows Ready to buy, the agent’s picks, your wishlist, still looking and set aside, in that order', async () => {
       const res = await get('/wardrobe/wishlist');
       expect(res.statusCode).toBe(200);
       const html = unescapeHtml(res.body);
@@ -212,7 +212,7 @@ describe('the Muse inbox', () => {
       }
     });
 
-    it('orders options by what they unlock over Muse’s rank, and needs by their best option', async () => {
+    it('orders options by what they unlock over the agent’s rank, and needs by their best option', async () => {
       // The closet's two bottoms and two pairs of shoes go with a top; a
       // pair of shoes has one top and two bottoms to go with.
       const unlocksOf = (html: string, id: number) =>
@@ -236,7 +236,7 @@ describe('the Muse inbox', () => {
       const html = (await get('/wardrobe/wishlist')).body;
       const card = html.slice(html.indexOf(`data-need="${mixed}"`));
       expect(unlocksOf(card, top)).toBeGreaterThan(unlocksOf(card, shoes));
-      // The top first, though Muse ranks the shoes first.
+      // The top first, though the agent ranks the shoes first.
       expect(card.indexOf(`data-option="${top}"`)).toBeLessThan(
         card.indexOf(`data-option="${shoes}"`),
       );
@@ -292,7 +292,7 @@ describe('the Muse inbox', () => {
       }
     });
 
-    it('shows a grantee Muse’s needs, without unlocks or decisions', async () => {
+    it('shows a grantee the agent’s needs, without unlocks or decisions', async () => {
       await t.register('viewer-inbox@example.com');
       const viewerId = await userIdOf(t, 'viewer-inbox@example.com');
       const cookie = await t.login('viewer-inbox@example.com');
@@ -348,7 +348,7 @@ describe('the Muse inbox', () => {
     });
   });
 
-  describe('New from Muse (doc section 9)', () => {
+  describe('New from the agent (doc section 9)', () => {
     const seenAt = async () =>
       (
         await t.db
@@ -366,11 +366,11 @@ describe('the Muse inbox', () => {
       expect(before).toContain(
         'hx-post="/wardrobe/wishlist/seen" hx-trigger="load" hx-swap="none"',
       );
-      expect(before).not.toContain('data-new-from-muse');
+      expect(before).not.toContain('data-new-from-agent');
 
       const seen = await post('/wardrobe/wishlist/seen');
       expect(seen.statusCode).toBe(200);
-      expect(seen.body).toContain('data-new-from-muse');
+      expect(seen.body).toContain('data-new-from-agent');
       // The visit did move the marker: from never to the newest pick.
       expect(await seenAt()).not.toBeNull();
 
@@ -381,9 +381,9 @@ describe('the Muse inbox', () => {
       // Seen everything: an empty slot.
       await post('/wardrobe/wishlist/seen');
       const none = await post('/wardrobe/wishlist/seen');
-      expect(none.body).toContain('id="muse-new"');
+      expect(none.body).toContain('id="agent-new"');
       expect(none.body).toContain('hx-swap-oob="true"');
-      expect(none.body).not.toContain('data-new-from-muse');
+      expect(none.body).not.toContain('data-new-from-agent');
 
       const jackets = await need('A field jacket');
       const jacket = await pick('Waxed field jacket', jackets);
@@ -500,8 +500,8 @@ describe('the Muse inbox', () => {
     it('is a 404 for another owner’s pick or need, writing nothing', async () => {
       const id = await need('A watch');
       const watch = await pick('Field watch', id, { category: 'accessories' });
-      await t.register('other-muse@example.com');
-      const cookie = await t.login('other-muse@example.com');
+      await t.register('other-agent@example.com');
+      const cookie = await t.login('other-agent@example.com');
       const as = (url: string, payload: Record<string, string> = {}) =>
         t.inject({ method: 'POST', url, payload, headers: { cookie } });
       expect((await as(`/wardrobe/${watch}/choose`)).statusCode).toBe(404);
@@ -864,12 +864,12 @@ describe('the Muse inbox', () => {
       second = await pick('Parka', id, { category: 'outerwear', price: '220' });
     });
 
-    it('says it is Muse’s, links its need, and offers This one as the primary, never Remove', async () => {
+    it('says it is the agent’s, links its need, and offers This one as the primary, never Remove', async () => {
       const html = unescapeHtml((await get(`/wardrobe/${first}`)).body);
       expect(html).toContain('data-suggestion-state="open"');
       expect(html).toContain('From your agent');
       expect(html).toContain(`href="/wardrobe/wishlist/needs/${id}"`);
-      expect(html).toContain('Muse: Mac coat goes with your jeans');
+      expect(html).toContain('Stylist: Mac coat goes with your jeans');
       expect(html).toContain(`action="/wardrobe/${first}/choose"`);
       expect(html).toContain('data-other-options');
       expect(html).toContain(`href="/wardrobe/${second}"`);
@@ -905,7 +905,7 @@ describe('the Muse inbox', () => {
   describe('Today’s card, the warm list and the export', () => {
     it('Today’s card counts the needs to decide and leads to the inbox', async () => {
       const html = unescapeHtml((await get('/')).body);
-      const [, count] = /data-muse-needs="(\d+)"/.exec(html) ?? [];
+      const [, count] = /data-agent-needs="(\d+)"/.exec(html) ?? [];
       expect(Number(count)).toBeGreaterThan(0);
       expect(html).toContain(
         `Your agent has ${count} needs for you to decide on`,

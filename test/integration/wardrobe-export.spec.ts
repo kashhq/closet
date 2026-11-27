@@ -136,7 +136,7 @@ describe('the wardrobe export', () => {
       url: `/wardrobe/${fullId}/share`,
     });
     expect(shared.statusCode).toBe(200);
-    // Its Muse need (#333): a name a spreadsheet would run, defused too.
+    // Its agent need (#333): a name a spreadsheet would run, defused too.
     [{ id: needId }] = await t.db
       .insert(optionGroup)
       .values({

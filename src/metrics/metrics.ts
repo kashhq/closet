@@ -48,7 +48,7 @@ export type JobName =
   | 'replan'
   | 'replan_prune'
   | 'order_mail'
-  | 'muse_rounds'
+  | 'agent_rounds'
   | 'sync_prune'
   | 'weather_prune';
 

@@ -594,7 +594,7 @@ export interface PiecesSet {
 
 /**
  * The owner's look `id` holds exactly `pieces` (MCP's
- * set_inspiration_pieces, #22d: Muse tagging a look). A stored piece equal
+ * set_inspiration_pieces, #22d: the agent tagging a look). A stored piece equal
  * to one asked for (role, type, colours in order, pattern; each matched
  * once) stays as it is, its position and its chosen garment with it; the
  * other stored pieces are removed, and the rest asked for added after the

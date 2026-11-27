@@ -117,13 +117,13 @@ export interface GarmentPageModel {
   /** "Add a copy" from a new garment's form (#20) landed here. */
   justAddedCopy: boolean;
   /**
-   * Muse's suggestion (#333): its note, its need and where it stands
+   * The agent's suggestion (#333): its note, its need and where it stands
    * (SuggestionSection); undefined for any other garment.
    */
   suggestion: SuggestionContext | undefined;
   /** The agent that made it over MCP, as the viewer may see it (#822). */
   agent: AgentLabel | null;
-  /** A Muse decision made on this page landed here: its toast. */
+  /** An agent decision made on this page landed here: its toast. */
   decided: DecisionToast | undefined;
 }
 
@@ -240,7 +240,7 @@ function Summary({ model }: { model: GarmentPageModel }) {
           <p>
             <AgentBadge
               agent={model.agent}
-              byMuse={model.garment.suggestedAt !== null}
+              byAgent={model.garment.suggestedAt !== null}
             />
           </p>
         )}
@@ -363,7 +363,7 @@ function Toasts({ model }: { model: GarmentPageModel }) {
       {model.decided && (
         <SavedToast
           id="decision-toast"
-          text={t(`muse.toast.${model.decided}`)}
+          text={t(`agent.toast.${model.decided}`)}
         />
       )}
       <StripFlags names={GARMENT_PAGE_FLAGS} />
@@ -372,7 +372,7 @@ function Toasts({ model }: { model: GarmentPageModel }) {
 }
 
 /**
- * The back arrow: to its need's decision screen for a Muse pick on the
+ * The back arrow: to its need's decision screen for an agent pick on the
  * wishlist, to the wishlist for any other wishlist item, else the grid.
  */
 function backUrl(garment: GarmentDetail, viewOwner: number | undefined) {
@@ -439,7 +439,7 @@ function FactsLine({ garment }: { garment: GarmentDetail }) {
  */
 function PrimaryActions({ model }: { model: GarmentPageModel }) {
   const { garment, viewOwner } = model;
-  // The owner decides on a Muse pick in its own section, Bought it among them.
+  // The owner decides on an agent pick in its own section, Bought it among them.
   const buy =
     model.canEdit &&
     garment.status === 'wishlist' &&
@@ -540,8 +540,8 @@ function GarmentMenu({
 /**
  * The owner's items of the ⋯ menu: archive (a closet garment) or restore
  * (an archived one), and delete (a wishlist item's is "Remove from
- * wishlist": it has no history to keep). A Muse pick on the wishlist is
- * never deleted (it is Muse's feedback: Not for me sets it aside), and a
+ * wishlist": it has no history to keep). An agent pick on the wishlist is
+ * never deleted (it is the agent's feedback: Not for me sets it aside), and a
  * bought one may be Returned (archived, its need open again; #333).
  */
 function OwnerMenuItems({ model }: { model: GarmentPageModel }) {
@@ -566,9 +566,9 @@ function OwnerMenuItems({ model }: { model: GarmentPageModel }) {
           <button
             type="button"
             hx-post={garmentUrl(garment.id, viewOwner, '/returned')}
-            hx-confirm={t('muse.CONFIRM_RETURNED')}
+            hx-confirm={t('agent.CONFIRM_RETURNED')}
           >
-            {t('muse.RETURNED_IT')}
+            {t('agent.RETURNED_IT')}
           </button>
         </li>
       )}

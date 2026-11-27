@@ -142,7 +142,7 @@ export interface Fixture {
   wishlistId: number;
   wishlistName: string;
   /**
-   * A Muse need of the owner's (#333) with two options, one set aside; a
+   * An agent need of the owner's (#333) with two options, one set aside; a
    * need set aside; and a pick bought (so Returned writes).
    */
   needId: number;
@@ -164,9 +164,9 @@ export interface Fixture {
   outfitShareId: string;
   /** An empty outfit of the owner's, on no day: what the entry's Change picks. */
   spareOutfitId: number;
-  /** One of Muse's outfits (#335) waiting on the owner, and one set aside. */
-  museOutfitId: number;
-  museDeclinedId: number;
+  /** One of the agent's outfits (#335) waiting on the owner, and one set aside. */
+  agentOutfitId: number;
+  agentDeclinedId: number;
   /** The calendar entry, planned on `today` (so worn may mark it). */
   entryId: number;
   /** The entry's outfit selfie (#19), and its photo's names. */
@@ -367,7 +367,7 @@ const TABLES = [
   'body_measurements',
   // POST /wardrobe marks an order item added (#25).
   'order_item',
-  // Muse's needs (#333): a decision settles or sets one aside.
+  // The agent's needs (#333): a decision settles or sets one aside.
   'option_group',
   // The Style page's outfit rules (#21b).
   'outfit_rule',
@@ -537,8 +537,8 @@ export function describeMatrix(
       expect(accept.headers.location).toMatch(/^\/wardrobe\?ownerId=\d+$/);
     };
 
-    /** The owner's Muse needs and picks (#333), written through the one writers. */
-    const museFixture = async (tag: string) => {
+    /** The owner's agent needs and picks (#333), written through the one writers. */
+    const agentFixture = async (tag: string) => {
       const ownerId = t.owner.id;
       const cookie = actors.owner.cookie!;
       const need = async (name: string) => {
@@ -553,7 +553,7 @@ export function describeMatrix(
         const marked = await markSuggestion(t.db, ownerId, id, {
           tokenId: null,
           groupId,
-          note: `Muse on ${name}`,
+          note: `Stylist on ${name}`,
           rank: null,
         });
         if (marked !== 'marked') throw new Error(`${name}: ${marked}`);
@@ -643,7 +643,7 @@ export function describeMatrix(
       if (typeof outfitRuleId !== 'number') {
         throw new Error(`No outfit rule: ${outfitRuleId}`);
       }
-      const muse = await museFixture(tag);
+      const agent = await agentFixture(tag);
       const archivedName = `Old ${tag}`;
       const archivedId = await createGarment(t, { name: archivedName, cookie });
       const archived = await t.inject({
@@ -695,9 +695,9 @@ export function describeMatrix(
         /^\/outfits\/(\d+)$/.exec(spare.headers.location as string)?.[1],
       );
       expect(spareOutfitId).toBeGreaterThan(0);
-      // Muse's outfits (#335): the garment with the wishlist item, then
+      // The agent's outfits (#335): the garment with the wishlist item, then
       // marked as proposed, as the agent's tool will (phase 3).
-      const museOutfit = async (
+      const agentOutfit = async (
         reaction: 'proposed' | 'declined',
         garments: number[],
       ) => {
@@ -705,7 +705,7 @@ export function describeMatrix(
           method: 'POST',
           url: '/outfits',
           payload: {
-            name: `Muse ${reaction} ${tag}`,
+            name: `Stylist ${reaction} ${tag}`,
             category: garments.map(() => 'shirt'),
             garmentId: garments.map(String),
           },
@@ -729,11 +729,11 @@ export function describeMatrix(
         return id;
       };
       // Garment sets of their own: a save of a set already saved reuses it.
-      const museOutfitId = await museOutfit('proposed', [
+      const agentOutfitId = await agentOutfit('proposed', [
         garmentId,
         wishlistId,
       ]);
-      const museDeclinedId = await museOutfit('declined', [wishlistId]);
+      const agentDeclinedId = await agentOutfit('declined', [wishlistId]);
 
       const today = t.today();
       const scheduled = await t.inject({
@@ -896,7 +896,7 @@ export function describeMatrix(
         garmentName,
         wishlistId,
         wishlistName,
-        ...muse,
+        ...agent,
         archivedId,
         archivedName,
         capsuleId,
@@ -906,8 +906,8 @@ export function describeMatrix(
         garmentShareId: garmentShare!.shareableId,
         outfitShareId: outfitShare!.shareableId,
         spareOutfitId,
-        museOutfitId,
-        museDeclinedId,
+        agentOutfitId,
+        agentDeclinedId,
         entryId: entry.id,
         selfieId: ownSelfie.id,
         selfieFileName: ownSelfie.fileName,

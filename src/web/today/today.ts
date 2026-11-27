@@ -29,7 +29,7 @@ import {
 } from '../weather/service';
 import { somethingWornSql } from './queries';
 import { type NeedsToDecide, needsToDecideSql } from '../wishlist/inbox';
-import { type MuseRound, museRoundSql } from '../wishlist/rounds';
+import { type AgentRound, agentRoundSql } from '../wishlist/rounds';
 
 /**
  * Today (#15; plan section 9): the household's day for one person, as a
@@ -49,7 +49,7 @@ import { type MuseRound, museRoundSql } from '../wishlist/rounds';
  * Whether anything was worn today is read only when asked (`worn`, in the
  * same statement): the page never shows it (#158); get_today asks, and the
  * evening reminder reads it for every evening person at once (eveningDays).
- * So are Muse's needs waiting on the owner's choice (`needs`, #333) and
+ * So are the agent's needs waiting on the owner's choice (`needs`, #333) and
  * its latest round while any of it waits (#337), which only the page
  * shows, as one card: the round's while it waits, else the needs'. So is
  * the first-run gate (`firstRun`, #666): until the closet can be dressed
@@ -100,10 +100,10 @@ export interface TodayModel {
   weather: UserWeather | null;
   /** Whether anything was worn today (somethingWornSql); read only when asked (`worn`). */
   wornToday?: boolean;
-  /** Muse's needs with options to choose (needsToDecideSql); null for none; read only when asked (`needs`). */
+  /** The agent's needs with options to choose (needsToDecideSql); null for none; read only when asked (`needs`). */
   needs?: NeedsToDecide | null;
-  /** Muse's latest round while any of it waits (museRoundSql); null otherwise; read with `needs`. */
-  round?: MuseRound | null;
+  /** The agent's latest round while any of it waits (agentRoundSql); null otherwise; read with `needs`. */
+  round?: AgentRound | null;
   /** The first-run path's stage; null once the closet can be dressed; read only when asked (`firstRun`). */
   firstRun?: FirstRun | null;
   /** The trips today is a day of (#684): the page says "Away". */
@@ -118,7 +118,7 @@ export interface TodayOptions {
   ownWeather?: UserWeather;
   /** Also read whether anything was worn today (get_today; the page never shows it). */
   worn?: boolean;
-  /** Also read Muse's needs and latest round waiting on the owner (the page's card). */
+  /** Also read the agent's needs and latest round waiting on the owner (the page's card). */
   needs?: boolean;
   /** Also read the first-run gate over the closet's kinds (the page). */
   firstRun?: boolean;
@@ -132,7 +132,7 @@ export interface TodayDeps {
 
 /**
  * The day's entries, the person's settings with their forecast row, and
- * (when asked) whether anything was worn, Muse's needs waiting on a
+ * (when asked) whether anything was worn, the agent's needs waiting on a
  * choice and the closet's kinds (the first-run gate, #666), in one
  * statement (#172; the
  * entries and the weather were two, in parallel), so the ideas start with
@@ -154,7 +154,7 @@ async function readDay(
         : weatherWithForecastSql(ownerId, now, deps.weather.timeZone),
     worn: worn ? somethingWornSql(ownerId, today) : undefined,
     needs: needs ? needsToDecideSql(ownerId) : undefined,
-    round: needs ? museRoundSql(ownerId) : undefined,
+    round: needs ? agentRoundSql(ownerId) : undefined,
     closet: firstRun ? closetKindsSql(ownerId) : undefined,
     away: awayTripsSql(ownerId, today, today),
   });

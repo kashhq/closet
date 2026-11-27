@@ -17,7 +17,7 @@ import { lookName } from './look-name';
  * implies, its colours, its pattern where the category has one, and a note
  * naming the look. Not the look's link as the product link: a lookbook
  * page or a pin is not where the piece is sold, and two pieces of one look
- * would read as one product to Muse's never-again rule (suggestions.md).
+ * would read as one product to the agent's never-again rule (suggestions.md).
  */
 export function wishlistFieldsOf(
   piece: LookPiece,

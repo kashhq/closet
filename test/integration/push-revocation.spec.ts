@@ -158,7 +158,7 @@ describe('push subscriptions revoked with the sessions (PWA_ENABLED=true)', () =
           t.db,
           userId,
           endpoint,
-          { morning: MORNING, evening: null, museRounds: false },
+          { morning: MORNING, evening: null, agentRounds: false },
           setAt,
         );
       }

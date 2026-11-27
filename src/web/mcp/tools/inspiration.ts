@@ -40,7 +40,7 @@ import { rowId } from './common';
  * (the queries' NotFound). The reads are the Inspiration tab's and the
  * match view's (recreateOwnLook, so get_inspiration answers what "Recreate
  * this look" shows); the writes are the paste's (addLinkedInspiration) and
- * a piece writer of the look's own lock (setInspirationPieces). Muse reads
+ * a piece writer of the look's own lock (setInspirationPieces). The agent reads
  * a link's page itself and tags the look: the vision step no server model does.
  */
 

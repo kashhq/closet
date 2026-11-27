@@ -209,7 +209,7 @@ export const NewGarment = Type.Object(
     boughtForNeedId: Type.Optional(
       CloneType(RowId, {
         description:
-          '"Bought a different one": your own Muse need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only',
+          '"Bought a different one": your own agent need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only',
       }),
     ),
     clientId: Type.Optional(

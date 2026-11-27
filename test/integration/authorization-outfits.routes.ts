@@ -458,14 +458,14 @@ export const ROUTES: Route[] = [
   },
   ...(
     [
-      ['love', (f: Fixture) => f.museOutfitId, {}, { event: 'love' }],
+      ['love', (f: Fixture) => f.agentOutfitId, {}, { event: 'love' }],
       [
         'dismiss',
-        (f: Fixture) => f.museOutfitId,
+        (f: Fixture) => f.agentOutfitId,
         { reason: 'style', note: '' },
         { event: 'decline', reason: 'style' },
       ],
-      ['undo', (f: Fixture) => f.museDeclinedId, {}, { event: 'reconsider' }],
+      ['undo', (f: Fixture) => f.agentDeclinedId, {}, { event: 'reconsider' }],
     ] as const
   ).map(
     ([move, id, payload, reaction]): Route => ({

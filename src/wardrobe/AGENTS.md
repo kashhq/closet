@@ -35,7 +35,7 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Some types ar
                        style.ts: the style profile's value sets. See Style profile
                        outfit-origin.ts: who made an outfit (person, agent, idea, planner)
                        and which origins Saved keeps (#659). See Outfits
-                       look-reaction.ts: a Muse outfit's reaction machine
+                       look-reaction.ts: an agent outfit's reaction machine
                        (lookReactionTransition, pure; first the plans' looks, #290). See Outfits
                        money.ts: prices in cents (toCents, fromCents): insights' costs and
                        a need's budget fit
@@ -53,7 +53,7 @@ _Reference, not auto-loaded:_ [`reference.md`](reference.md) holds Some types ar
                        care.ts: the care label's value sets, its presets from the
                        materials (carePresetsFor, applyCarePresets), the repair
                        kinds. See Wardrobe, care-and-repairs.md
-                       suggestions.ts: Muse's suggestions and option groups
+                       suggestions.ts: the agent's suggestions and option groups
                        (decideSuggestion, pure; the dismissal reasons, budgetFit). See
                        Wishlist, suggestions.md
 ```

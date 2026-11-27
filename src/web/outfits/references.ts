@@ -34,8 +34,8 @@ export function outfitIsHeld(outfitId: AnyPgColumn | SQL): SQL<boolean> {
 }
 
 /**
- * **An outfit may hold a garment not owned yet (a wishlist item, Muse's
- * pick) only while nothing holds it** (#335, docs/plans/2026-10-05-muse-
+ * **An outfit may hold a garment not owned yet (a wishlist item, the agent's
+ * pick) only while nothing holds it** (#335, docs/plans/2026-10-05-agent-
  * suggestions.md section 3). Such an outfit is incomplete: it cannot be
  * planned, packed or worn, so a held outfit is always complete. The rule's
  * two halves, each enforced by the writers of its side:
@@ -110,9 +110,9 @@ export function isPieceToBuy(garment: { status: GarmentStatus }): boolean {
 /**
  * The owner's own outfits, as the Saved grid, the pickers (a day's, a
  * trip's), the garment page's strip and MCP's list_outfits list them:
- * never proposed, or one of Muse's proposals loved while complete ("Save"
+ * never proposed, or one of the agent's proposals loved while complete ("Save"
  * is Love on a complete outfit, #335; src/web/outfits/proposals.ts).
- * Muse's others are the Outfits tab's own section. `outfitId` defaults to
+ * The agent's others are the Outfits tab's own section. `outfitId` defaults to
  * the `outfit` row's own id, rendered qualified (a raw `sql` template's);
  * a single-table select passes it as a parameter (piecesToBuyFrom).
  */
@@ -133,22 +133,22 @@ export function keptOutfit(): SQL {
   return inArray(outfit.origin, KEPT_ORIGINS);
 }
 
-/** Muse's proposals still waiting on the owner, and those set aside: not the owner's. */
-export function museOutfit(): SQL {
+/** The agent's proposals still waiting on the owner, and those set aside: not the owner's. */
+export function agentOutfit(): SQL {
   return sql`(${isNotNull(outfit.proposedAt)} and not ${ownersOutfit()})`;
 }
 
 /**
- * One of Muse's outfits still waiting on the owner: not theirs yet, and
- * not set aside (the From Muse section's cards). What a round's Today card
+ * One of the agent's outfits still waiting on the owner: not theirs yet, and
+ * not set aside (the From the agent section's cards). What a round's Today card
  * counts (src/web/wishlist/rounds.ts) and GET /api/v1/outfits?proposed=true.
  */
-export function museOutfitWaiting(): SQL {
-  return sql`(${museOutfit()} and ${outfit.reaction} <> 'declined')`;
+export function agentOutfitWaiting(): SQL {
+  return sql`(${agentOutfit()} and ${outfit.reaction} <> 'declined')`;
 }
 
 /**
- * One of Muse's proposals not the owner's yet (proposed, sent back, set
+ * One of the agent's proposals not the owner's yet (proposed, sent back, set
  * aside): never planned, packed or worn, complete or not (#335). By id, a
  * parameter.
  */

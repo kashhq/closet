@@ -317,7 +317,7 @@ describe('API statements per route', () => {
         {
           page: 'GET /outfits',
           op: 'listOutfits',
-          label: "?proposed=true, the page's From Muse section",
+          label: "?proposed=true, the page's From the agent section",
           given: 'proposal',
           query: { proposed: 'true' },
         },

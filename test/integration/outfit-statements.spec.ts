@@ -134,7 +134,7 @@ describe('outfit statements (#164)', () => {
       const load = () => t.inject({ method: 'GET', url: '/outfits' });
       const recorded = await recordQueries(load);
       // The session's user row, then the tiles with their activity and
-      // Muse's outfits with what their pieces unlock (#335), in one.
+      // The agent's outfits with what their pieces unlock (#335), in one.
       expect(recorded.statements).toBe(2);
       // The tiles read no notes and no share link: the page shows neither.
       const read = recorded.sql

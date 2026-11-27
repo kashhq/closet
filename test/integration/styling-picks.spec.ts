@@ -19,11 +19,11 @@ import { createAccessToken } from './mcp';
 import { HX_FRAGMENT } from './pages';
 
 /**
- * Styling's Include picks (#335 part B; docs/plans/2026-10-05-muse-
+ * Styling's Include picks (#335 part B; docs/plans/2026-10-05-agent-
  * suggestions.md, section 4 E): `?picks=1`, off by default, puts the
  * garments not bought yet that are offered to style with (offeredToStyle:
  * still wanted, not under a need set aside) first on their roles' strips,
- * badged "To buy", a need's options side by side in Muse's rank; the rows
+ * badged "To buy", a need's options side by side in the agent's rank; the rows
  * carry them through Shuffle and "Add row"; Save makes an incomplete
  * outfit through the outfit writer (the A1 rule:
  * test/integration/incomplete-outfits.spec.ts). Never over a shared
@@ -40,7 +40,7 @@ describe('Styling: Include picks (#335)', () => {
   let blazerOne: number;
   let blazerTwo: number;
   let knit: number;
-  /** The owner's own wishlist item, and Muse's boots (a role the closet lacks). */
+  /** The owner's own wishlist item, and the agent's boots (a role the closet lacks). */
   let ownShirt: number;
   let boots: number;
   /** Not offered: a pick set aside, and one under a need set aside. */
@@ -169,7 +169,7 @@ describe('Styling: Include picks (#335)', () => {
   beforeAll(async () => {
     t = await createTestApp();
     ownerId = await userIdOf(t, 'owner@example.com');
-    await createAccessToken(t, { name: 'Muse' });
+    await createAccessToken(t, { name: 'Stylist' });
     const [token] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -179,7 +179,7 @@ describe('Styling: Include picks (#335)', () => {
     jeans = await closetGarment('Jeans', 'bottoms');
     const blazers = await need('A navy blazer');
     const knits = await need('A grey knit');
-    // Written out of rank order: the strip puts them in Muse's.
+    // Written out of rank order: the strip puts them in the agent's.
     blazerTwo = await pick('Linen blazer', 'outerwear', blazers, 2);
     knit = await pick('Grey knit', 'outerwear', knits, 1);
     blazerOne = await pick('Wool blazer', 'outerwear', blazers, 1);

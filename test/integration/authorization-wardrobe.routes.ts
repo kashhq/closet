@@ -13,7 +13,7 @@ import {
 
 // The authorization matrix (authorization-matrix.ts): the wardrobe, garments, link import, the wishlist, wears, the order mail.
 
-/** A Muse decision (#333): the owner's alone, whatever the share. */
+/** An agent decision (#333): the owner's alone, whatever the share. */
 const OWNER_DECIDES: Route['expect'] = {
   owner: 'ok',
   manager: ['notFound', 'forbidden'],
@@ -695,8 +695,8 @@ export const ROUTES: Route[] = [
       request: (_, q) => ({ method: 'GET', url: `/api/v1/wishlist${q}` }),
     },
   },
-  // The Muse inbox (#333): read like the wishlist (a VIEW grantee sees
-  // Muse's needs and notes), decided by the owner alone: with ?ownerId= a
+  // The agent inbox (#333): read like the wishlist (a VIEW grantee sees
+  // The agent's needs and notes), decided by the owner alone: with ?ownerId= a
   // grantee's decision is a 403, without it the pick is not in their
   // wardrobe (decide's 404).
   {

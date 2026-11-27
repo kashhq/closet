@@ -160,7 +160,7 @@ describe("another user's outfit is not found, whatever they share", () => {
 });
 
 describe('the outfit path for its owner', () => {
-  it("refuses deleting one of Muse's proposals not loved (409)", async () => {
+  it('refuses deleting one of the agent’s proposals not loved (409)', async () => {
     vi.mocked(deleteOutfit).mockResolvedValue('a-proposal');
     await expect(removeOutfit(deps, owner, OUTFIT)).rejects.toMatchObject({
       statusCode: 409,

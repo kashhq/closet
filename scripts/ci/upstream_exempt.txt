@@ -194,7 +194,7 @@ src/web/inspiration/piece-form.tsx	<button type="submit" class="btn btn-ghost bt
 src/web/inspiration/recreate-page.tsx	<button type="submit" class="btn btn-primary">
 src/web/inspiration/share-target.spec.ts	headers: { 'Content-Type': 'application/json' },
 src/web/layout/parts.tsx	<form method="dialog" class="modal-backdrop">
-src/web/outfits/muse-cards.tsx	class="flex items-center justify-between gap-2"
+src/web/outfits/agent-cards.tsx	class="flex items-center justify-between gap-2"
 src/web/outfits/show-page.tsx	<button type="submit" class="btn btn-primary">
 src/web/outfits/show-page.tsx	<span class="text-xs text-center line-clamp-2 leading-tight">
 src/web/share/share-page.tsx	<figure class="aspect-square overflow-hidden">

@@ -569,7 +569,7 @@ function notATripDay(trip: {
  * has ('already'), the calendar's rule. The refusal is told in the order
  * the checks were made one by one: the trip, the day, the outfit; and an
  * outfit that may not be held (#335, outfitMayBeHeld: a piece not bought
- * yet, or Muse's proposal not the owner's yet) is refused
+ * yet, or the agent's proposal not the owner's yet) is refused
  * (refuseUnholdable), nothing added.
  *
  * Two statements in a transaction (lockedTripCte): the first locks the

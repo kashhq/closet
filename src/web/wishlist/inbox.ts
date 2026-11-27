@@ -38,13 +38,13 @@ import {
 } from '../write-origin';
 
 /**
- * The Muse inbox's reads (#333 PR B; docs/plans/2026-10-05-muse-suggestions.md,
+ * The agent inbox's reads (#333 PR B; docs/plans/2026-10-05-agent-suggestions.md,
  * section 4 D and C): the Wishlist tab as the inbox and a need's decision
  * screen. Each page is one statement after the session (selectScalars):
  * the needs with their picks, the owner's own wishlist, the switcher, the
  * brand notes and, for the owner alone, "Unlocks N"'s inputs (the picks
  * locked against one closet read, goesWithManyInputsSql). A grantee reads
- * the needs and Muse's notes (owner decision, 2026-10-05) but never the
+ * the needs and the agent's notes (owner decision, 2026-10-05) but never the
  * owner's closet, so no unlocks and no decisions; a VIEW grantee no listed
  * price either (`private`, #680: priceJsonPair). "Still wanted" is
  * wanted() and nothing else; every decision is decide()'s (decisions.ts).
@@ -53,8 +53,8 @@ import {
 /** Group cards per page of the inbox (the Ideas sentinel's paging, doc section 7). */
 export const GROUPS_PAGE_SIZE = 10;
 
-/** One of Muse's picks as a card shows it. */
-export interface MusePick {
+/** One of the agent's picks as a card shows it. */
+export interface AgentPick {
   id: number;
   name: string | null;
   brand: string | null;
@@ -63,9 +63,9 @@ export interface MusePick {
   price?: string | null;
   sourceUrl: string | null;
   photo: SignablePhotoRef | null;
-  /** Muse's place for it among the need's options, 1 its pick; null: unranked. */
+  /** The agent's place for it among the need's options, 1 its pick; null: unranked. */
   rank: number | null;
-  /** Muse's reasoning. */
+  /** The agent's reasoning. */
   note: string | null;
   dismissedAt: string | null;
   dismissedReason: DismissReason | null;
@@ -76,18 +76,18 @@ export interface MusePick {
 export interface Need {
   id: number;
   name: string;
-  /** Per piece, '300.00'; null when Muse set none. */
+  /** Per piece, '300.00'; null when the agent set none. */
   budget: string | null;
-  /** Muse's reasoning for the need. */
+  /** The agent's reasoning for the need. */
   note: string | null;
   status: OptionGroupStatus;
   resolvedGarmentId: number | null;
   dismissedReason: DismissReason | null;
   ownerNote: string | null;
-  /** Muse, as the reader may see it (agentLabelSql: "Agent" to a grantee). */
+  /** The agent, as the reader may see it (agentLabelSql: "Agent" to a grantee). */
   agent: AgentLabel | null;
-  /** Its picks on the wishlist, wanted or set aside, Muse's rank order. */
-  picks: MusePick[];
+  /** Its picks on the wishlist, wanted or set aside, the agent's rank order. */
+  picks: AgentPick[];
   resolver: GarmentRef | null;
 }
 
@@ -101,7 +101,7 @@ interface OwnItem {
   price?: string | null;
   sourceUrl: string | null;
   photo: SignablePhotoRef | null;
-  /** A suggestion outside any need: "From Muse" (until phase 3's singles). */
+  /** A suggestion outside any need: "From the agent" (until phase 3's singles). */
   suggested: boolean;
   /** The agent that added it, as the reader may see it (#822); a plain item's badge. */
   agent: AgentLabel | null;
@@ -115,7 +115,7 @@ interface OwnItem {
  * (needPicksSql filters by onWishlist), so wanted()'s other half, not set
  * aside, is all that is left to ask of the row.
  */
-export function isOpenPick(pick: MusePick): boolean {
+export function isOpenPick(pick: AgentPick): boolean {
   return pick.dismissedAt === null;
 }
 
@@ -138,7 +138,7 @@ const replaced = aliased('replaced');
 const replacedGarment = replaced.columns;
 
 /** A pick as `role` reads it: its price only with `private`. */
-const pickJson = (role: WardrobeRole) => sql<MusePick>`json_build_object(
+const pickJson = (role: WardrobeRole) => sql<AgentPick>`json_build_object(
   'id', ${garment.id},
   'name', ${garment.name},
   'brand', ${garment.brand},
@@ -153,8 +153,8 @@ const pickJson = (role: WardrobeRole) => sql<MusePick>`json_build_object(
   'dismissedNote', ${garment.dismissedNote}
 )`;
 
-/** A need's picks on the wishlist, Muse's rank first (unranked last), then oldest. */
-const needPicksSql = (role: WardrobeRole) => sql<MusePick[]>`(
+/** A need's picks on the wishlist, the agent's rank first (unranked last), then oldest. */
+const needPicksSql = (role: WardrobeRole) => sql<AgentPick[]>`(
   select coalesce(
     json_agg(${pickJson(role)} order by ${garment.suggestionRank} nulls last, ${garment.id}),
     '[]'
@@ -280,7 +280,7 @@ function ownItemsSql(
 
 /** What a suggestion's own page shows of it beyond the garment (suggestion-section.tsx). */
 export interface SuggestionContext {
-  /** Muse, as the reader may see it (agentLabelSql: "Agent" to a grantee). */
+  /** The agent, as the reader may see it (agentLabelSql: "Agent" to a grantee). */
   agent: AgentLabel | null;
   note: string | null;
   dismissedReason: DismissReason | null;
@@ -317,8 +317,8 @@ export function suggestionContextSql(
 /** An open need with something to choose, and how many outfits its options unlock. */
 export interface InboxGroup {
   need: Need;
-  /** Its open picks, the most unlocks first (then Muse's rank). */
-  options: MusePick[];
+  /** Its open picks, the most unlocks first (then the agent's rank). */
+  options: AgentPick[];
   /** By pick id; undefined for a grantee (the owner's closet is theirs alone). */
   unlocks: Map<number, OutfitCount> | undefined;
 }
@@ -326,15 +326,15 @@ export interface InboxGroup {
 /** A row of "N set aside", each with its Undo. */
 export type SetAsideRow =
   | { kind: 'need'; need: Need }
-  | { kind: 'pick'; pick: MusePick | OwnItem; need: Need | undefined };
+  | { kind: 'pick'; pick: AgentPick | OwnItem; need: Need | undefined };
 
 export interface Inbox {
   /** Chosen, not yet bought: the need and its chosen pick. */
-  readyToBuy: { need: Need; pick: MusePick }[];
+  readyToBuy: { need: Need; pick: AgentPick }[];
   /** Open needs with options, sorted (sortGroups); the page shows one page of them. */
   groups: InboxGroup[];
   own: OwnItem[];
-  /** Open needs with no open option: "Muse is still looking for". */
+  /** Open needs with no open option: "the agent is still looking for". */
   stillLooking: Need[];
   setAside: SetAsideRow[];
   sharedWardrobes: SharedWardrobe[];
@@ -349,7 +349,7 @@ export interface Inbox {
  * they differ, or with no unlocks (a grantee).
  */
 export function sharedUnlocks(
-  options: readonly MusePick[],
+  options: readonly AgentPick[],
   unlocks: ReadonlyMap<number, OutfitCount> | undefined,
 ): OutfitCount | undefined {
   const counts = options.map((pick) => unlocks?.get(pick.id));
@@ -370,7 +370,7 @@ function countValue(count: OutfitCount | undefined): number {
 }
 
 /**
- * The options most unlocks first, then Muse's rank, then oldest; the
+ * The options most unlocks first, then the agent's rank, then oldest; the
  * needs by their best option the same way (doc section 3, "the closet
  * decides between options"). Without unlocks (a grantee) rank alone.
  */
@@ -378,7 +378,7 @@ function sortGroups(
   needs: readonly Need[],
   unlocks: Map<number, OutfitCount> | undefined,
 ): InboxGroup[] {
-  const byPick = (a: MusePick, b: MusePick) =>
+  const byPick = (a: AgentPick, b: AgentPick) =>
     countValue(unlocks?.get(b.id)) - countValue(unlocks?.get(a.id)) ||
     (a.rank ?? Infinity) - (b.rank ?? Infinity) ||
     a.id - b.id;
@@ -478,9 +478,9 @@ function sectionsOf(
 export interface NeedDetail {
   need: Need;
   /** Its open picks, most unlocks first; the chosen one when resolved. */
-  options: MusePick[];
+  options: AgentPick[];
   /** Picks set aside (by the owner, or because another was chosen). */
-  setAside: MusePick[];
+  setAside: AgentPick[];
   /** By pick id: the count and the best outfits; undefined for a grantee. */
   judged: Map<number, BestOutfits<ClosetGarment>> | undefined;
   brandSizes: BrandSizeLookup | undefined;
@@ -528,7 +528,7 @@ export async function readNeed(
   const judged =
     row.judged && bestOutfitsOf(readManyGoesWithInputs(row.judged));
   const searchMs = performance.now() - started;
-  const value = (pick: MusePick) => countValue(judged?.get(pick.id));
+  const value = (pick: AgentPick) => countValue(judged?.get(pick.id));
   return {
     need,
     options: need.picks
@@ -580,7 +580,7 @@ export function needsToDecideSql(ownerId: number): SQL<NeedsToDecide | null> {
 export interface NeedBoughtFor {
   id: number;
   name: string;
-  /** The chosen pick, else its best open one (Muse's rank first); null when none is left. */
+  /** The chosen pick, else its best open one (the agent's rank first); null when none is left. */
   pickId: number | null;
 }
 
@@ -622,14 +622,14 @@ export async function findNeedToBuyFor(
   return need ?? undefined;
 }
 
-/** A need that has picks newer than the owner last looked: "New from Muse". */
+/** A need that has picks newer than the owner last looked: "New from the agent". */
 export interface NewNeed {
   id: number;
   name: string;
 }
 
 /**
- * "New from Muse" (doc section 9: never part of the cached bare page): the
+ * "New from the agent" (doc section 9: never part of the cached bare page): the
  * open needs holding a wanted pick suggested since the owner last looked
  * (every one when they never have), newest first, and the owner's
  * suggestions_seen_at moved to the newest of those picks, in one

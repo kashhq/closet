@@ -29,7 +29,7 @@ import { Icon } from '../layout/icon';
  * section 3, "Wardrobe"): the app bar whose title is the wardrobe switcher,
  * with the ⋯ menu and the ＋ add sheet, and the tabs under it, Closet,
  * Capsules, Laundry and Wishlist (the owner's decision 4 on #43). Every
- * tab page renders both, so moving between them keeps the header. Muse's
+ * tab page renders both, so moving between them keeps the header. The agent's
  * suggestions live in the Wishlist tab (#333, owner decision 2026-10-05).
  */
 

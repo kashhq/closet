@@ -176,7 +176,7 @@ export const StyleProfile = Type.Object(
   {
     title: 'StyleProfile',
     description:
-      'What Muse reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.',
+      'What the agent reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.',
   },
 );
 

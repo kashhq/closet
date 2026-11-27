@@ -12,7 +12,7 @@ import { ownerTransaction } from '../auth/queries';
 import { outfitIsComplete, ownersOutfit } from './references';
 
 /**
- * The one writer of a Muse outfit's reaction (#335; proposals.ts says
+ * The one writer of an agent outfit's reaction (#335; proposals.ts says
  * which list each reaction puts it on). Its own module, as the outfit
  * writers (queries.ts: reuseOutfit, a save that meets a proposal) call it.
  */
@@ -108,7 +108,7 @@ function noteAfter(
 
 /**
  * A person's save (Styling, the outfit form, a pick of the gallery or
- * Today, create_outfit) of exactly the garments of one of Muse's proposals
+ * Today, create_outfit) of exactly the garments of one of the agent's proposals
  * not theirs yet: they made it theirs, so it is loved (Undone first when
  * it was set aside), through reactToOutfit. Complete, it is the owner's
  * and may be planned (outfitMayBeHeld). Called by reuseOutfit, under its

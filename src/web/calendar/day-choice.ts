@@ -33,7 +33,7 @@ export interface DayChoice {
 /**
  * The plan page's read, one statement (#165, #660): a page of the owner's
  * own outfits of `list`, as every picker lists them (savedOutfitsSql:
- * ownersOutfit, keptOutfit; Muse's proposals are the Outfits tab's own
+ * ownersOutfit, keptOutfit; the agent's proposals are the Outfits tab's own
  * section, #335, one-offs behind the segment, #659), and the day's
  * entries. GET /calendar/plan and its sentinel's GET /calendar/plan/more.
  */

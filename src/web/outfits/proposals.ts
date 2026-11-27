@@ -14,11 +14,11 @@ import {
 } from '../gallery/queries';
 import { privateColumns } from '../wardrobe/private-fields';
 import { onWishlist } from '../wardrobe/status';
-import { museOutfit } from './references';
+import { agentOutfit } from './references';
 import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
 
 /**
- * Muse's outfits (#335, docs/plans/2026-10-05-muse-suggestions.md section
+ * The agent's outfits (#335, docs/plans/2026-10-05-agent-suggestions.md section
  * 4 B): ordinary outfits the owner's agent proposed (outfit.proposed_at),
  * with its note and the owner's reaction (src/wardrobe/look-reaction.ts,
  * reused from plan looks: proposed, loved, revise, declined). Which list an
@@ -26,14 +26,14 @@ import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
  * - **the owner's** (`ownersOutfit`): never proposed, or a proposal loved
  *   while complete ("Save" is Love on a complete outfit). The Saved grid,
  *   the pickers, the garment page's strip.
- * - **from Muse** (`awaitingOwner`): proposed or sent back, or loved but
+ * - **from the agent** (`awaitingOwner`): proposed or sent back, or loved but
  *   still holding a piece to buy. The Outfits tab's first section.
  * - **set aside**: declined, with a reason. Collapsed under it, to undo.
- * Bought it moves a loved outfit from Muse's to the owner's by itself.
+ * Bought it moves a loved outfit from the agent's to the owner's by itself.
  */
 
-/** A piece of a Muse outfit as its card shows it: what it is, and if to buy, its price and whether it was set aside. */
-export interface MusePiece {
+/** A piece of an agent outfit as its card shows it: what it is, and if to buy, its price and whether it was set aside. */
+export interface AgentPiece {
   id: number;
   name: string | null;
   category: string;
@@ -44,22 +44,22 @@ export interface MusePiece {
   photo: SignablePhotoRef | null;
 }
 
-/** A Muse outfit as its card shows it. */
-export interface MuseOutfit {
+/** An agent outfit as its card shows it. */
+export interface AgentOutfit {
   id: number;
   name: string | null;
   note: string | null;
   reaction: LookReaction;
   ownerNote: string | null;
   dismissedReason: OutfitDismissReason | null;
-  /** Muse: outfits are their owner's alone, so its token's name, or "Agent". */
+  /** The agent: outfits are their owner's alone, so its token's name, or "Agent". */
   agent: AgentLabel | null;
-  pieces: MusePiece[];
+  pieces: AgentPiece[];
 }
 
 /** An outfit's pieces in slot order (empty slots show nothing), for a scalar subquery over `outfit`. */
-function musePiecesSql(): SQL<MusePiece[]> {
-  return sql<MusePiece[]>`(
+function agentPiecesSql(): SQL<AgentPiece[]> {
+  return sql<AgentPiece[]>`(
     select coalesce(json_agg(json_build_object(
       'id', ${garment.id},
       'name', ${garment.name},
@@ -77,12 +77,12 @@ function musePiecesSql(): SQL<MusePiece[]> {
 }
 
 /**
- * The owner's Muse outfits not theirs yet (awaiting them, or set aside),
+ * The owner's agent outfits not theirs yet (awaiting them, or set aside),
  * newest proposal first, as one scalar subquery for savedContext's
  * statement. Raw SQL, so `outfit` renders qualified (references.ts).
  */
-export function museOutfitsSql(ownerId: number): SQL<MuseOutfit[]> {
-  return sql<MuseOutfit[]>`(
+export function agentOutfitsSql(ownerId: number): SQL<AgentOutfit[]> {
+  return sql<AgentOutfit[]>`(
     select coalesce(json_agg(json_build_object(
       'id', ${outfit.id},
       'name', ${outfit.name},
@@ -91,35 +91,35 @@ export function museOutfitsSql(ownerId: number): SQL<MuseOutfit[]> {
       'ownerNote', ${outfit.ownerNote},
       'dismissedReason', ${outfit.dismissedReason},
       'agent', ${agentLabelSql(outfit.addedByTokenId, OWNER_READS)},
-      'pieces', ${musePiecesSql()}
+      'pieces', ${agentPiecesSql()}
     ) order by ${outfit.proposedAt} desc, ${outfit.id} desc), '[]')
     from ${outfit}
-    where ${and(eq(outfit.ownerId, ownerId), museOutfit())}
+    where ${and(eq(outfit.ownerId, ownerId), agentOutfit())}
   )`;
 }
 
 /**
- * The pieces to buy of the owner's Muse outfits, with the closet and the
+ * The pieces to buy of the owner's agent outfits, with the closet and the
  * avoided pairs once, to count what each unlocks (unlocksOf: the inbox's
  * "Unlocks N", #333). For savedContext's statement.
  */
-export function museUnlocksInputsSql(
+export function agentUnlocksInputsSql(
   ownerId: number,
 ): SQL<ManyGoesWithInputsJson> {
   return goesWithManyInputsSql(
     ownerId,
-    sql`${garment.id} in (select ${outfitSlot.garmentId} from ${outfitSlot} inner join ${outfit} on ${eq(outfit.id, outfitSlot.outfitId)} where ${and(eq(outfit.ownerId, ownerId), museOutfit(), onWishlist())})`,
+    sql`${garment.id} in (select ${outfitSlot.garmentId} from ${outfitSlot} inner join ${outfit} on ${eq(outfit.id, outfitSlot.outfitId)} where ${and(eq(outfit.ownerId, ownerId), agentOutfit(), onWishlist())})`,
   );
 }
 
-/** museUnlocksInputsSql's answer: each piece to buy's count. */
-export function readMuseUnlocks(
+/** agentUnlocksInputsSql's answer: each piece to buy's count. */
+export function readAgentUnlocks(
   json: ManyGoesWithInputsJson,
 ): Map<number, OutfitCount> {
   return unlocksOf(readManyGoesWithInputs(json));
 }
 
-/** Which of Muse's outfits a section shows: awaiting the owner, or set aside. */
-export function isSetAside(item: Pick<MuseOutfit, 'reaction'>): boolean {
+/** Which of the agent's outfits a section shows: awaiting the owner, or set aside. */
+export function isSetAside(item: Pick<AgentOutfit, 'reaction'>): boolean {
   return item.reaction === 'declined';
 }

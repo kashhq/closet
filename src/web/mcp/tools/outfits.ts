@@ -50,7 +50,7 @@ export const OUTFIT_FOR_MCP = {
   garments: 'own',
   // Incomplete (#335): the pieces to buy first, by id and name.
   toBuy: 'own',
-  // One of Muse's proposals (#335): its note and the owner's reaction.
+  // One of the agent's proposals (#335): its note and the owner's reaction.
   proposal: 'keep',
   agent: 'own',
 } as const satisfies Projection<OutfitListRecord>;

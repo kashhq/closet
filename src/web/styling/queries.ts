@@ -420,7 +420,7 @@ export function readSavedOutfit(
  * Include picks (`?picks=1`, #335): the owner's garments offered to style
  * with (offeredToStyle: still wanted, not under a need set aside), which
  * join their role's strip first, badged "To buy". A need's options sit
- * side by side in Muse's rank (by need, newest first, then rank), then
+ * side by side in the agent's rank (by need, newest first, then rank), then
  * the lone picks and the owner's own wishlist items, newest first. A
  * scalar subquery; read with readGarments.
  */

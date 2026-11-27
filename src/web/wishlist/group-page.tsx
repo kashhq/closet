@@ -4,7 +4,7 @@ import { PhotoSet, viewerTrigger, enlargeLabel } from '../files/photo-viewer';
 import type { ClosetGarment } from '../gallery/queries';
 import { ideaName } from '../gallery/ideas';
 import { t } from '../i18n';
-import { museName } from '../write-origin';
+import { suggestingAgentName } from '../write-origin';
 import { PageShell } from '../layout/page-shell';
 import { OutfitCollage } from '../outfits/collage';
 import { BrandSizeNote } from '../sizes/views';
@@ -17,7 +17,7 @@ import {
   wardrobeUrl,
   WISHLIST_PATH,
 } from '../wardrobe/urls';
-import { type MusePick, type NeedDetail, sharedUnlocks } from './inbox';
+import { type AgentPick, type NeedDetail, sharedUnlocks } from './inbox';
 import { Unlocks } from './inbox-page';
 import {
   ChooseForm,
@@ -48,7 +48,7 @@ export interface NeedPageModel {
 const PHOTO_SET = 'need-options';
 
 /** The viewer's set: the options' photos in strip order. */
-function viewerPhotos(options: readonly MusePick[]) {
+function viewerPhotos(options: readonly AgentPick[]) {
   return options.flatMap((pick) =>
     pick.photo
       ? [
@@ -69,7 +69,7 @@ function pickName(pick: { name: string | null; category: string }): string {
 /** The chosen pick alone; else an open need's options; else none. */
 function shownPicks(
   { need, options }: NeedDetail,
-  chosen: MusePick | undefined,
+  chosen: AgentPick | undefined,
 ): NeedDetail['options'] {
   if (chosen) return [chosen];
   return need.status === 'open' ? options : [];
@@ -77,12 +77,12 @@ function shownPicks(
 
 /**
  * GET /wardrobe/wishlist/needs/:id, a need's decision screen (#333;
- * docs/plans/2026-10-05-muse-suggestions.md, section 4 C): the need, its
- * budget and Muse's reasoning behind a tap, then its options. On a phone a
+ * docs/plans/2026-10-05-agent-suggestions.md, section 4 C): the need, its
+ * budget and the agent's reasoning behind a tap, then its options. On a phone a
  * snap strip, one card centred with the next peeking; from `lg` the same
  * markup as columns side by side (the strip's `options` size), so options
  * compare directly. Each card: the photo (the shared viewer), price
- * against the budget, Unlocks N, the brand size note, Muse's note, **This
+ * against the budget, Unlocks N, the brand size note, the agent's note, **This
  * one** (the card's one primary), then View product, Details and Not for
  * me in place, and its best outfits with the closet under it. A chosen
  * need shows its pick with Bought it; a need set aside, Undo. Every
@@ -124,7 +124,7 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
         {need.note && (
           <details class="text-sm">
             <summary class="link link-hover text-muted">
-              {t('muse.WHY', { agent: museName(need.agent) })}
+              {t('agent.WHY', { agent: suggestingAgentName(need.agent) })}
             </summary>
             <p class="pt-1 whitespace-pre-line" data-need-note="">
               {need.note}
@@ -137,7 +137,7 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
           <PhotoSet id={PHOTO_SET} photos={viewerPhotos(shown)} />
           <SnapStrip
             size="peek"
-            label={t('muse.OPTIONS_LABEL', { need: need.name })}
+            label={t('agent.OPTIONS_LABEL', { need: need.name })}
             listbox={false}
             desktop="grid"
             tapThrough
@@ -164,7 +164,7 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
       )}
       {need.status === 'open' && options.length === 0 && (
         <p class="text-sm text-muted" data-no-options="">
-          {t('muse.NO_OPTIONS_LEFT')}
+          {t('agent.NO_OPTIONS_LEFT')}
         </p>
       )}
       <SetAsidePicks model={model} picks={setAside} self={self} />
@@ -174,7 +174,7 @@ export function NeedPage(props: { ctx: ViewContext; model: NeedPageModel }) {
           <NotForMe
             action={needUrl(need.id, undefined, '/dismiss')}
             returnTo={self}
-            label={t('muse.NOT_THIS_NEED')}
+            label={t('agent.NOT_THIS_NEED')}
           />
         </footer>
       )}
@@ -193,7 +193,7 @@ function BoughtDifferent({ needId }: { needId: number }) {
       href={wardrobeUrl(undefined, { forNeed: needId }, '/wardrobe/new')}
       class="btn btn-ghost btn-sm self-start"
     >
-      {t('muse.BOUGHT_DIFFERENT')}
+      {t('agent.BOUGHT_DIFFERENT')}
     </a>
   );
 }
@@ -201,7 +201,7 @@ function BoughtDifferent({ needId }: { needId: number }) {
 /** Where the need stands when it is not open: chosen, bought, or set aside (with Undo). */
 function NeedState(props: {
   model: NeedPageModel;
-  chosen: MusePick | undefined;
+  chosen: AgentPick | undefined;
 }) {
   const { model, chosen } = props;
   const { need } = model.detail;
@@ -213,7 +213,7 @@ function NeedState(props: {
         data-need-state="dismissed"
       >
         <span class="badge badge-soft badge-neutral">
-          {t('muse.NEED_SET_ASIDE', {
+          {t('agent.NEED_SET_ASIDE', {
             reason: reasonText(need.dismissedReason),
           })}
         </span>
@@ -231,7 +231,7 @@ function NeedState(props: {
   if (chosen) {
     return (
       <span class="badge badge-soft badge-success" data-need-state="chosen">
-        {t('muse.CHOSEN')}
+        {t('agent.CHOSEN')}
       </span>
     );
   }
@@ -242,14 +242,14 @@ function NeedState(props: {
       class="badge badge-soft badge-success"
       data-need-state="bought"
     >
-      {t('muse.BOUGHT', { name: pickName(need.resolver) })}
+      {t('agent.BOUGHT', { name: pickName(need.resolver) })}
     </a>
   ) : null;
 }
 
 function OptionCard(props: {
   model: NeedPageModel;
-  pick: MusePick;
+  pick: AgentPick;
   chosen: boolean;
   selected: boolean;
   self: string;
@@ -318,7 +318,7 @@ function OptionCard(props: {
  */
 function OptionActions(props: {
   model: NeedPageModel;
-  pick: MusePick;
+  pick: AgentPick;
   chosen: boolean;
   self: string;
 }) {
@@ -356,7 +356,7 @@ function OptionActions(props: {
           href={garmentUrl(pick.id, model.viewOwner)}
           class="btn btn-ghost btn-sm"
         >
-          {t('muse.DETAILS')}
+          {t('agent.DETAILS')}
         </a>
         {model.isOwner && !chosen && (
           <NotForMe
@@ -368,7 +368,7 @@ function OptionActions(props: {
           <UndoForm
             action={needUrl(need.id, undefined, '/undo')}
             returnTo={self}
-            label={t('muse.UNDO_CHOICE')}
+            label={t('agent.UNDO_CHOICE')}
           />
         )}
       </div>
@@ -384,7 +384,7 @@ function BestOutfitRows(props: {
   if (props.best.best.length === 0) return null;
   return (
     <div class="flex flex-col gap-1 pt-1">
-      <p class="text-xs text-muted">{t('muse.BEST_LABEL')}</p>
+      <p class="text-xs text-muted">{t('agent.BEST_LABEL')}</p>
       <ul class={THUMB_ROW} data-best-outfits="">
         {props.best.best.map((idea) => (
           <li title={ideaName(idea.garments)}>
@@ -406,7 +406,7 @@ function BestOutfitRows(props: {
 /** The need's picks set aside, each with its reason, and Undo while the need is open. */
 function SetAsidePicks(props: {
   model: NeedPageModel;
-  picks: readonly MusePick[];
+  picks: readonly AgentPick[];
   self: string;
 }) {
   const { model, picks, self } = props;
@@ -419,8 +419,8 @@ function SetAsidePicks(props: {
     >
       <summary class="collapse-title text-sm font-medium">
         {picks.length === 1
-          ? t('muse.SET_ASIDE_ONE')
-          : t('muse.SET_ASIDE_COUNT', { count: picks.length })}
+          ? t('agent.SET_ASIDE_ONE')
+          : t('agent.SET_ASIDE_COUNT', { count: picks.length })}
       </summary>
       <ul class="collapse-content flex flex-col divide-y divide-base-300">
         {picks.map((pick) => (
@@ -444,7 +444,7 @@ function SetAsidePicks(props: {
               <UndoForm
                 action={garmentUrl(pick.id, undefined, '/undo')}
                 returnTo={self}
-                ariaLabel={`${t('muse.UNDO')}: ${pickName(pick)}`}
+                ariaLabel={`${t('agent.UNDO')}: ${pickName(pick)}`}
               />
             )}
           </li>

@@ -38,7 +38,7 @@ export const WARM_GARMENT_CAP = 500;
 export const WARM_OUTFIT_CAP = 250;
 
 /**
- * The Muse inbox's pages a warm names (#333): the inbox itself, its needs'
+ * The agent inbox's pages a warm names (#333): the inbox itself, its needs'
  * decision screens and the pages of what is still wanted, newest first.
  * Their thumbs count the same, beside the closet's.
  */

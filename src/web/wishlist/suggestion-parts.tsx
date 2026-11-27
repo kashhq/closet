@@ -9,12 +9,12 @@ import { PostForm } from '../form';
 import { imageUrl, type SignablePhotoRef } from '../files/image-url';
 import { unlocksText } from '../gallery/goes-with';
 import { t, type Translated } from '../i18n';
-import { type AgentLabel, museName } from '../write-origin';
+import { type AgentLabel, suggestingAgentName } from '../write-origin';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import { priceLabel } from '../wardrobe/garment';
 
 /**
- * What the Muse inbox (inbox-page.tsx), a need's decision screen
+ * What the agent inbox (inbox-page.tsx), a need's decision screen
  * (group-page.tsx) and a suggestion's own page (suggestion-section.tsx)
  * share: the decision forms, each a native PostForm posting to the one
  * writer's routes (suggestion-routes.tsx) with the page to come back to,
@@ -45,7 +45,7 @@ export function decisionToastOf(
 
 /** Why something was set aside, as the owner reads it; null for one the plans' review set aside before #337 (its words are the note). */
 export function reasonText(reason: DismissReason | null): Translated {
-  return t(`muse.reason.${reason ?? 'none'}`);
+  return t(`agent.reason.${reason ?? 'none'}`);
 }
 
 /** The page a decision comes back to, checked again by the route (safeReturnTo). */
@@ -59,7 +59,7 @@ export function ChooseForm(props: { action: string; returnTo: string }) {
     <PostForm action={props.action}>
       <ReturnTo path={props.returnTo} />
       <button type="submit" class="btn btn-primary btn-block">
-        {t('muse.THIS_ONE')}
+        {t('agent.THIS_ONE')}
       </button>
     </PostForm>
   );
@@ -81,12 +81,12 @@ export function NotForMe(props: {
   return (
     <details class="group/not-for-me" data-not-for-me="">
       <summary class="btn btn-ghost btn-sm">
-        {props.label ?? t('muse.NOT_FOR_ME')}
+        {props.label ?? t('agent.NOT_FOR_ME')}
       </summary>
       <PostForm action={props.action} class="flex flex-col gap-2 pt-2">
         <ReturnTo path={props.returnTo} />
         <label class="flex flex-col gap-1 text-xs text-muted">
-          {t('muse.NOTE_LABEL')}
+          {t('agent.NOTE_LABEL')}
           <textarea
             name="note"
             rows={2}
@@ -94,7 +94,7 @@ export function NotForMe(props: {
             class="textarea textarea-sm w-full"
           ></textarea>
         </label>
-        <p class="text-xs text-muted">{t('muse.NOT_FOR_ME_HINT')}</p>
+        <p class="text-xs text-muted">{t('agent.NOT_FOR_ME_HINT')}</p>
         <div class="flex flex-wrap gap-1">
           {(props.reasons ?? OWNER_DISMISS_REASONS).map((reason) => (
             <button
@@ -129,7 +129,7 @@ export function UndoForm(props: {
         class={props.primary ? 'btn btn-primary' : 'btn btn-ghost btn-sm'}
         aria-label={props.ariaLabel}
       >
-        {props.label ?? t('muse.UNDO')}
+        {props.label ?? t('agent.UNDO')}
       </button>
     </PostForm>
   );
@@ -157,7 +157,7 @@ export function PriceAgainstBudget(props: {
       {said && (
         <span class={fit === 'over' ? 'text-warning' : 'text-success'}>
           {' · '}
-          {t(fit === 'over' ? 'muse.OVER_BUDGET' : 'muse.WITHIN_BUDGET')}
+          {t(fit === 'over' ? 'agent.OVER_BUDGET' : 'agent.WITHIN_BUDGET')}
         </span>
       )}
     </p>
@@ -177,14 +177,14 @@ export function NeedFacts(props: {
 }) {
   const { unlocks } = props;
   const facts = [
-    props.budget && t('muse.UP_TO', { price: priceLabel(props.budget) }),
+    props.budget && t('agent.UP_TO', { price: priceLabel(props.budget) }),
     props.options === 1
-      ? t('muse.OPTIONS_ONE')
-      : t('muse.OPTIONS', { count: props.options }),
+      ? t('agent.OPTIONS_ONE')
+      : t('agent.OPTIONS', { count: props.options }),
     unlocks &&
       (props.options === 1
         ? unlocksText(unlocks)
-        : t('muse.EACH', { unlocks: unlocksText(unlocks) })),
+        : t('agent.EACH', { unlocks: unlocksText(unlocks) })),
   ].filter(Boolean);
   return (
     <p
@@ -206,7 +206,7 @@ export function NeedFacts(props: {
 export function NeedLink(props: { name: string; href: string }) {
   return (
     <p class="text-xs" data-need-link="">
-      <span class="text-muted uppercase tracking-wide">{t('muse.NEED')}</span>{' '}
+      <span class="text-muted uppercase tracking-wide">{t('agent.NEED')}</span>{' '}
       <a href={props.href} class="link link-hover break-words">
         {props.name}
       </a>
@@ -243,13 +243,13 @@ export function ProductPhoto(props: {
 }
 
 /**
- * "From Muse": a suggestion's provenance, by its agent as the reader may
+ * "From the agent": a suggestion's provenance, by its agent as the reader may
  * see it; null where none is (an own item's lone suggestion, 0040's rows).
  */
 export function FromAgent({ agent }: { agent: AgentLabel | null }) {
   return (
     <span class="badge badge-soft badge-secondary" data-from-agent="">
-      {t('muse.FROM', { agent: museName(agent) })}
+      {t('agent.FROM', { agent: suggestingAgentName(agent) })}
     </span>
   );
 }
@@ -263,7 +263,7 @@ export function DecisionToastView({
   return (
     <>
       {toast && (
-        <SavedToast id="decision-toast" text={t(`muse.toast.${toast}`)} />
+        <SavedToast id="decision-toast" text={t(`agent.toast.${toast}`)} />
       )}
       <StripFlags names={[DECISION_FLAG]} />
     </>

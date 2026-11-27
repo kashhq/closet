@@ -1,10 +1,10 @@
 import { Card } from '../card';
 import { t } from '../i18n';
-import { museName } from '../write-origin';
+import { suggestingAgentName } from '../write-origin';
 import { categoryLabel } from '../wardrobe/garment';
 import type { GarmentDetail } from '../wardrobe/queries';
 import { garmentUrl, needUrl } from '../wardrobe/urls';
-import { isOpenPick, type MusePick, type SuggestionContext } from './inbox';
+import { isOpenPick, type AgentPick, type SuggestionContext } from './inbox';
 import {
   ChooseForm,
   FromAgent,
@@ -52,8 +52,8 @@ function pickName(pick: { name: string | null; category: string }): string {
 
 /**
  * A suggestion's part of its garment page (#333; doc section 4 F), under
- * the summary: "From Muse" and where it stands, its need (a link to the
- * decision screen) and price against the need's budget, Muse's note, the
+ * the summary: "From the agent" and where it stands, its need (a link to the
+ * decision screen) and price against the need's budget, the agent's note, the
  * owner's decisions by state (open: **This one**; chosen: **Bought it**;
  * set aside: **Undo**, each the one primary), and the need's other
  * options. A grantee reads it without the decisions (a MANAGE grantee keeps
@@ -75,7 +75,9 @@ export function SuggestionSection(props: {
       as="section"
       variant="content"
       bodyClass="p-4 gap-3"
-      aria-label={t('muse.FROM', { agent: museName(suggestion.agent) })}
+      aria-label={t('agent.FROM', {
+        agent: suggestingAgentName(suggestion.agent),
+      })}
       data-suggestion-state={state}
     >
       <div class="flex flex-wrap items-center gap-2">
@@ -129,12 +131,12 @@ function StateBadge(props: {
   switch (state) {
     case STATE.chosen:
       return (
-        <span class="badge badge-soft badge-success">{t('muse.CHOSEN')}</span>
+        <span class="badge badge-soft badge-success">{t('agent.CHOSEN')}</span>
       );
     case STATE.setAside:
       return (
         <span class="badge badge-soft badge-neutral">
-          {t('muse.SET_ASIDE_REASON', {
+          {t('agent.SET_ASIDE_REASON', {
             reason: reasonText(suggestion.dismissedReason),
           })}
         </span>
@@ -142,7 +144,7 @@ function StateBadge(props: {
     case STATE.needSetAside:
       return (
         <span class="badge badge-soft badge-neutral">
-          {t('muse.NEED_SET_ASIDE', {
+          {t('agent.NEED_SET_ASIDE', {
             reason: reasonText(suggestion.need?.dismissedReason ?? null),
           })}
         </span>
@@ -199,7 +201,7 @@ function Decisions(props: {
               <UndoForm
                 action={needUrl(need.id, undefined, '/undo')}
                 returnTo={self}
-                label={t('muse.UNDO_CHOICE')}
+                label={t('agent.UNDO_CHOICE')}
               />
             )}
           </div>
@@ -244,14 +246,14 @@ function BoughtItLink(props: { href: string; primary?: boolean }) {
 
 /** The need's other open options, each to its own page, and the way to compare them. */
 function OtherOptions(props: {
-  picks: readonly MusePick[];
+  picks: readonly AgentPick[];
   compare: string;
   viewOwner: number | undefined;
 }) {
   if (props.picks.length === 0) return null;
   return (
     <div class="flex flex-col gap-2 border-t border-base-300 pt-3">
-      <p class="text-sm font-medium">{t('muse.OTHER_OPTIONS')}</p>
+      <p class="text-sm font-medium">{t('agent.OTHER_OPTIONS')}</p>
       <ul class={THUMB_ROW_WIDE} data-other-options="">
         {props.picks.map((pick) => (
           <li>
@@ -267,7 +269,7 @@ function OtherOptions(props: {
         ))}
       </ul>
       <a href={props.compare} class="btn btn-outline btn-sm self-start">
-        {t('muse.COMPARE')}
+        {t('agent.COMPARE')}
       </a>
     </div>
   );

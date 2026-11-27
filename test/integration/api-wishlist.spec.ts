@@ -8,7 +8,7 @@ import { createGarment, createWishlistItem, garmentRow } from './garments';
 import { createTestApp, type TestApp, TEST_PASSWORD } from './harness';
 
 /**
- * The wishlist and Muse's inbox on /api/v1 (#194b): the tab and a need's
+ * The wishlist and the agent's inbox on /api/v1 (#194b): the tab and a need's
  * screen as their pages read them, every owner decision through
  * makeDecision, "Bought it" through buyWishlistItem, "Bought a different
  * one" through POST /garments. Who may do what is the authorization
@@ -42,7 +42,7 @@ async function pick(name: string, groupId: number, rank: number | null = null) {
   const marked = await markSuggestion(t.db, ownerId, id, {
     tokenId: null,
     groupId,
-    note: `Muse on ${name}`,
+    note: `Stylist on ${name}`,
     rank,
   });
   expect(marked).toBe('marked');
@@ -115,24 +115,24 @@ describe('reads', () => {
         need: { id: number; status: string };
         options: {
           id: number;
-          fromMuse: boolean;
+          fromAgent: boolean;
           rank?: number;
           unlocks?: object;
         }[];
       }[];
-      items: { id: number; fromMuse: boolean; replaces?: { id: number } }[];
+      items: { id: number; fromAgent: boolean; replaces?: { id: number } }[];
       stillLooking: { id: number }[];
     }>();
     const card = inbox.needs.find(({ need: n }) => n.id === coats)!;
     expect(card.need.status).toBe('open');
     expect(card.options.map(({ id }) => id)).toContain(first);
     expect(card.options[0]).toMatchObject({
-      fromMuse: true,
+      fromAgent: true,
       unlocks: expect.any(Object),
     });
     expect(inbox.stillLooking.map(({ id }) => id)).toContain(looking);
     expect(inbox.items.find(({ id }) => id === ownId)).toMatchObject({
-      fromMuse: false,
+      fromAgent: false,
       replaces: { id: replaced },
     });
 
@@ -174,7 +174,7 @@ describe('reads', () => {
     );
   });
 
-  it('"New from Muse" answers what came in since the last call, once', async () => {
+  it('"New from the agent" answers what came in since the last call, once', async () => {
     const fresh = await need('A belt');
     await pick('Brown belt', fresh);
     const seen = await api('POST', '/wishlist/seen');
