@@ -101,6 +101,8 @@ upload's cutout never runs while another step is measured.
 
 ## Using it on a page PR
 
+It needs a Postgres at `TEST_DATABASE_URL`: start the `closet-pg` container from README's Development section first.
+
 ```bash
 npm run audit:pages -- --only '#159' --compare docs/perf/baseline.json
 npm run audit:pages -- --persona scale --only '#164' --compare docs/perf/baseline-scale.json

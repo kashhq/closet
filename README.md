@@ -227,8 +227,10 @@ npm run start:dev                                 # http://localhost:3000
 Use another host port (`-p 55432:5432` and `DATABASE_PORT=55432`) when 5432 is
 taken. The owner's integration tier and page audit never touch `closet_db`: each
 run creates scratch databases on the server named by `TEST_DATABASE_URL`
-(default `postgres://postgres@localhost:5432/postgres`, the container above) and
-drops them afterwards.
+(default `postgres://postgres@localhost:5432/postgres`, the container above on
+its default port; with `-p 55432:5432` set
+`TEST_DATABASE_URL=postgres://postgres@localhost:55432/postgres`) and drops them
+afterwards.
 
 ### npm scripts
 
