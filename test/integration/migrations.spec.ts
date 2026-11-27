@@ -563,6 +563,80 @@ describe('migrations', () => {
     expect(after.revision).toBe(coatRevision);
     expect(await schemaDrift(t.db)).toEqual([]);
   });
+
+  // 0073 stops every share id 0064 kept (#964). Its updates are synced
+  // writes (0053's reason): the file runs here on rows holding an id as
+  // production's do, in a transaction holding no mark of its own.
+  it('stops every legacy share link (0073) under the owner lock, re-sending only the rows it stopped', async () => {
+    const otherEmail = 'legacy-share-other@example.com';
+    await t.register(otherEmail);
+    const otherId = await userIdOf(t, otherEmail);
+    const shared = await createGarment(t, { name: 'Shared since insert' });
+    const unshared = await createGarment(t, { name: 'Never shared' });
+    const ids = await asFixture(t.db, async (tx) => {
+      await tx
+        .update(garment)
+        .set({ shareableId: randomUUID() })
+        .where(eq(garment.id, shared));
+      const [row] = await tx
+        .insert(outfit)
+        .values({
+          ownerId: otherId,
+          name: 'Legacy look',
+          shareableId: randomUUID(),
+        })
+        .returning({ id: outfit.id, shareableId: outfit.shareableId });
+      return { outfit: row.id, outfitShareId: row.shareableId };
+    });
+    const garmentRow = async (id: number) =>
+      (
+        await t.db
+          .select({
+            shareableId: garment.shareableId,
+            revision: garment.revision,
+          })
+          .from(garment)
+          .where(eq(garment.id, id))
+      )[0];
+    const sharedBefore = await garmentRow(shared);
+    const unsharedBefore = await garmentRow(unshared);
+    const links = [
+      `/share?shareableId=${sharedBefore.shareableId}&type=garment`,
+      `/share?shareableId=${ids.outfitShareId}&type=outfit`,
+    ];
+    const open = (url: string) =>
+      t.inject({ method: 'GET', url, anonymous: true });
+    for (const url of links)
+      expect((await open(url)).statusCode, url).toBe(200);
+
+    const migration = await readFile(
+      join(MIGRATIONS_FOLDER, '0073_stop-legacy-shares.sql'),
+      'utf8',
+    );
+    await t.db.transaction(async (tx) => {
+      for (const statement of migration.split('--> statement-breakpoint')) {
+        await tx.execute(sql.raw(statement));
+      }
+    });
+
+    const sharedAfter = await garmentRow(shared);
+    expect(sharedAfter.shareableId).toBeNull();
+    const [look] = await t.db
+      .select({ shareableId: outfit.shareableId })
+      .from(outfit)
+      .where(eq(outfit.id, ids.outfit));
+    expect(look.shareableId).toBeNull();
+    // The feed re-sends a stopped row without its link; an untouched row
+    // keeps its revision.
+    expect(sharedAfter.revision).not.toBe(sharedBefore.revision);
+    expect(await garmentRow(unshared)).toEqual(unsharedBefore);
+    // A link already sent is now the same 404 as an unknown id.
+    for (const url of links)
+      expect((await open(url)).statusCode, url).toBe(404);
+    expect(
+      (await open(`/file/watermark/${sharedBefore.shareableId}`)).statusCode,
+    ).toBe(404);
+  });
 });
 
 /**
