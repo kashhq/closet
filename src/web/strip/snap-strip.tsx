@@ -58,7 +58,7 @@ const SIZES = {
       'lg:before:mr-0 lg:after:ml-0 lg:before:w-[calc(50%-10rem)] lg:after:w-[calc(50%-10rem)]',
   },
   // The same card with the next one peeking in on a phone (Today's rows, a
-  // The agent need's options), flush left: the first card cannot be centred there.
+  // An agent need's options), flush left: the first card cannot be centred there.
   peek: {
     item: 'w-[85%]',
     lgItem: 'lg:w-72',

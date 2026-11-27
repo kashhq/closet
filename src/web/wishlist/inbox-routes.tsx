@@ -88,7 +88,7 @@ function noteOf(note: string | undefined): string | null {
 }
 
 /**
- * The agent inbox (#333; docs/plans/2026-10-05-agent-suggestions.md, section
+ * The agent inbox (#333; docs/plans/2026-10-05-muse-suggestions.md, section
  * 4 C and D): the Wishlist tab as the inbox, its next page of needs, the
  * "New from the agent" marker, a need's decision screen, and every decision
  * made on them. The pages are read by whoever reads the wishlist (a VIEW

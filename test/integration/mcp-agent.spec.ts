@@ -23,7 +23,7 @@ import {
 import { callTool, createAccessToken, mcpRequest, tool } from './mcp';
 
 /**
- * The agent's MCP tools (#337, docs/plans/2026-10-05-agent-suggestions.md
+ * The agent's MCP tools (#337, docs/plans/2026-10-05-muse-suggestions.md
  * section 5), driven as a client: a need (create_option_group), its
  * options from product links (suggest_garment), an outfit
  * (suggest_outfit), what stands where (list_suggestions), the closet's

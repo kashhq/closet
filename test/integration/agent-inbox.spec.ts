@@ -14,7 +14,7 @@ import {
 } from './harness';
 
 /**
- * The agent phase 1B (#333; docs/plans/2026-10-05-agent-suggestions.md, section
+ * The agent phase 1B (#333; docs/plans/2026-10-05-muse-suggestions.md, section
  * 4 C, D, F): the Wishlist tab as the agent's inbox, a need's decision screen,
  * a suggestion's page, and every decision over HTTP, each through decide()
  * with its rows asserted. Also "New from the agent" (never in the bare page,

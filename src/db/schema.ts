@@ -1059,7 +1059,7 @@ export const outfit = pgTable(
     name: text('name'),
     notes: text('notes'),
     ownerId: integer('owner_id').notNull(),
-    // An agent outfit (#335, docs/plans/2026-10-05-agent-suggestions.md): one
+    // An agent outfit (#335, docs/plans/2026-10-05-muse-suggestions.md): one
     // the owner's agent proposed, marked by `proposed_at` (the token is
     // revoked, never deleted, but the mark should not hang on a nullable
     // key), with the agent's note and the owner's reaction

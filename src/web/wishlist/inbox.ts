@@ -38,7 +38,7 @@ import {
 } from '../write-origin';
 
 /**
- * The agent inbox's reads (#333 PR B; docs/plans/2026-10-05-agent-suggestions.md,
+ * The agent inbox's reads (#333 PR B; docs/plans/2026-10-05-muse-suggestions.md,
  * section 4 D and C): the Wishlist tab as the inbox and a need's decision
  * screen. Each page is one statement after the session (selectScalars):
  * the needs with their picks, the owner's own wishlist, the switcher, the

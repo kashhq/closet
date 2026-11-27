@@ -38,7 +38,7 @@ import { addGarmentFromLink } from './link-import';
 const deps = (ctx: ToolContext) => ({ db: ctx.db, logger: ctx.webLogger });
 
 /**
- * The agent's tools (#337; docs/plans/2026-10-05-agent-suggestions.md section
+ * The agent's tools (#337; docs/plans/2026-10-05-muse-suggestions.md section
  * 5): the agent writes its suggestions as the app's own rows, through the
  * app's own writers, and reads back what the owner decided. The caller's
  * own wardrobe, no ownerId. A need is createOptionGroup's, a pick the

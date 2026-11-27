@@ -8,7 +8,7 @@ import { moveFeedbackCursor } from './feedback';
 import { OPEN_PICKS } from './inbox';
 
 /**
- * The agent's rounds (#337; docs/plans/2026-10-05-agent-suggestions.md section
+ * The agent's rounds (#337; docs/plans/2026-10-05-muse-suggestions.md section
  * 4 A): the agent ends a round of suggestions with finish_round, which
  * stores when (agent_round) and nothing of what: a round is the agent's
  * outfits proposed and options suggested in (`since`, `finished_at`],

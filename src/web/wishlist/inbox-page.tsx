@@ -71,7 +71,7 @@ const TO_WISHLIST = destinationParams({ to: 'wishlist' });
 
 /**
  * GET /wardrobe/wishlist, the Wishlist tab as the agent's inbox (#333;
- * docs/plans/2026-10-05-agent-suggestions.md, section 4 D), top to bottom:
+ * docs/plans/2026-10-05-muse-suggestions.md, section 4 D), top to bottom:
  * Ready to buy (chosen, not bought), the agent's picks (a card per open need,
  * most unlocks first, paged with the Ideas sentinel), the owner's own
  * wishlist, "the agent is still looking for" and the set-aside list. One
