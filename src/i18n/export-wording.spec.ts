@@ -52,7 +52,7 @@ describe('the garment export is never called a backup', () => {
   it("Profile's hint says what the export holds and leaves out", () => {
     const hint = english.profile.EXPORT_HINT;
     expect(hint).toContain('garment list');
-    expect(hint).toContain('Muse needs');
+    expect(hint).toContain('wishlist needs');
     expect(hint).toContain('no photo files');
     expect(hint).toContain('outfits');
     expect(hint).toContain('It is not a backup');

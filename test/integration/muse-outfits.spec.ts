@@ -372,7 +372,7 @@ describe('Muse’s outfits (#335)', () => {
       });
       expect(planned.statusCode).toBe(409);
       expect(unescapeHtml(planned.body)).toContain(
-        'Save it first: Muse’s outfits are planned or packed once they’re yours.',
+        'Save it first: suggested outfits are planned or packed once they’re yours.',
       );
       const trip = await post('/trips', {
         name: 'Proposal trip',
@@ -474,7 +474,7 @@ describe('Muse’s outfits (#335)', () => {
       });
       expect(res.headers.location).toBe(`/outfits/${id}?alreadySaved=muse`);
       const page = unescapeHtml((await get(String(res.headers.location))).body);
-      expect(page).toContain('Saved Muse’s outfit: it’s yours now');
+      expect(page).toContain('Saved the suggested outfit: it’s yours now');
       expect(page).not.toContain('Already saved');
     });
 

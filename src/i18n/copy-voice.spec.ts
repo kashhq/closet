@@ -15,7 +15,6 @@ const strings = leaves(english);
 // Names that stay capitalised mid-label: names, not Title Case. Phrases, not
 // words, so a name's parts ('Code', 'Weather') do not pass on their own.
 const PROPER_NOUNS = [
-  'Muse', // the wishlist's agent
   'Claude Code', // the MCP client the token screen names
   'Open-Meteo', // the weather provider (its credit line)
   'Styling', // the composer's section name
@@ -42,7 +41,7 @@ function isLabel(text: string): boolean {
 }
 
 // A name becomes one lowercase word, not nothing: dropping it would promote
-// the next word to first position, which the check skips ('Muse Picks').
+// the next word to first position, which the check skips ('Claude Code Picks').
 function namesAsWords(text: string): string {
   return PROPER_NOUNS.reduce(
     (rest, name) => rest.replaceAll(name, 'name'),
@@ -93,9 +92,26 @@ describe('the copy speaks in one voice (#729)', () => {
     expect(titleCasedWords('Connect Claude Code')).toEqual([]);
     expect(titleCasedWords('Weather Settings')).toEqual(['Settings']);
     expect(titleCasedWords('Open Weather')).toEqual(['Weather']);
-    expect(titleCasedWords('Muse Picks')).toEqual(['Picks']);
+    expect(titleCasedWords('Claude Code Picks')).toEqual(['Picks']);
     expect(titleCasedWords('Styling Tips')).toEqual(['Tips']);
-    expect(titleCasedWords('Ask Muse')).toEqual([]);
+    expect(titleCasedWords('Ask Claude Code')).toEqual([]);
     expect(isLabel('Tap Save. Then wait')).toBe(false);
+  });
+});
+
+// #1281: Closet is agent-agnostic, so copy names the agent from its token's
+// label or says "your agent", never a brand.
+describe('no agent brand in the copy', () => {
+  // The one place a client is named: the token screen's list of what can connect.
+  const NAMES_A_CLIENT = new Set(['agentAccess.INTRO']);
+
+  it('never says Muse, except to name it as a client that can connect', () => {
+    const offenders = strings
+      .filter(
+        ([key, text]) => /\bmuse\b/i.test(text) && !NAMES_A_CLIENT.has(key),
+      )
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+    expect(english.agentAccess.INTRO).toContain('Meta’s Muse');
   });
 });

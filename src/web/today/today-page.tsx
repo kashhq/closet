@@ -13,8 +13,8 @@ import { adviceChips, ChipList } from '../gallery/chips';
 import { Reasons } from '../gallery/ideas-page';
 import type { PoolGarment } from '../gallery/queries';
 import { ideasUrl } from '../gallery/urls';
-import { t } from '../i18n';
-import { museName } from '../write-origin';
+import { t, type Translated } from '../i18n';
+import { agentName } from '../write-origin';
 import { AwayLink } from '../trips/away-link';
 import { IDEA_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
@@ -22,7 +22,7 @@ import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import { sheetOpener } from '../layout/sheet';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import type { NeedsToDecide } from '../wishlist/inbox';
-import { roundReviewPath, roundWhat } from '../wishlist/round-text';
+import { roundCard, roundReviewPath } from '../wishlist/round-text';
 import type { MuseRound } from '../wishlist/rounds';
 import { WISHLIST_PATH } from '../wardrobe/urls';
 import { ADD_SHEET_ID, AddSheet } from '../wardrobe/wardrobe-header';
@@ -230,10 +230,7 @@ function RoundCard({ round }: { round: MuseRound }) {
     >
       <div class="flex-1 min-w-0">
         <p class="text-sm font-semibold break-words">
-          {t('muse.round.CARD', {
-            agent: museName(round.agent),
-            what: roundWhat(round),
-          })}
+          {roundCard(round.agent, round)}
         </p>
         {round.summary && (
           <p class="text-sm text-muted line-clamp-1">{round.summary}</p>
@@ -246,13 +243,25 @@ function RoundCard({ round }: { round: MuseRound }) {
   );
 }
 
+/** Sentence-initial: no token's name means "Your agent", its own keys. */
+function needsText({ agent, count }: NeedsToDecide): Translated {
+  if (!agent) {
+    return count === 1
+      ? t('muse.TODAY_CARD_UNNAMED_ONE')
+      : t('muse.TODAY_CARD_UNNAMED', { count });
+  }
+  return count === 1
+    ? t('muse.TODAY_CARD_ONE', { agent: agentName(agent) })
+    : t('muse.TODAY_CARD', { agent: agentName(agent), count });
+}
+
 /**
- * "Muse has 4 needs for you to decide on", with Review (the Wishlist
+ * "Dana’s agent has 4 needs for you to decide on", with Review (the Wishlist
  * inbox, #333). Gone by itself once no open need has an option left to
  * choose: nothing to dismiss.
  */
 function NeedsCard({ needs }: { needs: NeedsToDecide }) {
-  const params = { agent: museName(needs.agent), count: needs.count };
+  const text = needsText(needs);
   return (
     <Card
       as="article"
@@ -260,11 +269,7 @@ function NeedsCard({ needs }: { needs: NeedsToDecide }) {
       bodyClass="p-3 flex-row items-center gap-3"
       data-muse-needs={String(needs.count)}
     >
-      <p class="text-sm flex-1 min-w-0 break-words">
-        {needs.count === 1
-          ? t('muse.TODAY_CARD_ONE', params)
-          : t('muse.TODAY_CARD', params)}
-      </p>
+      <p class="text-sm flex-1 min-w-0 break-words">{text}</p>
       <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
         {t('muse.REVIEW')}
       </a>

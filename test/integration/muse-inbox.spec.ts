@@ -867,7 +867,7 @@ describe('the Muse inbox', () => {
     it('says it is Muse’s, links its need, and offers This one as the primary, never Remove', async () => {
       const html = unescapeHtml((await get(`/wardrobe/${first}`)).body);
       expect(html).toContain('data-suggestion-state="open"');
-      expect(html).toContain('From Muse');
+      expect(html).toContain('From your agent');
       expect(html).toContain(`href="/wardrobe/wishlist/needs/${id}"`);
       expect(html).toContain('Muse: Mac coat goes with your jeans');
       expect(html).toContain(`action="/wardrobe/${first}/choose"`);
@@ -907,7 +907,9 @@ describe('the Muse inbox', () => {
       const html = unescapeHtml((await get('/')).body);
       const [, count] = /data-muse-needs="(\d+)"/.exec(html) ?? [];
       expect(Number(count)).toBeGreaterThan(0);
-      expect(html).toContain(`Muse has ${count} needs for you to decide on`);
+      expect(html).toContain(
+        `Your agent has ${count} needs for you to decide on`,
+      );
       expect(html).toMatch(
         /href="\/wardrobe\/wishlist" class="btn btn-primary/,
       );

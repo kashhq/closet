@@ -1832,3 +1832,9 @@ Consequence: a downgraded or revoked partner's queued tap fails (403, 404) with 
 Why: 0064 kept every `shareable_id` minted at insert (2026-11-14), so every garment and outfit made before it was public until its owner found and stopped it.
 Decision: owner chose (b): migration 0073 nulls every garment and outfit `shareable_id`, under the owner lock (0053's statement), so the sync triggers bump each stopped row's revision and the feed re-sends it without `publicShareUrl`. Rows already unshared are untouched. Rejected: keeping the ids (a), or a marker for post-0064 shares (none exists).
 Consequence: every link already sent is a 404, ones shared since 0064 too, and their watermark previews. The ids cannot be restored; an owner re-taps Share and sends the new link. Rollback is restoring a backup, not reverting the migration.
+
+## 2026-11-27 — The app names the agent, not "Muse" (#1281)
+
+Why: "Muse" is a Meta product (Muse app, Meta Model API), and Closet is agent-agnostic: any MCP client runs suggestion rounds over /mcp.
+Decision: no brand. Copy names the agent from its token's label (`agentName`); with none the fallback is "your agent" (`museName`, mid-sentence). A sentence-initial string has an `_UNNAMED` key ("Your agent has ...": Today's cards, the round push) rather than a capitalised or string-munged fallback. `/auth/tokens` lists Claude Code, Claude and Meta's Muse as clients; `copy-voice.spec.ts` fails on any lang.json value saying Muse except that one.
+Consequence: a new agent-facing string with a `{agent}` at its start needs an `_UNNAMED` twin. Keys, files, `muse_round` and the push setting's column keep their names until #1282; API/OpenAPI descriptions still say Muse until then.
