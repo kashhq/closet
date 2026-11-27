@@ -1,6 +1,6 @@
 # The agent's suggestions and option groups
 
-Linked from `AGENTS.md` in this directory (Wishlist). Phase 1 of epic #332 (#333); the design is `docs/plans/2026-10-05-agent-suggestions.md`, which replaces the plans feature's UI. PR A is the model and its migration; PR B the inbox, the decision screen and the suggestion's page (below, "The screens").
+Linked from `AGENTS.md` in this directory (Wishlist). Phase 1 of epic #332 (#333); the design is `docs/plans/2026-10-05-muse-suggestions.md`, which replaces the plans feature's UI. PR A is the model and its migration; PR B the inbox, the decision screen and the suggestion's page (below, "The screens").
 
 ## The model
 

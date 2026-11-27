@@ -60,6 +60,12 @@ const RemindersBody = Type.Object({
   evening: Type.Optional(Type.Integer()),
   // The agent's rounds (#337): a toggle, no time.
   agentRoundsOn: Type.Optional(Type.Literal('1')),
+  // The field's name before the muse -> agent rename (#1296). A page cached
+  // by the service worker (it serves pages from before a deploy until
+  // WARM_PAGES refetches them) or left open across the deploy still posts
+  // it; without this its toggle would silently save as off. Remove once no
+  // cached page can predate the rename (docs/decisions.md 2026-11-27).
+  museRoundsOn: Type.Optional(Type.Literal('1')),
 });
 
 function reminderTime(
@@ -205,7 +211,8 @@ export const pushRoutes: FastifyPluginCallbackTypebox<PushRouteOptions> = (
           request.body.eveningOn,
           request.body.evening,
         ),
-        agentRounds: request.body.agentRoundsOn === '1',
+        agentRounds:
+          (request.body.agentRoundsOn ?? request.body.museRoundsOn) === '1',
       };
       const saved = await saveReminderSettings(
         db,

@@ -257,6 +257,13 @@ describe('push reminders', () => {
       expect(again.body).not.toContain('starts tomorrow');
     });
 
+    it('keeps the rounds toggle on from a page that still posts museRoundsOn (#1297)', async () => {
+      const endpoint = await subscribe();
+      const res = await save({ endpoint, museRoundsOn: '1' });
+      expect(res.body).toContain('Saved.');
+      expect(await deviceAt(endpoint)).toMatchObject({ agentRounds: true });
+    });
+
     it('refuses a time off the choices (400)', async () => {
       const endpoint = await subscribe();
       for (const [kind, value] of [

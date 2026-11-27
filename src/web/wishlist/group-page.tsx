@@ -77,7 +77,7 @@ function shownPicks(
 
 /**
  * GET /wardrobe/wishlist/needs/:id, a need's decision screen (#333;
- * docs/plans/2026-10-05-agent-suggestions.md, section 4 C): the need, its
+ * docs/plans/2026-10-05-muse-suggestions.md, section 4 C): the need, its
  * budget and the agent's reasoning behind a tap, then its options. On a phone a
  * snap strip, one card centred with the next peeking; from `lg` the same
  * markup as columns side by side (the strip's `options` size), so options

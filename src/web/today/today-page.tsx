@@ -207,7 +207,7 @@ function FirstRunCard({ stage }: { stage: FirstRun }) {
   );
 }
 
-/** One the agent card at most: the waiting round's, else the needs'. */
+/** One agent card at most: the waiting round's, else the needs'. */
 function AgentCard(props: Pick<TodayModel, 'round' | 'needs'>) {
   if (props.round) return <RoundCard round={props.round} />;
   if (props.needs) return <NeedsCard needs={props.needs} />;

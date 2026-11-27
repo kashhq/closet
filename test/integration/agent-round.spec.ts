@@ -33,7 +33,7 @@ import {
 import { callTool, createAccessToken, tool } from './mcp';
 
 /**
- * The moment a round lands (#337; docs/plans/2026-10-05-agent-suggestions.md
+ * The moment a round lands (#337; docs/plans/2026-10-05-muse-suggestions.md
  * section 4 A): finish_round stores the round (agent_round), moves the
  * agent's feedback cursor to the `until` it hands back, and sends one
  * notification, tagged agent-round, to the devices that turned the agent's

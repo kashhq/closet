@@ -163,7 +163,7 @@ export async function resolveDestination(
 /**
  * A new garment form's values: blank (the closet's, or a wishlist item's),
  * or prefilled from `prefill` (the garment a wishlist item replaces, or a
- * The agent need's pick for "Bought a different one") with what describes the
+ * An agent need's pick for "Bought a different one") with what describes the
  * kind of garment (category, type and the other properties, brand,
  * colours, size), never what belonged to that one (its name, notes,
  * dates, price, link, care).

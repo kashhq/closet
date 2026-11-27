@@ -92,7 +92,7 @@ export const todayRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         firstRun: true,
       });
       logger.debug(
-        `Today for user ${ownerId} (${model.today}): ${model.rows.map((row) => `${row.occasion} ${row.kind === 'planned' ? `planned ${row.entries.length}` : `${row.ideas.length} ideas`}`).join(', ')}${model.needs ? `, ${model.needs.count} the agent needs waiting` : ''}${model.firstRun ? `, first run (${model.firstRun})` : ''} in ${Math.round(performance.now() - started)} ms`,
+        `Today for user ${ownerId} (${model.today}): ${model.rows.map((row) => `${row.occasion} ${row.kind === 'planned' ? `planned ${row.entries.length}` : `${row.ideas.length} ideas`}`).join(', ')}${model.needs ? `, ${model.needs.count} agent needs waiting` : ''}${model.firstRun ? `, first run (${model.firstRun})` : ''} in ${Math.round(performance.now() - started)} ms`,
       );
       return renderPage(
         reply,
