@@ -57,7 +57,11 @@ async function closetOf(
   db: Db,
   ownerId: number,
 ): Promise<(ClosetPiece & { name: string | null })[]> {
-  const { garments } = await garmentSummaries(db, ownerId, CLOSET_FILTERS);
+  const { garments } = await garmentSummaries(
+    db,
+    { ownerId, role: 'OWN' },
+    CLOSET_FILTERS,
+  );
   return garments
     .map((garment) => ({
       ...garment,

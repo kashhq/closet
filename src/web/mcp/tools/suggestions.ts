@@ -130,7 +130,7 @@ export const suggestionTools = [
         readInbox(ctx.db, {
           ownerId: ctx.userId,
           viewerId: ctx.userId,
-          isOwner: true,
+          role: 'OWN',
         }),
         selectScalars(ctx.db, { outfits: museOutfitsSql(ctx.userId) }),
       ]);
@@ -309,16 +309,19 @@ export const suggestionTools = [
         },
       );
       logSuggestedPick({ logger: ctx.webLogger }, actor, saved.id, provenance);
-      const garment = (await findGarment(ctx.db, saved.id, ctx.userId))!;
+      const suggested = (await findGarment(ctx.db, saved.id, {
+        ownerId: ctx.userId,
+        role: 'OWN',
+      }))!;
       return {
-        id: garment.id,
+        id: suggested.id,
         groupId: args.groupId,
-        name: garment.name,
-        brand: garment.brand,
-        category: garment.category,
-        type: garment.type,
-        price: garment.price,
-        size: garment.size,
+        name: suggested.name,
+        brand: suggested.brand,
+        category: suggested.category,
+        type: suggested.type,
+        price: suggested.price,
+        size: suggested.size,
         notices: saved.notices,
         confidence: saved.confidence,
       };

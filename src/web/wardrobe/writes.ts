@@ -30,7 +30,7 @@ import { type EntryStatus, statusOfClone } from '../../wardrobe/status';
 import {
   type DeleteOutcome,
   deleteGarment,
-  findGarment,
+  garmentPhotoName,
   type GarmentDetail,
   type GarmentPhoto,
   garmentIdByClientId,
@@ -584,8 +584,7 @@ export async function rotateGarmentPhoto(
       if (
         error instanceof HttpError &&
         error.statusCode === 404 &&
-        (await findGarment(deps.db, id, ownerId))?.photo?.fileName !==
-          source.fileName
+        (await garmentPhotoName(deps.db, id, ownerId)) !== source.fileName
       ) {
         throw photoChanged();
       }

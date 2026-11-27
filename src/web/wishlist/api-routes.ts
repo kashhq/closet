@@ -92,7 +92,7 @@ export const wishlistApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const inbox = await readInbox(db, {
         ownerId: access.ownerId,
         viewerId: actorOf(request).userId,
-        isOwner: access.isOwner,
+        role: access.role,
       });
       logger.debug(
         `Inbox of wardrobe ${access.ownerId} (API): ${inbox.groups.length} needs with options, ${inbox.counted} options counted in ${inbox.searchMs.toFixed(0)}ms`,

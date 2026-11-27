@@ -688,7 +688,13 @@ function presetMaterials(text: string): Material[] {
   return storedSet(MATERIALS, text.split(',')) ?? [];
 }
 
-/** A stored garment as its edit and clone forms show it to `audience`. */
+/**
+ * A stored garment as its edit and clone forms show it to `audience`. The
+ * price and notes must be there (#680): an edit's through
+ * withPrivateFields, which refuses a garment read without them (an omitted
+ * field would be saved as cleared); a clone's through withoutUnread (a VIEW
+ * grantee's starts without them).
+ */
 export function storedFormValues(
   stored: Required<GarmentFields>,
   audience: FormAudience,

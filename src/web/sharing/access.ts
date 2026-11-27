@@ -258,8 +258,11 @@ async function resolveWardrobeAccess(
 /** What a call needs of the wardrobe it addresses. */
 export type WardrobeNeed = Capability;
 
+/** A WardrobeAccess authorizeWardrobe granted: it always has a role. */
+export type GrantedAccess = WardrobeAccess & { role: WardrobeRole };
+
 export interface AuthorizedWardrobe {
-  access: WardrobeAccess;
+  access: GrantedAccess;
   /** The shared wardrobe addressed, for links; undefined for one's own. */
   viewOwner: number | undefined;
 }
@@ -286,7 +289,10 @@ export async function authorizeWardrobe(
   if (!can(access.role, need)) throw new Forbidden();
   // `?ownerId=<self>` is the own wardrobe (nobody shares with themselves),
   // and its links must not carry the parameter.
-  return { access, viewOwner: access.isOwner ? undefined : access.ownerId };
+  return {
+    access: { ...access, role: access.role },
+    viewOwner: access.isOwner ? undefined : access.ownerId,
+  };
 }
 
 /** A route request addressing a wardrobe by `?ownerId=` (OwnerQuery). */

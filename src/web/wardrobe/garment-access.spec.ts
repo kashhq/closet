@@ -80,7 +80,12 @@ describe('requireGarment', () => {
       canManage: false,
     });
     expect(read.viewOwner).toBe(OWNER);
-    expect(findGarment).toHaveBeenCalledWith(noStatements, GARMENT, OWNER);
+    // Read as a VIEW grantee reads it: no price, no notes (#680).
+    expect(findGarment).toHaveBeenCalledWith(
+      noStatements,
+      GARMENT,
+      expect.objectContaining({ ownerId: OWNER, role: 'VIEW' }),
+    );
   });
 
   it('forbids a VIEW grantee a change, before the garment is read', async () => {
@@ -149,7 +154,7 @@ describe('searchGarments', () => {
     });
     expect(garmentSummaries).toHaveBeenCalledWith(
       noStatements,
-      OWNER,
+      expect.objectContaining({ ownerId: OWNER, role: 'VIEW' }),
       expect.any(Object),
       { before: undefined, limit: 24 },
     );

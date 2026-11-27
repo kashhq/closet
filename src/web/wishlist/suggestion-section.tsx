@@ -85,7 +85,7 @@ export function SuggestionSection(props: {
       {need && <NeedLink name={need.name} href={needUrl(need.id, viewOwner)} />}
       {garment.status === 'wishlist' && (
         <PriceAgainstBudget
-          price={garment.price}
+          price={props.garment.price}
           budget={need?.budget ?? null}
         />
       )}

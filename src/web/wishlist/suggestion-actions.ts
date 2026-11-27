@@ -71,7 +71,7 @@ export async function requireNeed(
     ownerId: wardrobe.access.ownerId,
     groupId: address.id,
     viewerId: actor.userId,
-    isOwner: wardrobe.access.isOwner,
+    role: wardrobe.access.role,
   });
   if (!detail) throw new NotFound('need');
   return { ...wardrobe, detail };

@@ -36,6 +36,7 @@ import {
 } from './garment-input';
 import { checkedType } from './garment-search';
 import type { GarmentDetail } from './queries';
+import { withPrivateFields } from './private-fields';
 
 /**
  * A garment's changes as a caller without a form names them (#192b): MCP's
@@ -127,8 +128,11 @@ export function readGarmentEdit(
   changes: GarmentChanges,
   audience: FormAudience,
 ): GarmentEdit {
+  // Every field the edit posts back is written: one read without the
+  // price and notes would clear them (#680).
+  const stored = withPrivateFields(garment);
   const values = withChanges(
-    storedFormValues(garment, audience),
+    storedFormValues(stored, audience),
     garment.fabricWeight,
     changes,
   );
@@ -136,7 +140,7 @@ export function readGarmentEdit(
   if (!read.ok) return { ok: false, errors: read.errors };
   return {
     ok: true,
-    fields: changedFields(garment, read.fields),
+    fields: changedFields(stored, read.fields),
     ignored: ignoredProperties(garment, read.fields, changes),
   };
 }

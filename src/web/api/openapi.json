@@ -262,7 +262,7 @@
           },
           "price": {
             "pattern": "^\\d+\\.\\d{2}$",
-            "description": "A decimal amount in the household currency",
+            "description": "In the household currency, one copy's (a wishlist item's as listed); never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "quantity": {
@@ -1595,7 +1595,7 @@
           },
           "price": {
             "pattern": "^\\d+\\.\\d{2}$",
-            "description": "A decimal amount in the household currency",
+            "description": "In the household currency, one copy's (a wishlist item's as listed); never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "quantity": {
@@ -1619,6 +1619,7 @@
             "type": "string"
           },
           "notes": {
+            "description": "The owner's notes; never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "acquiredOn": {
@@ -5471,7 +5472,7 @@
           },
           "price": {
             "pattern": "^\\d+\\.\\d{2}$",
-            "description": "A decimal amount in the household currency",
+            "description": "In the household currency, one copy's (a wishlist item's as listed); never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "sourceUrl": {
@@ -5766,7 +5767,7 @@
           },
           "price": {
             "pattern": "^\\d+\\.\\d{2}$",
-            "description": "A decimal amount in the household currency",
+            "description": "In the household currency, one copy's (a wishlist item's as listed); never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "sourceUrl": {
@@ -9062,7 +9063,7 @@
           },
           "price": {
             "pattern": "^\\d+\\.\\d{2}$",
-            "description": "A decimal amount in the household currency",
+            "description": "In the household currency, one copy's (a wishlist item's as listed); never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "quantity": {
@@ -9086,6 +9087,7 @@
             "type": "string"
           },
           "notes": {
+            "description": "The owner's notes; never to a VIEW share, which gets the garment without it",
             "type": "string"
           },
           "acquiredOn": {
@@ -10644,7 +10646,7 @@
             "in": "query",
             "name": "keyword",
             "required": false,
-            "description": "Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last"
+            "description": "Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last. A VIEW share is never searched by its notes"
           },
           {
             "schema": {

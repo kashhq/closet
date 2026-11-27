@@ -17,6 +17,7 @@ import {
 import { garmentUrl } from './urls';
 import { GarmentParams, OwnerQuery } from '../schemas';
 import { storedFormValues } from './garment-input';
+import { withPrivateFields } from './private-fields';
 
 /**
  * The repair and alteration log's writes (#23; docs/plans/2026-09-26-
@@ -65,7 +66,9 @@ export const repairRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
             subject: withShownPhoto(garment, cutouts.enabled),
             suggestionsFrom: userId,
             viewOwner: undefined,
-            values: storedFormValues(garment, { owner: true }),
+            values: storedFormValues(withPrivateFields(garment), {
+              owner: true,
+            }),
             repairs: repairPanel(garment, true, today, form),
           },
           400,

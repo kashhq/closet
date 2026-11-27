@@ -8,6 +8,7 @@ import {
   type SharedWardrobe,
   sharedWardrobesSql,
   toSharedWardrobe,
+  type WardrobeRole,
 } from '../sharing/access';
 import { needingWash } from '../wears/queries';
 import {
@@ -57,14 +58,21 @@ function countOf(where: SQL | undefined): SQL<number> {
  */
 export async function gridContext(
   db: Db,
-  scope: { userId: number; ownerId: number; filters: GridFilters },
+  scope: {
+    userId: number;
+    ownerId: number;
+    role: WardrobeRole;
+    filters: GridFilters;
+  },
   parts: ReadonlySet<GridContextPart>,
 ): Promise<GridContext> {
-  const { userId, ownerId, filters } = scope;
+  const { userId, ownerId, role, filters } = scope;
   const wanted = <T>(part: GridContextPart, column: () => SQL<T>) =>
     parts.has(part) ? column() : undefined;
   const row = await selectScalars(db, {
-    count: wanted('count', () => countOf(gridWhere(ownerId, filters))),
+    count: wanted('count', () =>
+      countOf(gridWhere({ ownerId, role }, filters)),
+    ),
     options: wanted('options', () => filterOptionsSql(ownerId)),
     capsules: wanted('capsules', () => capsuleNamesSql(ownerId)),
     toTag: wanted('toTag', () => toTagCountSql(ownerId)),

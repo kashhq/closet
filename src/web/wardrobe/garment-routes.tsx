@@ -67,6 +67,7 @@ import {
 } from './garment-input';
 import { GarmentParams, OwnerQuery } from '../schemas';
 import { BY_PERSON } from '../write-origin';
+import { withoutUnread, withPrivateFields } from './private-fields';
 
 /** A garment's page; its actions are paths under it. */
 const GARMENT_PATH = '/wardrobe/:id';
@@ -394,7 +395,9 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         subject: withShownPhoto(garment, options.cutouts.enabled),
         suggestionsFrom: access.ownerId,
         viewOwner,
-        values: storedFormValues(garment, { owner: access.isOwner }),
+        values: storedFormValues(withPrivateFields(garment), {
+          owner: access.isOwner,
+        }),
         repairs: repairPanel(
           garment,
           access.isOwner,
@@ -470,7 +473,9 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         viewOwner,
         garment: source,
       } = await authorize.garment(request, 'view');
-      const values = storedFormValues(source, { owner: access.isOwner });
+      const values = storedFormValues(withoutUnread(source), {
+        owner: access.isOwner,
+      });
       return renderGarmentForm(reply, db, {
         mode: {
           kind: 'clone',

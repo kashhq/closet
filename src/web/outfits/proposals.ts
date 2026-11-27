@@ -12,6 +12,7 @@ import {
   type ManyGoesWithInputsJson,
   readManyGoesWithInputs,
 } from '../gallery/queries';
+import { privateColumns } from '../wardrobe/private-fields';
 import { onWishlist } from '../wardrobe/status';
 import { museOutfit } from './references';
 import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
@@ -64,7 +65,7 @@ function musePiecesSql(): SQL<MusePiece[]> {
       'name', ${garment.name},
       'category', ${garment.category},
       'status', ${garment.status},
-      'price', ${garment.price},
+      'price', ${privateColumns('OWN').price},
       'setAside', ${garment.dismissedAt} is not null,
       'photo', ${photoRefJson}
     ) order by ${outfitSlot.position}), '[]')

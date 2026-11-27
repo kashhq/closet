@@ -55,9 +55,22 @@ import {
  * (nulls kept: an agent reads "null"; src/web/mcp/tools/garments.ts).
  */
 
-const Money = Type.String({
-  pattern: '^\\d+\\.\\d{2}$',
+const MONEY_PATTERN = '^\\d+\\.\\d{2}$';
+
+/** An amount as every resource answers it (the wishlist's too). */
+export const Money = Type.String({
+  pattern: MONEY_PATTERN,
   description: 'A decimal amount in the household currency',
+});
+
+/** Said on the price and the notes: the `private` capability (#680). */
+const NEVER_TO_VIEW =
+  'never to a VIEW share, which gets the garment without it';
+
+/** A garment's price where it is answered (garments, the wishlist, the feed). */
+export const PrivatePrice = Type.String({
+  pattern: MONEY_PATTERN,
+  description: `In the household currency, one copy's (a wishlist item's as listed); ${NEVER_TO_VIEW}`,
 });
 
 export const GarmentPhotoResource = Type.Object(
@@ -103,7 +116,7 @@ const identity = {
   brand: Type.Optional(Type.String()),
   colors: Type.Array(literals(GARMENT_COLORS)),
   size: Type.Optional(Type.String()),
-  price: Type.Optional(Money),
+  price: Type.Optional(PrivatePrice),
   quantity: Type.Integer({ minimum: 1 }),
   condition: literals(CONDITIONS),
   photo: Type.Optional(GarmentPhotoResource),
@@ -267,7 +280,9 @@ export function garmentShareUrl(
 /** A garment's stored fields beyond its identity: the page's and the feed's. */
 const recordFields = {
   ...identity,
-  notes: Type.Optional(Type.String()),
+  notes: Type.Optional(
+    Type.String({ description: `The owner's notes; ${NEVER_TO_VIEW}` }),
+  ),
   acquiredOn: Type.Optional(IsoDateSchema),
   /** A wishlist item's (or a bought one's) garment it replaces. */
   replacesGarmentId: Type.Optional(Type.Integer()),
@@ -329,6 +344,8 @@ function recordOf(
   cutoutsEnabled: boolean,
   shareUrl: string | null,
 ) {
+  // Absent where the reader lacks `private` (#680): left out, never null.
+  const { price, notes } = garment;
   return {
     id: garment.id,
     name: garment.name,
@@ -338,14 +355,14 @@ function recordOf(
     brand: garment.brand,
     colors: garment.colors ?? [],
     size: garment.size,
-    price: garment.price,
+    price,
     quantity: garment.quantity,
     condition: garment.condition,
     photo:
       garment.photo &&
       toGarmentPhoto(shownPhoto(garment.photo, cutoutsEnabled)),
     photoMissingSince: garment.photoMissingSince?.toISOString() ?? null,
-    notes: garment.notes,
+    notes,
     acquiredOn: garment.acquiredOn,
     replacesGarmentId: garment.replacesGarmentId,
     sourceUrl: garment.sourceUrl,
@@ -453,11 +470,9 @@ function ownerCare(
   garment: GarmentDetail,
   wear: NonNullable<GarmentContext['own']>['wear'],
 ) {
-  const cost = totalCost({
-    price: garment.price,
-    quantity: garment.quantity,
-    repairCost: wear.repairCost,
-  });
+  // The owner's care: their price is always read.
+  const { price = null, quantity } = garment;
+  const cost = totalCost({ price, quantity, repairCost: wear.repairCost });
   return {
     washAfterWears: garment.washAfterWears,
     lastWashedOn: garment.lastWashedOn,

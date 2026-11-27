@@ -57,6 +57,7 @@ import {
   type ToolContext,
   wardrobeFor,
 } from '../tool';
+import type { GrantedAccess } from '../../sharing/access';
 import {
   centsPriceInput,
   isoDate,
@@ -146,7 +147,7 @@ export function summaryForAgent(
 async function garmentForAgent(
   ctx: ToolContext,
   garment: GarmentDetail,
-  access: { ownerId: number; isOwner: boolean },
+  access: Pick<GrantedAccess, 'ownerId' | 'isOwner' | 'role'>,
 ) {
   const context = await garmentContext(
     ctx.db,
@@ -252,7 +253,7 @@ const SearchInput = z.object({
     .max(NAME_MAX)
     .optional()
     .describe(
-      'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored: "jcrew" finds J.Crew); notes-only matches come last.',
+      'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored: "jcrew" finds J.Crew); notes-only matches come last. A VIEW share is never searched by its notes.',
     ),
   category: z
     .string()
@@ -368,7 +369,7 @@ export const garmentTools = [
     writes: false,
     async run({ ownerId, includeArchived }, ctx) {
       const access = await wardrobeFor(ctx, ownerId, 'view');
-      const { garments } = await garmentSummaries(ctx.db, access.ownerId, {
+      const { garments } = await garmentSummaries(ctx.db, access, {
         scope: includeArchived ? 'owned' : 'closet',
         needsWash: false,
         attention: false,
@@ -392,7 +393,7 @@ export const garmentTools = [
   defineTool({
     name: 'get_garment',
     title: 'Get a garment',
-    description: `One garment in full: its status (closet, archived, or wishlist: not bought yet) and fields, every property, its care label, product link and price, what it replaces (a wishlist item), quantity and condition, the capsules it is in, and on your own wardrobe your wears and washes, what it cost (price per piece × copies plus what its repairs cost; null without a price) and its cost per wear (that over the days worn; null until worn), and its repair and alteration log (each with its day, kind, note and cost), and agent when an agent added it over MCP (your token's name when it was yours, "<first name>'s agent" for a grantee's on your wardrobe, else "Agent"). No photo: get_garment_photo has it; photoMissingSince is set while nothing of the photo is stored (hasPhoto false until it is back).`,
+    description: `One garment in full: its status (closet, archived, or wishlist: not bought yet) and fields, every property, its care label, product link, price and notes (never on a VIEW share), what it replaces (a wishlist item), quantity and condition, the capsules it is in, and on your own wardrobe your wears and washes, what it cost (price per piece × copies plus what its repairs cost; null without a price) and its cost per wear (that over the days worn; null until worn), and its repair and alteration log (each with its day, kind, note and cost), and agent when an agent added it over MCP (your token's name when it was yours, "<first name>'s agent" for a grantee's on your wardrobe, else "Agent"). No photo: get_garment_photo has it; photoMissingSince is set while nothing of the photo is stored (hasPhoto false until it is back).`,
     input: z.object({ id: rowId(), ownerId: ownerIdInput }),
     writes: false,
     async run({ id, ownerId }, ctx) {
@@ -517,12 +518,12 @@ export const garmentTools = [
     name: 'list_wishlist',
     title: 'List the wishlist',
     description:
-      "A wardrobe's wishlist: what its owner is thinking of buying, newest first, each with its brand, category, price, product link and the closet garment it would replace. None of it is in the closet (search_garments never lists it).",
+      "A wardrobe's wishlist: what its owner is thinking of buying, newest first, each with its brand, category, price (never on a VIEW share), product link and the closet garment it would replace. None of it is in the closet (search_garments never lists it).",
     input: z.object({ ownerId: ownerIdInput }),
     writes: false,
     async run({ ownerId }, ctx) {
       const access = await wardrobeFor(ctx, ownerId, 'view');
-      const items = await wishlistItems(ctx.db, access.ownerId);
+      const items = await wishlistItems(ctx.db, access);
       return {
         items: items.map((item) => ({
           id: item.id,

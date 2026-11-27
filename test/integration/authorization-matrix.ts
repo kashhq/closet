@@ -292,6 +292,11 @@ export const calendarEntry = (f: Fixture) =>
 export const selfieName = (f: Fixture) => f.selfieFileName;
 export const inspirationTitle = (f: Fixture) => f.inspirationTitle;
 export const inspirationPhotoName = (f: Fixture) => f.inspirationFileName;
+// The fixture garment's and wishlist item's price and the garment's notes
+// (#680): `private`, so no answer to a VIEW grantee holds either, on any
+// route of the matrix, a success or a refusal (expectAnswer).
+export const PRIVATE_PRICE = '913.37';
+export const PRIVATE_NOTES = 'Owner notes, never a VIEW share';
 export const OWNER_TOKEN_NAME = 'Owner laptop token';
 export const OWNER_DEVICE_NAME = 'Owner phone app';
 
@@ -601,7 +606,12 @@ export function describeMatrix(
       const garmentName = `Coat ${tag}`;
       const capsuleName = `Capsule ${tag}`;
       const outfitName = `Look ${tag}`;
-      const garmentId = await createGarment(t, { name: garmentName, cookie });
+      const garmentId = await createGarment(t, {
+        name: garmentName,
+        cookie,
+        price: PRIVATE_PRICE,
+        notes: PRIVATE_NOTES,
+      });
       await uploadPhoto(t, garmentId, photo, cookie);
       // Its cutout failed (no queue runs here), so "Try again" requeues it.
       await failCutout(t, await photoFileName(t, garmentId));
@@ -612,6 +622,7 @@ export function describeMatrix(
         brand,
         replaces: garmentId,
         cookie,
+        price: PRIVATE_PRICE,
       });
       const brandSizeId = await addBrandSize(t.db, t.owner.id, {
         brand,
@@ -1095,17 +1106,28 @@ export function describeMatrix(
       return { ok: twin.ok, request: await twin.request(fixture, ownerQuery) };
     };
 
+    /** A VIEW grantee's answer, a success or a refusal, holds no price and no notes (#680). */
+    const expectNothingPrivate = (
+      actor: ActorName,
+      res: LightMyRequestResponse,
+    ) => {
+      if (actor !== 'viewer') return;
+      expect(res.body).not.toContain(PRIVATE_PRICE);
+      expect(res.body).not.toContain(PRIVATE_NOTES);
+    };
+
     /**
      * The answer: a success's status (a page read that shows its subject
      * names it), or a refusal's, leaking nothing. On the API a signed-out
      * request is the 401 every refused token gets, never the login redirect.
      */
     const expectAnswer = (
-      { route, surface, outcome }: Case,
+      { route, surface, outcome, actor }: Case,
       ok: number,
       res: LightMyRequestResponse,
       secret: string,
     ) => {
+      expectNothingPrivate(actor, res);
       if (outcome === 'ok') {
         expect(res.statusCode).toBe(ok);
         if (surface === 'page' && route.kind === 'read' && route.shows) {
@@ -1202,6 +1224,11 @@ export function describeMatrix(
         }
       }
       shared = await createFixture();
+      // What the viewer's answers are held to never contain is stored.
+      expect(await garmentRow(t, shared.garmentId)).toMatchObject({
+        price: PRIVATE_PRICE,
+        notes: PRIVATE_NOTES,
+      });
       Object.assign(results, { t, actors, shared });
     });
 

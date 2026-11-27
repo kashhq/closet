@@ -115,6 +115,7 @@ import { saveGarmentFromLink } from './link-import/save';
 import { readRepairForm, RepairParams } from './repairs';
 import type { WardrobeDeps } from './writes';
 import { BY_PERSON } from '../write-origin';
+import { withoutUnread } from './private-fields';
 
 const flag = (description: string) =>
   Type.Boolean({ default: false, description });
@@ -129,7 +130,7 @@ const GarmentListQuery = Type.Object({
     Type.String({
       maxLength: NAME_MAX,
       description:
-        'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last',
+        'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last. A VIEW share is never searched by its notes',
     }),
   ),
   category: Type.Optional(Type.String({ maxLength: CATEGORY_MAX })),
@@ -558,7 +559,9 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         viewOwner,
         garment: source,
       } = await authorize.garment(request, 'view');
-      const values = storedFormValues(source, { owner: access.isOwner });
+      const values = storedFormValues(withoutUnread(source), {
+        owner: access.isOwner,
+      });
       const form = readNewGarment(
         {
           ...values,

@@ -6,6 +6,7 @@ import {
   CLOSET_FILTERS,
   type GarmentSummary,
   garmentSummaries,
+  type WardrobeRead,
 } from '../../wardrobe/queries';
 import { type ComparedGarment, compareWardrobes } from '../compare';
 import { actorOf, defineTool, type ToolContext, wardrobeFor } from '../tool';
@@ -18,23 +19,24 @@ import { rowId } from './common';
  */
 const MAX_COMPARED = 1000;
 
+/** The wardrobe's closet as its reader reads it: a VIEW share's without prices. */
 async function closet(
   ctx: ToolContext,
-  ownerId: number,
+  wardrobe: WardrobeRead,
 ): Promise<{ garments: ComparedGarment[]; complete: boolean }> {
-  const page = await garmentSummaries(ctx.db, ownerId, CLOSET_FILTERS, {
+  const page = await garmentSummaries(ctx.db, wardrobe, CLOSET_FILTERS, {
     limit: MAX_COMPARED,
   });
   return {
-    garments: page.garments.map((garment: GarmentSummary) => ({
-      id: garment.id,
-      name: garment.name,
-      category: garment.category,
-      type: garment.type,
-      brand: garment.brand,
-      colors: garment.colors ?? [],
-      price: garment.price,
-      sourceUrl: garment.sourceUrl,
+    garments: page.garments.map((summary: GarmentSummary) => ({
+      id: summary.id,
+      name: summary.name,
+      category: summary.category,
+      type: summary.type,
+      brand: summary.brand,
+      colors: summary.colors ?? [],
+      price: summary.price,
+      sourceUrl: summary.sourceUrl,
     })),
     complete: page.before === undefined,
   };
@@ -64,7 +66,7 @@ export const sharingTools = [
     name: 'compare_with_shared_wardrobe',
     title: 'Compare my closet with a shared wardrobe',
     description:
-      "Compares your closet (garments in it: not archived, not the wishlist) with a wardrobe shared with you, by role (top, bottom, layer, footwear...) and type (t-shirt, jeans, overshirt...). Answers the counts per role, the gaps (kinds the shared wardrobe has and you have none of, with its garments' brands, colours, prices and product links), the overlap and what only you have. Use it to talk through what to buy next.",
+      "Compares your closet (garments in it: not archived, not the wishlist) with a wardrobe shared with you, by role (top, bottom, layer, footwear...) and type (t-shirt, jeans, overshirt...). Answers the counts per role, the gaps (kinds the shared wardrobe has and you have none of, with its garments' brands, colours, product links and, on a MANAGE share, prices), the overlap and what only you have. Use it to talk through what to buy next.",
     input: z.object({
       ownerId: rowId().describe(
         "The shared wardrobe's owner id, from list_shared_wardrobes.",
@@ -77,8 +79,8 @@ export const sharingTools = [
       }
       const shared = await wardrobeFor(ctx, ownerId, 'view');
       const [mine, theirs] = await Promise.all([
-        closet(ctx, ctx.userId),
-        closet(ctx, shared.ownerId),
+        closet(ctx, { ownerId: ctx.userId, role: 'OWN' }),
+        closet(ctx, shared),
       ]);
       return {
         ...compareWardrobes(mine.garments, theirs.garments),

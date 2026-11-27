@@ -38,17 +38,34 @@ export interface GarmentRequest {
   brand?: string;
   cookie?: string;
   ownerId?: number;
+  /** The product fields' price (posted with their `product` marker). */
+  price?: string;
+  notes?: string;
 }
 
 /** POST /wardrobe; resolves the new garment's id from the redirect. */
 export async function createGarment(
   t: TestApp,
-  { name, category = 'shirt', brand, cookie, ownerId }: GarmentRequest,
+  {
+    name,
+    category = 'shirt',
+    brand,
+    cookie,
+    ownerId,
+    price,
+    notes,
+  }: GarmentRequest,
 ): Promise<number> {
   const res = await t.inject({
     method: 'POST',
     url: ownerId ? `/wardrobe?ownerId=${ownerId}` : '/wardrobe',
-    payload: { name, category, brand },
+    payload: {
+      name,
+      category,
+      brand,
+      notes,
+      ...(price !== undefined && { product: '1', price, sourceUrl: '' }),
+    },
     headers: cookie ? { cookie } : {},
   });
   expect(res.statusCode).toBe(302);

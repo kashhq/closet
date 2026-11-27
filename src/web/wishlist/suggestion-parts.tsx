@@ -141,7 +141,8 @@ export function UndoForm(props: {
  * exception worth a word in a small space.
  */
 export function PriceAgainstBudget(props: {
-  price: string | null;
+  /** Absent for a reader without `private` (#680): nothing shows. */
+  price?: string | null;
   budget: string | null;
   class?: string;
   compact?: boolean;

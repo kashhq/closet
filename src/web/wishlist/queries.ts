@@ -7,6 +7,8 @@ import type { Condition } from '../../wardrobe/properties';
 import type { GarmentStatus } from '../../wardrobe/status';
 import type { SignablePhotoRef } from '../files/image-url';
 import { photoRefJson } from '../files/queries';
+import { privateColumns } from '../wardrobe/private-fields';
+import type { WardrobeRead } from '../wardrobe/queries';
 import { inCloset, onWishlist, ownedGarment, wanted } from '../wardrobe/status';
 
 /**
@@ -30,7 +32,8 @@ export interface WishlistItem {
   name: string | null;
   brand: string | null;
   category: string;
-  price: string | null;
+  /** The listed price; absent without `private` (#680). */
+  price?: string | null;
   sourceUrl: string | null;
   photo: SignablePhotoRef | null;
   /** The garment it would replace; null for none (or deleted since). */
@@ -41,20 +44,22 @@ const replacedGarment = alias(garment, 'replaced');
 
 /**
  * The wardrobe's wishlist, newest first, each item with the garment it
- * replaces. One statement, unpaged: a wishlist is a handful of things being
+ * replaces, as its reader's role reads it (the price only with `private`).
+ * One statement, unpaged: a wishlist is a handful of things being
  * considered, not a closet (the grid's keyset paging is for hundreds).
  */
 export async function wishlistItems(
   db: Db,
-  ownerId: number,
+  { ownerId, role }: WardrobeRead,
 ): Promise<WishlistItem[]> {
+  const { price } = privateColumns(role);
   const rows = await db
     .select({
       id: garment.id,
       name: garment.name,
       brand: garment.brand,
       category: garment.category,
-      price: garment.price,
+      ...(price && { price }),
       sourceUrl: garment.sourceUrl,
       photo: photoRefJson,
       replaces: {

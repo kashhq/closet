@@ -20,12 +20,14 @@ import {
   type SharedWardrobe,
   sharedWardrobesSql,
   toSharedWardrobe,
+  type WardrobeRole,
 } from '../sharing/access';
 import {
   type BrandSizeLookup,
   brandSizeLookup,
   brandSizesSql,
 } from '../sizes/queries';
+import { priceJsonPair } from '../wardrobe/private-fields';
 import { onWishlist, wanted } from '../wardrobe/status';
 import { type GarmentRef } from './queries';
 import {
@@ -43,7 +45,8 @@ import {
  * brand notes and, for the owner alone, "Unlocks N"'s inputs (the picks
  * locked against one closet read, goesWithManyInputsSql). A grantee reads
  * the needs and Muse's notes (owner decision, 2026-10-05) but never the
- * owner's closet, so no unlocks and no decisions. "Still wanted" is
+ * owner's closet, so no unlocks and no decisions; a VIEW grantee no listed
+ * price either (`private`, #680: priceJsonPair). "Still wanted" is
  * wanted() and nothing else; every decision is decide()'s (decisions.ts).
  */
 
@@ -56,8 +59,8 @@ export interface MusePick {
   name: string | null;
   brand: string | null;
   category: string;
-  /** The listed price, '49.90'; null when unknown. */
-  price: string | null;
+  /** The listed price, '49.90'; null when unknown, absent without `private`. */
+  price?: string | null;
   sourceUrl: string | null;
   photo: SignablePhotoRef | null;
   /** Muse's place for it among the need's options, 1 its pick; null: unranked. */
@@ -94,7 +97,8 @@ interface OwnItem {
   name: string | null;
   brand: string | null;
   category: string;
-  price: string | null;
+  /** Absent without `private`. */
+  price?: string | null;
   sourceUrl: string | null;
   photo: SignablePhotoRef | null;
   /** A suggestion outside any need: "From Muse" (until phase 3's singles). */
@@ -133,12 +137,13 @@ const resolverGarment = resolver.columns;
 const replaced = aliased('replaced');
 const replacedGarment = replaced.columns;
 
-const pickJson = sql<MusePick>`json_build_object(
+/** A pick as `role` reads it: its price only with `private`. */
+const pickJson = (role: WardrobeRole) => sql<MusePick>`json_build_object(
   'id', ${garment.id},
   'name', ${garment.name},
   'brand', ${garment.brand},
   'category', ${garment.category},
-  'price', ${garment.price}::text,
+  ${priceJsonPair(role)}
   'sourceUrl', ${garment.sourceUrl},
   'photo', ${photoRefJson},
   'rank', ${garment.suggestionRank},
@@ -149,9 +154,9 @@ const pickJson = sql<MusePick>`json_build_object(
 )`;
 
 /** A need's picks on the wishlist, Muse's rank first (unranked last), then oldest. */
-const needPicksSql = sql<MusePick[]>`(
+const needPicksSql = (role: WardrobeRole) => sql<MusePick[]>`(
   select coalesce(
-    json_agg(${pickJson} order by ${garment.suggestionRank} nulls last, ${garment.id}),
+    json_agg(${pickJson(role)} order by ${garment.suggestionRank} nulls last, ${garment.id}),
     '[]'
   )
   from ${garment}
@@ -171,11 +176,12 @@ const resolverSql = sql<GarmentRef | null>`(
   where ${eq(resolverGarment.id, optionGroup.resolvedGarmentId)}
 )`;
 
-/** The owner's needs `which` picks, as JSON, oldest first, as `viewer` reads them. */
+/** The owner's needs `which` picks, as JSON, oldest first, as `viewer` reads them with `role`. */
 function needsSql(
   ownerId: number,
   which: SQL | undefined,
   viewer: AgentViewer,
+  role: WardrobeRole,
 ): SQL<Need[]> {
   return sql<Need[]>`(
     select coalesce(json_agg(json_build_object(
@@ -188,7 +194,7 @@ function needsSql(
       'dismissedReason', ${optionGroup.dismissedReason},
       'ownerNote', ${optionGroup.ownerNote},
       'agent', ${agentLabelSql(optionGroup.suggestedByTokenId, viewer)},
-      'picks', ${needPicksSql},
+      'picks', ${needPicksSql(role)},
       'resolver', ${resolverSql}
     ) order by ${optionGroup.id}), '[]')
     from ${optionGroup}
@@ -234,14 +240,18 @@ export const OPEN_PICKS = sql`(${wanted()} and ${garment.suggestionGroupId} in (
 ))`;
 
 /** The wishlist garments outside any need: the owner's own items, and a lone suggestion. */
-function ownItemsSql(ownerId: number, viewer: AgentViewer): SQL<OwnItem[]> {
+function ownItemsSql(
+  ownerId: number,
+  viewer: AgentViewer,
+  role: WardrobeRole,
+): SQL<OwnItem[]> {
   return sql<OwnItem[]>`(
     select coalesce(json_agg(json_build_object(
       'id', ${garment.id},
       'name', ${garment.name},
       'brand', ${garment.brand},
       'category', ${garment.category},
-      'price', ${garment.price}::text,
+      ${priceJsonPair(role)}
       'sourceUrl', ${garment.sourceUrl},
       'photo', ${photoRefJson},
       'suggested', ${garment.suggestedAt} is not null,
@@ -289,6 +299,7 @@ export function suggestionContextSql(
   garmentId: number,
   groupId: number | null,
   viewer: AgentViewer,
+  role: WardrobeRole,
 ): SQL<SuggestionContext> {
   return sql<SuggestionContext>`(
     select json_build_object(
@@ -296,7 +307,7 @@ export function suggestionContextSql(
       'note', ${garment.suggestionNote},
       'dismissedReason', ${garment.dismissedReason},
       'dismissedNote', ${garment.dismissedNote},
-      'need', ${groupId === null ? sql`null` : sql`(${needsSql(ownerId, eq(optionGroup.id, groupId), viewer)})->0`}
+      'need', ${groupId === null ? sql`null` : sql`(${needsSql(ownerId, eq(optionGroup.id, groupId), viewer, role)})->0`}
     )
     from ${garment}
     where ${and(eq(garment.id, garmentId), eq(garment.ownerId, ownerId))}
@@ -384,7 +395,7 @@ function sortGroups(
 }
 
 /**
- * The inbox of `ownerId`'s wardrobe as `viewerId` reads it, in one
+ * The inbox of `ownerId`'s wardrobe as `viewerId` reads it with `role`, in one
  * statement: the needs, the own items, the switcher, and for the owner
  * the brand notes and "Unlocks N" (counted after the statement, one search
  * per open pick; logged with its time by the route). `groupsOnly`: the
@@ -397,22 +408,22 @@ export async function readInbox(
   {
     ownerId,
     viewerId,
-    isOwner,
+    role,
     groupsOnly = false,
     switcher,
   }: {
     ownerId: number;
     viewerId: number;
-    isOwner: boolean;
+    role: WardrobeRole;
     groupsOnly?: boolean;
     switcher?: boolean;
   },
 ): Promise<Inbox & { searchMs: number; counted: number }> {
+  const isOwner = role === 'OWN';
+  const viewer = { viewerId, ownsWardrobe: isOwner };
   const row = await selectScalars(db, {
-    needs: needsSql(ownerId, inInbox, { viewerId, ownsWardrobe: isOwner }),
-    own: groupsOnly
-      ? undefined
-      : ownItemsSql(ownerId, { viewerId, ownsWardrobe: isOwner }),
+    needs: needsSql(ownerId, inInbox, viewer, role),
+    own: groupsOnly ? undefined : ownItemsSql(ownerId, viewer, role),
     sharedWardrobes: switcher ? sharedWardrobesSql(viewerId) : undefined,
     brandSizes: isOwner && !groupsOnly ? brandSizesSql(ownerId) : undefined,
     unlocks: isOwner ? goesWithManyInputsSql(ownerId, OPEN_PICKS) : undefined,
@@ -487,14 +498,22 @@ export async function readNeed(
     ownerId,
     groupId,
     viewerId,
-    isOwner,
-  }: { ownerId: number; groupId: number; viewerId: number; isOwner: boolean },
+    role,
+  }: {
+    ownerId: number;
+    groupId: number;
+    viewerId: number;
+    role: WardrobeRole;
+  },
 ): Promise<(NeedDetail & { searchMs: number }) | undefined> {
+  const isOwner = role === 'OWN';
   const row = await selectScalars(db, {
-    needs: needsSql(ownerId, eq(optionGroup.id, groupId), {
-      viewerId,
-      ownsWardrobe: isOwner,
-    }),
+    needs: needsSql(
+      ownerId,
+      eq(optionGroup.id, groupId),
+      { viewerId, ownsWardrobe: isOwner },
+      role,
+    ),
     brandSizes: isOwner ? brandSizesSql(ownerId) : undefined,
     judged: isOwner
       ? goesWithManyInputsSql(

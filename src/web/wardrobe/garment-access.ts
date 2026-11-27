@@ -10,7 +10,7 @@ import {
   actorOf,
   type AuthorizedWardrobe,
   authorizeWardrobe,
-  type WardrobeAccess,
+  type GrantedAccess,
   type WardrobeGuard,
   wardrobeGuard,
   type WardrobeNeed,
@@ -92,10 +92,10 @@ export interface AuthorizedGarment extends AuthorizedWardrobe {
  */
 export async function garmentIn(
   db: Db,
-  access: WardrobeAccess,
+  access: GrantedAccess,
   id: number,
 ): Promise<GarmentDetail> {
-  const garment = await findGarment(db, id, access.ownerId);
+  const garment = await findGarment(db, id, access);
   if (!garment) throw garmentNotFound();
   return garment;
 }
@@ -126,7 +126,7 @@ export async function requireGarment(
  */
 export async function taggedGarmentIn(
   db: Db,
-  access: WardrobeAccess,
+  access: GrantedAccess,
   id: number,
 ): Promise<{ garment: GarmentDetail; left: number }> {
   const tagged = await taggedGarment(db, id, access.ownerId);
@@ -172,7 +172,7 @@ export function garmentGuard(db: Db): GarmentGuard {
 export async function garmentPhotoIn(
   db: Db,
   logger: Logger,
-  access: WardrobeAccess,
+  access: GrantedAccess,
   id: number,
 ): Promise<{ garment: GarmentDetail; photo: StoredPhoto }> {
   const garment = await garmentIn(db, access, id);
@@ -231,11 +231,11 @@ export async function searchGarments(
     throw new NotFound('capsule');
   }
   const [page, total] = await Promise.all([
-    garmentSummaries(db, access.ownerId, filters, {
+    garmentSummaries(db, access, filters, {
       before: search.before,
       limit: search.limit,
     }),
-    gridCount(db, access.ownerId, filters),
+    gridCount(db, access, filters),
   ]);
   return { total, garments: page.garments, next: page.before ?? null };
 }

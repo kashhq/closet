@@ -26,6 +26,7 @@ import {
   type IsoDate,
 } from '../../calendar-date';
 import { recapPeriod } from './recap-period';
+import { privateColumns } from '../wardrobe/private-fields';
 import { repairCostSql } from '../wardrobe/repairs';
 import { type GarmentScope, inScope } from '../wardrobe/status';
 
@@ -82,7 +83,8 @@ function insightGarments(
         brand: garment.brand,
         colors: garment.colors,
         quantity: garment.quantity,
-        price: garment.price,
+        // Insights are the owner's (owner-only by design).
+        price: privateColumns('OWN').price,
         // Repairs dated up to `to`, like wears: a past year's cost per wear
         // is what the garment had cost by its December 31 (#151).
         repairCost: repairCostSql(garment.id, window.to),

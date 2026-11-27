@@ -26,6 +26,7 @@ import type { IsoDate } from '../../calendar-date';
 import { instantOnDay, type TapInstant } from '../../offline-writes';
 import type { SignablePhotoRef } from '../files/image-url';
 import { photoRefJson } from '../files/queries';
+import { privateColumns } from '../wardrobe/private-fields';
 import type { GarmentDetail } from '../wardrobe/queries';
 import { repairCostSql } from '../wardrobe/repairs';
 import { inCloset, onWishlist, ownedGarment } from '../wardrobe/status';
@@ -178,7 +179,10 @@ export async function wearCountsByGarment(
   return new Map(rows.map(({ garmentId, ...counts }) => [garmentId, counts]));
 }
 
-/** A garment as the wear line reads it (WearStatus, wear-section.tsx). */
+/**
+ * A garment as the wear line reads it (WearStatus, wear-section.tsx): the
+ * owner's, whose price (cost per wear) is read as `'OWN'`.
+ */
 export type WearGarment = Pick<
   GarmentDetail,
   | 'id'
@@ -213,7 +217,7 @@ export async function wearStatusOf(
         'status', ${garment.status},
         'category', ${garment.category},
         'quantity', ${garment.quantity},
-        'price', ${garment.price}::text,
+        'price', ${privateColumns('OWN').price}::text,
         'washAfterWears', ${garment.washAfterWears},
         'lastWashedOn', ${garment.lastWashedOn}
       )

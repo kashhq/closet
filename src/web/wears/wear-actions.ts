@@ -157,7 +157,7 @@ async function refusalOf(
   id: number,
   ownerId: number,
 ): Promise<HttpError> {
-  const garment = await findGarment(db, id, ownerId);
+  const garment = await findGarment(db, id, { ownerId, role: 'OWN' });
   return garment?.status === 'wishlist'
     ? garmentNotOwnedYet()
     : garmentNotFound();

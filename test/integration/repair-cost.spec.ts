@@ -17,8 +17,9 @@ import { createAccessToken, tool } from './mcp';
  * the garment page's wear line and its htmx answer, insights (and "your
  * closet cost"), a past year's recap (repairs dated up to its December 31,
  * like wears), wardrobe_stats and get_garment. An unpriced garment stays
- * out, repaired or not. Repairs are the owner's own record: a grantee sees
- * the price and never a cost that holds them. The clock is pinned to
+ * out, repaired or not. Repairs are the owner's own record, and the price
+ * the `private` capability's (#680): a VIEW grantee sees neither, nor a
+ * cost that holds them. The clock is pinned to
  * 2026-09-27 in New York so the repairs and wears fall in known years.
  */
 
@@ -304,19 +305,20 @@ describe('repair costs in cost per wear', () => {
   });
 
   describe('a grantee', () => {
-    it('sees the price on the shared garment page, never a cost with repairs', async () => {
+    it('sees neither the price on the shared garment page nor a cost with repairs', async () => {
       const html = await get(
         `/wardrobe/${g.boots}?ownerId=${t.owner.id}`,
         viewerCookie,
       );
-      expect(html).toContain('$100.00');
+      expect(html).toContain('Boots');
+      expect(html).not.toContain('$100.00');
       expect(html).not.toContain('a wear');
       expect(html).not.toContain('$150.00');
       expect(html).not.toContain('$50.00');
       expect(html).not.toContain('garment-repairs');
     });
 
-    it('gets the price alone from get_garment on the shared wardrobe', async () => {
+    it('gets no price and no cost from get_garment on the shared wardrobe', async () => {
       const token = await createAccessToken(t, { cookie: viewerCookie });
       const detail = await tool<Record<string, unknown>>(
         t,
@@ -324,10 +326,12 @@ describe('repair costs in cost per wear', () => {
         'get_garment',
         { id: g.boots, ownerId: t.owner.id },
       );
-      expect(detail.price).toBe('100.00');
+      expect(detail.name).toBe('Boots');
+      expect(detail).not.toHaveProperty('price');
       expect(detail.care).toBeUndefined();
       expect(detail.repairs).toBeUndefined();
       const answer = JSON.stringify(detail);
+      expect(answer).not.toContain('100.00');
       expect(answer).not.toContain('150.00');
       expect(answer).not.toContain('costPerWear');
     });

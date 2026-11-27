@@ -52,7 +52,7 @@ describe('garment keyset index order', () => {
     const { statements } = await recordStatements(() =>
       gridPage(
         t.db,
-        owner,
+        { ownerId: owner, role: 'OWN' },
         { scope: 'closet', needsWash: false, attention: false },
         { ownerView: false },
       ),

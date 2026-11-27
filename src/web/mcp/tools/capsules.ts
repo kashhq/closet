@@ -81,7 +81,7 @@ export const capsuleTools = [
       );
       const page = await garmentSummaries(
         ctx.db,
-        access.ownerId,
+        access,
         { ...CLOSET_FILTERS, capsule: id },
         { before: readPageCursor(before), limit: GRID_PAGE_SIZE },
       );

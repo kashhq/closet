@@ -1814,3 +1814,9 @@ Consequence: a refused sign-up is today's 302 to login, with `?registrationClose
 Why: the README's Development steps assumed `../pgvault-dev` and devkit, neither public. A fresh clone with no `devkit/` builds and boots against a plain `postgres:18`, but `eslint.config.mjs` and `vitest.config.mts` import `./devkit/lint/*`, so lint, typecheck and every Vitest tier fail.
 Decision: owner chose to document, not decouple. README says the `make` targets, hooks, lint, typecheck and Vitest are the owner's, lists what works (`npm ci`, `build`, `start:dev`, `format`), and replaces pgvault-dev with `docker run postgres:18`.
 Consequence: a contributor's PR is checked by the owner's gate, not by their checkout. Do not make the configs tolerate a missing devkit to widen that list.
+
+## 2026-11-27 — Price and notes are read only through `privateColumns(role)` (#680)
+
+Why: owner decision 2026-11-25: a garment's price and notes are never a VIEW grantee's. Each garment reader picked its own columns, so hiding them at the mappers would leave every new reader one forgotten field from a leak.
+Decision: `src/web/wardrobe/private-fields.ts` is the only file naming `garment.price` and `garment.notes` (`guards.conf @garment-private`). Readers ask by role (`privateColumns`, `priceJsonPair`, the feed's `privateColumnsWhere`); without `private` the fields are not selected, so every answer leaves them out (absent, never null). A VIEW keyword search silently ignores the notes and is unranked (coordinator decision 3). Rejected: stripping in the mappers (the row still held them; a new mapper could pass them on).
+Consequence: share-aware readers take a `WardrobeRead` (`{ ownerId, role }`), not an owner id. A downgraded share is resent by the feed without them (`g`, #959); a cached offline page shows the old body until it revalidates (accepted, plan comment). Detail: `src/web/sharing/reference.md`.
