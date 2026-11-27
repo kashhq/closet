@@ -1856,3 +1856,4 @@ Consequence: the gate forwards four more exact routes. Nothing an agent calls ne
 **Why:** the muse -> agent rename (#1296) renamed the AutosaveForm field `museRoundsOn` to `agentRoundsOn`. The service worker keeps serving the older build's cached pages offline until `WARM_PAGES` refetches them (`src/web/shell/AGENTS.md`, Updates), and no stale-form marker exists, so such a page posted the old name and silently turned round notifications off (#1297).
 **Decision:** `POST /push/reminders` accepts both names (`RemindersBody`, `src/web/push/routes.tsx`); the new one wins. Spec: `push-reminders.spec.ts`.
 **Consequence:** delete `museRoundsOn` once no cached or open page can predate the rename (a few weeks after 2026-11-27, once the installed PWAs have refetched).
+Superseded 2026-11-27: the owner dropped the alias; no clients exist.
