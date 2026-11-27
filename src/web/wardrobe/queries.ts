@@ -101,12 +101,13 @@ import {
 /**
  * The wardrobe a read is of, and the reader's role there, which decides
  * whether it reads the price and notes and searches the notes
- * (privateColumns, private-fields.ts). A WardrobeAccess is one; an
- * internal check that shows neither field passes no role.
+ * (privateColumns, private-fields.ts). A GrantedAccess is one. Never
+ * without a role: a read that left it out would drop the fields, and an
+ * edit standing on it would clear them.
  */
 export interface WardrobeRead {
   ownerId: number;
-  role: WardrobeRole | undefined;
+  role: WardrobeRole;
 }
 
 /** The grid's filters, as the query string gives them (already validated). */
@@ -204,7 +205,7 @@ export function gridWhere(
  * match ranks 0.
  */
 function gridOrder(
-  role: WardrobeRole | undefined,
+  role: WardrobeRole,
   filters: GridFilters,
   before: GridCursor | undefined,
 ): { rank: SQL<KeywordRank>; after: SQL | undefined; orderBy: SQL[] } {
@@ -636,8 +637,26 @@ const detailColumns = {
  * A garment's columns as `role` reads them: everything stored on it, the
  * price and notes only with `private` (privateColumns).
  */
-function detailColumnsFor(role: WardrobeRole | undefined) {
+function detailColumnsFor(role: WardrobeRole) {
   return { ...detailColumns, ...privateColumns(role) };
+}
+
+/**
+ * The stored name of the garment's photo now, null without one, undefined
+ * when the garment is not in `ownerId`'s wardrobe: a photo write's check
+ * that its turn is still current (rotateGarmentPhoto), reading nothing else.
+ */
+export async function garmentPhotoName(
+  db: Db,
+  id: number,
+  ownerId: number,
+): Promise<string | null | undefined> {
+  const [row] = await db
+    .select({ fileName: file.fileName })
+    .from(garment)
+    .leftJoin(file, eq(file.id, garment.photoId))
+    .where(and(eq(garment.id, id), eq(garment.ownerId, ownerId)));
+  return row && row.fileName;
 }
 
 /** The garment in the wardrobe, as its role reads it, or undefined. */

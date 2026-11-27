@@ -18,7 +18,7 @@ import type { WebOptions } from '../plugin';
 import { todayIn } from '../../calendar-date';
 import { postedInstant } from '../offline-writes';
 import { renderFragment, renderPage, wantsFragment } from '../render';
-import { actorOf, type WardrobeAccess } from '../sharing/access';
+import { actorOf, type GrantedAccess } from '../sharing/access';
 import { viewContext } from '../view-context';
 import { normalizeCategory, normalizeSize } from './garment';
 import {
@@ -212,7 +212,7 @@ function listedCapsule(capsules: CapsuleRef[], id: number): CapsuleRef {
  * (its "Add to capsule", and a foreign `?capsule=`).
  */
 function gridContextParts(answer: {
-  access: WardrobeAccess;
+  access: GrantedAccess;
   selecting: boolean;
   fragment: boolean;
   pick: number | undefined;
@@ -359,7 +359,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
    * the N the page showed, never only its loaded tiles.
    */
   async function selected(
-    access: WardrobeAccess,
+    access: GrantedAccess,
     request: { query: GridQuery; body: SelectionBody },
   ): Promise<{ ids: number[]; all: boolean; search: GridSearch }> {
     const search = gridSearch(request.query, access.isOwner);

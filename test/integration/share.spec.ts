@@ -379,6 +379,36 @@ describe('wardrobe sharing', () => {
       expect(await found('VIEW')).toEqual([false, false, false]);
     });
 
+    // A MANAGE grantee's edit stands on a read with both fields: one
+    // without them would save them cleared (withPrivateFields).
+    it("survive a MANAGE grantee's edit of another field", async () => {
+      const { cookie, device, agent } = readers.MANAGE;
+      const form = await t.inject({
+        method: 'GET',
+        url: `/wardrobe/${garmentId}/edit?ownerId=${owner}`,
+        headers: { cookie },
+      });
+      expect(form.statusCode).toBe(200);
+      expect(form.body).toContain(PRICE);
+      expect(form.body).toContain(NOTES);
+      const patched = await t.api(device, {
+        method: 'PATCH',
+        url: `/api/v1/garments/${garmentId}?ownerId=${owner}`,
+        payload: { name: 'Private coat, renamed' },
+      });
+      expect(patched.statusCode, patched.body).toBe(200);
+      await tool(t, agent, 'update_garment', {
+        id: garmentId,
+        ownerId: owner,
+        name: 'Private coat',
+      });
+      expect(await garmentRow(t, garmentId)).toMatchObject({
+        name: 'Private coat',
+        price: PRICE,
+        notes: NOTES,
+      });
+    });
+
     it("a VIEW grantee's clone starts without them", async () => {
       const { device } = readers.VIEW;
       const res = await t.api(device, {

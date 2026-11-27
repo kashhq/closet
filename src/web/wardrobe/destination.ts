@@ -2,7 +2,7 @@ import type { Db, Queryable } from '../../db/client';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { NotFound } from '../refusals';
-import type { WardrobeAccess } from '../sharing/access';
+import type { GrantedAccess } from '../sharing/access';
 import type { EntryStatus } from '../../wardrobe/status';
 import { decide } from '../wishlist/decisions';
 import { findNeedToBuyFor, type NeedBoughtFor } from '../wishlist/inbox';
@@ -32,7 +32,7 @@ import { garmentNotFound } from './garment-access';
 async function resolveNeed(
   db: Queryable,
   needId: number,
-  access: WardrobeAccess,
+  access: GrantedAccess,
 ): Promise<NeedBoughtFor> {
   const need = access.isOwner
     ? await findNeedToBuyFor(db, access.ownerId, needId)
@@ -55,7 +55,7 @@ async function resolveNeed(
 export async function postedDestination(
   db: Queryable,
   body: Pick<GarmentBody, 'to' | 'orderItem' | 'forNeed'>,
-  access: WardrobeAccess,
+  access: GrantedAccess,
 ): Promise<{
   destination: Destination & { to: EntryStatus };
   boughtFor?: NeedBoughtFor;
@@ -105,7 +105,7 @@ export async function postedDestination(
 async function resolveOrderItem(
   db: Queryable,
   orderItemId: number,
-  access: WardrobeAccess,
+  access: GrantedAccess,
 ): Promise<number> {
   const item = access.isOwner
     ? await findPendingOrderItem(db, orderItemId, access.ownerId)
@@ -125,7 +125,7 @@ async function resolveOrderItem(
 export async function resolveDestination(
   db: Db,
   query: DestinationQuery,
-  access: WardrobeAccess,
+  access: GrantedAccess,
 ): Promise<{
   destination: Destination;
   replaced?: GarmentDetail;

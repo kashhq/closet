@@ -61,7 +61,7 @@ export async function gridContext(
   scope: {
     userId: number;
     ownerId: number;
-    role: WardrobeRole | undefined;
+    role: WardrobeRole;
     filters: GridFilters;
   },
   parts: ReadonlySet<GridContextPart>,

@@ -48,7 +48,6 @@ import {
   type CareLabel,
 } from '../../wardrobe/care';
 import { normalizeCategory, normalizeSize } from './garment';
-import type { PrivateFields } from './private-fields';
 
 /**
  * The garment input model: the garment form's TypeBox body (GarmentBody), the
@@ -690,12 +689,14 @@ function presetMaterials(text: string): Material[] {
 }
 
 /**
- * A stored garment as its edit and clone forms show it to `audience`: the
- * price and notes as its reader read them, so a VIEW grantee's clone starts
- * without them (#680).
+ * A stored garment as its edit and clone forms show it to `audience`. The
+ * price and notes must be there (#680): an edit's through
+ * withPrivateFields, which refuses a garment read without them (an omitted
+ * field would be saved as cleared); a clone's through withoutUnread (a VIEW
+ * grantee's starts without them).
  */
 export function storedFormValues(
-  stored: Omit<Required<GarmentFields>, keyof PrivateFields> & PrivateFields,
+  stored: Required<GarmentFields>,
   audience: FormAudience,
 ): GarmentFormValues {
   return {

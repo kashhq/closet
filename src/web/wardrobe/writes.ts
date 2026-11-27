@@ -30,7 +30,7 @@ import { type EntryStatus, statusOfClone } from '../../wardrobe/status';
 import {
   type DeleteOutcome,
   deleteGarment,
-  findGarment,
+  garmentPhotoName,
   type GarmentDetail,
   type GarmentPhoto,
   garmentIdByClientId,
@@ -584,9 +584,7 @@ export async function rotateGarmentPhoto(
       if (
         error instanceof HttpError &&
         error.statusCode === 404 &&
-        // Only the photo is compared: no role, so nothing private is read.
-        (await findGarment(deps.db, id, { ownerId, role: undefined }))?.photo
-          ?.fileName !== source.fileName
+        (await garmentPhotoName(deps.db, id, ownerId)) !== source.fileName
       ) {
         throw photoChanged();
       }

@@ -23,9 +23,9 @@ export interface PrivateFields {
   notes?: string | null;
 }
 
-/** Whether `role` reads a garment's price and notes; undefined (no role) never. */
-export function seesPrivate(role: WardrobeRole | undefined): boolean {
-  return role !== undefined && can(role, 'private');
+/** Whether `role` reads a garment's price and notes. */
+export function seesPrivate(role: WardrobeRole): boolean {
+  return can(role, 'private');
 }
 
 /**
@@ -34,12 +34,8 @@ export function seesPrivate(role: WardrobeRole | undefined): boolean {
  * as `'OWN'`, and gets both.
  */
 export function privateColumns(role: 'OWN'): PrivateColumns;
-export function privateColumns(
-  role: WardrobeRole | undefined,
-): Partial<PrivateColumns>;
-export function privateColumns(
-  role: WardrobeRole | undefined,
-): Partial<PrivateColumns> {
+export function privateColumns(role: WardrobeRole): Partial<PrivateColumns>;
+export function privateColumns(role: WardrobeRole): Partial<PrivateColumns> {
   return seesPrivate(role) ? PRIVATE_COLUMNS : {};
 }
 
@@ -66,6 +62,42 @@ export function privateColumnsWhere(reads: SQL<boolean>): {
  * nothing without `private`, so the key is absent: written before another
  * pair, `json_build_object('id', …, ${priceJsonPair(role)} 'sourceUrl', …)`.
  */
-export function priceJsonPair(role: WardrobeRole | undefined): SQL {
+export function priceJsonPair(role: WardrobeRole): SQL {
   return seesPrivate(role) ? sql`'price', ${garment.price}::text,` : sql``;
+}
+
+/** A garment as a reader with `private` read it: both fields there, null for none. */
+export type WithPrivateFields<T extends PrivateFields> = T &
+  Required<PrivateFields>;
+
+/**
+ * `garment`, refused unless it was read with its private fields: what an
+ * edit (the form, update_garment, the API's PATCH) stands on, since every
+ * field it posts back is written and an omitted one would become a cleared
+ * one. Throws, an invariant: the edit needs `manage`, which has `private`,
+ * so a read without them is a reader that left out the role.
+ */
+export function withPrivateFields<T extends PrivateFields>(
+  garment: T,
+): WithPrivateFields<T> {
+  if (!('price' in garment) || !('notes' in garment)) {
+    throw new Error(
+      'A garment read without its price and notes cannot be edited',
+    );
+  }
+  return garment as WithPrivateFields<T>;
+}
+
+/**
+ * A clone's source as its form starts: what the reader could not read is
+ * none (a VIEW grantee's clone has no price or notes, #680).
+ */
+export function withoutUnread<T extends PrivateFields>(
+  garment: T,
+): WithPrivateFields<T> {
+  return {
+    ...garment,
+    price: garment.price ?? null,
+    notes: garment.notes ?? null,
+  };
 }

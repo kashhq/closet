@@ -115,6 +115,7 @@ import { saveGarmentFromLink } from './link-import/save';
 import { readRepairForm, RepairParams } from './repairs';
 import type { WardrobeDeps } from './writes';
 import { BY_PERSON } from '../write-origin';
+import { withoutUnread } from './private-fields';
 
 const flag = (description: string) =>
   Type.Boolean({ default: false, description });
@@ -558,7 +559,9 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         viewOwner,
         garment: source,
       } = await authorize.garment(request, 'view');
-      const values = storedFormValues(source, { owner: access.isOwner });
+      const values = storedFormValues(withoutUnread(source), {
+        owner: access.isOwner,
+      });
       const form = readNewGarment(
         {
           ...values,
