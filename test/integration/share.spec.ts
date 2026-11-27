@@ -15,7 +15,7 @@ import {
   garmentsNamed,
 } from './garments';
 import { createTestApp, TEST_PASSWORD, TestApp, userIdOf } from './harness';
-import { createAccessToken, tool } from './mcp';
+import { callTool, createAccessToken, mcpRequest, tool } from './mcp';
 
 describe('wardrobe sharing', () => {
   let t: TestApp;
@@ -309,6 +309,43 @@ describe('wardrobe sharing', () => {
       const agent = JSON.parse(json[3]) as Record<string, unknown>;
       expect(agent).not.toHaveProperty('price');
       expect(agent).not.toHaveProperty('notes');
+    });
+
+    // Every read-only tool that addresses a wardrobe, asked of the shared
+    // one (with the garment's id where it takes one): a tool added later is
+    // held too, whatever its reader (guards.conf @garment-private's
+    // comment says what text cannot see).
+    it('no read-only MCP tool answers a VIEW grantee them', async () => {
+      const { agent } = readers.VIEW;
+      const listed = await mcpRequest(t, agent, 'tools/list');
+      expect(listed.statusCode).toBe(200);
+      const { tools } = listed.json<{
+        result: {
+          tools: {
+            name: string;
+            inputSchema: { properties?: Record<string, unknown> };
+            annotations?: { readOnlyHint?: boolean };
+          }[];
+        };
+      }>().result;
+      const asked = tools.filter(
+        (one) =>
+          one.annotations?.readOnlyHint === true &&
+          one.inputSchema.properties?.ownerId !== undefined,
+      );
+      let answered = 0;
+      for (const { name, inputSchema } of asked) {
+        const args: Record<string, unknown> = { ownerId: owner };
+        if (inputSchema.properties?.id !== undefined) args.id = garmentId;
+        const { value, isError } = await callTool(t, agent, name, args);
+        const text = JSON.stringify(value);
+        expect(text, name).not.toContain(PRICE);
+        expect(text, name).not.toContain(LISTED);
+        expect(text, name).not.toContain(NOTES);
+        if (!isError) answered += 1;
+      }
+      // get_garment, get_wardrobe, search_garments, list_wishlist at least.
+      expect(answered).toBeGreaterThanOrEqual(4);
     });
 
     it("a VIEW grantee's keyword search ignores the notes, silently", async () => {

@@ -46,7 +46,9 @@ export function privateColumns(
 /**
  * The private columns of a batched read across wardrobes (the changes
  * feed's garmentsByIds), each null on a row where `reads` is false: the
- * feed's `managesWardrobeSql`, `private`'s SQL form. The API leaves a null
+ * feed's `managesWardrobeSql`, which answers `manage`, and so `private`
+ * only while every role with `manage` has `private` (access.spec.ts holds
+ * that; share.spec.ts the SQL form to the resolver). The API leaves a null
  * price or notes out (asResource), so it is absent there too.
  */
 export function privateColumnsWhere(reads: SQL<boolean>): {

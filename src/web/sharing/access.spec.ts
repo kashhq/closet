@@ -123,6 +123,17 @@ describe('can', () => {
     expect(granted('MANAGE')).toEqual(['view', 'manage', 'launder', 'private']);
     expect(granted('VIEW')).toEqual(['view']);
   });
+
+  // The feed's garments and their price and notes ask one SQL form,
+  // managesWardrobeSql (privateColumnsWhere, garmentsByIds), and a write's
+  // stored base must hold what it would otherwise clear: a role that may
+  // change a wardrobe must read its private fields.
+  it('gives every role with `manage` `private` too (#680)', () => {
+    const roles: WardrobeRole[] = ['OWN', 'MANAGE', 'VIEW'];
+    for (const role of roles) {
+      if (can(role, 'manage')) expect(can(role, 'private'), role).toBe(true);
+    }
+  });
 });
 
 describe('markShareAware', () => {

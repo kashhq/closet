@@ -683,6 +683,8 @@ export function garmentsByIds(
   return db
     .select({
       ...detailColumns,
+      // `manage`'s SQL form stands for `private`: every role with one has
+      // the other (access.spec.ts).
       ...privateColumnsWhere(managesWardrobeSql(garment.ownerId, viewerId)),
       agent: agentLabelSql(garment.addedByTokenId, {
         viewerId,
