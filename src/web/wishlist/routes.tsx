@@ -111,12 +111,14 @@ export const wishlistRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       if (garment.status !== 'wishlist') {
         return reply.redirect(garmentUrl(garment.id, viewOwner), 302);
       }
+      // "Bought it" needs `manage`, which has `private`: the listed price.
+      const { price } = garment;
       return renderBought(reply, {
         garment,
         viewOwner,
         values: {
           acquiredOn: todayIn(config.timeZone, new Date()),
-          price: garment.price ?? '',
+          price: price ?? '',
         },
         archivable: await archivable(garment, authorized),
       });

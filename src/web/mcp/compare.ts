@@ -22,8 +22,8 @@ export interface ComparedGarment {
   brand: string | null;
   /** GARMENT_COLORS names. */
   colors: string[];
-  /** '49.90', US dollars; null when unknown. */
-  price: string | null;
+  /** '49.90', US dollars; null when unknown, absent on a VIEW share (#680). */
+  price?: string | null;
   sourceUrl: string | null;
 }
 
@@ -41,7 +41,7 @@ interface GarmentBrief {
   name: string | null;
   brand: string | null;
   colors: string[];
-  price: string | null;
+  price?: string | null;
   sourceUrl: string | null;
 }
 
@@ -56,14 +56,14 @@ export interface WardrobeComparison {
   onlyOwned: ComparisonGroup[];
 }
 
-function brief(garment: ComparedGarment): GarmentBrief {
+function brief(piece: ComparedGarment): GarmentBrief {
   return {
-    id: garment.id,
-    name: garment.name,
-    brand: garment.brand,
-    colors: garment.colors,
-    price: garment.price,
-    sourceUrl: garment.sourceUrl,
+    id: piece.id,
+    name: piece.name,
+    brand: piece.brand,
+    colors: piece.colors,
+    price: piece.price,
+    sourceUrl: piece.sourceUrl,
   };
 }
 

@@ -160,7 +160,7 @@ describe('a need is read by whoever reads the wishlist', () => {
       ownerId: OWNER,
       groupId: NEED,
       viewerId: viewer.userId,
-      isOwner: false,
+      role: 'VIEW',
     });
   });
 

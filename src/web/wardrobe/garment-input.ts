@@ -48,6 +48,7 @@ import {
   type CareLabel,
 } from '../../wardrobe/care';
 import { normalizeCategory, normalizeSize } from './garment';
+import type { PrivateFields } from './private-fields';
 
 /**
  * The garment input model: the garment form's TypeBox body (GarmentBody), the
@@ -688,9 +689,13 @@ function presetMaterials(text: string): Material[] {
   return storedSet(MATERIALS, text.split(',')) ?? [];
 }
 
-/** A stored garment as its edit and clone forms show it to `audience`. */
+/**
+ * A stored garment as its edit and clone forms show it to `audience`: the
+ * price and notes as its reader read them, so a VIEW grantee's clone starts
+ * without them (#680).
+ */
 export function storedFormValues(
-  stored: Required<GarmentFields>,
+  stored: Omit<Required<GarmentFields>, keyof PrivateFields> & PrivateFields,
   audience: FormAudience,
 ): GarmentFormValues {
   return {

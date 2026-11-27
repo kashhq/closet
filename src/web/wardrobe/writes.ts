@@ -584,8 +584,9 @@ export async function rotateGarmentPhoto(
       if (
         error instanceof HttpError &&
         error.statusCode === 404 &&
-        (await findGarment(deps.db, id, ownerId))?.photo?.fileName !==
-          source.fileName
+        // Only the photo is compared: no role, so nothing private is read.
+        (await findGarment(deps.db, id, { ownerId, role: undefined }))?.photo
+          ?.fileName !== source.fileName
       ) {
         throw photoChanged();
       }

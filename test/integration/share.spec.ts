@@ -7,8 +7,15 @@ import {
   type Capability,
   managesWardrobeSql,
 } from '../../src/web/sharing/access';
-import { createGarment, garmentRow, garmentsNamed } from './garments';
+import { deviceToken } from './api';
+import {
+  createGarment,
+  createWishlistItem,
+  garmentRow,
+  garmentsNamed,
+} from './garments';
 import { createTestApp, TEST_PASSWORD, TestApp, userIdOf } from './harness';
+import { createAccessToken, tool } from './mcp';
 
 describe('wardrobe sharing', () => {
   let t: TestApp;
@@ -179,5 +186,172 @@ describe('wardrobe sharing', () => {
         expect(manages, `${role} ${capability}`).toBe(can(role, capability));
       }
     }
+  });
+
+  // #680, owner decision 2026-11-25: a garment's price and notes are the
+  // `private` capability's. One garment and one wishlist item carry
+  // sentinels; every reader a grantee reaches is asked by the owner, a
+  // MANAGE grantee (both fields) and a VIEW grantee (neither, and its
+  // keyword search never matches the notes). The changes feed's case is
+  // api-changes.spec.ts's.
+  describe('price and notes', () => {
+    const PRICE = '987.65';
+    const NOTES = 'Zanzibar stitching';
+    const LISTED = '123.45';
+    let owner: number;
+    let garmentId: number;
+    const readers: Record<
+      'OWN' | 'MANAGE' | 'VIEW',
+      { cookie: string; device: string; agent: string }
+    > = {} as never;
+
+    beforeAll(async () => {
+      const email = 'private-owner@example.com';
+      const ownerCookie = await t.register(email);
+      owner = await userId(email);
+      const created = await t.inject({
+        method: 'POST',
+        url: '/wardrobe',
+        payload: {
+          name: 'Private coat',
+          category: 'outerwear',
+          notes: NOTES,
+          product: '1',
+          price: PRICE,
+          sourceUrl: '',
+        },
+        headers: { cookie: ownerCookie },
+      });
+      expect(created.statusCode).toBe(302);
+      garmentId = Number(
+        /^\/wardrobe\/(\d+)/.exec(created.headers.location!)![1],
+      );
+      await createWishlistItem(t, {
+        name: 'Private wish',
+        cookie: ownerCookie,
+        price: LISTED,
+      });
+      const reader = async (email: string, cookie: string) => ({
+        cookie,
+        device: (await deviceToken(t, { email })).token,
+        agent: await createAccessToken(t, { cookie }),
+      });
+      readers.OWN = await reader(email, ownerCookie);
+      for (const permission of ['MANAGE', 'VIEW'] as const) {
+        const grantee = `private-${permission.toLowerCase()}@example.com`;
+        const cookie = await t.register(grantee);
+        await t.db.insert(wardrobeShare).values({
+          grantorId: owner,
+          granteeId: await userId(grantee),
+          permission,
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+        });
+        readers[permission] = await reader(grantee, cookie);
+      }
+    });
+
+    /** Every answer `role` gets that could carry the fields, as text. */
+    async function answers(role: 'OWN' | 'MANAGE' | 'VIEW') {
+      const { cookie, device, agent } = readers[role];
+      const page = (url: string) =>
+        t.inject({ method: 'GET', url, headers: { cookie } });
+      const api = (url: string) =>
+        t.api(device, { method: 'GET', url: `/api/v1${url}` });
+      const all = await Promise.all([
+        page(`/wardrobe/${garmentId}?ownerId=${owner}`),
+        page(`/wardrobe/wishlist?ownerId=${owner}`),
+        api(`/garments/${garmentId}?ownerId=${owner}`),
+        api(`/garments?ownerId=${owner}`),
+        api(`/wishlist?ownerId=${owner}`),
+      ]);
+      for (const res of all) expect(res.statusCode, res.body).toBe(200);
+      const mcp = await Promise.all([
+        tool(t, agent, 'get_garment', { id: garmentId, ownerId: owner }),
+        tool(t, agent, 'search_garments', { ownerId: owner }),
+        tool(t, agent, 'list_wishlist', { ownerId: owner }),
+      ]);
+      return {
+        page: all.slice(0, 2).map((res) => res.body),
+        json: [
+          ...all.slice(2).map((res) => res.body),
+          ...mcp.map((answer) => JSON.stringify(answer)),
+        ],
+      };
+    }
+
+    it('reach the owner and a MANAGE grantee on every surface', async () => {
+      for (const role of ['OWN', 'MANAGE'] as const) {
+        const { page, json } = await answers(role);
+        expect(page[0], role).toContain(`$${PRICE}`);
+        expect(page[0], role).toContain(NOTES);
+        expect(page[1], role).toContain(`$${LISTED}`);
+        // The detail, the list, the wishlist; get_garment, the search, the wishlist.
+        for (const [i, text] of json.entries()) {
+          expect(text, `${role} ${i}`).toContain(i % 3 === 2 ? LISTED : PRICE);
+        }
+        expect(json[0], role).toContain(NOTES);
+        expect(json[3], role).toContain(NOTES);
+      }
+    });
+
+    it('never reach a VIEW grantee: absent, not null', async () => {
+      const { page, json } = await answers('VIEW');
+      for (const text of [...page, ...json]) {
+        expect(text).toContain('Private');
+        expect(text).not.toContain(PRICE);
+        expect(text).not.toContain(LISTED);
+        expect(text).not.toContain(NOTES);
+      }
+      const detail = JSON.parse(json[0]) as Record<string, unknown>;
+      expect(detail).not.toHaveProperty('price');
+      expect(detail).not.toHaveProperty('notes');
+      const agent = JSON.parse(json[3]) as Record<string, unknown>;
+      expect(agent).not.toHaveProperty('price');
+      expect(agent).not.toHaveProperty('notes');
+    });
+
+    it("a VIEW grantee's keyword search ignores the notes, silently", async () => {
+      const found = async (role: 'OWN' | 'MANAGE' | 'VIEW') => {
+        const { cookie, device, agent } = readers[role];
+        const grid = await t.inject({
+          method: 'GET',
+          url: `/wardrobe?ownerId=${owner}&keyword=zanzibar`,
+          headers: { cookie },
+        });
+        expect(grid.statusCode).toBe(200);
+        const list = await t.api(device, {
+          method: 'GET',
+          url: `/api/v1/garments?ownerId=${owner}&keyword=zanzibar`,
+        });
+        expect(list.statusCode).toBe(200);
+        const search = await tool<{ total: number }>(
+          t,
+          agent,
+          'search_garments',
+          { ownerId: owner, keyword: 'zanzibar' },
+        );
+        return [
+          grid.body.includes('Private coat'),
+          list.body.includes('Private coat'),
+          search.total > 0,
+        ];
+      };
+      expect(await found('OWN')).toEqual([true, true, true]);
+      expect(await found('MANAGE')).toEqual([true, true, true]);
+      expect(await found('VIEW')).toEqual([false, false, false]);
+    });
+
+    it("a VIEW grantee's clone starts without them", async () => {
+      const { device } = readers.VIEW;
+      const res = await t.api(device, {
+        method: 'POST',
+        url: `/api/v1/garments/${garmentId}/clones?ownerId=${owner}`,
+        payload: {},
+      });
+      expect(res.statusCode, res.body).toBe(201);
+      const clone = await garmentRow(t, res.json<{ id: number }>().id);
+      expect(clone).toMatchObject({ price: null, notes: null });
+    });
   });
 });

@@ -642,23 +642,23 @@ function PropertyChips({ garment }: { garment: GarmentDetail }) {
  * set. The care notes are the care label's (CareLabelSection).
  */
 function GarmentDetails({ garment }: { garment: GarmentDetail }) {
+  // Absent for a VIEW grantee (`private`, #680): neither row shows.
+  const { price, notes } = garment;
   const rows = [
     garment.colors && (
       <Detail label={t('COLOR')}>
         <span class="capitalize">{garment.colors.join(', ')}</span>
       </Detail>
     ),
-    garment.price && (
-      <Detail label={t('PRICE')}>{priceLabel(garment.price)}</Detail>
-    ),
+    price && <Detail label={t('PRICE')}>{priceLabel(price)}</Detail>,
     garment.acquiredOn && (
       <Detail label={t('DATE_ACQUIRED')}>
         <DayTime day={garment.acquiredOn} kind="date" />
       </Detail>
     ),
-    garment.notes && (
+    notes && (
       <Detail label={t('NOTES')} block>
-        <p class="whitespace-pre-line">{garment.notes}</p>
+        <p class="whitespace-pre-line">{notes}</p>
       </Detail>
     ),
   ].filter(Boolean);

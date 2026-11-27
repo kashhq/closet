@@ -252,7 +252,8 @@ describe('MCP over the seed personas', () => {
   });
 
   // The owner searches Theo's closet through the VIEW share on all three
-  // surfaces; each answer fits one page (the closet is 80 garments).
+  // surfaces, which never search its notes (#680); each answer fits one
+  // page (the closet is 80 garments).
   describe('the keyword search over Theo’s closet (#673)', () => {
     let demoId: number;
     let apiToken: string;
@@ -297,12 +298,11 @@ describe('MCP over the seed personas', () => {
 
     it('needs every word, in any order, matched through colour and type labels', async () => {
       const blueShirts = await search('blue shirt');
-      // Shirt-typed and blue; then the chinos, whose notes name "the linen
-      // shirt": a notes-only match ranks after them.
-      expect(new Set(blueShirts.slice(0, 3))).toEqual(
+      // Shirt-typed and blue. Not the chinos, whose notes name "the linen
+      // shirt": a VIEW share's search never reads the notes (#680).
+      expect(new Set(blueShirts)).toEqual(
         new Set(['Blue oxford', 'Western denim shirt', 'Plaid flannel']),
       );
-      expect(blueShirts.slice(3)).toEqual(['Navy chinos']);
       expect(await search('navy blazer')).toEqual(['Navy blazer']);
       expect(await search('blazer navy')).toEqual(['Navy blazer']);
     });
@@ -324,14 +324,13 @@ describe('MCP over the seed personas', () => {
       expect(jcrew).toHaveLength(brand.length);
     });
 
-    it('ranks a notes-only match below every name or type match', async () => {
+    // The owner's own search ranks a notes-only match last
+    // (wardrobe-grid.spec.ts); a VIEW share's never makes one (#680).
+    it('never matches the notes on a VIEW share, silently', async () => {
       const tees = await search('tee');
       // The blazer's notes say "over a tee or oxford".
-      const blazer = tees.indexOf('Navy blazer');
-      expect(blazer).toBeGreaterThan(0);
-      for (const [index, name] of tees.entries()) {
-        if (/\btee\b/i.test(name)) expect(index).toBeLessThan(blazer);
-      }
+      expect(tees.length).toBeGreaterThan(0);
+      expect(tees).not.toContain('Navy blazer');
     });
   });
 });

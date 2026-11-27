@@ -15,6 +15,7 @@ import type {
   OutfitDismissReason,
 } from '../../wardrobe/suggestions';
 import { OWNER_LOCK_TIMEOUT_MS } from '../../db/owner-lock';
+import { privateColumns } from '../wardrobe/private-fields';
 
 /**
  * What the owner decided about the agent's work since the agent last
@@ -209,7 +210,7 @@ function purchasesSql(ownerId: number, since: SQL): SQL<Purchase[]> {
         where ${eq(optionGroup.resolvedGarmentId, garment.id)}
       )),
       'different', ${garment.suggestedAt} is null,
-      'pricePaid', ${garment.price}::text,
+      'pricePaid', ${privateColumns('OWN').price}::text,
       'boughtOn', ${garment.acquiredOn}::text,
       'at', ${garment.boughtAt}
     ) order by ${garment.boughtAt} nulls first, ${garment.id}), '[]')

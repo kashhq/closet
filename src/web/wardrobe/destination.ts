@@ -139,7 +139,7 @@ export async function resolveDestination(
     const pick =
       need.pickId === null
         ? undefined
-        : await findGarment(db, need.pickId, access.ownerId);
+        : await findGarment(db, need.pickId, access);
     return {
       destination: { to: 'closet', forNeed: need.id },
       boughtFor: need,
@@ -147,7 +147,7 @@ export async function resolveDestination(
     };
   }
   const replaced = query.replaces
-    ? await findGarment(db, query.replaces, access.ownerId)
+    ? await findGarment(db, query.replaces, access)
     : null;
   if (replaced === undefined) throw garmentNotFound();
   return {

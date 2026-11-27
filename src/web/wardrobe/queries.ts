@@ -29,7 +29,7 @@ import type { AwayReason } from '../../wardrobe/availability';
 import type { CareLabel, CareWash } from '../../wardrobe/care';
 import type { EntryStatus, GarmentStatus } from '../../wardrobe/status';
 import { inCapsule } from '../capsules/queries';
-import { managesWardrobeSql } from '../sharing/access';
+import { managesWardrobeSql, type WardrobeRole } from '../sharing/access';
 import type { SignablePhotoRef, PlinthPhoto } from '../files/image-url';
 import type { StoredPhoto } from '../files/image-variant';
 import {
@@ -49,6 +49,12 @@ import {
   keywordRank,
   keywordTokens,
 } from './keyword-search';
+import {
+  type PrivateFields,
+  privateColumns,
+  privateColumnsWhere,
+  seesPrivate,
+} from './private-fields';
 import { type RepairEntry, repairLogSql } from './repairs';
 import {
   type GarmentScope,
@@ -91,6 +97,17 @@ import {
  * and the routes answer 404 either way. Reads return plain rows shaped for
  * the page, never whole entities.
  */
+
+/**
+ * The wardrobe a read is of, and the reader's role there, which decides
+ * whether it reads the price and notes and searches the notes
+ * (privateColumns, private-fields.ts). A WardrobeAccess is one; an
+ * internal check that shows neither field passes no role.
+ */
+export interface WardrobeRead {
+  ownerId: number;
+  role: WardrobeRole | undefined;
+}
 
 /** The grid's filters, as the query string gives them (already validated). */
 export interface GridFilters {
@@ -147,7 +164,7 @@ export interface GridPage {
 }
 
 export function gridWhere(
-  ownerId: number,
+  { ownerId, role }: WardrobeRead,
   filters: GridFilters,
 ): SQL | undefined {
   const conditions: (SQL | undefined)[] = [
@@ -167,7 +184,11 @@ export function gridWhere(
     conditions.push(arrayContains(garment.colors, [filters.color]));
   }
   const tokens = keywordTokens(filters.keyword);
-  if (tokens.length > 0) conditions.push(keywordMatch(garment, tokens));
+  // A reader without `private` never finds a garment by its notes (#680):
+  // the match would tell what they say.
+  if (tokens.length > 0) {
+    conditions.push(keywordMatch(garment, tokens, privateColumns(role).notes));
+  }
   return and(...conditions);
 }
 
@@ -178,14 +199,17 @@ export function gridWhere(
  * within each rank, so the next page is "a later rank, or the same rank and
  * an older id", the rank the one the cursor carries (GridCursor: never read
  * from the cursor's row). `rank` is selected beside each row for the next
- * cursor; 0 without a keyword, whose order ignores a cursor's rank.
+ * cursor; 0 without a keyword, whose order ignores a cursor's rank, and
+ * for a reader without `private`, whose search skips the notes, so every
+ * match ranks 0.
  */
 function gridOrder(
+  role: WardrobeRole | undefined,
   filters: GridFilters,
   before: GridCursor | undefined,
 ): { rank: SQL<KeywordRank>; after: SQL | undefined; orderBy: SQL[] } {
   const tokens = keywordTokens(filters.keyword);
-  if (tokens.length === 0) {
+  if (tokens.length === 0 || !seesPrivate(role)) {
     return {
       rank: sql<KeywordRank>`0`,
       after: before === undefined ? undefined : lt(garment.id, before.id),
@@ -265,7 +289,7 @@ const tileColumns = {
  */
 export async function gridPage(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
   options: { before?: GridCursor; ownerView: boolean; pick?: number },
 ): Promise<GridPage> {
@@ -280,12 +304,12 @@ export async function gridPage(
   const member = sql<
     boolean | null
   >`${pick === undefined ? sql`null` : inCapsule(pick)}`;
-  const { rank, after, orderBy } = gridOrder(filters, before);
+  const { rank, after, orderBy } = gridOrder(wardrobe.role, filters, before);
   const rows = await db
     .select({ ...tileColumns, ...own, member, rank })
     .from(garment)
     .leftJoin(file, eq(file.id, garment.photoId))
-    .where(and(gridWhere(ownerId, filters), after))
+    .where(and(gridWhere(wardrobe, filters), after))
     .orderBy(...orderBy)
     .limit(GRID_PAGE_SIZE + 1);
   const { rows: page, before: next } = keysetPage(rows, GRID_PAGE_SIZE);
@@ -327,7 +351,8 @@ export interface GarmentSummary {
   formality: Formality | null;
   quantity: number;
   condition: Condition;
-  price: string | null;
+  /** Absent for a reader without `private` (privateColumns). */
+  price?: string | null;
   sourceUrl: string | null;
   status: GarmentStatus;
   photo: PhotoWithCutout | null;
@@ -341,24 +366,25 @@ export interface GarmentSummary {
  */
 export async function garmentSummaries(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
   options: { before?: GridCursor; limit: number },
 ): Promise<{ garments: GarmentSummary[]; before: GridCursor | undefined }>;
 /** Without a `limit`: every match, no page and so no `before`. */
 export async function garmentSummaries(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
 ): Promise<{ garments: GarmentSummary[] }>;
 export async function garmentSummaries(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
   options: { before?: GridCursor; limit?: number } = {},
 ): Promise<{ garments: GarmentSummary[]; before?: GridCursor }> {
   const { before, limit } = options;
-  const { rank, after, orderBy } = gridOrder(filters, before);
+  const { rank, after, orderBy } = gridOrder(wardrobe.role, filters, before);
+  const { price } = privateColumns(wardrobe.role);
   const query = db
     .select({
       id: garment.id,
@@ -373,7 +399,7 @@ export async function garmentSummaries(
       formality: garment.formality,
       quantity: garment.quantity,
       condition: garment.condition,
-      price: garment.price,
+      ...(price && { price }),
       sourceUrl: garment.sourceUrl,
       status: garment.status,
       photo: photoWithCutoutJson,
@@ -382,7 +408,7 @@ export async function garmentSummaries(
     })
     .from(garment)
     .leftJoin(file, eq(file.id, garment.photoId))
-    .where(and(gridWhere(ownerId, filters), after))
+    .where(and(gridWhere(wardrobe, filters), after))
     .orderBy(...orderBy)
     .$dynamic();
   if (limit === undefined) {
@@ -400,13 +426,13 @@ export async function garmentSummaries(
  */
 export async function gridIds(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
 ): Promise<number[]> {
   const rows = await db
     .select({ id: garment.id })
     .from(garment)
-    .where(gridWhere(ownerId, filters))
+    .where(gridWhere(wardrobe, filters))
     .orderBy(garment.id);
   return rows.map((row) => row.id);
 }
@@ -414,10 +440,10 @@ export async function gridIds(
 /** How many garments match the filters (the grid's result count). */
 export function gridCount(
   db: Db,
-  ownerId: number,
+  wardrobe: WardrobeRead,
   filters: GridFilters,
 ): Promise<number> {
-  return db.$count(garment, gridWhere(ownerId, filters));
+  return db.$count(garment, gridWhere(wardrobe, filters));
 }
 
 /**
@@ -523,11 +549,14 @@ export interface GarmentDetail
       | keyof CareLabel
       | keyof ProductFields
       | keyof CareFields
+      | keyof PrivateFields
     >,
     GarmentPropertyFields,
     CareLabel,
-    ProductFields,
-    CareFields {
+    Omit<ProductFields, keyof PrivateFields>,
+    CareFields,
+    // Absent for a reader without `private` (#680, privateColumns).
+    PrivateFields {
   id: number;
   /** The public link's id (/share), null while not shared (#669). */
   shareableId: string | null;
@@ -567,7 +596,6 @@ const detailColumns = {
   brand: garment.brand,
   colors: garment.colors,
   size: garment.size,
-  notes: garment.notes,
   washingDetails: garment.washingDetails,
   acquiredOn: garment.acquiredOn,
   status: garment.status,
@@ -588,7 +616,6 @@ const detailColumns = {
   careIron: garment.careIron,
   careDryClean: garment.careDryClean,
   sourceUrl: garment.sourceUrl,
-  price: garment.price,
   quantity: garment.quantity,
   washAfterWears: garment.washAfterWears,
   condition: garment.condition,
@@ -605,14 +632,22 @@ const detailColumns = {
   photoMissingSince: file.originalMissingSince,
 };
 
-/** The garment in `ownerId`'s wardrobe, or undefined. */
+/**
+ * A garment's columns as `role` reads them: everything stored on it, the
+ * price and notes only with `private` (privateColumns).
+ */
+function detailColumnsFor(role: WardrobeRole | undefined) {
+  return { ...detailColumns, ...privateColumns(role) };
+}
+
+/** The garment in the wardrobe, as its role reads it, or undefined. */
 export async function findGarment(
   db: Db,
   id: number,
-  ownerId: number,
+  { ownerId, role }: WardrobeRead,
 ): Promise<GarmentDetail | undefined> {
   const [row] = await db
-    .select(detailColumns)
+    .select(detailColumnsFor(role))
     .from(garment)
     .leftJoin(file, eq(file.id, garment.photoId))
     .where(and(eq(garment.id, id), eq(garment.ownerId, ownerId)));
@@ -627,7 +662,8 @@ export interface SyncedGarmentRow extends GarmentDetail {
   repairs: RepairEntry[] | null;
   /**
    * The viewer owns its wardrobe or holds a MANAGE share: only they are
-   * shown its public link, as its page shows it (#959).
+   * shown its public link, as its page shows it (#959), and its price and
+   * notes (`private`: null to anyone else, so absent from the API).
    */
   viewerManages: boolean;
 }
@@ -637,7 +673,7 @@ export interface SyncedGarmentRow extends GarmentDetail {
  * changes feed's page, src/web/sync/feed.ts, which read the ids from the
  * wardrobes `viewerId` may see, in the same snapshot). The repair log is
  * the owner's own record: read only where `viewerId` owns the garment; the
- * public link only where they may manage it.
+ * public link, the price and the notes only where they may manage it.
  */
 export function garmentsByIds(
   db: Queryable,
@@ -647,6 +683,7 @@ export function garmentsByIds(
   return db
     .select({
       ...detailColumns,
+      ...privateColumnsWhere(managesWardrobeSql(garment.ownerId, viewerId)),
       agent: agentLabelSql(garment.addedByTokenId, {
         viewerId,
         ownsWardrobe: sql`${garment.ownerId} = ${viewerId}::int`,

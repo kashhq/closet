@@ -11,6 +11,7 @@ import {
   readGoesWithInputs,
 } from '../gallery/queries';
 import { GARMENT_OUTFITS_SHOWN } from '../outfits/garment-outfits';
+import type { WardrobeRole } from '../sharing/access';
 import { type GarmentOutfits, outfitsWithGarmentSql } from '../outfits/queries';
 import { type BrandSize, brandSizeSql } from '../sizes/queries';
 import { type WearSummary, wearSummarySql } from '../wears/queries';
@@ -74,6 +75,7 @@ export interface GarmentContext {
 interface ContextReader {
   isOwner: boolean;
   ownerId: number;
+  role: WardrobeRole;
   viewerId: number;
 }
 
@@ -123,7 +125,7 @@ function contextColumns(
     suggestionGroupId,
     madeByAgent,
   }: GarmentDetail,
-  { isOwner, ownerId, viewerId }: ContextReader,
+  { isOwner, ownerId, role, viewerId }: ContextReader,
   today: IsoDate,
 ) {
   const owned = status !== 'wishlist';
@@ -141,10 +143,13 @@ function contextColumns(
     brandSize:
       !owned && isOwner && brand ? brandSizeSql(ownerId, brand) : undefined,
     suggestion: when(suggestedAt !== null, () =>
-      suggestionContextSql(ownerId, id, suggestionGroupId, {
-        viewerId,
-        ownsWardrobe: isOwner,
-      }),
+      suggestionContextSql(
+        ownerId,
+        id,
+        suggestionGroupId,
+        { viewerId, ownsWardrobe: isOwner },
+        role,
+      ),
     ),
     agent: when(madeByAgent, () =>
       garmentAgentSql(id, { viewerId, ownsWardrobe: isOwner }),

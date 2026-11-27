@@ -15,6 +15,7 @@ import type { GoesWithCloset } from '../gallery/ideas';
 import type { ClosetGarment } from '../gallery/queries';
 import { IsoDateSchema } from '../schemas';
 import { MoneyInput } from '../wardrobe/garment-api-input';
+import { Money, PrivatePrice } from '../wardrobe/garment-resource';
 import type {
   Inbox,
   MusePick,
@@ -34,11 +35,6 @@ import type { GarmentRef } from './queries';
  * Unlocks and best outfits judge an option against the owner's closet, so
  * a grantee's answer never holds them.
  */
-
-const Money = Type.String({
-  pattern: '^\\d+\\.\\d{2}$',
-  description: 'A decimal amount in the household currency',
-});
 
 const GarmentRefResource = Type.Object(
   {
@@ -78,7 +74,7 @@ const WishlistGarment = Type.Object(
     brand: Type.Optional(Type.String()),
     category: Type.String(),
     /** The listed price. */
-    price: Type.Optional(Money),
+    price: Type.Optional(PrivatePrice),
     sourceUrl: Type.Optional(Type.String()),
     /** Signed, relative, immutable: from the cutout when it shows. */
     thumbUrl: Type.Optional(Type.String()),

@@ -1099,4 +1099,56 @@ describe("a grantee's feed", () => {
       await changes(grantee.device, { cursor: revoked.cursor }),
     ).not.toHaveProperty('revokedWardrobes');
   });
+
+  // #680: price and notes are `private`, a MANAGE share's and never a
+  // VIEW one's. The grant is part of the cursor (`g`, #959), so a share
+  // lowered to VIEW resends the wardrobe's garments, without them: a
+  // client replaces the row whole.
+  it('carries price and notes on a MANAGE share; lowered to VIEW, resends the garment without them', async () => {
+    const owner = await account('changes-private-owner@example.com');
+    const grantee = await account('changes-private-grantee@example.com');
+    const priced = await api(owner.device, 'POST', '/garments', {
+      category: 'shirt',
+      name: 'Priced',
+      price: '42.50',
+      notes: 'Private note',
+    });
+    expect(priced.statusCode, priced.body).toBe(201);
+    const id = priced.json<{ id: number }>().id;
+    await t.db.insert(wardrobeShare).values({
+      grantorId: owner.id,
+      granteeId: grantee.id,
+      permission: 'MANAGE',
+      acceptedAt: new Date(),
+      createdAt: new Date(),
+    });
+    const sharedRow = (pages: Page[]) =>
+      pages
+        .flatMap((page) => page.changes)
+        .find((change) => keyOf(change) === `garment:${id}`)?.data;
+
+    const managed = await syncAll(grantee.device, { limit: 100 });
+    expect(sharedRow(managed.pages)).toMatchObject({
+      price: '42.50',
+      notes: 'Private note',
+    });
+
+    await t.db
+      .update(wardrobeShare)
+      .set({ permission: 'VIEW' })
+      .where(
+        and(
+          eq(wardrobeShare.grantorId, owner.id),
+          eq(wardrobeShare.granteeId, grantee.id),
+        ),
+      );
+    const viewed = await syncAll(grantee.device, {
+      cursor: managed.cursor,
+      limit: 100,
+    });
+    const resent = sharedRow(viewed.pages);
+    expect(resent).toMatchObject({ id, name: 'Priced' });
+    expect(resent).not.toHaveProperty('price');
+    expect(resent).not.toHaveProperty('notes');
+  });
 });

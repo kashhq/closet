@@ -129,7 +129,7 @@ const GarmentListQuery = Type.Object({
     Type.String({
       maxLength: NAME_MAX,
       description:
-        'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last',
+        'Words, each matching the name, brand, colour, type, category or notes (punctuation ignored); notes-only matches last. A VIEW share is never searched by its notes',
     }),
   ),
   category: Type.Optional(Type.String({ maxLength: CATEGORY_MAX })),

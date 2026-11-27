@@ -95,7 +95,7 @@ export async function garmentIn(
   access: WardrobeAccess,
   id: number,
 ): Promise<GarmentDetail> {
-  const garment = await findGarment(db, id, access.ownerId);
+  const garment = await findGarment(db, id, access);
   if (!garment) throw garmentNotFound();
   return garment;
 }
@@ -231,11 +231,11 @@ export async function searchGarments(
     throw new NotFound('capsule');
   }
   const [page, total] = await Promise.all([
-    garmentSummaries(db, access.ownerId, filters, {
+    garmentSummaries(db, access, filters, {
       before: search.before,
       limit: search.limit,
     }),
-    gridCount(db, access.ownerId, filters),
+    gridCount(db, access, filters),
   ]);
   return { total, garments: page.garments, next: page.before ?? null };
 }

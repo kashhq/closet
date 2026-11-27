@@ -168,9 +168,11 @@ function WornLine(props: { garment: WearGarment; summary: WearSummary }) {
   if (summary.worn === 0 || summary.lastWorn === null) {
     return <>{t('wear.NOT_WORN')}</>;
   }
+  // The owner's line: their price is always read (`'OWN'`).
+  const { price = null, quantity } = garment;
   const cost = totalCost({
-    price: garment.price,
-    quantity: garment.quantity,
+    price,
+    quantity,
     repairCost: summary.repairCost,
   });
   const perWear = cost === null ? null : perWearCost(cost, summary.worn);

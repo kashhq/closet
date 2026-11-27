@@ -24,14 +24,16 @@ import { valueLabel } from './labels';
  * token must start a word of one of the garment's texts (startsAWord:
  * punctuation folded on both sides, so "jcrew" finds "J.Crew"): its name,
  * brand, notes or category, or the label (or key) of one of its colours or
- * its type. Colours, types and built-in categories are stored as keys, so a
+ * its type. The notes count only for a reader with `private` (#680): the
+ * caller passes their column, or none, and a VIEW grantee's search silently
+ * leaves them out. Colours, types and built-in categories are stored as keys, so a
  * token is resolved to the keys whose labels match here, before the query:
  * the labels stay in the catalog, never in SQL. Design: grid.md, Search.
  */
 
-/** `garment`'s searched columns. */
+/** `garment`'s searched columns, but the notes (passed apart: privateColumns). */
 type GarmentTable = Record<
-  'name' | 'brand' | 'notes' | 'category' | 'colors' | 'type',
+  'name' | 'brand' | 'category' | 'colors' | 'type',
   AnyPgColumn
 >;
 
@@ -189,14 +191,19 @@ function strongMatch(table: GarmentTable, token: KeywordToken): SQL {
   )!;
 }
 
-/** Every token matches one of the garment's texts, the notes included. */
+/** Every token matches one of the garment's texts, the `notes` included when given. */
 export function keywordMatch(
   table: GarmentTable,
   tokens: readonly KeywordToken[],
+  notes: AnyPgColumn | undefined,
 ): SQL {
   return and(
     ...tokens.map(
-      (token) => or(strongMatch(table, token), contains(table.notes, token))!,
+      (token) =>
+        or(
+          strongMatch(table, token),
+          notes === undefined ? undefined : contains(notes, token),
+        )!,
     ),
   )!;
 }
@@ -210,6 +217,8 @@ export type KeywordRank = (typeof KEYWORD_RANKS)[number];
  * matched only them: the page sorts by it first, so a garment the keyword
  * names ranks above one whose notes merely mention it. For a matching row
  * only (keywordMatch); a null name or brand falls to 1, never to null.
+ * A search without the notes has every match strong: no rank to sort by
+ * (gridOrder's unranked order).
  */
 export function keywordRank(
   table: GarmentTable,
