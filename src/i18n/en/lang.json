@@ -71,6 +71,7 @@
   "DELETE_ACCOUNT_WARNING": "Deleting your account removes your garments, photos, outfits, calendar, wears, washes, capsules, trips, sizes, style profile, selfies and saved looks. This cannot be undone. The garment list export (Profile, Export) keeps no photos, outfits or history; download it first if you want that list.",
   "DELETE_ACCOUNT_FAILED": "Incorrect email or password for this account",
   "LOGIN_FAILED": "Incorrect email or password",
+  "REGISTRATION_CLOSED": "Registration is closed on this server. Ask whoever runs it for an account.",
   "EMAIL_IN_USE": "Another account already uses this email address",
   "TOO_MANY_ATTEMPTS": "Too many attempts. Try again in {after}.",
   "WARDROBE_BUSY": "Another change to this wardrobe is still saving. Try again in a moment.",

@@ -22,7 +22,10 @@ import {
   SHARE_PHOTO_MAX_BYTES,
 } from '../../src/web/inspiration/share-target';
 import { LOOK_PAGE_SIZE } from '../../src/web/inspiration/page-size';
-import { variantFileName } from '../../src/web/files/image-variant';
+import {
+  unkeyedPhoto,
+  variantFileName,
+} from '../../src/web/files/image-variant';
 import { t as text } from '../../src/web/i18n';
 import { createGarment, jpegPhoto, photoRow } from './garments';
 import {
@@ -610,6 +613,12 @@ describe('inspiration', () => {
     expect(second).toEqual({ replaced: firstRow.fileName });
     expect(await lookPhotoName(t, id)).toBe(secondRow.fileName);
     expect(await photoRow(t, firstRow.fileName)).toBeUndefined();
+    // The writer was driven directly, so the after-commit unlink that
+    // attachInspirationPhoto owns is this test's: left behind, the original's
+    // bytes are an orphan to every later reconcile in this file once the
+    // clock passes reconcile's cutoff (the gate's clock shift, #1258).
+    await t.photos.deleteVariants(unkeyedPhoto(original));
+    expect(await stored()).not.toContain(original);
   });
 
   it('deletes a look with its photo, row and bytes', async () => {
@@ -655,11 +664,10 @@ describe('inspiration', () => {
       timeZone: t.timeZone,
       logger: silentLogger,
     });
+    // Its own set, never the run's totals: those count whatever any earlier
+    // test in this file left in the shared data dir. Leaving nothing behind
+    // is the account-deletion test's assertion, at the end of the file.
     expect(report.refused).toBeUndefined();
-    expect(report).toMatchObject({
-      orphanedRowsDeleted: 0,
-      orphanedSetsQuarantined: 0,
-    });
     expect(await photoRow(t, fileName)).toBeDefined();
     expect(await stored()).toContain(fileName);
     expect((await lookRow(id)).photoId).not.toBeNull();

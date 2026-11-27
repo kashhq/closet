@@ -73,7 +73,7 @@ volumes:
 
 **Behind HTTPS.** The installed app, its offline shell and push need a secure origin. With `PWA_ENABLED: 'true'` the server refuses to start unless `SITE_URL` is an `https://` URL and both VAPID keys are set, and it names the missing key. Set `TRUSTED_PROXIES` to your reverse proxy so the client address is read correctly.
 
-Open [http://localhost:3000](http://localhost:3000) and create an account: signing in is always required. Once everyone in the household has signed up, set `DISABLE_REGISTRATION=true`.
+Open [http://localhost:3000](http://localhost:3000) and create an account: signing in is always required. Only the first account can register (`REGISTRATION=first-user`, the default); to add a household member, set `REGISTRATION=open` while they sign up, then `closed` ([details](docs/operations.md)).
 
 ### Upgrading
 
@@ -85,6 +85,7 @@ One-off steps after an upgrade, each needed once, by the release that introduced
 
 - **Past #373 (trimmed thumbs).** Run `docker exec closet npm run maintenance:retrim-thumbs -- --dry-run`, then again without `--dry-run`, so existing cutouts get a thumb trimmed to the garment ([details](docs/operations.md)).
 - **Renamed database settings (#694).** `DATABASE_SCHEMA` is now `DATABASE_NAME`; the old name still works, with a warning at boot, and is ignored when both are set. `DATABASE_SSL` takes a mode: `DATABASE_SSL=true` boots as `no-verify` with a warning, and a later release reads it as `verify`, so set `no-verify` (or `verify`, with `DATABASE_SSL_CA` for a private CA) now.
+- **Registration modes (#670).** `REGISTRATION` replaces `DISABLE_REGISTRATION`, and a fresh install now closes sign-up after its first account. `DISABLE_REGISTRATION` still works for one release, with a warning at boot (`true` is `closed`, `false` is `open`); set both only if they agree, else the server refuses to start naming both. Existing accounts are untouched; replace the old variable with `REGISTRATION=closed` (or `open`).
 - **Moving from the Postgres 17 example (#738).** Postgres 18 keeps its data under `/var/lib/postgresql`, so pointing the quick-start block at a 17 volume starts an empty cluster and Closet migrates into an empty database: your wardrobe looks gone. To keep your data:
 
 1. On the old stack, run `docker compose exec postgres pg_dump -U closet -d closet > closet.sql`, then stop it.
@@ -133,7 +134,8 @@ The committed `.env` holds the defaults. A setting is changed by an environment 
 | `SITE_URL`                | Public origin, used for absolute links in share previews and as the Web Push (VAPID) contact, which must be `https:` when `PWA_ENABLED=true`                                                                                                                                                                                                                                                                                                                            | `http://localhost:3000`                 | `https://closet.example.com`       |
 | `ALLOWED_HOSTS`           | Comma-separated `host[:port]` names the server is also reached by (a LAN name or address, a plain-HTTP twin, a scraper's container name). `SITE_URL`'s host and loopback are always allowed; a request for any other Host is refused with 421 (DNS rebinding). Upgrading an install opened by a LAN address or `.local` name on the default `SITE_URL`: list them here, or set `SITE_URL`                                                                               | empty                                   | `closet.home.arpa,192.0.2.20:3000` |
 | `DATA_PATH`               | Directory for uploaded files                                                                                                                                                                                                                                                                                                                                                                                                                                            | `./data`                                | `./closet-data`                    |
-| `DISABLE_REGISTRATION`    | `true` closes registration: only existing accounts sign in                                                                                                                                                                                                                                                                                                                                                                                                              | `false`                                 | `true`                             |
+| `REGISTRATION`            | Who may create an account: `first-user` (only the first account; then sign-up is closed), `open` (anyone who reaches the site: a window for a household member) or `closed`                                                                                                                                                                                                                                                                                             | `first-user`                            | `closed`                           |
+| `DISABLE_REGISTRATION`    | Deprecated alias of `REGISTRATION` (`true` is `closed`, `false` is `open`; see Upgrading)                                                                                                                                                                                                                                                                                                                                                                               | -                                       | `true`                             |
 | `PASSWORD_HASH_ROUNDS`    | bcrypt cost of every password hash and sign-in comparison; below 12 only outside `APP_ENV=production` (the test tiers run at 4)                                                                                                                                                                                                                                                                                                                                         | `12`                                    | `4`                                |
 | `PWA_ENABLED`             | Enable service worker, PWA install prompt and Web Push notifications                                                                                                                                                                                                                                                                                                                                                                                                    | `false`                                 | `true`                             |
 | `WATERMARK_ENABLED`       | Composite the app icon onto share-link preview images                                                                                                                                                                                                                                                                                                                                                                                                                   | `false`                                 | `true`                             |
@@ -188,31 +190,47 @@ npx web-push generate-vapid-keys
 
 - Node (see `.nvmrc`, Node 22, an exact version: devkit's toolchain-check holds the
   Dockerfile and workflows to it) - install via [nvm](https://github.com/nvm-sh/nvm)
-- Docker, for Postgres. Development and tests use the shared local
-  **pgvault-dev** (a sibling `../pgvault-dev` compose project: Postgres on
-  `localhost:5432`, superuser `postgres`, trust auth).
+- Docker, for a throwaway Postgres 18 (production runs 18).
+
+**The `make` targets, the git hooks, lint, the type check and the Vitest tiers are
+the owner's: they need `devkit/`, a private repo that is not in this tree.**
+`eslint.config.mjs` and `vitest.config.mts` import `./devkit/lint/*` and
+`tsconfig.json` includes `vitest.config.mts`, so without it `npm test`,
+`npm run test:int`, `npm run lint:check` and `npm run typecheck` fail at once.
+What a checkout alone can run (checked on a fresh clone with no `devkit/`):
+
+| Command                                            | Without devkit                                |
+| -------------------------------------------------- | --------------------------------------------- |
+| `npm ci`, `npm run build`, `npm run start:dev`     | works (`build` type-checks `src/` with `tsc`) |
+| `npm run format:check`, `npm run format`           | works                                         |
+| `npm test`, `test:int`, `test:all`, `test:cov`     | fails: `vitest.config.mts` imports devkit     |
+| `npm run lint`, `lint:check`, `typecheck`, `check` | fails: the config imports devkit              |
+| every `make` target, `make install`, the hooks     | needs devkit                                  |
 
 ```bash
 nvm install                                       # reads .nvmrc and switches to it
 npm ci                                            # the lockfile as committed; postinstall applies patches/
-make install                                      # git hooks, once per checkout or worktree
-(cd ../pgvault-dev && docker compose up -d --wait)
-docker compose -f ../pgvault-dev/docker-compose.yml exec postgres \
-  psql -U postgres -c 'create database closet_db'   # once
+docker run -d --name closet-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
+  -p 5432:5432 postgres:18                        # trust auth, a throwaway server
+docker exec closet-pg psql -U postgres -c 'create database closet_db'   # once
 cat > .env.local <<ENV                              # gitignored
 ACCESS_TOKEN_SECRET=$(openssl rand -hex 32)
 DATABASE_HOST=localhost
+DATABASE_PORT=5432
 DATABASE_NAME=closet_db
 DATABASE_USER=postgres
 DATABASE_PASS=
 ENV
-npm run start:dev
+npm run start:dev                                 # http://localhost:3000
 ```
 
-The integration tier and the page audit never touch `closet_db`: each run
-creates scratch databases on the server named by `TEST_DATABASE_URL`
-(default `postgres://postgres@localhost:5432/postgres`, pgvault-dev) and drops
-them afterwards.
+Use another host port (`-p 55432:5432` and `DATABASE_PORT=55432`) when 5432 is
+taken. The owner's integration tier and page audit never touch `closet_db`: each
+run creates scratch databases on the server named by `TEST_DATABASE_URL`
+(default `postgres://postgres@localhost:5432/postgres`, the container above on
+its default port; with `-p 55432:5432` set
+`TEST_DATABASE_URL=postgres://postgres@localhost:55432/postgres`) and drops them
+afterwards.
 
 ### npm scripts
 
@@ -268,7 +286,7 @@ downloads it).
 main (`devkit/bin/check_tree.sh`, at most once per 3 h window) before it ships,
 and a red main files a `main-red` issue. The Makefile targets are thin callers of
 the npm scripts (`ci.yml`'s manual jobs call the same ones), and each brings its
-own throwaway Postgres 18 container, so none needs pgvault-dev.
+own throwaway Postgres 18 container, so none needs a database running.
 
 ```bash
 make ci-deps ci-quick         # npm ci; ci-guards, secrets-check, ci-lint, ci-typecheck

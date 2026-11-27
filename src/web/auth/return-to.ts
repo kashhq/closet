@@ -86,6 +86,18 @@ export function loginUrl(returnTo?: unknown): string {
   return withReturnTo(LOGIN_PATH, returnTo);
 }
 
+/**
+ * The login page's one-shot flag for a refused sign-up (#670): it says
+ * registration is closed on this server. URL state, never a session's.
+ */
+export const REGISTRATION_CLOSED_PARAM = 'registrationClosed';
+
+/** Where a refused sign-up lands: loginUrl, with the closed notice. */
+export function registrationClosedUrl(returnTo?: unknown): string {
+  const url = loginUrl(returnTo);
+  return `${url}${url.includes('?') ? '&' : '?'}${REGISTRATION_CLOSED_PARAM}=1`;
+}
+
 export const REGISTER_PATH = '/auth/register';
 
 /** The registration page, coming back to `returnTo` like loginUrl. */

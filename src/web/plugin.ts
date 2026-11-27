@@ -29,6 +29,7 @@ import { healthRoutes } from './health/routes';
 import { insightsRoutes } from './insights/routes';
 import type { Photos } from './files/photos';
 import type { Logger } from '../logger';
+import type { RegistrationGate } from './auth/registration';
 import type { JobRoster } from '../maintenance/scheduled';
 import type { ErrorTracker } from '../metrics/error-tracker';
 import type { Metrics } from '../metrics/metrics';
@@ -73,8 +74,6 @@ interface WebConfig {
   siteUrl: string;
   /** APP_TIMEZONE: the household's IANA zone, which decides "today". */
   timeZone: string;
-  /** DISABLE_REGISTRATION: the registration routes redirect to the login page. */
-  registrationDisabled: boolean;
   /**
    * PWA_ENABLED: the service worker is registered, so the manifest may name
    * the share target only it can answer (src/web/shell/manifest.ts).
@@ -105,6 +104,11 @@ export interface WebOptions {
   logger: Logger;
   db: Db;
   tokens: SessionTokens;
+  /**
+   * REGISTRATION, built by createApp() (its first-user latch must be shared):
+   * the registration routes and the login and invite pages' register link.
+   */
+  registration: RegistrationGate;
   /** AppOptions.photoUploadMax: PHOTO_UPLOAD_LIMIT's max, for the specs alone. */
   photoUploadMax?: number;
   /** AppOptions.signInAccountMax: SIGN_IN_ACCOUNT_LIMIT's max, for the specs alone. */

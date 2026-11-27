@@ -106,6 +106,8 @@ export function LoginPage(props: {
   failed?: { email: string };
   /** Where signing in lands, already through signInReturnTo. */
   returnTo: string;
+  /** Sent here by a refused sign-up (registrationClosedUrl). */
+  registrationClosed?: boolean;
 }) {
   const { ctx } = props;
   return (
@@ -121,6 +123,11 @@ export function LoginPage(props: {
       {/* Signed out only: a signed-in visitor opening this page keeps
           their notifications. */}
       {ctx.pwaEnabled && !ctx.user && <PushSignedOut />}
+      {props.registrationClosed && (
+        <div role="status" class="alert alert-info">
+          <span>{t('REGISTRATION_CLOSED')}</span>
+        </div>
+      )}
       {props.failed && <ErrorAlert message={t('LOGIN_FAILED')} />}
       <PostForm action="/auth/login" endsSession>
         <ReturnToField returnTo={props.returnTo} />

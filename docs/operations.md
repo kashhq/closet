@@ -16,7 +16,7 @@ The env, as production sets it (values never in this repo or printed; the file i
 
 ```
 SITE_URL=https://<host>
-DISABLE_REGISTRATION=true          # flip to false only while creating household accounts
+REGISTRATION=closed                # open only while a household member signs up (Adding a household member)
 ACCESS_TOKEN_SECRET=<openssl rand -hex 32>        # required, 32+ chars
 PUBLIC_VAPID_KEY=<npx web-push generate-vapid-keys>   # required when PWA_ENABLED=true
 PRIVATE_VAPID_KEY=<same>
@@ -55,6 +55,8 @@ The boot log says `Order mail: on (Fastmail, every 5 min, N trusted senders)`; e
 **The order mail's stored owner (#976), once.** After the deploy that adds `order_mail_owner` (0071), an install whose order mail fetched emails but never made an item is refused adoption (one `OrderMail` error naming the command): run `docker exec closet npm run order-mail:bind-owner -- --confirm` with `ORDER_MAIL_OWNER` set to the owner's email, then `docker restart closet`.
 
 **Trimmed thumbs (#373), once.** After the deploy that trims new cutouts' thumbs to the garment, on the host: `docker exec closet npm run maintenance:retrim-thumbs -- --dry-run` (counts the thumbs `due`), then without `--dry-run`. Each photo with a ready or edited cutout gets its trimmed thumb under a new variant key, so phones fetch it; the replaced files go with the swap. A second run reports them `current`. Exit 1 names failed photos in warn lines (logger `ThumbRetrim`); run it again. src/maintenance/reference.md, Commands.
+
+**Adding a household member.** Registration is closed once the first account exists (`REGISTRATION=first-user`, the default) or always (`closed`, production's). There is no invite-to-register and no CLI that creates an account: set `REGISTRATION=open` in `closet.env`, redeploy, let them create their account, then set `closed` and redeploy again. While open, anyone who reaches the site can register. With `first-user`, sign-up stays closed even if every account is later deleted, until the next restart (the gate remembers per process: `src/web/auth/registration.ts`). Until homelab's compose replaces `DISABLE_REGISTRATION` with `REGISTRATION`, set only one of the two: a disagreeing pair stops the boot, naming both.
 
 **Locked out.** There is no email reset. On the host: `docker exec -it closet npm run user:set-password -- <email>` asks for the new password twice without echoing it (or reads it from piped stdin), applies the registration rules, and signs out every session of that account (its access tokens and push subscriptions revoked with them). An unknown email exits 1 and changes nothing, and so does a database the running build has not migrated yet (it never migrates).
 

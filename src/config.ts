@@ -49,6 +49,9 @@ export function databaseSslMode(raw: string): DatabaseSslMode | undefined {
   return DATABASE_SSL_MODES.find((mode) => mode === value);
 }
 
+export const REGISTRATION_MODES = ['first-user', 'open', 'closed'] as const;
+export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
+
 // Variables renamed before 0.1 froze the names: the old one is still read
 // when the new one is unset, with a deprecation warning.
 const DEPRECATED_NAMES: Record<string, string> = {
@@ -111,7 +114,15 @@ const ConfigSchema = Type.Object({
   // calendar and which week opens by default. One zone, because one
   // household shares the calendar; an unknown name fails the boot.
   APP_TIMEZONE: NonEmpty({ default: 'America/New_York' }),
-  DISABLE_REGISTRATION: Type.Boolean({ default: false }),
+  // Who may create an account (src/web/auth/registration.ts, #670):
+  // `first-user` lets only the first one register, then sign-up is closed;
+  // `open` lets anyone (a household member's window); `closed`, nobody.
+  // DISABLE_REGISTRATION, its boolean before 0.1, is still read as an alias
+  // (readDeprecatedRegistration).
+  REGISTRATION: Type.Union(
+    REGISTRATION_MODES.map((mode) => Type.Literal(mode)),
+    { default: 'first-user' },
+  ),
   PWA_ENABLED: Type.Boolean({ default: false }),
   // Signs every session token (HS256). No default on purpose: a known
   // secret lets anyone mint a session for any user id. 32 characters is the
@@ -156,7 +167,7 @@ const ConfigSchema = Type.Object({
   // (DEPRECATED_NAMES).
   DATABASE_NAME: NonEmpty(),
   DATABASE_USER: NonEmpty(),
-  // Empty is valid: pgvault-dev and the test databases use trust auth.
+  // Empty is valid: a local trust-auth Postgres and the test databases use no password.
   DATABASE_PASS: Type.String(),
   // TLS to Postgres (#694): `verify` checks the server's certificate against
   // the system's CAs or DATABASE_SSL_CA, `no-verify` encrypts without
@@ -286,6 +297,7 @@ export function loadConfig({
   // A set: a deprecated name in two sources is still one warning.
   const deprecations = new Set<string>();
   const merged = mergedEnv(envFiles, env, deprecations);
+  const aliasProblems = readDeprecatedRegistration(merged, deprecations);
   for (const message of deprecations) onDeprecated(message);
 
   const values: Record<string, unknown> = {};
@@ -295,7 +307,7 @@ export function loadConfig({
   }
   const config: unknown = Value.Default(ConfigSchema, values);
 
-  const problems = describeErrors(config);
+  const problems = [...aliasProblems, ...describeErrors(config)];
   if (problems.length === 0) {
     problems.push(...crossFieldProblems(config as Config));
   }
@@ -347,6 +359,47 @@ function readDeprecatedSsl(merged: Env, deprecations: Set<string>): void {
       'DATABASE_SSL=true is deprecated: it means no-verify (the server certificate is not checked) and will mean verify; set no-verify or verify',
     );
   }
+}
+
+const DISABLE_REGISTRATION = 'DISABLE_REGISTRATION';
+
+/**
+ * DISABLE_REGISTRATION, the boolean before #670, as the REGISTRATION mode it
+ * meant (`true` closed, `false` open), in place, with a deprecation warning,
+ * for one release. Set beside REGISTRATION it must agree, or the boot stops
+ * naming both: letting either win silently could open a sign-up the
+ * operator closed. Answers the problems, never naming a value.
+ */
+function readDeprecatedRegistration(
+  merged: Env,
+  deprecations: Set<string>,
+): string[] {
+  const raw = merged[DISABLE_REGISTRATION];
+  if (raw === undefined) return [];
+  const disabled = coerce(Type.Boolean(), raw);
+  if (typeof disabled !== 'boolean') {
+    return [`${DISABLE_REGISTRATION}: expected boolean`];
+  }
+  const meant: RegistrationMode = disabled ? 'closed' : 'open';
+  const current = merged.REGISTRATION;
+  if (current === undefined) {
+    merged.REGISTRATION = meant;
+    deprecations.add(
+      `${DISABLE_REGISTRATION} is deprecated: set REGISTRATION=${meant}`,
+    );
+    return [];
+  }
+  if (current === meant) {
+    deprecations.add(
+      `${DISABLE_REGISTRATION} is ignored: REGISTRATION is set; remove ${DISABLE_REGISTRATION}`,
+    );
+    return [];
+  }
+  // An unknown REGISTRATION is the schema's to refuse by name.
+  if (!REGISTRATION_MODES.some((mode) => mode === current)) return [];
+  return [
+    `REGISTRATION: disagrees with ${DISABLE_REGISTRATION}; set REGISTRATION alone and remove ${DISABLE_REGISTRATION}`,
+  ];
 }
 
 function readEnvFile(file: string): Env {

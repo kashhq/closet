@@ -92,7 +92,9 @@ const BASE_ENV: Env = {
   APP_NAME: 'Closet',
   SITE_URL: 'http://localhost:3000',
   TRUSTED_PROXIES: '127.0.0.1,::1',
-  DISABLE_REGISTRATION: 'false',
+  // Specs sign many people up (t.register); first-user and closed are
+  // registration.spec.ts's.
+  REGISTRATION: 'open',
   PWA_ENABLED: 'false',
   // No spec reaches Open-Meteo: weather is off unless a spec turns it on
   // with the stand-in (test/support/weather-stub.ts), which createTestApp
@@ -237,8 +239,9 @@ export interface TestApp {
    */
   logs: LogCapture;
   /**
-   * POST /auth/register (a seeded row plus a login when DISABLE_REGISTRATION
-   * is on); returns the session cookie for later requests.
+   * POST /auth/register (a seeded row plus a login unless REGISTRATION is
+   * open, so first-user never sees its first account come through the
+   * route); returns the session cookie for later requests.
    */
   register: (email: string, password?: string) => Promise<string>;
   /** POST /auth/login; returns the session cookie for later requests. */
@@ -421,7 +424,7 @@ export async function createTestApp(
   const login = (email: string, password = TEST_PASSWORD) =>
     signIn('login', { url: '/auth/login', payload: { email, password } });
   const register = async (email: string, password = TEST_PASSWORD) => {
-    if (config.DISABLE_REGISTRATION) {
+    if (config.REGISTRATION !== 'open') {
       await insertUser(db, email, await hashPassword(password));
       return login(email, password);
     }
