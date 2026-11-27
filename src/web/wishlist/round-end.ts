@@ -1,10 +1,9 @@
 import type { Db } from '../../db/client';
 import type { Logger } from '../../logger';
 import { OwnerLockTimeout } from '../errors';
-import { t } from '../i18n';
-import { type AgentLabel, museName } from '../write-origin';
+import type { AgentLabel } from '../write-origin';
 import type { DeviceMessage, PushSender } from '../push/sender';
-import { roundReviewPath, roundWhat } from './round-text';
+import { roundCard, roundPushTitle, roundReviewPath } from './round-text';
 import { finishRound, quietRounds, type RoundCounts } from './rounds';
 
 /**
@@ -39,13 +38,12 @@ export interface EndedRound extends RoundCounts {
 }
 
 function roundMessage(round: EndedRound): DeviceMessage {
-  const agent = museName(round.agent);
   return {
     userId: round.ownerId,
     devices: 'muse-rounds',
     payload: {
-      title: t('muse.round.PUSH_TITLE', { agent }),
-      body: t('muse.round.CARD', { agent, what: roundWhat(round) }),
+      title: roundPushTitle(round.agent),
+      body: roundCard(round.agent, round),
       url: roundReviewPath(round),
       tag: ROUND_TAG,
     },
@@ -56,7 +54,7 @@ function roundMessage(round: EndedRound): DeviceMessage {
 /**
  * Each round's one notification (doc section 4 A), in one batch
  * (sendEach: one read of the devices): to its owner's devices taking
- * Muse's rounds, tagged so a newer round replaces an unread one, kept a
+ * the agent's rounds, tagged so a newer round replaces an unread one, kept a
  * day by the push service. After the rounds' commit: a failed send never
  * undoes a round, it is logged (the sender's own lines say which device).
  * How many devices each reached, in the rounds' order; none without

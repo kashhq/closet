@@ -164,6 +164,8 @@ export const PLACEHOLDER_KINDS = {
   'muse.BOUGHT_FOR': { need: 'data' },
   'muse.TODAY_CARD': { agent: 'data', count: 'data' },
   'muse.TODAY_CARD_ONE': { agent: 'data' },
+  'muse.TODAY_CARD_UNNAMED': { count: 'data' },
+  'muse.round.CARD_UNNAMED': { what: 'copy' },
   'muse.round.CARD': { agent: 'data', what: 'copy' },
   'muse.round.BOTH': { outfits: 'copy', pieces: 'copy' },
   'muse.round.OUTFITS': { count: 'data' },

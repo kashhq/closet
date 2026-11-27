@@ -29,7 +29,7 @@
     "SIGN_OUT_EVERYWHERE_HINT": "Signs out every other browser and app signed in to your account and stops their notifications. This device stays signed in. Agent access tokens and invite links keep working: revoke them on their own. If someone may know your password, change it instead.",
     "SIGNED_OUT_EVERYWHERE": "Every other device has been signed out.",
     "EXPORT": "Export",
-    "EXPORT_HINT": "Download your garment list with all its details: a CSV for spreadsheets, or JSON with links to the photos. It holds your garments and Muse needs only: no photo files (the links point to this server and stop working if it goes away), outfits, calendar, wears, washes, capsules, trips, sizes, style profile, selfies or saved looks. It is not a backup; backups are the operator's database dump plus the photo share.",
+    "EXPORT_HINT": "Download your garment list with all its details: a CSV for spreadsheets, or JSON with links to the photos. It holds your garments and wishlist needs only: no photo files (the links point to this server and stop working if it goes away), outfits, calendar, wears, washes, capsules, trips, sizes, style profile, selfies or saved looks. It is not a backup; backups are the operator's database dump plus the photo share.",
     "EXPORT_CSV": "Download CSV",
     "EXPORT_JSON": "Download JSON"
   },
@@ -460,7 +460,7 @@
   },
   "agentAccess": {
     "TITLE": "Agent access",
-    "INTRO": "A personal access token lets your own Claude, or another MCP client, work on your wardrobe as you: search it, add from links, build outfits and plan days. A token reads only unless you let it make changes, and what it may do is fixed when it is made. Changing your password revokes every token.",
+    "INTRO": "A personal access token lets any MCP client (Claude Code, Claude, Meta’s Muse, or another) work on your wardrobe as you: search it, add from links, build outfits and plan days. A token reads only unless you let it make changes, and what it may do is fixed when it is made. A round of suggestions is run by whichever agent holds a token. Changing your password revokes every token.",
     "NEW": "New token",
     "NAME": "Name",
     "NAME_PLACEHOLDER": "Claude Code on my laptop",
@@ -1027,7 +1027,7 @@
     "MOVE_TO_CLOSET": "Move to closet",
     "BOUGHT_TOAST": "In your closet now",
     "NOT_ON_WISHLIST": "This is no longer on the wishlist.",
-    "SUGGESTION_NOT_DELETED": "This is one of Muse’s suggestions: it is kept as feedback for Muse, never deleted.",
+    "SUGGESTION_NOT_DELETED": "This is a suggestion from your agent: it is kept as feedback for it, never deleted.",
     "REMOVE": "Remove from wishlist",
     "CONFIRM_REMOVE": "Remove this from the wishlist? It will be deleted."
   },
@@ -1038,9 +1038,9 @@
   },
   "muse": {
     "READY": "Ready to buy",
-    "PICKS": "Muse’s picks",
+    "PICKS": "Suggested picks",
     "OWN": "Your wishlist",
-    "STILL_LOOKING": "Muse is still looking for:",
+    "STILL_LOOKING": "Still looking for:",
     "NOT_NOW_NEED": "Not now: {need}",
     "SET_ASIDE_COUNT": "{count} set aside",
     "SET_ASIDE_ONE": "1 set aside",
@@ -1050,15 +1050,15 @@
     "OPTIONS_ONE": "1 option",
     "UP_TO": "Up to {price}",
     "DECIDE": "Compare and choose",
-    "NEW": "New from Muse:",
+    "NEW": "New suggestions:",
     "NEW_MORE": "and {count} more",
     "FROM": "From {agent}",
-    "AGENT": "Muse",
+    "AGENT": "your agent",
     "WHY": "Why {agent} suggests this",
     "THIS_ONE": "This one",
     "NOT_FOR_ME": "Not for me",
-    "NOT_FOR_ME_HINT": "Tap a reason. Muse learns from it.",
-    "NOTE_LABEL": "A note for Muse (optional)",
+    "NOT_FOR_ME_HINT": "Tap a reason. Your agent learns from it.",
+    "NOTE_LABEL": "A note for your agent (optional)",
     "NOT_THIS_NEED": "Not this need right now",
     "BOUGHT_DIFFERENT": "Bought a different one",
     "DETAILS": "Details",
@@ -1074,28 +1074,32 @@
     "BEST_LABEL": "Its best outfits with your closet",
     "RETURNED_IT": "Returned it",
     "CONFIRM_RETURNED": "Returned it? It moves to the archive, and the need is open again.",
-    "BOUGHT_FOR": "Bought for “{need}”: Muse sees what you chose instead of its picks.",
+    "BOUGHT_FOR": "Bought for “{need}”: your agent sees what you chose instead of its picks.",
     "TODAY_CARD": "{agent} has {count} needs for you to decide on",
     "TODAY_CARD_ONE": "{agent} has 1 need for you to decide on",
+    "TODAY_CARD_UNNAMED": "Your agent has {count} needs for you to decide on",
+    "TODAY_CARD_UNNAMED_ONE": "Your agent has 1 need for you to decide on",
     "round": {
       "CARD": "{agent}: {what} to consider",
+      "CARD_UNNAMED": "Your agent: {what} to consider",
       "BOTH": "{outfits}, {pieces}",
       "OUTFITS": "{count} outfits",
       "OUTFITS_ONE": "1 outfit",
       "PIECES": "{count} pieces",
       "PIECES_ONE": "1 piece",
-      "PUSH_TITLE": "{agent} finished a round"
+      "PUSH_TITLE": "{agent} finished a round",
+      "PUSH_TITLE_UNNAMED": "Your agent finished a round"
     },
     "REVIEW": "Review",
     "STALE": "This changed since the page was drawn. Reload to see where it stands.",
     "toast": {
       "choose": "Chosen: it’s in Ready to buy",
-      "love": "Loved. Muse learns from it.",
+      "love": "Loved. Your agent learns from it.",
       "save": "Saved to your outfits",
-      "dismiss": "Set aside. Muse learns from it.",
+      "dismiss": "Set aside. Your agent learns from it.",
       "undo": "Back on your list",
       "returned": "Archived as returned. The need is open again.",
-      "boughtFor": "In your closet now. Muse sees the need is met."
+      "boughtFor": "In your closet now. Your agent sees the need is met."
     },
     "reason": {
       "too_pricey": "Too pricey",
@@ -1282,7 +1286,7 @@
     },
     "PLAN_IDEAS": "Choose from ideas",
     "ALREADY_SAVED": "Already saved: this outfit was picked before.",
-    "SAVED_MUSE": "Saved Muse’s outfit: it’s yours now",
+    "SAVED_MUSE": "Saved the suggested outfit: it’s yours now",
     "FOR_TRIP": "For {name}",
     "PICK_TRIP": "Add to the trip",
     "TAB_INSPIRATION": "Inspiration"
@@ -1324,9 +1328,9 @@
       "UNDO_LABEL": "Undo setting {name} aside",
       "SET_ASIDE_LINE": "Set aside: {reason}",
       "PIECE_LINK": "{name}: {label}, open its page",
-      "NOT_YOURS_YET": "Save it first: Muse’s outfits are planned or packed once they’re yours.",
+      "NOT_YOURS_YET": "Save it first: suggested outfits are planned or packed once they’re yours.",
       "ALREADY_YOURS": "This outfit is yours now: it was saved since this page was drawn.",
-      "DELETE_REFUSED": "Not for me sets one of Muse’s outfits aside: Muse learns from it, and you can undo it."
+      "DELETE_REFUSED": "Not for me sets a suggested outfit aside: your agent learns from it, and you can undo it."
     },
     "TO_BUY": "{count} pieces to buy",
     "TO_BUY_ONE": "1 piece to buy",
@@ -1522,7 +1526,7 @@
       "SAVED": "Saved.",
       "SAVED_TIMES": "Saved. A time already past today starts tomorrow.",
       "NOT_REGISTERED": "Turn notifications on for this device to choose reminders.",
-      "MUSE": "When Muse finishes a round",
+      "MUSE": "When your agent finishes a round",
       "MUSE_HINT": "One notification per round of suggestions, opening what it brought."
     }
   },

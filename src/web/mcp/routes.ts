@@ -24,7 +24,7 @@ import { mcpTools } from './tools';
 export const MAX_TOOL_INPUT_ELEMENTS = 10_000;
 
 // What the client's model reads first: the server, and how to style a
-// wardrobe with the tools (#269, Muse's workflow since #337). The README's
+// wardrobe with the tools (#269, the suggestion workflow since #337). The README's
 // "Styling with an agent" is the owner's side of the same workflow; keep
 // the two in step.
 const INSTRUCTIONS = [
@@ -42,9 +42,9 @@ const INSTRUCTIONS = [
 ].join('\n');
 
 // Told a read-only token's model first (#701): its write tools are not
-// registered, so Muse's round and the Rules' writes are not there to call.
+// registered, so the suggestion round and the Rules' writes are not there to call.
 const READ_ONLY_INSTRUCTIONS = [
-  "This token is read-only: the tools that write (every WRITES tool, Muse's round included) are not available to it. Read, compare and advise; the owner makes changes in the app or with a token that can write.",
+  'This token is read-only: the tools that write (every WRITES tool, a suggestion round included) are not available to it. Read, compare and advise; the owner makes changes in the app or with a token that can write.',
   INSTRUCTIONS,
 ].join('\n');
 

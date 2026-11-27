@@ -338,7 +338,7 @@ describe('a round of Muse’s', () => {
       const blank = await form(endpoint);
       expect(blank).toContain('name="museRoundsOn"');
       expect(blank).not.toMatch(/name="museRoundsOn" value="1" checked/);
-      expect(blank).toContain('When Muse finishes a round');
+      expect(blank).toContain('When your agent finishes a round');
 
       const saved = await t.inject({
         method: 'POST',
