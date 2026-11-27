@@ -109,13 +109,26 @@ describe('the Wardrobe header and tabs', () => {
     }
   });
 
-  it('leaves Laundry out of a shared wardrobe’s tabs: it is the user’s own', async () => {
+  it('leaves Laundry out of a VIEW share’s tabs and switcher, and gives a MANAGE partner the owner’s (#680)', async () => {
     const html = await get(`/wardrobe?ownerId=${ownerId}`, viewer);
     const tabs = tabsOf(html)!;
     expect(tabs).toContain(`href="/wardrobe?ownerId=${ownerId}"`);
     expect(tabs).toContain(`href="/capsules?ownerId=${ownerId}"`);
     expect(tabs).toContain(`href="/wardrobe/wishlist?ownerId=${ownerId}"`);
     expect(tabs).not.toContain('/laundry');
+    // The viewer's own laundry switches to the shared closet, not its hamper.
+    expect(await get('/laundry', viewer)).not.toContain(
+      `href="/laundry?ownerId=${ownerId}"`,
+    );
+
+    const managed = await get(`/laundry?ownerId=${ownerId}`, manager);
+    expect(activeTab(managed)).toBe('Laundry');
+    expect(tabsOf(managed)).toContain(`href="/laundry?ownerId=${ownerId}"`);
+    // The switcher keeps the tab: their own hamper, and the owner's.
+    expect(managed).toContain('href="/laundry"');
+    expect(await get('/laundry', manager)).toContain(
+      `href="/laundry?ownerId=${ownerId}"`,
+    );
   });
 
   it('puts Select (with the grid’s filters), tagging, Insights and the year in review in ⋯', async () => {

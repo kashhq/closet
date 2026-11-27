@@ -997,14 +997,17 @@ document.addEventListener(
 
 // ---- Replay -----------------------------------------------------------------
 
-/** Only a same-origin path of a queueable route is ever posted (plan section 7). */
+/**
+ * Only a same-origin path of a queueable route is ever posted (plan section
+ * 7), with no query but a shared wardrobe's `?ownerId=` on a wear or wash
+ * (#680), which queueableKindOf judges with the path.
+ */
 function replayUrl(path: string): URL | undefined {
   try {
     const url = new URL(path, location.origin);
     const ours =
       url.origin === location.origin &&
-      url.search === '' &&
-      queueableKindOf(url.pathname) !== undefined;
+      queueableKindOf(url.pathname + url.search) !== undefined;
     return ours ? url : undefined;
   } catch {
     return undefined;

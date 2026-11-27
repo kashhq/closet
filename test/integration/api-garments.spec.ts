@@ -178,9 +178,22 @@ describe('GET /api/v1/garments', () => {
       403,
       'forbidden',
     );
-    expect(wash.detail).toBe('needsWash reads your own wears only');
+    expect(wash.detail).toBe(
+      'needsWash needs your own wardrobe or a MANAGE share',
+    );
     // The grantee's own wardrobe holds none of the owner's garments.
     expect((await list(viewerToken)).json<ListAnswer>().total).toBe(0);
+  });
+
+  it('lets a MANAGE partner filter the owner’s closet by needsWash: they do the laundry (#680)', async () => {
+    const manager = await signUp('api-garments-launder@example.com');
+    await share(manager.cookie, 'MANAGE');
+    const owner = `?ownerId=${t.owner.id}`;
+    const res = await list(manager.token, `${owner}&needsWash=true`);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json<ListAnswer>().total).toBe(
+      (await list(ownerToken, '?needsWash=true')).json<ListAnswer>().total,
+    );
   });
 
   it("answers a stranger's ?ownerId= with the problem 404 of an unknown wardrobe", async () => {

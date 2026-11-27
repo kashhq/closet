@@ -29,7 +29,7 @@ import type { AwayReason } from '../../wardrobe/availability';
 import type { CareLabel, CareWash } from '../../wardrobe/care';
 import type { EntryStatus, GarmentStatus } from '../../wardrobe/status';
 import { inCapsule } from '../capsules/queries';
-import { managesWardrobeSql, type WardrobeRole } from '../sharing/access';
+import { can, managesWardrobeSql, type WardrobeRole } from '../sharing/access';
 import type { SignablePhotoRef, PlinthPhoto } from '../files/image-url';
 import type { StoredPhoto } from '../files/image-variant';
 import {
@@ -152,8 +152,12 @@ export interface GarmentTile {
   /** The "x3" badge. */
   quantity: number;
   condition: Condition;
-  /** The owner's own records; absent on a shared wardrobe's grid. */
-  care?: { dirty: number; away: AwayReason | null };
+  /**
+   * The wash state for whoever does the laundry (`launder`: the owner and a
+   * MANAGE partner, #680), with away the owner's alone (`own`); absent on a
+   * VIEW grantee's grid.
+   */
+  care?: { dirty: number; away?: AwayReason | null };
   /** In the capsule picker only: a member of the capsule being picked. */
   member?: boolean;
 }
@@ -283,8 +287,9 @@ const tileColumns = {
  * ended at (keyset, so a page costs the same however deep it is and a
  * garment added meanwhile never shifts one onto the next). One statement,
  * one row per tile, served by garment_owner_id_status_id_index (or the
- * category one) in index order. `ownerView` adds the owner's own records to
- * each tile (dirty copies, away), which a share never shows. `pick` (the
+ * category one) in index order. The reader's role adds the care state to
+ * each tile: dirty copies with `launder`, away with `own` (gridCare); a VIEW
+ * grantee's tiles have neither. `pick` (the
  * capsule picker) marks each tile a member of that capsule or not, in the
  * same statement: inCapsule matches nothing for another wardrobe's capsule.
  */
@@ -292,22 +297,27 @@ export async function gridPage(
   db: Db,
   wardrobe: WardrobeRead,
   filters: GridFilters,
-  options: { before?: GridCursor; ownerView: boolean; pick?: number },
+  options: { before?: GridCursor; pick?: number } = {},
 ): Promise<GridPage> {
-  const { before, ownerView, pick } = options;
-  // Not computed at all for a share. Each is a correlated count of the
+  const { before, pick } = options;
+  const launders = can(wardrobe.role, 'launder');
+  const owns = can(wardrobe.role, 'own');
+  // Not computed at all for a VIEW share. Each is a correlated count of the
   // garment's wears since its wash (garment_wear_garment_id_day_index), run
   // only for tiles with a wash limit: about 0.03 ms a tile in the demo's
   // plan (#159), so a set-based rewrite would buy nothing.
-  const own = ownerView
-    ? { dirty: dirtyCopiesSql(), away: sql<AwayReason | null>`${garment.away}` }
-    : { dirty: sql<number>`0`, away: sql<AwayReason | null>`null` };
+  const care = {
+    dirty: launders ? dirtyCopiesSql() : sql<number>`0`,
+    away: owns
+      ? sql<AwayReason | null>`${garment.away}`
+      : sql<AwayReason | null>`null`,
+  };
   const member = sql<
     boolean | null
   >`${pick === undefined ? sql`null` : inCapsule(pick)}`;
   const { rank, after, orderBy } = gridOrder(wardrobe.role, filters, before);
   const rows = await db
-    .select({ ...tileColumns, ...own, member, rank })
+    .select({ ...tileColumns, ...care, member, rank })
     .from(garment)
     .leftJoin(file, eq(file.id, garment.photoId))
     .where(and(gridWhere(wardrobe, filters), after))
@@ -318,7 +328,7 @@ export async function gridPage(
     ({ dirty, away, member, photo, ...row }): GarmentTile => ({
       ...row,
       photo: plinthPhoto(photo),
-      ...(ownerView && { care: { dirty, away } }),
+      ...(launders && { care: owns ? { dirty, away } : { dirty } }),
       ...(member !== null && { member }),
     }),
   );

@@ -149,7 +149,7 @@ const GarmentListQuery = Type.Object({
   capsuleId: Type.Optional(RowId),
   includeArchived: flag('Also garments no longer in the closet'),
   needsWash: flag(
-    'Only garments with a copy that needs a wash: your own wardrobe only',
+    'Only garments with a copy that needs a wash: your own wardrobe or a MANAGE share',
   ),
   needsAttention: flag('Only garments that need repair or replacing soon'),
   needsTagging: flag(
@@ -216,7 +216,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['garments'],
         summary: "A wardrobe's garments, filtered as the grid filters them",
         description:
-          'The closet (with `includeArchived` the archive too; never the wishlist), newest first. A type without its category is a 400; `needsWash` on a shared wardrobe is a 403; a capsule outside the wardrobe a 404.',
+          'The closet (with `includeArchived` the archive too; never the wishlist), newest first. A type without its category is a 400; `needsWash` on a VIEW share is a 403; a capsule outside the wardrobe a 404.',
         querystring: GarmentListQuery,
         response: apiResponses({ 200: GarmentList }),
       },

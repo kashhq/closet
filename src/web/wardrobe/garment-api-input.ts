@@ -181,8 +181,8 @@ const ReplacesGarmentId = Type.Optional(
 
 /**
  * `?ownerId=`: a wardrobe shared with the caller; absent, their own. Every
- * share-aware garment route's query, the owner-only records' too (wears,
- * washes, away: a grantee naming the owner is a 403, plan section 2).
+ * share-aware garment route's query, the owner-only records' too (away,
+ * the repair log: a grantee naming the owner is a 403, plan section 2).
  */
 export const OwnerId = Type.Optional(
   Type.Integer({

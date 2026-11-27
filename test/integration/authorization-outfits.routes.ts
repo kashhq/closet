@@ -747,8 +747,9 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    // The requester's own hamper; a foreign `?ownerId=` is a 404. Not `shows`:
-    // the fixture's garment is not worn (the owner's page lists nothing).
+    // A wardrobe's hamper (#680): the requester's own, or a MANAGE share's;
+    // a VIEW share is a 403. Not `shows`: the fixture's garment is not worn
+    // (the page lists nothing).
     name: 'GET /laundry',
     kind: 'read',
     ok: 200,
@@ -757,8 +758,8 @@ export const ROUTES: Route[] = [
     request: (_, q) => ({ method: 'GET', url: `/laundry${q}` }),
     expect: {
       owner: 'ok',
-      manager: ['hidden', 'notFound'],
-      viewer: ['hidden', 'notFound'],
+      manager: ['hidden', 'ok'],
+      viewer: ['hidden', 'forbidden'],
       stranger: ['hidden', 'notFound'],
     },
   },
@@ -818,8 +819,8 @@ export const ROUTES: Route[] = [
     }),
     expect: {
       owner: 'ok',
-      manager: ['ignored', 'notFound'],
-      viewer: ['ignored', 'notFound'],
+      manager: ['ignored', 'ok'],
+      viewer: ['ignored', 'forbidden'],
       stranger: ['ignored', 'notFound'],
     },
     api: {

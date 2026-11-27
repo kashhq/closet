@@ -26,7 +26,8 @@ import type { IsoDate } from '../../calendar-date';
 import { instantOnDay, type TapInstant } from '../../offline-writes';
 import type { SignablePhotoRef } from '../files/image-url';
 import { photoRefJson } from '../files/queries';
-import { privateColumns } from '../wardrobe/private-fields';
+import { can, type WardrobeRole } from '../sharing/access';
+import { priceJsonPair } from '../wardrobe/private-fields';
 import type { GarmentDetail } from '../wardrobe/queries';
 import { repairCostSql } from '../wardrobe/repairs';
 import { inCloset, onWishlist, ownedGarment } from '../wardrobe/status';
@@ -36,9 +37,11 @@ import { PERSONS_CHOICE_SET } from '../calendar/planned-by';
  * Wears, washes and away: the owner's own records about their garments
  * (docs/plans/2026-09-26-wardrobe-features.md, section 1). The one writer of
  * each: `garment_wear` rows (setEntryWorn, setWoreToday), last_washed_on
- * (markWashed), away (setAway). Private like outfits and the calendar:
- * every function is scoped to the owner, and the routes never reach them
- * through a share (src/web/wears/routes.tsx).
+ * (markWashed), away (setAway). Every function is scoped to the owner
+ * whose wardrobe the caller authorized: the owner, or for day-level wears,
+ * washes and the wash state a MANAGE partner (`launder`, #680,
+ * wear-actions.ts); calendar-entry wears, the wear count and away stay
+ * the owner's alone.
  *
  * The wash rules as query conditions live here too, built from
  * src/wardrobe/availability.ts's constants so the two cannot drift
@@ -105,10 +108,13 @@ export function availableGarment(): SQL {
   )!;
 }
 
-/** The garment page's wear line: "Worn 12 times · 2 since washed · last worn yesterday". */
-export interface WearSummary {
-  /** Days worn, ever. */
-  worn: number;
+/**
+ * A garment's wash state as anyone who does the laundry sees it (#680: the
+ * owner and a MANAGE partner, `launder`): the days worn since the wash and
+ * the last day worn. Never the wear count or its cost: those are the
+ * owner's record (WearSummary).
+ */
+export interface LaundryState {
   sinceWash: number;
   lastWorn: IsoDate | null;
   /**
@@ -118,42 +124,74 @@ export interface WearSummary {
    * src/page-day.ts), so the page reads the same tomorrow.
    */
   lastWornBy: 'single' | 'entry' | null;
+}
+
+/** The owner's own wear record on top of the wash state: "Worn 12 times", cost per wear. */
+export interface WearRecord {
+  /** Days worn, ever. */
+  worn: number;
   /** Its repairs' costs summed (repairCostSql), for the wear line's cost per wear. */
   repairCost: string | null;
 }
 
+/** The garment page's wear line, the owner's: "Worn 12 times · 2 since washed · last worn yesterday". */
+export type WearSummary = LaundryState & WearRecord;
+
 /**
- * The garment's wear counts and what its repairs cost, as a scalar
- * subquery (a JSON object), so a page reads it with the rest in one
- * statement: the garment page (garmentContext,
- * src/web/wardrobe/garment-context.ts) and the wear routes' answer
- * (wearStatusOf). The owner's own records: the caller is the owner and has
- * found the garment in their wardrobe, so its row (grouped with none or
- * more wears) is there. A column of selectScalars, never of a Drizzle
+ * The garment's wears as one JSON object over its row left-joined to its
+ * wears (grouped with none or more), `pairs` the object's own beside the
+ * wash state's. The caller has found the garment in the owner's wardrobe,
+ * so the row is there. A column of selectScalars, never of a Drizzle
  * select from one table (see wearStatusOf).
  */
-export function wearSummarySql(
+function wearsJsonSql<T extends LaundryState>(
   garmentId: number,
-  today: IsoDate,
-): SQL<WearSummary> {
+  pairs: SQL,
+): SQL<T> {
   // The last day's wears, a single one first: one aggregate, no subquery.
   const lastWornBy = sql`(array_agg(
     case when ${garmentWear.outfitCalendarId} is null then 'single' else 'entry' end
     order by ${garmentWear.day} desc, ${garmentWear.outfitCalendarId} desc nulls first
   ) filter (where ${garmentWear.day} is not null))[1]`;
-  return sql<WearSummary>`(
+  return sql<T>`(
     select json_build_object(
-      'worn', count(distinct ${garmentWear.day})::int,
+      ${pairs}
       'sinceWash', (count(distinct ${garmentWear.day}) filter (where ${wornSinceWash}))::int,
       'lastWorn', max(${garmentWear.day})::text,
-      'lastWornBy', ${lastWornBy},
-      'repairCost', ${repairCostSql(garment.id, today)}
+      'lastWornBy', ${lastWornBy}
     )
     from ${garment}
     left join ${garmentWear} on ${eq(garmentWear.garmentId, garment.id)}
     where ${eq(garment.id, garmentId)}
     group by ${garment.id}
   )`;
+}
+
+/**
+ * The garment's wash state alone (LaundryState), as a scalar subquery: what
+ * a MANAGE partner's garment page and wear answers read (garmentContext's
+ * `laundry`, wearStatusOf).
+ */
+export function laundryStateSql(garmentId: number): SQL<LaundryState> {
+  return wearsJsonSql(garmentId, sql``);
+}
+
+/**
+ * The garment's wear counts and what its repairs cost, as a scalar
+ * subquery (a JSON object), so a page reads it with the rest in one
+ * statement: the owner's garment page (garmentContext,
+ * src/web/wardrobe/garment-context.ts) and the wear routes' answer
+ * (wearStatusOf). The owner's own records: never read for a grantee.
+ */
+export function wearSummarySql(
+  garmentId: number,
+  today: IsoDate,
+): SQL<WearSummary> {
+  return wearsJsonSql(
+    garmentId,
+    sql`'worn', count(distinct ${garmentWear.day})::int,
+      'repairCost', ${repairCostSql(garment.id, today)},`,
+  );
 }
 
 /**
@@ -180,8 +218,8 @@ export async function wearCountsByGarment(
 }
 
 /**
- * A garment as the wear line reads it (WearStatus, wear-section.tsx): the
- * owner's, whose price (cost per wear) is read as `'OWN'`.
+ * A garment as the wear line reads it (WearStatus, wear-section.tsx): its
+ * price (cost per wear) only where the owner's record is read.
  */
 export type WearGarment = Pick<
   GarmentDetail,
@@ -195,38 +233,60 @@ export type WearGarment = Pick<
   | 'lastWashedOn'
 >;
 
+/** What the wear line shows (WearStatus): the wash state, and the owner's record for the owner alone. */
+export interface WearStatusRead {
+  garment: WearGarment;
+  laundry: LaundryState;
+  /** The owner's (`own`); undefined for a MANAGE partner. */
+  record: WearRecord | undefined;
+}
+
 /**
  * What Wore today and Washed answer (WearStatus, wear-section.tsx): the
- * owner's garment as the wear line reads it, and its wear summary, in one
- * statement. Undefined when it is not the owner's. Through selectScalars,
- * not a select from garment with the summary as a column: Drizzle writes a
- * single-table select's columns unqualified, the subquery's included, and
- * its `garment` and `garment_wear` then both answer to "id".
+ * garment in `wardrobe` as the wear line reads it, and its wears as its
+ * reader may see them (the owner's summary, a MANAGE partner's wash state
+ * alone), in one statement. Undefined when it is not that wardrobe's.
+ * Through selectScalars, not a select from garment with the summary as a
+ * column: Drizzle writes a single-table select's columns unqualified, the
+ * subquery's included, and its `garment` and `garment_wear` then both
+ * answer to "id".
  */
 export async function wearStatusOf(
   db: Queryable,
   garmentId: number,
-  ownerId: number,
+  wardrobe: { ownerId: number; role: WardrobeRole },
   today: IsoDate,
-): Promise<{ garment: WearGarment; summary: WearSummary } | undefined> {
-  const { shown, summary } = await selectScalars(db, {
-    shown: sql<WearGarment | null>`(
-      select json_build_object(
-        'id', ${garment.id},
-        'name', ${garment.name},
-        'status', ${garment.status},
-        'category', ${garment.category},
-        'quantity', ${garment.quantity},
-        'price', ${privateColumns('OWN').price}::text,
-        'washAfterWears', ${garment.washAfterWears},
-        'lastWashedOn', ${garment.lastWashedOn}
-      )
-      from ${garment}
-      where ${and(eq(garment.id, garmentId), eq(garment.ownerId, ownerId))}
-    )`,
-    summary: wearSummarySql(garmentId, today),
+): Promise<WearStatusRead | undefined> {
+  const shown = sql<WearGarment | null>`(
+    select json_build_object(
+      'id', ${garment.id},
+      'name', ${garment.name},
+      'status', ${garment.status},
+      'category', ${garment.category},
+      'quantity', ${garment.quantity},
+      ${can(wardrobe.role, 'own') ? priceJsonPair('OWN') : sql``}
+      'washAfterWears', ${garment.washAfterWears},
+      'lastWashedOn', ${garment.lastWashedOn}
+    )
+    from ${garment}
+    where ${and(eq(garment.id, garmentId), eq(garment.ownerId, wardrobe.ownerId))}
+  )`;
+  if (can(wardrobe.role, 'own')) {
+    const read = await selectScalars(db, {
+      shown,
+      wears: wearSummarySql(garmentId, today),
+    });
+    return read.shown
+      ? { garment: read.shown, laundry: read.wears, record: read.wears }
+      : undefined;
+  }
+  const read = await selectScalars(db, {
+    shown,
+    wears: laundryStateSql(garmentId),
   });
-  return shown ? { garment: shown, summary } : undefined;
+  return read.shown
+    ? { garment: read.shown, laundry: read.wears, record: undefined }
+    : undefined;
 }
 
 /** A garment on the laundry page. */

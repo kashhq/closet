@@ -602,6 +602,7 @@ describe('MCP statements per tool (#172)', () => {
         set_capsule_membership: { id: ids.danaCapsule, add: [danaGarment] },
         mark_worn: { garmentId: danaGarment },
         mark_washed: { garmentIds: [danaGarment] },
+        laundry_status: {},
         compare_with_shared_wardrobe: {},
       } satisfies Record<string, Record<string, unknown>>;
       expect(Object.keys(shared).sort()).toEqual(

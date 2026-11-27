@@ -4,7 +4,11 @@ import type { Db } from '../../db/client';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { type ActionDeps, logOp } from '../op-log';
-import type { Actor } from '../sharing/access';
+import {
+  type Actor,
+  type AuthorizedWardrobe,
+  authorizeWardrobe,
+} from '../sharing/access';
 import { garmentNotOwnedYet } from '../wardrobe/garment-actions';
 import {
   type GarmentAddress,
@@ -16,16 +20,23 @@ import { markWashed, setAway, setWoreToday, type WashOutcome } from './queries';
 
 /**
  * The wear path (#188, #193a): Wore today, Washed and away on one garment,
- * each taking the Actor and the garment's address and refusing itself, so
- * the garment page (routes.tsx) and the API (api-routes.ts) refuse alike.
- * The owner's own records: a grantee who sees the garment is a 403 through
- * `?ownerId=` and a 404 without it, where it is not in their wardrobe
- * (garmentWardrobe's `own`, free on one's own wardrobe). Each writer
- * judges the garment in its own statement (queries.ts), so a write that
- * lands reads nothing first (#160); only one that changed nothing reads
- * the garment to say why: not the owner's (404) or a wishlist item, not
- * owned yet (409). Callers parse, call and answer; the day is theirs to
- * judge (today, or a queued tap's within the window).
+ * and the laundry's batch, each taking the Actor and the wardrobe's
+ * address and refusing itself, so the pages (routes.tsx, the grid's Mark
+ * washed), the API (api-routes.ts) and MCP refuse alike. Wore today and
+ * the washes need `launder` (#680: the owner and a MANAGE partner, who
+ * does the household's laundry); away is the owner's record (`own`). A
+ * grantee without it who sees the garment is a 403 through `?ownerId=`,
+ * and a 404 without it, where it is not in their wardrobe (garmentWardrobe,
+ * free on one's own wardrobe and on the share a request read ahead).
+ * A partner's wear or wash is the owner's row, under the owner's lock: the
+ * writers take the authorized `ownerId`, never the actor's, and no column
+ * says who tapped (the log line does: logOp's actor).
+ *
+ * Each writer judges the garment in its own statement (queries.ts), so a
+ * write that lands reads nothing first (#160); only one that changed
+ * nothing reads the garment to say why: not in the wardrobe (404) or a
+ * wishlist item, not owned yet (409). Callers parse, call and answer; the
+ * day is theirs to judge (today, or a queued tap's within the window).
  */
 
 /** A queued wear's client id refused; the page route logs it with the replay's key. */
@@ -38,9 +49,9 @@ export class WearClientIdRefusal extends HttpError {
   }
 }
 
-/** What a wear or wash did, in whose wardrobe (always the actor's own). */
+/** What a wear or wash did, in the wardrobe it was authorized in (the owner's, or a MANAGE share). */
 export interface WearWrite {
-  ownerId: number;
+  wardrobe: AuthorizedWardrobe;
   /** False for one that already was so: a retry, a replayed tap. */
   changed: boolean;
 }
@@ -58,7 +69,8 @@ export async function wearGarment(
     clientId?: string;
   },
 ): Promise<WearWrite> {
-  const { access } = await garmentWardrobe(db, actor, address, 'own');
+  const wardrobe = await garmentWardrobe(db, actor, address, 'launder');
+  const { access } = wardrobe;
   const outcome = await setWoreToday(db, {
     garmentId: address.id,
     ownerId: access.ownerId,
@@ -74,11 +86,12 @@ export async function wearGarment(
   const changed = outcome === 'changed';
   logOp(logger, actor, change.worn ? 'garment.worn' : 'garment.wear.undone', {
     garmentId: address.id,
+    ownerId: access.ownerId,
     day: change.day,
     changed,
     clientId: change.clientId,
   });
-  return { ownerId: access.ownerId, changed };
+  return { wardrobe, changed };
 }
 
 /**
@@ -91,40 +104,53 @@ export async function washGarment(
   address: GarmentAddress,
   wash: { day: IsoDate; at: Date | null },
 ): Promise<WearWrite> {
-  const { access } = await garmentWardrobe(db, actor, address, 'own');
+  const wardrobe = await garmentWardrobe(db, actor, address, 'launder');
+  const { access } = wardrobe;
   const {
     washed: [washed],
   } = await markWashed(db, access.ownerId, [address.id], wash.day, wash.at);
   if (!washed) throw await refusalOf(db, address.id, access.ownerId);
   logOp(logger, actor, 'garment.washed', {
     garmentId: address.id,
+    ownerId: access.ownerId,
     day: wash.day,
     changed: washed.changed,
   });
-  return { ownerId: access.ownerId, changed: washed.changed };
+  return { wardrobe, changed: washed.changed };
 }
 
 /**
  * Laundry's batch (the laundry page, `POST /garments/washes`, mark_washed,
- * select mode's Mark washed with `closetOnly`): the actor's own garments
- * named, the rest left unwashed and counted by why (WashOutcome).
+ * select mode's Mark washed with `closetOnly`) in the wardrobe `ownerId`
+ * names (`''` or absent: the actor's own; an unseen one is "Wardrobe not
+ * found"): its garments named, the rest left unwashed and counted by why
+ * (WashOutcome).
  */
 export async function washGarments(
   { db, logger }: ActionDeps,
   actor: Actor,
+  ownerId: number | '' | undefined,
   garmentIds: number[],
   wash: { day: IsoDate; at: Date | null },
   options: { closetOnly?: boolean } = {},
 ): Promise<WashOutcome> {
+  const { access } = await authorizeWardrobe(
+    db,
+    actor,
+    ownerId,
+    'launder',
+    'wardrobe',
+  );
   const outcome = await markWashed(
     db,
-    actor.userId,
+    access.ownerId,
     garmentIds,
     wash.day,
     wash.at,
     options,
   );
   logOp(logger, actor, 'garments.washed', {
+    ownerId: access.ownerId,
     day: wash.day,
     washed: outcome.washed.length,
     asked: garmentIds.length,

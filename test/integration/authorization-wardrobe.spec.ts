@@ -7,12 +7,13 @@ import { ROUTES } from './authorization-wardrobe.routes';
 
 describeMatrix('wardrobe', ROUTES, (m) => {
   // The page offers what the routes allow: clone to anyone who can see the
-  // garment, edit (and condition) to the owner and a MANAGE grantee,
-  // archive, delete and the wear section to the owner only.
+  // garment, edit (and condition) and the wear section (Wore today, Washed:
+  // #680) to the owner and a MANAGE grantee, archive, delete and where it
+  // is to the owner only.
   it.each([
-    ['owner', { clone: true, edit: true, remove: true }],
-    ['manager', { clone: true, edit: true, remove: false }],
-    ['viewer', { clone: true, edit: false, remove: false }],
+    ['owner', { clone: true, edit: true, wear: true, remove: true }],
+    ['manager', { clone: true, edit: true, wear: true, remove: false }],
+    ['viewer', { clone: true, edit: false, wear: false, remove: false }],
   ] as const)(
     'the garment page shows %s the actions they may take',
     async (actor, can) => {
@@ -31,8 +32,15 @@ describeMatrix('wardrobe', ROUTES, (m) => {
       expect(html.includes(`hx-delete="/wardrobe/${id}`)).toBe(can.remove);
       expect(html.includes(`/wardrobe/${id}/archive`)).toBe(can.remove);
       expect(html.includes(`/wardrobe/${id}/condition`)).toBe(can.edit);
-      expect(html.includes('id="garment-wear"')).toBe(can.remove);
-      expect(html.includes(`/wardrobe/${id}/wear`)).toBe(can.remove);
+      expect(html.includes('id="garment-wear"')).toBe(can.wear);
+      // Into the wardrobe the page is of: the owner's links carry no ?ownerId=.
+      expect(html.includes(`action="/wardrobe/${id}/wear${q}"`)).toBe(
+        can.wear && actor !== 'owner',
+      );
+      expect(html.includes(`action="/wardrobe/${id}/wear"`)).toBe(
+        actor === 'owner',
+      );
+      expect(html.includes('id="garment-away"')).toBe(can.remove);
     },
   );
 
@@ -90,10 +98,11 @@ describeMatrix('wardrobe', ROUTES, (m) => {
   });
 
   // The wear's undo (#193a) is wearGarment behind the same guard as its
-  // PUT, so it refuses as the PUT's matrix cases do; its own case needs a
+  // PUT, so it answers as the PUT's matrix cases do; its own case needs a
   // wear to undo, which the shared fixture must not have
-  // (authorization-coverage.spec.ts, EXEMPT).
-  it('DELETE /api/v1/garments/:id/wears/:day refuses as its PUT does', async () => {
+  // (authorization-coverage.spec.ts, EXEMPT): the MANAGE partner's undo
+  // (#680) takes it off again.
+  it('DELETE /api/v1/garments/:id/wears/:day answers as its PUT does', async () => {
     const { garmentId, today } = m.shared;
     const url = `/api/v1/garments/${garmentId}/wears/${today}`;
     const owner = m.actors.owner.token!;
@@ -102,7 +111,7 @@ describeMatrix('wardrobe', ROUTES, (m) => {
     const worn = await m.t.api(owner, { method: 'PUT', url });
     expect(worn.json()).toMatchObject({ worn: true, changed: true });
     const before = await wearsOf();
-    for (const actor of ['manager', 'viewer', 'stranger'] as const) {
+    for (const actor of ['viewer', 'stranger'] as const) {
       const token = m.actors[actor].token!;
       const own = await m.t.api(token, { method: 'DELETE', url });
       const named = await m.t.api(token, {
@@ -115,7 +124,13 @@ describeMatrix('wardrobe', ROUTES, (m) => {
       expect(named.body).not.toContain(m.shared.garmentName);
     }
     expect(await wearsOf()).toBe(before);
-    const undone = await m.t.api(owner, { method: 'DELETE', url });
+    const manager = m.actors.manager.token!;
+    const own = await m.t.api(manager, { method: 'DELETE', url });
+    expect(own.statusCode).toBe(404);
+    const undone = await m.t.api(manager, {
+      method: 'DELETE',
+      url: `${url}?ownerId=${m.actors.owner.id}`,
+    });
     expect(undone.json()).toMatchObject({ worn: false, changed: true });
     expect(await wearsOf()).toBe(before - 1);
   });

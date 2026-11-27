@@ -152,8 +152,8 @@ describe('queuedTarget', () => {
       queuedTarget('wear', 41),
       queuedTarget('wash', 41),
       queuedTarget('entry', 88),
-      queuedTarget('packed', 7, 41),
-      queuedTarget('item', 7, 3),
+      queuedTarget('packed', 7, { part: 41 }),
+      queuedTarget('item', 7, { part: 3 }),
     ]).toEqual([
       // The outbox adds the page's day to a wear's (#708).
       { key: 'wear:41', path: '/wardrobe/41/wear' },
@@ -163,15 +163,35 @@ describe('queuedTarget', () => {
       { key: 'item:7:3', path: '/trips/7/items/packed' },
     ]);
     // Another trip's tick of the same garment is another record.
-    expect(queuedTarget('packed', 8, 41).key).not.toBe(
-      queuedTarget('packed', 7, 41).key,
+    expect(queuedTarget('packed', 8, { part: 41 }).key).not.toBe(
+      queuedTarget('packed', 7, { part: 41 }).key,
     );
   });
 
   it('builds the paths the allowlist takes back, kind for kind', () => {
     for (const kind of Object.keys(QUEUEABLE_ROUTES) as QueueableKind[]) {
-      expect(queueableKindOf(queuedTarget(kind, 12, 3).path), kind).toBe(kind);
+      expect(
+        queueableKindOf(queuedTarget(kind, 12, { part: 3 }).path),
+        kind,
+      ).toBe(kind);
     }
+  });
+
+  it("puts a partner's wear or wash in the owner's wardrobe, keyed as the garment's (#680)", () => {
+    expect([
+      queuedTarget('wear', 41, { ownerId: 7 }),
+      queuedTarget('wash', 41, { ownerId: 7 }),
+    ]).toEqual([
+      { key: 'wear:41', path: '/wardrobe/41/wear?ownerId=7' },
+      { key: 'wash:41', path: '/wardrobe/41/washed?ownerId=7' },
+    ]);
+    expect(queueableKindOf('/wardrobe/41/washed?ownerId=7')).toBe('wash');
+    expect(
+      showsQueuedWrite('/wardrobe/41/wear?ownerId=7', '/wardrobe/41'),
+    ).toBe(true);
+    expect(showsQueuedWrite('/wardrobe/41/washed?ownerId=7', '/laundry')).toBe(
+      true,
+    );
   });
 });
 
@@ -184,6 +204,10 @@ describe('queueableKindOf', () => {
       '/wardrobe/0/wear',
       '/wardrobe/abc/washed',
       '/wardrobe/41/wear?worn=1',
+      '/wardrobe/41/wear?ownerId=0',
+      '/wardrobe/41/wear?ownerId=7&worn=1',
+      '/calendar/88/worn?ownerId=7',
+      '/trips/7/packed?ownerId=7',
       '/trips/7/items/3/delete',
       'https://elsewhere.example/wardrobe/41/wear',
       '/auth/logout',

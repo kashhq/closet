@@ -517,7 +517,10 @@ function PackingRowView(props: {
   return (
     <li
       data-packing-garment={garment.id}
-      {...outboxRegion(queuedTarget('packed', props.tripId, garment.id), name)}
+      {...outboxRegion(
+        queuedTarget('packed', props.tripId, { part: garment.id }),
+        name,
+      )}
     >
       {/* The row's padding is the label's, so the whole row is the tap. */}
       <label class="flex items-center gap-3 py-1.5 cursor-pointer">
@@ -648,7 +651,7 @@ function ExtrasSection({ model }: { model: TripPageModel }) {
                   class="flex items-center gap-3"
                   data-trip-item={item.id}
                   {...outboxRegion(
-                    queuedTarget('item', trip.id, item.id),
+                    queuedTarget('item', trip.id, { part: item.id }),
                     item.label,
                   )}
                 >
