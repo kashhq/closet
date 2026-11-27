@@ -81,7 +81,7 @@ whose tag must match `@playwright/test` in `package-lock.json`, against a
 
 ```bash
 npm run build
-docker exec pgvault-dev-postgres-1 psql -U postgres -c 'CREATE DATABASE closet_webkit'
+docker exec closet-pg psql -U postgres -c 'CREATE DATABASE closet_webkit'
 # The production config, as the nightly runs it (PWA on, VAPID keys, https: SITE_URL),
 # plus what playwright.config.ts would set for its own server (SENTRY_DSN, ORDER_MAIL_*).
 PORT=3107 DATABASE_HOST=localhost DATABASE_USER=postgres DATABASE_PASS=postgres \

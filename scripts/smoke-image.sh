@@ -11,7 +11,7 @@
 # Environment:
 #   DATABASE_HOST, DATABASE_PORT (5432), DATABASE_USER, DATABASE_PASS, DATABASE_NAME
 #       An empty database: the boot must apply the migrations. The container runs on the host's
-#       network, so localhost is the host's (make ci-smoke's throwaway Postgres, pgvault-dev on
+#       network, so localhost is the host's (make ci-smoke's throwaway Postgres, a local Postgres on
 #       the production host).
 #   SMOKE_PORT   where the app listens (3000).
 #   MODELS_DIR   a directory holding the verified model (npm run cutout:fetch-model): the app loads it

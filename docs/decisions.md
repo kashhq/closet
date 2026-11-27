@@ -1808,3 +1808,9 @@ Consequence: a link carrying `?ownerId=` onto an owner-only page 404s; a page th
 Why: `DISABLE_REGISTRATION` defaulted to false, so a fresh install exposed to the internet let anyone create accounts after the first.
 Decision: owner chose `REGISTRATION=first-user|open|closed`, default `first-user`; `DISABLE_REGISTRATION` is read for one release as `closed`/`open` with a boot warning, and a disagreeing pair is a ConfigError naming both (letting either win could open a sign-up the operator closed). One `RegistrationGate` (`src/web/auth/registration.ts`) answers the routes' hook and the login and invite pages' link. A first-user insert takes `pg_advisory_xact_lock`, then checks for an account, then inserts, as separate statements (#189: a statement's snapshot predates its lock wait).
 Consequence: a refused sign-up is today's 302 to login, with `?registrationClosed=1` for the notice. The gate's latch is per process and never re-opens without a restart. A second member joins through a temporary `REGISTRATION=open`; there is no CLI. Specs and Playwright run `open`. Homelab's compose must replace its `DISABLE_REGISTRATION` line, not add `REGISTRATION` beside it.
+
+## 2026-11-27 — devkit stays private; the README documents the stranger's path (#695)
+
+Why: the README's Development steps assumed `../pgvault-dev` and devkit, neither public. A fresh clone with no `devkit/` builds and boots against a plain `postgres:18`, but `eslint.config.mjs` and `vitest.config.mts` import `./devkit/lint/*`, so lint, typecheck and every Vitest tier fail.
+Decision: owner chose to document, not decouple. README says the `make` targets, hooks, lint, typecheck and Vitest are the owner's, lists what works (`npm ci`, `build`, `start:dev`, `format`), and replaces pgvault-dev with `docker run postgres:18`.
+Consequence: a contributor's PR is checked by the owner's gate, not by their checkout. Do not make the configs tolerate a missing devkit to widen that list.
