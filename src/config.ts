@@ -167,7 +167,7 @@ const ConfigSchema = Type.Object({
   // (DEPRECATED_NAMES).
   DATABASE_NAME: NonEmpty(),
   DATABASE_USER: NonEmpty(),
-  // Empty is valid: pgvault-dev and the test databases use trust auth.
+  // Empty is valid: a local trust-auth Postgres and the test databases use no password.
   DATABASE_PASS: Type.String(),
   // TLS to Postgres (#694): `verify` checks the server's certificate against
   // the system's CAs or DATABASE_SSL_CA, `no-verify` encrypts without

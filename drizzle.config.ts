@@ -6,7 +6,7 @@ import { sslOption } from './src/db/client';
 // drizzle-kit only (`npx drizzle-kit generate`, `pull`, `studio`); the app
 // never reads this file. `generate` diffs src/db/schema.ts against the last
 // snapshot in drizzle/meta and needs no database. Commands that do connect
-// default to closet_db on pgvault-dev (localhost:5432, trust auth); the
+// default to closet_db on a local Postgres (localhost:5432, trust auth); the
 // DATABASE_* env vars point them elsewhere, as they do for the app (TLS with
 // the app's own modes; DATABASE_SCHEMA is the app's deprecated alias).
 const sslMode = databaseSslMode(process.env.DATABASE_SSL ?? 'off');

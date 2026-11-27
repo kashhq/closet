@@ -35,9 +35,8 @@ npm run cutout:fetch-model    # src/cutout/AGENTS.md
 npm run lint                  # eslint --fix; lint:check is the gate
 npm run format                # prettier --write; format:check is the gate
 
-# Test tiers, cheapest first; all but the first need Postgres (pgvault-dev, .env.local: README)
+# Test tiers, cheapest first; all but the first need Postgres (a postgres:18 container: README)
 npm test                      # Vitest unit projects; test:watch, test:debug
-(cd ../pgvault-dev && docker compose up -d --wait)
 npm run test:int              # Vitest integration: the real app in-process, a scratch database per spec file
 npm run test:e2e              # build, then Playwright: test/AGENTS.md
 npm run audit:pages           # every page/action as the demo persona (--persona scale: 500 garments) vs docs/perf/

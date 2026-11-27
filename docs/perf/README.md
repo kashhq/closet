@@ -47,7 +47,7 @@ password: 220 to 440 ms by design) and the photo pipeline are not pages.
    `createApp`, the way the integration harness boots `src/`, with
    production's flags (`NODE_ENV=production`, PWA, weather, metrics,
    error tracking and the order mail on) on a throwaway database on the shared local Postgres
-   (`TEST_DATABASE_URL`, default pgvault-dev on :5432) and a temporary
+   (`TEST_DATABASE_URL`, default a local Postgres on :5432) and a temporary
    `DATA_PATH`. The database is dropped at the end, whatever happened.
 2. Seeds Theo (`--persona`, `demo` or `scale`) and Dana (`sparse`, who
    shares her wardrobe with Theo) through the seed, anchored on today, runs `ANALYZE` (a production
@@ -102,7 +102,6 @@ upload's cutout never runs while another step is measured.
 ## Using it on a page PR
 
 ```bash
-(cd ../pgvault-dev && docker compose up -d --wait)
 npm run audit:pages -- --only '#159' --compare docs/perf/baseline.json
 npm run audit:pages -- --persona scale --only '#164' --compare docs/perf/baseline-scale.json
 make perf-compare             # both personas, whole walk (about 36 minutes, most of it rate-limit waits), on a throwaway Postgres
@@ -135,7 +134,7 @@ npm run audit:pages -- --persona scale --out docs/perf/baseline-scale
 
 ## Noise
 
-Measured on the production host (Ryzen 7 8845HS, 16 threads, pgvault-dev on Postgres
+Measured on the production host (Ryzen 7 8845HS, 16 threads, Postgres
 18) on 2026-09-28, with two runs of the same build one after the other
 (the baseline, then `--compare` against it), while other agents' test runs
 shared the box (load average 5 to 15). The change of each step's p50 from
