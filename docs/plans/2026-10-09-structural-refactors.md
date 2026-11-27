@@ -51,7 +51,7 @@ A structural graph of the codebase flagged four kinds of signal: shared primitiv
 
 ### 2. A single garment status mark, derived from status plus availability
 
-**Summary:** `garmentMarks(piece, { ownerView })` in `src/wardrobe/` next to `availability.ts` returns ordered typed marks (`to-buy | archived | away:lent|repair | needs-wash | set-aside`). A single `<GarmentMark>` renders them with one daisyUI variant and one i18n key each. `CollagePieceView` changes from its `mark`/`status` pair to `marks[]`. The grid's `TileMarks`, Styling, the garment page's `StatusBadge`, the agent cards and trips all use it.
+**Summary:** `garmentMarks(piece, { ownerView })` in `src/wardrobe/` next to `availability.ts` returns ordered typed marks (`to-buy | archived | away:lent|repair | needs-wash | set-aside`). A single `<GarmentMark>` renders them with one daisyUI variant and one i18n key each. `CollagePieceView` changes from its `mark`/`status` pair to `marks[]`. The grid's `TileMarks`, Styling, the garment page's `StatusBadge`, Muse cards and trips all use it.
 
 | Perspective | Assessment | Verdict |
 |---|---|---|
@@ -142,7 +142,7 @@ Lane A, behavior-preserving refactors (proof: integration specs unchanged and gr
 
 Lane B, user-visible (each PR: screenshots at 390 px and 1440 px with real-shaped seed data, and a UX review against this doc):
 - **U1** `src/web/date-labels.ts`: absorbs `calendar/labels.ts`, `relativeDay` without the ISO fallback, `trips/shortDate`, a shared `DayHeading`; `acquiredOn` formatted (after R1).
-- **U2a** `garmentMarks()` in `src/wardrobe/` + `<GarmentMark>`: one variant and one i18n key per mark, adopted by the grid tiles, Styling rows, the garment page `StatusBadge` and the agent cards. No new data reads.
+- **U2a** `garmentMarks()` in `src/wardrobe/` + `<GarmentMark>`: one variant and one i18n key per mark, adopted by the grid tiles, Styling rows, the garment page `StatusBadge` and Muse cards. No new data reads.
 - **U2b** Availability marks on `OutfitCollage` (Today, calendar, outfit page): blocking marks only (away, archived), `ownerView`-gated, statement counts unchanged, marks shown with the page's freshness when served from cache (after U2a).
 - **U3** `WornControl`: one verb family and undo everywhere, the trip page gains undo, dead `CALENDAR_*WORN*` keys removed (after U1).
 - **U4** `OutfitCollage size="row"` in `SavedOutfitButton` and the trip outfit rows: every piece, footwear never dropped.

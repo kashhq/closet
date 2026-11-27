@@ -77,7 +77,7 @@ function agentPiecesSql(): SQL<AgentPiece[]> {
 }
 
 /**
- * The owner's the agent outfits not theirs yet (awaiting them, or set aside),
+ * The owner's agent outfits not theirs yet (awaiting them, or set aside),
  * newest proposal first, as one scalar subquery for savedContext's
  * statement. Raw SQL, so `outfit` renders qualified (references.ts).
  */
@@ -99,7 +99,7 @@ export function agentOutfitsSql(ownerId: number): SQL<AgentOutfit[]> {
 }
 
 /**
- * The pieces to buy of the owner's the agent outfits, with the closet and the
+ * The pieces to buy of the owner's agent outfits, with the closet and the
  * avoided pairs once, to count what each unlocks (unlocksOf: the inbox's
  * "Unlocks N", #333). For savedContext's statement.
  */

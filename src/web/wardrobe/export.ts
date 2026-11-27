@@ -210,7 +210,7 @@ function jsonGarment({ garment: row, photo }: ExportRow): object {
 }
 
 /**
- * `ownerId`'s the agent needs (#333), oldest first, as the JSON bundle holds
+ * `ownerId`'s agent needs (#333), oldest first, as the JSON bundle holds
  * them: a handful, so one statement after the garments.
  */
 async function exportGroups(db: Db, ownerId: number): Promise<object[]> {

@@ -537,7 +537,7 @@ export function describeMatrix(
       expect(accept.headers.location).toMatch(/^\/wardrobe\?ownerId=\d+$/);
     };
 
-    /** The owner's the agent needs and picks (#333), written through the one writers. */
+    /** The owner's agent needs and picks (#333), written through the one writers. */
     const agentFixture = async (tag: string) => {
       const ownerId = t.owner.id;
       const cookie = actors.owner.cookie!;

@@ -46,7 +46,7 @@
  *  - `CARD_COLUMNS`: blocks of mixed height (Insights' cards) flowing down
  *    CSS columns, so a short card leaves no hole: one on a phone (stacked
  *    with the same 1rem gap), two at `lg`, three at `xl`.
- *  - `PAIR_GRID`: two side by side from `lg` (the Wishlist inbox's the agent
+ *  - `PAIR_GRID`: two side by side from `lg` (the Wishlist inbox's agent
  *    picks).
  *  - `AGENT_GRID`: the agent's outfit cards (the Outfits tab, #335), the page's
  *    hero, every piece big: one on a phone, two from `lg` (never three:

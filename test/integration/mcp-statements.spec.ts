@@ -393,7 +393,7 @@ describe('MCP statements per tool (#172)', () => {
     ['get_sizes', () => ({}), 3],
     // The agent's (#337). The closet, as a plan's gap view read it.
     ['get_closet_coverage', () => ({ targets: [{ category: 'tops' }] }), 2],
-    // The inbox's one statement (readInbox) and the Outfits tab's the agent
+    // The inbox's one statement (readInbox) and the Outfits tab's agent
     // outfits beside it, in parallel.
     ['list_suggestions', () => ({}), 3],
     // Every list and the cursor's move in one statement.

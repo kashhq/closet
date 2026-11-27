@@ -119,7 +119,7 @@ export interface GarmentFormModel {
   link?: LinkImportView;
   /** A wishlist form's "Replaces" choices (renderGarmentForm reads them). */
   replaceable?: ReplaceableGarment[];
-  /** The owner's the agent need a new closet garment is bought for instead of its picks (#333; its destination's forNeed). */
+  /** The owner's agent need a new closet garment is bought for instead of its picks (#333; its destination's forNeed). */
   boughtFor?: NeedBoughtFor;
   /**
    * The requester's note on the form's brand (#24), under Size; read, and
