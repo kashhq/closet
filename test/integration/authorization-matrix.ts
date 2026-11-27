@@ -1106,6 +1106,16 @@ export function describeMatrix(
       return { ok: twin.ok, request: await twin.request(fixture, ownerQuery) };
     };
 
+    /** A VIEW grantee's answer, a success or a refusal, holds no price and no notes (#680). */
+    const expectNothingPrivate = (
+      actor: ActorName,
+      res: LightMyRequestResponse,
+    ) => {
+      if (actor !== 'viewer') return;
+      expect(res.body).not.toContain(PRIVATE_PRICE);
+      expect(res.body).not.toContain(PRIVATE_NOTES);
+    };
+
     /**
      * The answer: a success's status (a page read that shows its subject
      * names it), or a refusal's, leaking nothing. On the API a signed-out
@@ -1117,10 +1127,7 @@ export function describeMatrix(
       res: LightMyRequestResponse,
       secret: string,
     ) => {
-      if (actor === 'viewer') {
-        expect(res.body).not.toContain(PRIVATE_PRICE);
-        expect(res.body).not.toContain(PRIVATE_NOTES);
-      }
+      expectNothingPrivate(actor, res);
       if (outcome === 'ok') {
         expect(res.statusCode).toBe(ok);
         if (surface === 'page' && route.kind === 'read' && route.shows) {
