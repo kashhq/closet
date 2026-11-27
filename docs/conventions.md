@@ -30,7 +30,7 @@ The root's Conventions are the upstream rules we kept (once `.github/prompts/boi
 
 One voice for every user-facing string (#729); `src/i18n/copy-voice.spec.ts` holds the first two rules over `lang.json`.
 
-- **Sentence case.** A label capitalises its first word and proper nouns only ("Date acquired", "Wardrobe sharing"). Muse, Claude, Open-Meteo and the name of the Styling page are the allowlisted names; a new one is added to the spec with a reason.
+- **Sentence case.** A label capitalises its first word and proper nouns only ("Date acquired", "Wardrobe sharing"). Claude, Open-Meteo and the name of the Styling page are the allowlisted names; a new one is added to the spec with a reason.
 - **"Sign in", "Sign out", "Create account"**, never Login, Logout, Log in or Register (the keys keep their old names; the values are the copy).
 - **One noun per concept.** **Wardrobe** is the section and what is shared (dock, page title, "Wardrobe sharing", "{name}'s wardrobe"); **Closet** is the garments you own now, as against the wishlist (the Closet tab, "in your closet"), and the app's default name; the unfiltered capsule scope is **All garments** everywhere (Wardrobe, Capsules, Ideas, Styling). **Styling** is the composer (dock and page); **Style profile** is the taste profile; "Style" is only a verb ("Style an outfit").
 - A built-in value that is stored lower case (a category) is shown through its label, never raw.

@@ -119,7 +119,7 @@ export interface GarmentFormModel {
   link?: LinkImportView;
   /** A wishlist form's "Replaces" choices (renderGarmentForm reads them). */
   replaceable?: ReplaceableGarment[];
-  /** The owner's Muse need a new closet garment is bought for instead of its picks (#333; its destination's forNeed). */
+  /** The owner's the agent need a new closet garment is bought for instead of its picks (#333; its destination's forNeed). */
   boughtFor?: NeedBoughtFor;
   /**
    * The requester's note on the form's brand (#24), under Size; read, and
@@ -377,7 +377,7 @@ function OwnershipFields(props: {
             value={String(model.boughtFor.id)}
           />
           <p class="alert alert-info text-sm" id="garment-bought-for">
-            {t('muse.BOUGHT_FOR', { need: model.boughtFor.name })}
+            {t('agent.BOUGHT_FOR', { need: model.boughtFor.name })}
           </p>
         </>
       )}

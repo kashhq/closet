@@ -1,8 +1,8 @@
 import { toCents } from './money';
 
 /**
- * A suggestion and its option group (Muse phase 1, #333; the design is
- * docs/plans/2026-10-05-muse-suggestions.md, section 3). A suggestion is a
+ * A suggestion and its option group (the agent phase 1, #333; the design is
+ * docs/plans/2026-10-05-agent-suggestions.md, section 3). A suggestion is a
  * wishlist garment with provenance (garment.suggested_at and the columns
  * beside it); an option group is one need holding its sibling suggestions
  * (option_group). Deciding between them is feedback to the agent, so
@@ -75,7 +75,7 @@ export const OWNER_DISMISS_REASONS = [
 export type OwnerDismissReason = (typeof OWNER_DISMISS_REASONS)[number];
 
 /**
- * The reasons the owner may give "Not for me" on one of Muse's outfits
+ * The reasons the owner may give "Not for me" on one of the agent's outfits
  * (#335): an outfit has no size, so no fit_size. Stored as
  * outfit.dismissed_reason.
  */
@@ -88,7 +88,7 @@ export const OUTFIT_DISMISS_REASONS = [
 ] as const satisfies readonly OwnerDismissReason[];
 export type OutfitDismissReason = (typeof OUTFIT_DISMISS_REASONS)[number];
 
-/** Muse's options for one need: the most a group holds, ranked 1 to this. */
+/** The agent's options for one need: the most a group holds, ranked 1 to this. */
 export const MAX_OPTIONS_PER_GROUP = 5;
 
 /** A need's name ("A navy blazer"): a card's title. */

@@ -106,7 +106,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
 
   // The new garment form: the closet's, or the wishlist's (`?to=wishlist`,
   // prefilled from the garment it replaces with `&replaces=`), or a closet
-  // garment bought for a Muse need instead of its picks (`?forNeed=`,
+  // garment bought for an agent need instead of its picks (`?forNeed=`,
   // prefilled from its best pick). `?photo=` is an add-sheet upload's
   // pending photo, shown only while it is still the
   // requester's (the save's claim is the real check); otherwise the form
@@ -182,7 +182,7 @@ export const garmentRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const userId = sessionUserId(request);
       const scope = { userId, ownerId: access.ownerId };
       const saved = readIdList(request.body.draftsSaved);
-      // An order item or a Muse need is checked before anything is read or
+      // An order item or an agent need is checked before anything is read or
       // stored, and written in the garment's transaction.
       const { destination, boughtFor, withGarment } = await postedDestination(
         db,

@@ -519,6 +519,13 @@
       "when": 1795798230227,
       "tag": "0073_stop-legacy-shares",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1795809629117,
+      "tag": "0074_agent-rename",
+      "breakpoints": true
     }
   ]
 }

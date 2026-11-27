@@ -23,7 +23,7 @@ import { weekPlanTools } from './week-plan';
  * tools/week-plan.ts's plan_week, its template in tools/style.ts's
  * get_style_profile. Trips (#10) are tools/trips.ts: list_trips, get_trip
  * (the packing list, and the destination's forecast with WEATHER_ENABLED)
- * and plan_trip_outfit. Muse's (#337) are tools/suggestions.ts (needs,
+ * and plan_trip_outfit. The agent's (#337) are tools/suggestions.ts (needs,
  * options, outfits, the inbox and the owner's feedback) and
  * tools/coverage.ts (get_closet_coverage). The outfit gallery (#9)
  * is tools/gallery.ts, with "Goes with my closet" for a wishlist item

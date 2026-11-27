@@ -1034,9 +1034,7 @@
   "agent": {
     "ANONYMOUS": "Agent",
     "OF_PERSON": "{name}’s agent",
-    "MADE_BY": "Made by {name}"
-  },
-  "muse": {
+    "MADE_BY": "Made by {name}",
     "READY": "Ready to buy",
     "PICKS": "Suggested picks",
     "OWN": "Your wishlist",
@@ -1286,7 +1284,7 @@
     },
     "PLAN_IDEAS": "Choose from ideas",
     "ALREADY_SAVED": "Already saved: this outfit was picked before.",
-    "SAVED_MUSE": "Saved the suggested outfit: it’s yours now",
+    "SAVED_AGENT": "Saved the suggested outfit: it’s yours now",
     "FOR_TRIP": "For {name}",
     "PICK_TRIP": "Add to the trip",
     "TAB_INSPIRATION": "Inspiration"
@@ -1314,7 +1312,7 @@
     "GONE_MANY": "{count} garments you chose are no longer in your wardrobe",
     "UNNAMED_GARMENT": "An unnamed garment",
     "INCOMPLETE": "Buy {pieces} first: an outfit with pieces not bought yet can’t be planned or packed.",
-    "muse": {
+    "agent": {
       "TITLE": "From {agent}",
       "FROM": "From {agent}",
       "YOURS": "Your outfits",
@@ -1526,8 +1524,8 @@
       "SAVED": "Saved.",
       "SAVED_TIMES": "Saved. A time already past today starts tomorrow.",
       "NOT_REGISTERED": "Turn notifications on for this device to choose reminders.",
-      "MUSE": "When your agent finishes a round",
-      "MUSE_HINT": "One notification per round of suggestions, opening what it brought."
+      "AGENT_ROUND": "When your agent finishes a round",
+      "AGENT_ROUND_HINT": "One notification per round of suggestions, opening what it brought."
     }
   },
   "selfie": {

@@ -290,7 +290,7 @@ describe('the MCP endpoint', () => {
       }>();
       expect(result.serverInfo.name).toBe('Closet');
       expect(result.instructions).toContain('nothing deletes');
-      // The styling workflow (#269; Muse's since #337): feedback first,
+      // The styling workflow (#269; the agent's since #337): feedback first,
       // and the owner buys.
       expect(result.instructions).toContain(
         'Start every conversation with get_suggestion_feedback',

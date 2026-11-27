@@ -6,7 +6,7 @@ import { defaultsToToday } from '../day-time';
 import { AlreadySavedToast } from '../gallery/already-saved';
 import type { AlreadySaved } from '../gallery/urls';
 import { t } from '../i18n';
-import { museName } from '../write-origin';
+import { suggestingAgentName } from '../write-origin';
 import { AgentBadge } from '../agent-badge';
 import { PageShell } from '../layout/page-shell';
 import { GarmentThumb } from '../layout/parts';
@@ -67,7 +67,7 @@ export function OutfitPage(props: {
   entries: OutfitEntries;
   /** The gallery's pick or a save found this outfit already saved (?alreadySaved=). */
   alreadySaved?: AlreadySaved;
-  /** A reaction to Muse's proposal came back here (`?decided=`). */
+  /** A reaction to the agent's proposal came back here (`?decided=`). */
   toast?: DecisionToast;
 }) {
   const { ctx, outfit, entries } = props;
@@ -80,7 +80,7 @@ export function OutfitPage(props: {
     ownerView: true,
   });
   // Plan is offered only where the outfit may be held (outfitMayBeHeld):
-  // complete, and the owner's (not one of Muse's proposals until saved).
+  // complete, and the owner's (not one of the agent's proposals until saved).
   const mayBePlanned =
     toBuy.length === 0 &&
     (!outfit.proposal || outfit.proposal.reaction === 'loved');
@@ -146,7 +146,7 @@ export function OutfitPage(props: {
 }
 
 /**
- * The split page's subject: what the outfit is (Muse's proposal and its
+ * The split page's subject: what the outfit is (the agent's proposal and its
  * answer, who made it, the notes) and the collage. A phone reads them before
  * the actions, so they lead the subject rather than the facts.
  */
@@ -167,7 +167,7 @@ function OutfitSubject(props: {
       )}
       {outfit.agent && (
         <p class="px-1">
-          <AgentBadge agent={outfit.agent} byMuse={outfit.proposal !== null} />
+          <AgentBadge agent={outfit.agent} byAgent={outfit.proposal !== null} />
         </p>
       )}
       {outfit.notes && <p class="text-muted text-sm px-1">{outfit.notes}</p>}
@@ -196,7 +196,7 @@ function publicShareOf(outfit: OutfitPageDetail): PublicShare {
  */
 function OutfitMenu(props: { ctx: ViewContext; outfit: OutfitPageDetail }) {
   const { ctx, outfit } = props;
-  // Muse's proposal not loved is feedback: Not for me sets it aside, kept.
+  // The agent's proposal not loved is feedback: Not for me sets it aside, kept.
   const deletable = !outfit.proposal || outfit.proposal.reaction === 'loved';
   return (
     <details class="dropdown dropdown-end" id="outfit-menu">
@@ -232,8 +232,8 @@ function OutfitMenu(props: { ctx: ViewContext; outfit: OutfitPageDetail }) {
 }
 
 /**
- * One of Muse's outfits (#335): who proposed it and why, and the owner's
- * reaction as on its card (muse-cards.tsx): Love (Save once complete) and
+ * One of the agent's outfits (#335): who proposed it and why, and the owner's
+ * reaction as on its card (agent-cards.tsx): Love (Save once complete) and
  * Not for me while it waits on them, Undo once set aside. Loved, it is
  * the owner's (or waits on its pieces, listed below).
  */
@@ -250,18 +250,20 @@ function ProposalBlock(props: {
   return (
     <section class="flex flex-col gap-2 px-1" data-outfit-proposal="">
       <p class="text-sm font-medium">
-        {t('outfits.muse.FROM', { agent: museName(proposal.agent) })}
+        {t('outfits.agent.FROM', {
+          agent: suggestingAgentName(proposal.agent),
+        })}
       </p>
       {proposal.note && <p class="text-sm text-muted">{proposal.note}</p>}
       {proposal.reaction === 'revise' && proposal.ownerNote && (
         <p class="text-sm">
-          {t('outfits.muse.YOU_ASKED', { note: proposal.ownerNote })}
+          {t('outfits.agent.YOU_ASKED', { note: proposal.ownerNote })}
         </p>
       )}
       {proposal.reaction === 'declined' && (
         <div class="flex items-center gap-2">
           <p class="text-sm text-muted flex-1">
-            {t('outfits.muse.SET_ASIDE_LINE', {
+            {t('outfits.agent.SET_ASIDE_LINE', {
               reason: reasonText(proposal.dismissedReason),
             })}
           </p>
@@ -273,14 +275,14 @@ function ProposalBlock(props: {
           <PostForm action={action('love')}>
             <input type="hidden" name="returnTo" value={returnTo} />
             <button type="submit" class="btn btn-primary">
-              {t(props.complete ? 'outfits.muse.SAVE' : 'outfits.muse.LOVE')}
+              {t(props.complete ? 'outfits.agent.SAVE' : 'outfits.agent.LOVE')}
             </button>
           </PostForm>
           <NotForMe
             action={action('dismiss')}
             returnTo={returnTo}
             reasons={OUTFIT_DISMISS_REASONS}
-            label={`× ${t('muse.NOT_FOR_ME')}`}
+            label={`× ${t('agent.NOT_FOR_ME')}`}
           />
         </div>
       )}

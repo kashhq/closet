@@ -6,28 +6,28 @@ import { imageUrl } from '../files/image-url';
 import { enlargeLabel, PhotoSet, viewerTrigger } from '../files/photo-viewer';
 import { unlocksText } from '../gallery/goes-with';
 import { t } from '../i18n';
-import { museName } from '../write-origin';
-import { MUSE_GRID, MUSE_PIECES } from '../layout/columns';
+import { suggestingAgentName } from '../write-origin';
+import { AGENT_GRID, AGENT_PIECES } from '../layout/columns';
 import { GarmentMark, markLabel } from '../layout/garment-mark';
 import { HangerIcon } from '../layout/parts';
 import { stylingUrl } from '../styling/urls';
 import { categoryLabel, priceLabel } from '../wardrobe/garment';
 import { NotForMe, reasonText, UndoForm } from '../wishlist/suggestion-parts';
-import { isSetAside, type MuseOutfit, type MusePiece } from './proposals';
+import { isSetAside, type AgentOutfit, type AgentPiece } from './proposals';
 import { isPieceToBuy } from './references';
 import { outfitUrl } from './urls';
 
 /**
- * The Outfits tab's From Muse section (#335, docs/plans/2026-10-05-muse-
- * suggestions.md section 4 B): Muse's outfits waiting on the owner as large
+ * The Outfits tab's From the agent section (#335, docs/plans/2026-10-05-agent-
+ * suggestions.md section 4 B): the agent's outfits waiting on the owner as large
  * cards, every piece big (a tap opens the photo viewer), pieces to buy
  * badged with their price and what they unlock; then those set aside,
  * collapsed, each with Undo. One markup: a card per row on a phone, two
- * from `lg` (MUSE_GRID), the four pieces of a row filling the card. Static: the bytes change only
+ * from `lg` (AGENT_GRID), the four pieces of a row filling the card. Static: the bytes change only
  * when an outfit or a piece does, so bare /outfits stays byte-stable.
  */
-export function MuseSection(props: {
-  outfits: readonly MuseOutfit[];
+export function AgentSection(props: {
+  outfits: readonly AgentOutfit[];
   unlocks: ReadonlyMap<number, OutfitCount>;
 }) {
   const waiting = props.outfits.filter((item) => !isSetAside(item));
@@ -36,18 +36,22 @@ export function MuseSection(props: {
   return (
     <section
       class="flex flex-col gap-3"
-      aria-labelledby="muse-outfits-title"
-      data-muse-outfits=""
+      aria-labelledby="agent-outfits-title"
+      data-agent-outfits=""
     >
       {waiting.length > 0 && (
         <>
-          <h2 id="muse-outfits-title" class="font-semibold px-1">
-            {t('outfits.muse.TITLE', { agent: agentOf(waiting) })}{' '}
+          <h2 id="agent-outfits-title" class="font-semibold px-1">
+            {t('outfits.agent.TITLE', { agent: agentOf(waiting) })}{' '}
             <span class="font-normal text-muted">· {waiting.length}</span>
           </h2>
-          <ul class={MUSE_GRID}>
+          <ul class={AGENT_GRID}>
             {waiting.map((item, index) => (
-              <MuseCard item={item} unlocks={props.unlocks} eager={index < 2} />
+              <AgentCard
+                item={item}
+                unlocks={props.unlocks}
+                eager={index < 2}
+              />
             ))}
           </ul>
         </>
@@ -57,9 +61,9 @@ export function MuseSection(props: {
   );
 }
 
-/** The agent's name as the token says it; "Muse" when none did. */
-function agentOf(outfits: readonly MuseOutfit[]): string {
-  return museName(outfits.find((o) => o.agent)?.agent ?? null);
+/** The agent's name as the token says it; "the agent" when none did. */
+function agentOf(outfits: readonly AgentOutfit[]): string {
+  return suggestingAgentName(outfits.find((o) => o.agent)?.agent ?? null);
 }
 
 /** Where a card's moves come back to: the tab, at the card. */
@@ -68,10 +72,10 @@ const RETURN_TO = '/outfits';
 /** What the card leads with, by where the outfit stands (one primary). */
 type Primary =
   | { kind: 'save' | 'love' }
-  | { kind: 'choose'; piece: MusePiece }
-  | { kind: 'replace'; piece: MusePiece };
+  | { kind: 'choose'; piece: AgentPiece }
+  | { kind: 'replace'; piece: AgentPiece };
 
-function primaryOf(item: MuseOutfit): Primary {
+function primaryOf(item: AgentOutfit): Primary {
   const setAsidePiece = item.pieces.find((p) => p.setAside);
   if (setAsidePiece) return { kind: 'replace', piece: setAsidePiece };
   const toBuy = item.pieces.find(isPieceToBuy);
@@ -80,19 +84,19 @@ function primaryOf(item: MuseOutfit): Primary {
   return { kind: toBuy ? 'love' : 'save' };
 }
 
-function MuseCard(props: {
-  item: MuseOutfit;
+function AgentCard(props: {
+  item: AgentOutfit;
   unlocks: ReadonlyMap<number, OutfitCount>;
   eager: boolean;
 }) {
   const { item } = props;
-  const viewerSet = `muse-outfit-${item.id}-photos`;
+  const viewerSet = `agent-outfit-${item.id}-photos`;
   const primary = primaryOf(item);
   const name = item.name || t('UNTITLED_OUTFIT');
   return (
     <li
-      id={`muse-outfit-${item.id}`}
-      data-muse-outfit={String(item.id)}
+      id={`agent-outfit-${item.id}`}
+      data-agent-outfit={String(item.id)}
       data-reaction={item.reaction}
       class="flex flex-col gap-3 rounded-box border border-base-300 bg-base-100 p-4 lg:p-3"
     >
@@ -105,23 +109,23 @@ function MuseCard(props: {
           </h3>
           {item.reaction === 'loved' && (
             <span class="badge badge-sm badge-soft badge-primary shrink-0">
-              {t('outfits.muse.LOVED')}
+              {t('outfits.agent.LOVED')}
             </span>
           )}
         </div>
         {item.note && (
-          <p class="text-sm text-muted line-clamp-2" data-muse-note="">
+          <p class="text-sm text-muted line-clamp-2" data-agent-note="">
             {item.note}
           </p>
         )}
         {item.reaction === 'revise' && item.ownerNote && (
           <p class="text-sm" data-owner-note="">
-            {t('outfits.muse.YOU_ASKED', { note: item.ownerNote })}
+            {t('outfits.agent.YOU_ASKED', { note: item.ownerNote })}
           </p>
         )}
         {primary.kind === 'replace' && (
           <p class="text-sm text-warning" data-needs-replacement="">
-            {t('outfits.muse.NEEDS_REPLACEMENT', {
+            {t('outfits.agent.NEEDS_REPLACEMENT', {
               name: pieceName(primary.piece),
             })}
           </p>
@@ -133,7 +137,7 @@ function MuseCard(props: {
           piece.photo ? [{ photo: piece.photo, alt: pieceName(piece) }] : [],
         )}
       />
-      <ul class={MUSE_PIECES}>
+      <ul class={AGENT_PIECES}>
         {item.pieces.map((piece) => (
           <PieceTile
             piece={piece}
@@ -162,7 +166,7 @@ function MuseCard(props: {
             action={`${outfitUrl(item.id)}/dismiss`}
             returnTo={RETURN_TO}
             reasons={OUTFIT_DISMISS_REASONS}
-            label={`× ${t('muse.NOT_FOR_ME')}`}
+            label={`× ${t('agent.NOT_FOR_ME')}`}
           />
         </div>
       </div>
@@ -170,7 +174,7 @@ function MuseCard(props: {
   );
 }
 
-function PrimaryAction(props: { item: MuseOutfit; primary: Primary }) {
+function PrimaryAction(props: { item: AgentOutfit; primary: Primary }) {
   const { item, primary } = props;
   switch (primary.kind) {
     case 'save':
@@ -181,12 +185,12 @@ function PrimaryAction(props: { item: MuseOutfit; primary: Primary }) {
           <button
             type="submit"
             class="btn btn-primary"
-            data-muse-primary={primary.kind}
+            data-agent-primary={primary.kind}
           >
             {t(
               primary.kind === 'save'
-                ? 'outfits.muse.SAVE'
-                : 'outfits.muse.LOVE',
+                ? 'outfits.agent.SAVE'
+                : 'outfits.agent.LOVE',
             )}
           </button>
         </PostForm>
@@ -196,9 +200,9 @@ function PrimaryAction(props: { item: MuseOutfit; primary: Primary }) {
         <a
           href={`/wardrobe/${primary.piece.id}`}
           class="btn btn-primary"
-          data-muse-primary="choose"
+          data-agent-primary="choose"
         >
-          {t('outfits.muse.CHOOSE_PIECES')}
+          {t('outfits.agent.CHOOSE_PIECES')}
         </a>
       );
     case 'replace':
@@ -210,7 +214,7 @@ function PrimaryAction(props: { item: MuseOutfit; primary: Primary }) {
             returnTo: RETURN_TO,
           })}
           class="btn btn-primary"
-          data-muse-primary="replace"
+          data-agent-primary="replace"
         >
           {t('outfits.EDIT')}
         </a>
@@ -218,15 +222,15 @@ function PrimaryAction(props: { item: MuseOutfit; primary: Primary }) {
   }
 }
 
-const pieceName = (piece: MusePiece) =>
+const pieceName = (piece: AgentPiece) =>
   piece.name ?? categoryLabel(piece.category);
 
 /**
  * A piece's mark, none when it is owned: set aside, or to buy, which wears its price in
  * the mark's look when it has one; `label` is what the badge says.
  */
-function pieceMark(piece: MusePiece) {
-  // Muse's cards are the owner's alone.
+function pieceMark(piece: AgentPiece) {
+  // The agent's cards are the owner's alone.
   const marks = garmentMarks(piece, { ownerView: true });
   const [first] = marks;
   if (first === undefined) return undefined;
@@ -247,7 +251,7 @@ function pieceMark(piece: MusePiece) {
  * gives most pieces and so tells nothing, the inbox's rule).
  */
 function PieceTile(props: {
-  piece: MusePiece;
+  piece: AgentPiece;
   unlocks: OutfitCount | undefined;
   viewerSet: string;
   eager: boolean;
@@ -289,7 +293,7 @@ function PieceTile(props: {
           <a
             href={`/wardrobe/${piece.id}`}
             class="absolute bottom-0.5 sm:bottom-1.5 left-1/2 -translate-x-1/2 flex after:absolute after:-inset-x-2 after:top-1/2 after:h-11 after:-translate-y-1/2"
-            aria-label={t('outfits.muse.PIECE_LINK', {
+            aria-label={t('outfits.agent.PIECE_LINK', {
               name,
               label: mark.label,
             })}
@@ -316,18 +320,18 @@ function PieceTile(props: {
   );
 }
 
-/** Muse's outfits set aside, collapsed under one count: each with its reason and Undo. */
-function SetAside({ outfits }: { outfits: readonly MuseOutfit[] }) {
+/** The agent's outfits set aside, collapsed under one count: each with its reason and Undo. */
+function SetAside({ outfits }: { outfits: readonly AgentOutfit[] }) {
   return (
-    <details class="px-1" data-muse-set-aside="">
+    <details class="px-1" data-agent-set-aside="">
       <summary class="link link-hover text-sm text-muted flex items-center">
-        {t('outfits.muse.SET_ASIDE_COUNT', { count: outfits.length })}
+        {t('outfits.agent.SET_ASIDE_COUNT', { count: outfits.length })}
       </summary>
       <ul class="flex flex-col gap-1 pt-1">
         {outfits.map((item) => (
           <li
             class="flex items-center justify-between gap-2"
-            data-muse-set-aside-outfit={String(item.id)}
+            data-agent-set-aside-outfit={String(item.id)}
           >
             <span class="text-sm min-w-0 truncate">
               {item.name || t('UNTITLED_OUTFIT')}
@@ -341,7 +345,7 @@ function SetAside({ outfits }: { outfits: readonly MuseOutfit[] }) {
             <UndoForm
               action={`${outfitUrl(item.id)}/undo`}
               returnTo={RETURN_TO}
-              ariaLabel={t('outfits.muse.UNDO_LABEL', {
+              ariaLabel={t('outfits.agent.UNDO_LABEL', {
                 name: item.name || t('UNTITLED_OUTFIT'),
               })}
             />

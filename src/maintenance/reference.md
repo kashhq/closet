@@ -10,7 +10,7 @@ Moved out of `AGENTS.md` (#723) so the auto-loaded doc keeps only invariants, go
                        (the quarantine's purge and --restore-from-trash, #649), nightly.ts (a daily timer at an APP_TIMEZONE hour, started
                        by server.ts when MAINTENANCE_ENABLED), minutely.ts (a timer a second past every
                        minute, or every `everyMinutes`, never overlapping: the push reminders, the
-                       week's re-plan, the order mail's poll, Muse's quiet round close),
+                       week's re-plan, the order mail's poll, the agent's quiet round close),
                        scheduled.ts (what both timers share: ScheduledJob, whose stop() waits for a
                        run in flight at most STOP_WAIT_MS, and stopBeforeClose, the preClose hook
                        that stops them all before the pool ends), cli.ts (runCli: config, logger, schema check,

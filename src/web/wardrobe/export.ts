@@ -27,7 +27,7 @@ export const EXPORT_PAGE_SIZE = 200;
 /**
  * The garment columns left out: whose it is (always the requester), the
  * internal photo row id (the photo is exported as its URLs), and a
- * the agent token's id (a credential's row the export does not hold; its
+ * The agent token's id (a credential's row the export does not hold; its
  * need's id is exported, the JSON bundle's `optionGroups` holds the needs,
  * and the CSV names each garment's need in OPTION_GROUP_COLUMN), and the
  * sync's bookkeeping (#196a: the owner's revision and a client's create id,
@@ -42,7 +42,7 @@ export const OMITTED_COLUMNS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The option_group columns the JSON bundle leaves out of each need (Muse,
+ * The option_group columns the JSON bundle leaves out of each need (the agent,
  * #333): whose it is and its token.
  */
 const OMITTED_GROUP_COLUMNS: ReadonlySet<string> = new Set([
@@ -210,7 +210,7 @@ function jsonGarment({ garment: row, photo }: ExportRow): object {
 }
 
 /**
- * `ownerId`'s Muse needs (#333), oldest first, as the JSON bundle holds
+ * `ownerId`'s the agent needs (#333), oldest first, as the JSON bundle holds
  * them: a handful, so one statement after the garments.
  */
 async function exportGroups(db: Db, ownerId: number): Promise<object[]> {

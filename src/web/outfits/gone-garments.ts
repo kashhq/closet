@@ -319,13 +319,13 @@ export class OutfitIncomplete extends HttpError {
 }
 
 /**
- * The refusal of a write that would plan, pack or wear one of Muse's
+ * The refusal of a write that would plan, pack or wear one of the agent's
  * proposals the owner has not made theirs (#335): a 409. Save (or Love)
  * makes it theirs; nothing was written.
  */
 class OutfitNotYours extends HttpError {
   constructor(readonly outfitId: number) {
-    super(409, t('outfits.muse.NOT_YOURS_YET'), {
+    super(409, t('outfits.agent.NOT_YOURS_YET'), {
       logDetail: `outfit ${outfitId} is a proposal not the owner's yet`,
     });
     this.name = 'OutfitNotYours';

@@ -483,7 +483,7 @@ describe('outfits', () => {
         expect(ids.length).toBeGreaterThan(3);
         expect(ids).toEqual([...ids].sort((a, b) => b - a));
         // The session's user row, then every outfit with its garments,
-        // the entries' activity (worn counts, next plans) and Muse's
+        // the entries' activity (worn counts, next plans) and the agent's
         // outfits (#335) in one (#164).
         expect((await recordQueries(load)).statements).toBe(2);
       });

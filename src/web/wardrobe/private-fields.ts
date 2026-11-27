@@ -30,7 +30,7 @@ export function seesPrivate(role: WardrobeRole): boolean {
 
 /**
  * The private columns for a select: both with `private`, neither without.
- * An owner-only reader (insights, wears, Muse's feedback, the outfits) asks
+ * An owner-only reader (insights, wears, the agent's feedback, the outfits) asks
  * as `'OWN'`, and gets both.
  */
 export function privateColumns(role: 'OWN'): PrivateColumns;

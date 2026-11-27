@@ -268,21 +268,21 @@ describe('Today', () => {
       await clearToday();
     });
 
-    // #333: Muse's needs waiting on the owner's choice are a card leading
+    // #333: the agent's needs waiting on the owner's choice are a card leading
     // to the Wishlist inbox, read in the day's own statement
     // (needsToDecideSql in readDay), so the counts above stay; it goes once
     // no open need has an option to choose. A plan an agent drafted no
     // longer has a card: the plans are unlinked.
-    it('shows Muse’s needs to decide as a card, in the same three statements, until none is left', async () => {
+    it('shows the agent’s needs to decide as a card, in the same three statements, until none is left', async () => {
       await clearToday();
-      await createAccessToken(t, { name: 'Muse' });
+      await createAccessToken(t, { name: 'Stylist' });
       const [{ id: tokenId }] = await t.db
         .select({ id: personalAccessToken.id })
         .from(personalAccessToken)
         .where(
           and(
             eq(personalAccessToken.userId, t.owner.id),
-            eq(personalAccessToken.name, 'Muse'),
+            eq(personalAccessToken.name, 'Stylist'),
           ),
         );
       const needs: number[] = [];
@@ -323,8 +323,8 @@ describe('Today', () => {
       const record = await recordQueries(() => get('/'));
       expect(record.statements).toBe(3);
       const html = unescapeHtml((await get('/')).body);
-      expect(html).toContain('data-muse-needs="2"');
-      expect(html).toContain('Muse has 2 needs for you to decide on');
+      expect(html).toContain('data-agent-needs="2"');
+      expect(html).toContain('Stylist has 2 needs for you to decide on');
       expect(html).toMatch(
         /href="\/wardrobe\/wishlist" class="btn btn-primary/,
       );
@@ -332,7 +332,7 @@ describe('Today', () => {
 
       await decide(t.db, t.owner.id, { kind: 'choose', garmentId: picks[0] });
       expect(unescapeHtml((await get('/')).body)).toContain(
-        'Muse has 1 need for you to decide on',
+        'Stylist has 1 need for you to decide on',
       );
       await decide(t.db, t.owner.id, {
         kind: 'dismiss-group',
@@ -340,7 +340,7 @@ describe('Today', () => {
         reason: 'not_now',
         note: null,
       });
-      expect((await get('/')).body).not.toContain('data-muse-needs');
+      expect((await get('/')).body).not.toContain('data-agent-needs');
       await asFixture(t.db, (tx) => tx.delete(optionGroup));
       await asFixture(t.db, (tx) =>
         tx.delete(garment).where(inArray(garment.id, picks)),

@@ -19,8 +19,8 @@ import {
   type DecisionToast,
   DecisionToastView,
 } from '../wishlist/suggestion-parts';
-import { MuseSection } from './muse-cards';
-import type { MuseOutfit } from './proposals';
+import { AgentSection } from './agent-cards';
+import type { AgentOutfit } from './proposals';
 import { buyFirstNote, toBuyLine } from './to-buy';
 import type { OutfitList } from './outfit-list';
 import { OutfitListTabs } from './outfit-list-tabs';
@@ -47,11 +47,11 @@ export interface SavedModel {
    */
   picking?: { destination: DayDestination; choice: DayChoice };
   /**
-   * Muse's outfits not the owner's yet, and what their pieces to buy
-   * unlock (#335): the From Muse section above the grid. Never read while
+   * The agent's outfits not the owner's yet, and what their pieces to buy
+   * unlock (#335): the From the agent section above the grid. Never read while
    * picking.
    */
-  muse: { outfits: MuseOutfit[]; unlocks: Map<number, OutfitCount> };
+  agent: { outfits: AgentOutfit[]; unlocks: Map<number, OutfitCount> };
   /** A reaction's toast (`?decided=`). */
   toast: DecisionToast | undefined;
 }
@@ -102,9 +102,9 @@ export function OutfitsPage(props: { ctx: ViewContext; model: SavedModel }) {
       {model.picking && (
         <PickingHeader destination={model.picking.destination} />
       )}
-      {!model.picking && <MuseSection {...model.muse} />}
-      {!model.picking && model.muse.outfits.length > 0 && (
-        <h2 class="font-semibold px-1 pt-2">{t('outfits.muse.YOURS')}</h2>
+      {!model.picking && <AgentSection {...model.agent} />}
+      {!model.picking && model.agent.outfits.length > 0 && (
+        <h2 class="font-semibold px-1 pt-2">{t('outfits.agent.YOURS')}</h2>
       )}
       <OutfitListTabs
         list={model.list}
@@ -313,7 +313,7 @@ function OutfitTile(props: {
         {line && <span class="text-xs text-muted truncate">{line}</span>}
         {outfit.agent && !outfit.proposed && (
           <span class="flex">
-            <AgentBadge agent={outfit.agent} byMuse={outfit.proposed} />
+            <AgentBadge agent={outfit.agent} byAgent={outfit.proposed} />
           </span>
         )}
       </span>

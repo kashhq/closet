@@ -50,6 +50,7 @@ describe('PLACEHOLDER_KINDS (#1100)', () => {
     expect(formatOnly).toEqual([
       'CALENDAR_PLAN_DAY',
       'QUANTITY_BADGE',
+      'agent.round.BOTH',
       'calendar.MONTH_TITLE',
       'calendar.MORE',
       'calendar.SHORT_DAY',
@@ -63,7 +64,6 @@ describe('PLACEHOLDER_KINDS (#1100)', () => {
       'linkImport.REASON_LED',
       'mark.OUTFIT_LABEL',
       'mark.PIECE',
-      'muse.round.BOTH',
       'refusal.form.fieldErrors',
       'sizes.BRAND_NOTE',
       'today.push.PLANNED',
@@ -117,7 +117,7 @@ describe('t() parameters (#1100)', () => {
     // @ts-expect-error words around a copy placeholder do not make it data
     t('style.RULE_BROKEN', { rule: 'Never boots with shorts' });
     // @ts-expect-error a key's placeholders are required
-    expect(() => t('muse.round.BOTH')).toThrow('missing parameter');
+    expect(() => t('agent.round.BOTH')).toThrow('missing parameter');
   });
 
   it('takes any string or number for a data placeholder', () => {

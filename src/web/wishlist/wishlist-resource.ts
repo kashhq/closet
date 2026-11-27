@@ -18,7 +18,7 @@ import { MoneyInput } from '../wardrobe/garment-api-input';
 import { Money, PrivatePrice } from '../wardrobe/garment-resource';
 import type {
   Inbox,
-  MusePick,
+  AgentPick,
   Need,
   NeedDetail,
   NewNeed,
@@ -29,7 +29,7 @@ import type { GarmentRef } from './queries';
 /**
  * The API's wishlist resources and inputs (#194b; docs/plans/2026-11-12-
  * json-api.md section 2), mapped from what the pages read: the Wishlist
- * tab as Muse's inbox (readInbox), a need's decision screen (readNeed) and
+ * tab as the agent's inbox (readInbox), a need's decision screen (readNeed) and
  * "Goes with my closet" (goesWithCloset). camelCase, null fields left out.
  * A wishlist garment in full is GET /garments/{id}; these are its cards.
  * Unlocks and best outfits judge an option against the owner's closet, so
@@ -78,11 +78,11 @@ const WishlistGarment = Type.Object(
     sourceUrl: Type.Optional(Type.String()),
     /** Signed, relative, immutable: from the cutout when it shows. */
     thumbUrl: Type.Optional(Type.String()),
-    fromMuse: Type.Boolean({ description: 'Your agent suggested it' }),
-    /** Muse's place for it among its need's options, 1 its pick. */
+    fromAgent: Type.Boolean({ description: 'Your agent suggested it' }),
+    /** The agent's place for it among its need's options, 1 its pick. */
     rank: Type.Optional(Type.Integer({ minimum: 1 })),
-    /** Muse's reasoning. */
-    museNote: Type.Optional(Type.String()),
+    /** The agent's reasoning. */
+    agentNote: Type.Optional(Type.String()),
     setAside: Type.Boolean({
       description:
         'Set aside ("Not for me", or another option chosen): Undo brings it back',
@@ -108,7 +108,7 @@ type WishlistGarment = Static<typeof WishlistGarment>;
 type OwnItem = Inbox['own'][number];
 
 function toPick(
-  pick: MusePick,
+  pick: AgentPick,
   extra: Partial<WishlistGarment> = {},
 ): WishlistGarment {
   return {
@@ -121,11 +121,11 @@ function toPick(
       sourceUrl: pick.sourceUrl,
       thumbUrl: pick.photo && imageUrl(pick.photo, 'thumb'),
       rank: pick.rank,
-      museNote: pick.note,
+      agentNote: pick.note,
       setAsideReason: pick.dismissedReason,
       setAsideNote: pick.dismissedNote,
     }),
-    fromMuse: true,
+    fromAgent: true,
     setAside: pick.dismissedAt !== null,
     ...extra,
   };
@@ -144,7 +144,7 @@ function toOwnItem(item: OwnItem): WishlistGarment {
       setAsideReason: item.dismissedReason,
       replaces: item.replaces && toGarmentRef(item.replaces),
     }),
-    fromMuse: item.suggested,
+    fromAgent: item.suggested,
     setAside: item.dismissedAt !== null,
   };
 }
@@ -153,9 +153,9 @@ const NeedResource = Type.Object(
   {
     id: Type.Integer(),
     name: Type.String(),
-    /** Per piece, as Muse set it. */
+    /** Per piece, as the agent set it. */
     budget: Type.Optional(Money),
-    /** Muse's reasoning. */
+    /** The agent's reasoning. */
     note: Type.Optional(Type.String()),
     status: literals(OPTION_GROUP_STATUSES),
     /** What settled it: the option chosen, or what was bought. */
@@ -168,7 +168,7 @@ const NeedResource = Type.Object(
   {
     title: 'WishlistNeed',
     description:
-      'One need Muse is shopping for (an option group): open, resolved (an option chosen or bought) or set aside',
+      'One need the agent is shopping for (an option group): open, resolved (an option chosen or bought) or set aside',
   },
 );
 type NeedResource = Static<typeof NeedResource>;
@@ -203,7 +203,7 @@ export const Wishlist = Type.Object(
       ),
       {
         description:
-          "Open needs with options to choose from: the most unlocks first (for the owner; else Muse's rank), each need's options likewise",
+          "Open needs with options to choose from: the most unlocks first (for the owner; else the agent’s rank), each need's options likewise",
       },
     ),
     items: Type.Array(WishlistGarment, {
@@ -211,7 +211,7 @@ export const Wishlist = Type.Object(
         'Your own wishlist items (and a lone suggestion), newest first',
     }),
     stillLooking: Type.Array(NeedResource, {
-      description: 'Open needs with no option left: Muse is still looking',
+      description: 'Open needs with no option left: the agent is still looking',
     }),
     setAside: Type.Object(
       {
@@ -227,7 +227,7 @@ export const Wishlist = Type.Object(
   {
     title: 'Wishlist',
     description:
-      "The Wishlist tab, Muse's inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows",
+      'The Wishlist tab, the agent’s inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows',
   },
 );
 

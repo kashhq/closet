@@ -114,7 +114,7 @@ describe('push reminders', () => {
       {
         morning: settings.morning ?? null,
         evening: settings.evening ?? null,
-        museRounds: false,
+        agentRounds: false,
       },
       setAt,
     );
@@ -241,17 +241,17 @@ describe('push reminders', () => {
       expect(row.remindersSetAt).not.toBeNull();
       // Named by device id, never by its endpoint.
       expect(t.logs.messages('info', 'Web')).toContainEqual(
-        `User ${t.owner.id} set reminders on push device ${row.id}: morning 420, evening off (minutes after midnight), Muse's rounds off`,
+        `User ${t.owner.id} set reminders on push device ${row.id}: morning 420, evening off (minutes after midnight), the agent’s rounds off`,
       );
       expect(t.logs.text()).not.toContain(endpoint);
-      // The same times again with Muse's toggle: no time changed, no word
+      // The same times again with the agent's toggle: no time changed, no word
       // about tomorrow.
       const again = await save({
         endpoint,
         morningOn: '1',
         morning: '420',
         evening: '1260',
-        museRoundsOn: '1',
+        agentRoundsOn: '1',
       });
       expect(again.body).toContain('Saved.');
       expect(again.body).not.toContain('starts tomorrow');

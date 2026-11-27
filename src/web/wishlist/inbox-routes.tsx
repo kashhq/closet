@@ -26,7 +26,7 @@ import {
   INBOX_MORE_PATH,
   INBOX_SEEN_PATH,
   InboxPage,
-  NewFromMuse,
+  NewFromAgent,
 } from './inbox-page';
 import {
   DECISION_FLAG,
@@ -88,11 +88,11 @@ function noteOf(note: string | undefined): string | null {
 }
 
 /**
- * The Muse inbox (#333; docs/plans/2026-10-05-muse-suggestions.md, section
+ * The agent inbox (#333; docs/plans/2026-10-05-agent-suggestions.md, section
  * 4 C and D): the Wishlist tab as the inbox, its next page of needs, the
- * "New from Muse" marker, a need's decision screen, and every decision
+ * "New from the agent" marker, a need's decision screen, and every decision
  * made on them. The pages are read by whoever reads the wishlist (a VIEW
- * grantee sees Muse's notes: owner decision, 2026-10-05); unlocks, best
+ * grantee sees the agent's notes: owner decision, 2026-10-05); unlocks, best
  * outfits, the marker and every decision are the owner's alone. Each
  * decision is one call of makeDecision() (suggestion-actions.ts, which
  * refuses itself: a 404 not theirs, a 409 a stale page or a double tap,
@@ -165,12 +165,12 @@ export const inboxRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
-  // "New from Muse", sent by the owner's inbox as it loads (hx-swap none):
+  // "New from the agent", sent by the owner's inbox as it loads (hx-swap none):
   // the answer is the marker's slot, out of band. A write, so never cached
   // (doc section 9: the bare page stays the same before and after).
   app.post(INBOX_SEEN_PATH, async (request, reply) => {
     const needs = await markNeedsSeen({ db, logger }, actorOf(request));
-    return renderFragment(reply, <NewFromMuse needs={needs} />);
+    return renderFragment(reply, <NewFromAgent needs={needs} />);
   });
 
   app.get(

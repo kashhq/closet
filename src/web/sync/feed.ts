@@ -158,7 +158,7 @@ export const FEED: Readonly<Record<SyncResource, FeedEntry>> = {
         data: toSyncedCapsule(row),
       })),
   }),
-  // Muse's proposals included: the owner's to react to (decided on #607).
+  // The agent's proposals included: the owner's to react to (decided on #607).
   outfit: feedEntry({
     name: 'outfit',
     shared: false,

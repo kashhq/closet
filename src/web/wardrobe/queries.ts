@@ -585,7 +585,7 @@ export interface GarmentDetail
   away: AwayReason | null;
   awayNote: string | null;
   /**
-   * Muse's suggestion (#333): set when it is one, so its page shows where
+   * The agent's suggestion (#333): set when it is one, so its page shows where
    * it stands (src/web/wishlist/suggestion-section.tsx). The rest is read
    * with the garment's context (garmentContext's `suggestion`).
    */

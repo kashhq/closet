@@ -23,7 +23,7 @@ import { sheetOpener } from '../layout/sheet';
 import { OutfitCollage, outfitLabel } from '../outfits/collage';
 import type { NeedsToDecide } from '../wishlist/inbox';
 import { roundCard, roundReviewPath } from '../wishlist/round-text';
-import type { MuseRound } from '../wishlist/rounds';
+import type { AgentRound } from '../wishlist/rounds';
 import { WISHLIST_PATH } from '../wardrobe/urls';
 import { ADD_SHEET_ID, AddSheet } from '../wardrobe/wardrobe-header';
 import { EntrySelfie } from '../selfies/views';
@@ -37,7 +37,7 @@ import { TODAY_PATH, todayIdeasUrl, WEAR_THIS_PATH, WORE_FLAG } from './urls';
 
 /**
  * Today (#15; docs/plans/2026-09-26-redesign.md, "Today"): the day's date,
- * its weather line, Muse's one card while a round or a need waits on the
+ * its weather line, the agent's one card while a round or a need waits on the
  * owner (#333, #337), then a row per occasion: a planned outfit with "Wore
  * it" and "Change", or three ideas to swipe with "Wear this" and Refresh. A
  * summary with one decision on it: every card leads into another tab's page
@@ -113,7 +113,7 @@ export function TodayPage(props: {
       >
         {t('today.OFFLINE')}
       </p>
-      <MuseCard round={model.round} needs={model.needs} />
+      <AgentCard round={model.round} needs={model.needs} />
       {model.rows.map((row) =>
         row.kind === 'planned' ? (
           <PlannedRowView row={row} today={model.today} wore={wore} />
@@ -207,26 +207,26 @@ function FirstRunCard({ stage }: { stage: FirstRun }) {
   );
 }
 
-/** One Muse card at most: the waiting round's, else the needs'. */
-function MuseCard(props: Pick<TodayModel, 'round' | 'needs'>) {
+/** One the agent card at most: the waiting round's, else the needs'. */
+function AgentCard(props: Pick<TodayModel, 'round' | 'needs'>) {
   if (props.round) return <RoundCard round={props.round} />;
   if (props.needs) return <NeedsCard needs={props.needs} />;
   return null;
 }
 
 /**
- * "Muse: 3 outfits, 7 pieces to consider", with Review (#337): the latest
+ * "the agent: 3 outfits, 7 pieces to consider", with Review (#337): the latest
  * round while any of it waits, counted live, so it shrinks as the owner
  * decides and goes at zero (nothing to dismiss). It takes the needs
- * card's place: one Muse card at most. Muse's one line under it, clamped.
+ * card's place: one agent card at most. The agent's one line under it, clamped.
  */
-function RoundCard({ round }: { round: MuseRound }) {
+function RoundCard({ round }: { round: AgentRound }) {
   return (
     <Card
       as="article"
       variant="content"
       bodyClass="p-3 flex-row items-center gap-3"
-      data-muse-round={String(round.id)}
+      data-agent-round={String(round.id)}
     >
       <div class="flex-1 min-w-0">
         <p class="text-sm font-semibold break-words">
@@ -237,7 +237,7 @@ function RoundCard({ round }: { round: MuseRound }) {
         )}
       </div>
       <a href={roundReviewPath(round)} class="btn btn-primary btn-sm shrink-0">
-        {t('muse.REVIEW')}
+        {t('agent.REVIEW')}
       </a>
     </Card>
   );
@@ -247,12 +247,12 @@ function RoundCard({ round }: { round: MuseRound }) {
 function needsText({ agent, count }: NeedsToDecide): Translated {
   if (!agent) {
     return count === 1
-      ? t('muse.TODAY_CARD_UNNAMED_ONE')
-      : t('muse.TODAY_CARD_UNNAMED', { count });
+      ? t('agent.TODAY_CARD_UNNAMED_ONE')
+      : t('agent.TODAY_CARD_UNNAMED', { count });
   }
   return count === 1
-    ? t('muse.TODAY_CARD_ONE', { agent: agentName(agent) })
-    : t('muse.TODAY_CARD', { agent: agentName(agent), count });
+    ? t('agent.TODAY_CARD_ONE', { agent: agentName(agent) })
+    : t('agent.TODAY_CARD', { agent: agentName(agent), count });
 }
 
 /**
@@ -267,11 +267,11 @@ function NeedsCard({ needs }: { needs: NeedsToDecide }) {
       as="article"
       variant="content"
       bodyClass="p-3 flex-row items-center gap-3"
-      data-muse-needs={String(needs.count)}
+      data-agent-needs={String(needs.count)}
     >
       <p class="text-sm flex-1 min-w-0 break-words">{text}</p>
       <a href={WISHLIST_PATH} class="btn btn-primary btn-sm shrink-0">
-        {t('muse.REVIEW')}
+        {t('agent.REVIEW')}
       </a>
     </Card>
   );

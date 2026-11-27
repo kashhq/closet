@@ -30,8 +30,8 @@ function sources(dir: string): string[] {
 const DYNAMIC_PREFIXES = [
   'errorPage.title.', // error-page.tsx, by the error's kind
   'gallery.problem.', // gallery/chips.tsx, by IdeaProblem
-  'muse.reason.', // wishlist/suggestion-parts.tsx
-  'muse.toast.', // the decision toasts
+  'agent.reason.', // wishlist/suggestion-parts.tsx
+  'agent.toast.', // the decision toasts
   'occasion.', // date-labels.ts
   'property.', // wardrobe/labels.ts: property.<name>.<value>
   'roles.', // wardrobe/labels.ts

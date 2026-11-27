@@ -20,7 +20,7 @@ import { callTool, createAccessToken, tool } from './mcp';
 
 /**
  * suggest_garment judged again as it writes (#337): its refusals before
- * the fetch (mcp-muse.spec.ts) are read ahead, so a need set aside or
+ * the fetch (mcp-agent.spec.ts) are read ahead, so a need set aside or
  * filled during the fetch, a link set aside by the owner whoever added
  * it, or the same link marked by a call alongside is refused under the
  * owner lock (markSuggestedProduct), leaving no garment and no pending
@@ -65,7 +65,7 @@ describe('suggest_garment, judged again as it writes', () => {
   beforeAll(async () => {
     sites = await startLinkSites();
     t = await createTestApp({}, { outboundFetch: sites.outboundFetch });
-    token = await createAccessToken(t, { name: 'Muse' });
+    token = await createAccessToken(t, { name: 'Stylist' });
     const [row] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)

@@ -179,7 +179,7 @@ describe('GET /offline/warm', () => {
       '/laundry',
       ...closet.map((id) => `/wardrobe/${id}`),
       `/outfits/${outfitId}`,
-      // The Muse inbox (#333): the Wishlist tab, and what is still wanted.
+      // The agent inbox (#333): the Wishlist tab, and what is still wanted.
       '/wardrobe/wishlist',
       `/wardrobe/${wished}`,
     ]);

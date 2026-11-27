@@ -127,7 +127,7 @@ const ReactionBody = Type.Union([
   Type.Null(),
 ]);
 
-/** "Not for me" on one of Muse's outfits: a reason (a 400 without), an optional note. */
+/** "Not for me" on one of the agent's outfits: a reason (a 400 without), an optional note. */
 const DeclineBody = Type.Object({
   returnTo: Type.Optional(Type.String({ maxLength: 2048 })),
   reason: Type.Union(
@@ -259,7 +259,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       }
       const day = destination.kind === 'day' ? destination : undefined;
       const list = parseOutfitList(request.query.show);
-      const { page, activity, choice, muse } = await savedContext(
+      const { page, activity, choice, agent } = await savedContext(
         db,
         ownerId,
         today,
@@ -280,7 +280,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
             ...page,
             list,
             activity,
-            muse,
+            agent,
             toast: decisionToastOf(request.query[DECISION_FLAG]),
             picking:
               day && choice
@@ -463,7 +463,7 @@ export const outfitRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   );
 
   /**
-   * A reaction to one of Muse's outfits (#335; reactToProposal over the one
+   * A reaction to one of the agent's outfits (#335; reactToProposal over the one
    * writer): Love (Save on a complete outfit), Not for me with a reason,
    * Undo. A native post each, 303 to the page it was made on with its
    * toast; the refusals (a 404, a 409) are reactToProposal's.

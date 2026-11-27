@@ -18,17 +18,17 @@ import {
 import { createAccessToken, tool } from './mcp';
 
 /**
- * Muse's outfits on the Outfits tab (#335, docs/plans/2026-10-05-muse-
+ * The agent's outfits on the Outfits tab (#335, docs/plans/2026-10-05-agent-
  * suggestions.md section 4 B): ordinary outfits the agent proposed
- * (outfit.proposed_at). From Muse is its own section, the owner's grid
+ * (outfit.proposed_at). From the agent is its own section, the owner's grid
  * and pickers keep to their own (ownersOutfit); each card leads with one
  * primary by where the outfit stands; Love (Save once complete), Not for
  * me with a reason and Undo go through the one writer (reactToOutfit);
  * Bought it makes a loved outfit the owner's; a proposal is never deleted.
  * The migration that made plan looks these outfits is
- * muse-outfits-migration.spec.ts (retired 2026-10-13)'s.
+ * agent-outfits-migration.spec.ts (retired 2026-10-13)'s.
  */
-describe('Muse’s outfits (#335)', () => {
+describe('the agent’s outfits (#335)', () => {
   let t: TestApp;
   let tokenId: number;
   let mcpToken: string;
@@ -42,7 +42,7 @@ describe('Muse’s outfits (#335)', () => {
   const post = (url: string, payload: Record<string, unknown> = {}) =>
     t.inject({ method: 'POST', url, payload });
 
-  /** An outfit of these garments, proposed by Muse with `reaction`. */
+  /** An outfit of these garments, proposed by the agent with `reaction`. */
   const proposed = async (
     name: string,
     garments: number[],
@@ -80,14 +80,14 @@ describe('Muse’s outfits (#335)', () => {
 
   /** One card's markup on the tab: up to the next card. */
   const cardOf = (html: string, id: number) => {
-    const start = html.indexOf(`data-muse-outfit="${id}"`);
+    const start = html.indexOf(`data-agent-outfit="${id}"`);
     if (start === -1) return undefined;
-    const next = html.indexOf('data-muse-outfit="', start + 1);
+    const next = html.indexOf('data-agent-outfit="', start + 1);
     return html.slice(start, next === -1 ? undefined : next);
   };
 
   const primaryOf = (html: string, id: number) =>
-    /data-muse-primary="([a-z]+)"/.exec(cardOf(html, id) ?? '')?.[1];
+    /data-agent-primary="([a-z]+)"/.exec(cardOf(html, id) ?? '')?.[1];
 
   const tab = async () => unescapeHtml((await get('/outfits')).body);
 
@@ -98,7 +98,7 @@ describe('Muse’s outfits (#335)', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    mcpToken = await createAccessToken(t, { name: 'Muse' });
+    mcpToken = await createAccessToken(t, { name: 'Stylist' });
     const [token] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -121,7 +121,7 @@ describe('Muse’s outfits (#335)', () => {
   afterAll(() => t?.cleanup());
 
   describe('the tab', () => {
-    it('shows Muse’s outfits first, as cards, newest first; the grid and the pickers keep to the owner’s', async () => {
+    it('shows the agent’s outfits first, as cards, newest first; the grid and the pickers keep to the owner’s', async () => {
       const own = await post('/outfits', {
         name: 'My own',
         notes: '',
@@ -138,7 +138,7 @@ describe('Muse’s outfits (#335)', () => {
         new Date(Date.now() - 60_000),
       );
       const newer = await proposed('Newer look', [knit, jeans]);
-      // Complete, but Muse's until saved: never in a picker either.
+      // Complete, but the agent's until saved: never in a picker either.
       const completePending = await proposed(
         'Complete, not saved',
         [tee, jeans, shoes],
@@ -146,9 +146,9 @@ describe('Muse’s outfits (#335)', () => {
         new Date(Date.now() - 120_000),
       );
       const html = await tab();
-      expect(html).toContain('From Muse');
-      expect(html.indexOf(`data-muse-outfit="${newer}"`)).toBeLessThan(
-        html.indexOf(`data-muse-outfit="${older}"`),
+      expect(html).toContain('From Stylist');
+      expect(html.indexOf(`data-agent-outfit="${newer}"`)).toBeLessThan(
+        html.indexOf(`data-agent-outfit="${older}"`),
       );
       expect(html).toContain('Your outfits');
       // The grid's tiles: the owner's only.
@@ -159,7 +159,7 @@ describe('Muse’s outfits (#335)', () => {
       const picking = unescapeHtml(
         (await get(`/outfits?for=day:${t.today()}&occasion=all-day`)).body,
       );
-      expect(picking).not.toContain('data-muse-outfits');
+      expect(picking).not.toContain('data-agent-outfits');
       expect(picking).not.toContain(`value="${newer}"`);
       expect(picking).not.toContain(`value="${completePending}"`);
       const plan = unescapeHtml(
@@ -239,7 +239,7 @@ describe('Muse’s outfits (#335)', () => {
   });
 
   describe('reactions (reactToOutfit)', () => {
-    it('Love keeps an incomplete outfit in Muse’s section, loved; Bought it makes it the owner’s', async () => {
+    it('Love keeps an incomplete outfit in the agent’s section, loved; Bought it makes it the owner’s', async () => {
       const coat = await createWishlistItem(t, {
         name: 'Rain coat',
         category: 'outerwear',
@@ -292,7 +292,7 @@ describe('Muse’s outfits (#335)', () => {
       expect(cardOf(html, id)).toBeUndefined();
       expect(html).toMatch(
         new RegExp(
-          `data-muse-set-aside-outfit="${id}"[\\s\\S]*?Too loud[\\s\\S]*?The style`,
+          `data-agent-set-aside-outfit="${id}"[\\s\\S]*?Too loud[\\s\\S]*?The style`,
         ),
       );
       const undo = await post(`/outfits/${id}/undo`, {});
@@ -318,7 +318,7 @@ describe('Muse’s outfits (#335)', () => {
         /^\/outfits\/(\d+)$/.exec(String(own.headers.location))![1],
       );
       expect((await post(`/outfits/${ownId}/love`, {})).statusCode).toBe(404);
-      const stranger = await t.register('stranger-muse@example.com');
+      const stranger = await t.register('stranger-agent@example.com');
       const theirs = await t.inject({
         method: 'POST',
         url: `/outfits/${id}/dismiss`,
@@ -339,10 +339,10 @@ describe('Muse’s outfits (#335)', () => {
   });
 
   describe('the outfit page and delete', () => {
-    it('says it is Muse’s, offers the card’s moves, and hides Delete until loved', async () => {
+    it('says it is the agent’s, offers the card’s moves, and hides Delete until loved', async () => {
       const id = await proposed('Office blazer', [blazer, shoes]);
       const page = unescapeHtml((await get(`/outfits/${id}`)).body);
-      expect(page).toContain('From Muse');
+      expect(page).toContain('From Stylist');
       expect(page).toContain('Why Office blazer');
       expect(page).toContain(`action="/outfits/${id}/love"`);
       expect(page).toContain(`action="/outfits/${id}/dismiss"`);
@@ -463,16 +463,16 @@ describe('Muse’s outfits (#335)', () => {
       });
     });
 
-    it('a save of its set says it saved Muse’s outfit, not "Already saved"', async () => {
+    it('a save of its set says it saved the agent’s outfit, not "Already saved"', async () => {
       const extra = await belt();
-      const id = await proposed('Saved from Muse', [jeans, extra]);
+      const id = await proposed('Saved from Stylist', [jeans, extra]);
       const res = await post('/outfits', {
         name: 'Mine now',
         notes: '',
         category: ['bottoms', 'accessories'],
         garmentId: [jeans, extra].map(String),
       });
-      expect(res.headers.location).toBe(`/outfits/${id}?alreadySaved=muse`);
+      expect(res.headers.location).toBe(`/outfits/${id}?alreadySaved=agent`);
       const page = unescapeHtml((await get(String(res.headers.location))).body);
       expect(page).toContain('Saved the suggested outfit: it’s yours now');
       expect(page).not.toContain('Already saved');
@@ -592,7 +592,7 @@ describe('Muse’s outfits (#335)', () => {
   });
 });
 
-describe('the generator’s memory keeps Muse’s proposals (#335)', () => {
+describe('the generator’s memory keeps the agent’s proposals (#335)', () => {
   let t: TestApp;
 
   beforeAll(async () => {
@@ -601,7 +601,7 @@ describe('the generator’s memory keeps Muse’s proposals (#335)', () => {
 
   afterAll(() => t?.cleanup());
 
-  it('Ideas never offers a set Muse proposed, even one the owner set aside', async () => {
+  it('Ideas never offers a set the agent proposed, even one the owner set aside', async () => {
     const tee = await createGarment(t, { name: 'White tee', category: 'tops' });
     const jeans = await createGarment(t, {
       name: 'Raw jeans',
@@ -621,7 +621,7 @@ describe('the generator’s memory keeps Muse’s proposals (#335)', () => {
       method: 'POST',
       url: '/outfits',
       payload: {
-        name: 'Muse’s',
+        name: 'Stylist’s',
         notes: '',
         category: ['tops', 'bottoms', 'footwear'],
         garmentId: [tee, jeans, shoes].map(String),

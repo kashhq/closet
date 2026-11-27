@@ -222,7 +222,7 @@ export const GarmentBody = Type.Object({
   // added with it (POST /wardrobe only; the requester's own pending item,
   // else a 404).
   orderItem: Type.Optional(Type.Union([Type.Literal(''), RowId])),
-  // A new closet garment's Muse need (#333, "Bought a different one"):
+  // A new closet garment's the agent need (#333, "Bought a different one"):
   // settled by it in its transaction (POST /wardrobe only; the requester's
   // own open need, else a 404).
   forNeed: Type.Optional(Type.Union([Type.Literal(''), RowId])),

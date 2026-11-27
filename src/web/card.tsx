@@ -6,7 +6,7 @@ import type { Child, JSX } from 'hono/jsx';
  * (`shadow-` is refused outside dropdowns, toasts and sheets by ESLint).
  *
  * - `content`: a hairline `border-base-300` on `base-100`, for what a page
- *   shows: Today's rows, Profile's sections, the Muse cards.
+ *   shows: Today's rows, Profile's sections, the agent cards.
  * - `inset`: a `base-200` fill, for a form panel set into a page. It is also
  *   the plinth's colour, so never put a cutout straight on it (the garment
  *   would lose its plinth): a cutout sits on a `content` card.

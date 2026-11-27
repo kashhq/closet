@@ -218,7 +218,7 @@ export const user = pgTable(
     // issued before (#700). A counter, never a time: nothing compares clocks.
     sessionVersion: integer('session_version').default(0).notNull(),
     // When the owner last opened their wishlist: suggestions newer than it
-    // are "new from Muse" (src/wardrobe/suggestions.ts). Never rendered into
+    // are "new from the agent" (src/wardrobe/suggestions.ts). Never rendered into
     // a cached page; null: never opened since suggestions came.
     suggestionsSeenAt: timestamp('suggestions_seen_at', { withTimezone: true }),
     // The sync (#196a, src/db/sync-tables.ts): the newest revision of the
@@ -271,11 +271,11 @@ export const userDevice = pgTable(
     morningReminder: smallint('morning_reminder').$type<MinuteOfDay>(),
     eveningReminder: smallint('evening_reminder').$type<MinuteOfDay>(),
     remindersSetAt: timestamp('reminders_set_at', { withTimezone: true }),
-    // Muse's rounds (#337): one notification when the agent finishes a
+    // The agent's rounds (#337): one notification when the agent finishes a
     // round of suggestions (finish_round). Opt-in per device like the
     // reminders, so false until turned on; off again when the device
     // moves to another account (upsertDevice).
-    museRounds: boolean('muse_rounds').default(false).notNull(),
+    agentRounds: boolean('agent_rounds').default(false).notNull(),
   },
   (table) => [
     index('user_device_user_id_index').on(table.userId),
@@ -684,7 +684,7 @@ export const garment = pgTable(
     careDry: text('care_dry').$type<CareDry>(),
     careIron: text('care_iron').$type<CareIron>(),
     careDryClean: text('care_dry_clean').$type<CareDryClean>(),
-    // A suggestion's provenance (Muse, #333; src/wardrobe/suggestions.ts):
+    // A suggestion's provenance (the agent, #333; src/wardrobe/suggestions.ts):
     // `suggested_at` marks one (a suggestion is a garment with it set), its
     // option group, its note and its rank among the group's options.
     // Written only while the garment is on the wishlist (by the agent's
@@ -896,7 +896,7 @@ export const garment = pgTable(
     // must outlive it so the garment still says an agent made it ("Agent").
     index('garment_suggested_by_token_id_index').on(table.addedByTokenId),
     // Each owner's newest suggestion (the quiet round close's minutely read,
-    // quietRounds, src/web/wishlist/rounds.ts): Muse's rows only.
+    // quietRounds, src/web/wishlist/rounds.ts): the agent's rows only.
     index('garment_owner_id_suggested_at_index')
       .on(table.ownerId, table.suggestedAt)
       .where(sql`${table.suggestedAt} is not null`),
@@ -920,12 +920,12 @@ function optionGroupId(): AnyPgColumn {
 
 // A round of the agent's suggestions, ended by finish_round (#337,
 // src/web/wishlist/rounds.ts): what it brought is derived on every read,
-// never stored: Muse's outfits proposed and options suggested in
+// never stored: the agent's outfits proposed and options suggested in
 // (`since`, `finished_at`], `since` being the owner's previous round's
 // end (null for the first). Today's card is the latest round while any of
 // it still waits on the owner. `summary` is the agent's one line.
-export const museRound = pgTable(
-  'muse_round',
+export const agentRound = pgTable(
+  'agent_round',
   {
     id: serial('id').primaryKey(),
     ownerId: integer('owner_id').notNull(),
@@ -939,33 +939,33 @@ export const museRound = pgTable(
   (table) => [
     // The latest round of an owner (Today, finish_round) and the owner_id
     // foreign key's index.
-    index('muse_round_owner_id_finished_at_index').on(
+    index('agent_round_owner_id_finished_at_index').on(
       table.ownerId,
       table.finishedAt,
     ),
     foreignKey({
-      name: 'muse_round_owner_id_foreign',
+      name: 'agent_round_owner_id_foreign',
       columns: [table.ownerId],
       foreignColumns: [user.id],
     })
       .onUpdate('cascade')
       .onDelete('cascade'),
-    index('muse_round_token_id_index').on(table.tokenId),
+    index('agent_round_token_id_index').on(table.tokenId),
     foreignKey({
-      name: 'muse_round_token_id_foreign',
+      name: 'agent_round_token_id_foreign',
       columns: [table.tokenId],
       foreignColumns: [personalAccessToken.id],
     })
       .onUpdate('cascade')
       .onDelete('set null'),
     check(
-      'muse_round_summary_check',
+      'agent_round_summary_check',
       sql`${table.summary} is null or length(trim(${table.summary})) > 0`,
     ),
   ],
 );
 
-// One need the owner's agent researched ("a navy blazer, under $300", Muse,
+// One need the owner's agent researched ("a navy blazer, under $300", the agent,
 // #333; src/wardrobe/suggestions.ts): its budget and reasoning, and the
 // owner's decision. Its options are the wishlist garments whose
 // suggestion_group_id names it, ranked by the agent; it may hold none yet
@@ -1059,7 +1059,7 @@ export const outfit = pgTable(
     name: text('name'),
     notes: text('notes'),
     ownerId: integer('owner_id').notNull(),
-    // A Muse outfit (#335, docs/plans/2026-10-05-muse-suggestions.md): one
+    // An agent outfit (#335, docs/plans/2026-10-05-agent-suggestions.md): one
     // the owner's agent proposed, marked by `proposed_at` (the token is
     // revoked, never deleted, but the mark should not hang on a nullable
     // key), with the agent's note and the owner's reaction

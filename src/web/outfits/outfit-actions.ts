@@ -136,7 +136,7 @@ export async function setOutfitPublicShare<Shared extends boolean>(
 
 /**
  * Deletes the actor's outfit (deleteOutfit: its wears kept as day-level
- * wears). One of Muse's proposals not loved is refused (409): Not for me
+ * wears). One of the agent's proposals not loved is refused (409): Not for me
  * sets it aside, and its reaction is feedback a delete would lose (#335).
  */
 export async function removeOutfit(
@@ -147,7 +147,7 @@ export async function removeOutfit(
   const deleted = await deleteOutfit(db, id, actor.userId);
   if (!deleted) throw outfitNotFound();
   if (deleted === 'a-proposal') {
-    throw new HttpError(409, t('outfits.muse.DELETE_REFUSED'), {
+    throw new HttpError(409, t('outfits.agent.DELETE_REFUSED'), {
       logDetail: `outfit ${id} is a proposal not loved`,
     });
   }
@@ -161,8 +161,8 @@ export async function removeOutfit(
 export type Reacted = Extract<ReactOutcome, { ok: true }>;
 
 /**
- * The actor's reaction to one of Muse's outfits (reactToOutfit): another's
- * outfit, or one Muse did not propose, is NotFound; one that is the
+ * The actor's reaction to one of the agent's outfits (reactToOutfit): another's
+ * outfit, or one agent did not propose, is NotFound; one that is the
  * owner's already, or a move its reaction does not take (a stale page, a
  * double tap), a 409.
  */
@@ -190,7 +190,9 @@ export async function reactToProposal(
   throw new HttpError(
     409,
     t(
-      outcome.reason === 'owners' ? 'outfits.muse.ALREADY_YOURS' : 'muse.STALE',
+      outcome.reason === 'owners'
+        ? 'outfits.agent.ALREADY_YOURS'
+        : 'agent.STALE',
     ),
     { logDetail },
   );

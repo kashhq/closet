@@ -15,15 +15,15 @@ import type { RoundCounts } from './rounds';
 export function roundWhat({ outfits, pieces }: RoundCounts): Translated {
   const outfitText =
     outfits === 1
-      ? t('muse.round.OUTFITS_ONE')
-      : t('muse.round.OUTFITS', { count: outfits });
+      ? t('agent.round.OUTFITS_ONE')
+      : t('agent.round.OUTFITS', { count: outfits });
   const pieceText =
     pieces === 1
-      ? t('muse.round.PIECES_ONE')
-      : t('muse.round.PIECES', { count: pieces });
+      ? t('agent.round.PIECES_ONE')
+      : t('agent.round.PIECES', { count: pieces });
   if (pieces === 0) return outfitText;
   if (outfits === 0) return pieceText;
-  return t('muse.round.BOTH', { outfits: outfitText, pieces: pieceText });
+  return t('agent.round.BOTH', { outfits: outfitText, pieces: pieceText });
 }
 
 /**
@@ -37,15 +37,15 @@ export function roundCard(
 ): Translated {
   const what = roundWhat(counts);
   return agent
-    ? t('muse.round.CARD', { agent: agentName(agent), what })
-    : t('muse.round.CARD_UNNAMED', { what });
+    ? t('agent.round.CARD', { agent: agentName(agent), what })
+    : t('agent.round.CARD_UNNAMED', { what });
 }
 
 /** The push title: the same two-key split as roundCard. */
 export function roundPushTitle(agent: AgentLabel | null): Translated {
   return agent
-    ? t('muse.round.PUSH_TITLE', { agent: agentName(agent) })
-    : t('muse.round.PUSH_TITLE_UNNAMED');
+    ? t('agent.round.PUSH_TITLE', { agent: agentName(agent) })
+    : t('agent.round.PUSH_TITLE_UNNAMED');
 }
 
 /** Where Review goes: the outfits first (doc section 1), else the options. */

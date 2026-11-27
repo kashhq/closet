@@ -94,7 +94,7 @@ async function commitWithPhoto<T>(
 
 /**
  * More rows a new garment's save writes in the garment's own transaction,
- * given its id: an order item marked added (#25), a Muse need settled by
+ * given its id: an order item marked added (#25), an agent need settled by
  * "Bought a different one" (#333), a suggestion's provenance (#337), so
  * the garment never exists without what it was added for.
  */
@@ -135,7 +135,7 @@ export function createGarment(
  * is not compared with the row's content: a retry may follow the client's
  * own later edits, and the id names the create.
  *
- * `settle` resolves what rides with a new garment (a Muse need it was
+ * `settle` resolves what rides with a new garment (an agent need it was
  * bought for, postedDestination), and runs only after the insert has
  * proved the create new, in the insert's transaction holding the owner
  * lock, on that transaction (`tx`, never the pool: a second connection

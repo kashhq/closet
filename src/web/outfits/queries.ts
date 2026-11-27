@@ -57,7 +57,7 @@ import {
 } from './gone-garments';
 import {
   keptOutfit,
-  museOutfitWaiting,
+  agentOutfitWaiting,
   outfitIsHeld,
   ownersOutfit,
 } from './references';
@@ -164,7 +164,7 @@ export interface CreateResult extends SaveResult {
   name: string | null;
   /** The garments were already an outfit of the owner's: it was reused, nothing was created. */
   alreadySaved: boolean;
-  /** That outfit was one of Muse's proposals, which this save made the owner's (#335, adoptProposal). */
+  /** That outfit was one of the agent's proposals, which this save made the owner's (#335, adoptProposal). */
   adoptedProposal: boolean;
   /**
    * A person's save took over what the week planner had made of it: the
@@ -255,7 +255,7 @@ function toolOutfitSql(): SQL {
 /**
  * The outfits matching `where` (findOutfit's one), each with its chosen
  * garments in slot order (empty slots show nothing) and its proposal when
- * Muse proposed it, in one statement. Raw SQL, never db.query: the
+ * The agent proposed it, in one statement. Raw SQL, never db.query: the
  * relational query writes every column of a `where` against its root
  * table, which breaks a predicate with a subquery of its own
  * (ownersOutfit).
@@ -271,17 +271,17 @@ async function outfitsWithGarments(db: Db, where: SQL): Promise<ToolOutfit[]> {
   return outfits;
 }
 
-/** An outfit as the MCP tools answer it: with its proposal when Muse proposed it (#335). */
+/** An outfit as the MCP tools answer it: with its proposal when the agent proposed it (#335). */
 export type ToolOutfit = OutfitDetail & {
   proposal: Omit<OutfitProposal, 'agent'> | null;
 };
 
 /**
  * The owner's outfits a page at a time (outfitPageSql), with their notes:
- * list_outfits and GET /api/v1/outfits. Their own (ownersOutfit: Muse's
+ * list_outfits and GET /api/v1/outfits. Their own (ownersOutfit: the agent's
  * proposals not theirs yet are the Outfits tab's own section), or with
- * `proposed` Muse's proposals waiting on the owner (museOutfitWaiting: the
- * Outfits tab's From Muse cards and Today's round count). One statement,
+ * `proposed` the agent's proposals waiting on the owner (agentOutfitWaiting: the
+ * Outfits tab's From the agent cards and Today's round count). One statement,
  * as the Saved tab's; the Saved tab, the pickers and a trip's add page
  * read savedOutfitsSql.
  */
@@ -299,7 +299,7 @@ export async function listOutfitsPage(
       toolOutfitSql(),
       and(
         eq(outfit.ownerId, ownerId),
-        page.proposed ? museOutfitWaiting() : ownersOutfit(),
+        page.proposed ? agentOutfitWaiting() : ownersOutfit(),
         page.list && listFilter(page.list),
       )!,
       page,
@@ -323,7 +323,7 @@ export type GarmentOutfit = Pick<OutfitSummary, 'id' | 'name' | 'garments'>;
 /** A Saved-tab tile (savedOutfitsSql): the outfit, and its agent when one made it (#822). */
 export type SavedOutfit = GarmentOutfit & {
   agent: AgentLabel | null;
-  /** One of Muse's proposals the owner kept: its own provenance, no badge. */
+  /** One of the agent's proposals the owner kept: its own provenance, no badge. */
   proposed: boolean;
 };
 
@@ -449,7 +449,7 @@ export function outfitsWithGarmentSql(
   garmentId: number,
   limit: number,
 ): SQL<GarmentOutfits> {
-  // The owner's own outfits only: Muse's proposals are its section's.
+  // The owner's own outfits only: the agent's proposals are its section's.
   const holds = and(
     eq(outfit.ownerId, ownerId),
     sql`${outfit.id} in (select ${outfitSlot.outfitId} from ${outfitSlot} where ${eq(outfitSlot.garmentId, garmentId)})`,
@@ -481,17 +481,17 @@ type OutfitDetail = OutfitSummary & {
   agent: AgentLabel | null;
 };
 
-/** One of Muse's proposals as its outfit page says it (#335; proposals.ts). */
+/** One of the agent's proposals as its outfit page says it (#335; proposals.ts). */
 export interface OutfitProposal {
   note: string | null;
   reaction: LookReaction;
   ownerNote: string | null;
   dismissedReason: OutfitDismissReason | null;
-  /** Muse: outfits are their owner's alone, so its token's name, or "Agent". */
+  /** The agent: outfits are their owner's alone, so its token's name, or "Agent". */
   agent: AgentLabel | null;
 }
 
-/** The outfit page's outfit: with its proposal when Muse proposed it. */
+/** The outfit page's outfit: with its proposal when the agent proposed it. */
 export type OutfitPageDetail = OutfitDetail & {
   proposal: OutfitProposal | null;
 };
@@ -860,7 +860,7 @@ export function sameGarmentsOutfit(
     .select({
       id: outfit.id,
       name: outfit.name,
-      // One of Muse's proposals not the owner's yet: a save adopts it
+      // One of the agent's proposals not the owner's yet: a save adopts it
       // (adoptProposal), read here so a plain reuse costs nothing more.
       pending:
         sql<boolean>`(${outfit.proposedAt} is not null and ${outfit.reaction} <> 'loved')`.as(
@@ -1286,7 +1286,7 @@ export function deleteOutfit(
       .where(and(eq(outfit.id, id), eq(outfit.ownerId, ownerId)))
       .for('update');
     if (!found) return undefined;
-    // Muse's proposal not loved yet (or set aside) is feedback for it: Not
+    // The agent's proposal not loved yet (or set aside) is feedback for it: Not
     // for me sets it aside, kept; a delete would lose it (#335).
     if (found.reaction !== null && found.reaction !== 'loved') {
       return 'a-proposal';

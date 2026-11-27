@@ -184,7 +184,7 @@ describe('background jobs: statements per run (#173)', () => {
       {
         morning: DEFAULT_REMINDER_TIMES.morning,
         evening: DEFAULT_REMINDER_TIMES.evening,
-        museRounds: false,
+        agentRounds: false,
       },
       new Date('2020-01-01T00:00:00Z'),
     );

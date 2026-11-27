@@ -31,7 +31,7 @@ import {
   type Inbox,
   type InboxGroup,
   type NewNeed,
-  type MusePick,
+  type AgentPick,
   type SetAsideRow,
   sharedUnlocks,
 } from './inbox';
@@ -49,18 +49,18 @@ import {
 
 /** GET /wardrobe/wishlist/more: the next page of need cards. */
 export const INBOX_MORE_PATH = `${WISHLIST_PATH}/more`;
-/** POST /wardrobe/wishlist/seen: "New from Muse" (markSuggestionsSeen). */
+/** POST /wardrobe/wishlist/seen: "New from the agent" (markSuggestionsSeen). */
 export const INBOX_SEEN_PATH = `${WISHLIST_PATH}/seen`;
 /** The slot the seen POST's answer fills, out of band. */
-const NEW_SLOT_ID = 'muse-new';
-/** Needs a "New from Muse" line names before "and N more". */
+const NEW_SLOT_ID = 'agent-new';
+/** Needs a "New from the agent" line names before "and N more". */
 const NEW_NAMED = 3;
 
 export interface InboxModel {
   inbox: Inbox;
   /** The shared wardrobe shown; undefined for the requester's own. */
   viewOwner: number | undefined;
-  /** Decisions, unlocks and "New from Muse": the owner's alone. */
+  /** Decisions, unlocks and "New from the agent": the owner's alone. */
   isOwner: boolean;
   /** Add and "Bought it": the owner and a MANAGE grantee (a VIEW grantee reads). */
   canEdit: boolean;
@@ -70,14 +70,14 @@ export interface InboxModel {
 const TO_WISHLIST = destinationParams({ to: 'wishlist' });
 
 /**
- * GET /wardrobe/wishlist, the Wishlist tab as Muse's inbox (#333;
- * docs/plans/2026-10-05-muse-suggestions.md, section 4 D), top to bottom:
- * Ready to buy (chosen, not bought), Muse's picks (a card per open need,
+ * GET /wardrobe/wishlist, the Wishlist tab as the agent's inbox (#333;
+ * docs/plans/2026-10-05-agent-suggestions.md, section 4 D), top to bottom:
+ * Ready to buy (chosen, not bought), the agent's picks (a card per open need,
  * most unlocks first, paged with the Ideas sentinel), the owner's own
- * wishlist, "Muse is still looking for" and the set-aside list. One
+ * wishlist, "the agent is still looking for" and the set-aside list. One
  * primary per card: Bought it, or the need's "Compare and choose". One
  * markup: a phone's single column, two need cards and four product cards
- * across from `lg`. "New from Muse" is never in this HTML (doc section 9):
+ * across from `lg`. "New from the agent" is never in this HTML (doc section 9):
  * the owner's page asks for it as it loads (INBOX_SEEN_PATH) and the
  * answer fills its slot out of band.
  */
@@ -122,7 +122,7 @@ export function InboxPage(props: { ctx: ViewContext; model: InboxModel }) {
       ) : (
         <>
           <ReadyToBuy model={model} />
-          <MusePicks model={model} />
+          <AgentPicks model={model} />
           <OwnWishlist model={model} />
           <StillLooking model={model} returnTo={returnTo} />
         </>
@@ -181,7 +181,7 @@ function ProductCard(props: {
     name: string | null;
     category: string;
     sourceUrl: string | null;
-    photo: MusePick['photo'];
+    photo: AgentPick['photo'];
   };
   viewOwner: number | undefined;
   canBuy: boolean;
@@ -242,7 +242,7 @@ function ReadyToBuy({ model }: { model: InboxModel }) {
   if (readyToBuy.length === 0) return null;
   return (
     <section aria-labelledby="inbox-ready">
-      <SectionHeading id="inbox-ready" text={t('muse.READY')} />
+      <SectionHeading id="inbox-ready" text={t('agent.READY')} />
       <ul class={CANDIDATE_GRID} data-inbox-section="ready">
         {readyToBuy.map(({ need, pick }) => (
           <ProductCard
@@ -270,12 +270,12 @@ function ReadyToBuy({ model }: { model: InboxModel }) {
   );
 }
 
-function MusePicks({ model }: { model: InboxModel }) {
+function AgentPicks({ model }: { model: InboxModel }) {
   const { groups } = model.inbox;
   if (groups.length === 0) return null;
   return (
     <section aria-labelledby="inbox-picks">
-      <SectionHeading id="inbox-picks" text={t('muse.PICKS')} />
+      <SectionHeading id="inbox-picks" text={t('agent.PICKS')} />
       {/* Filled out of band by the seen POST's answer, never in this HTML (doc section 9). */}
       {model.isOwner && (
         <div
@@ -383,7 +383,7 @@ function GroupCard(props: {
         href={needUrl(need.id, viewOwner)}
         class="btn btn-primary btn-sm static self-start after:absolute after:inset-0"
       >
-        {t('muse.DECIDE')}
+        {t('agent.DECIDE')}
       </a>
     </Card>
   );
@@ -407,7 +407,7 @@ function OwnWishlist({ model }: { model: InboxModel }) {
   if (own.length === 0) return null;
   return (
     <section aria-labelledby="inbox-own">
-      <SectionHeading id="inbox-own" text={t('muse.OWN')} />
+      <SectionHeading id="inbox-own" text={t('agent.OWN')} />
       <ul class={CANDIDATE_GRID} id="wishlist" data-inbox-section="own">
         {own.map((item) => (
           <ProductCard
@@ -418,7 +418,7 @@ function OwnWishlist({ model }: { model: InboxModel }) {
             attributes={{ 'data-own': String(item.id) }}
           >
             {item.suggested && <FromAgent agent={null} />}
-            <AgentBadge agent={item.agent} byMuse={item.suggested} />
+            <AgentBadge agent={item.agent} byAgent={item.suggested} />
             {[item.brand, categoryLabel(item.category)]
               .filter(Boolean)
               .join(' · ')}
@@ -441,7 +441,7 @@ function OwnWishlist({ model }: { model: InboxModel }) {
 }
 
 /**
- * Needs Muse has no option for yet (owner decision on #333): one compact
+ * Needs the agent has no option for yet (owner decision on #333): one compact
  * line at the bottom, each with a one-tap "not now" (Not for me on the
  * need, reason not_now).
  */
@@ -450,7 +450,7 @@ function StillLooking(props: { model: InboxModel; returnTo: string }) {
   if (stillLooking.length === 0) return null;
   return (
     <section class="flex flex-col gap-2" data-inbox-section="still-looking">
-      <p class="text-sm text-muted px-1">{t('muse.STILL_LOOKING')}</p>
+      <p class="text-sm text-muted px-1">{t('agent.STILL_LOOKING')}</p>
       <ul class="flex flex-wrap gap-2">
         {stillLooking.map((need) => (
           <li
@@ -466,7 +466,7 @@ function StillLooking(props: { model: InboxModel; returnTo: string }) {
                   name="reason"
                   value="not_now"
                   class="btn btn-ghost btn-xs btn-circle"
-                  aria-label={t('muse.NOT_NOW_NEED', { need: need.name })}
+                  aria-label={t('agent.NOT_NOW_NEED', { need: need.name })}
                 >
                   ×
                 </button>
@@ -495,8 +495,8 @@ function SetAside(props: { model: InboxModel; returnTo: string }) {
     >
       <summary class="collapse-title text-sm font-medium">
         {setAside.length === 1
-          ? t('muse.SET_ASIDE_ONE')
-          : t('muse.SET_ASIDE_COUNT', { count: setAside.length })}
+          ? t('agent.SET_ASIDE_ONE')
+          : t('agent.SET_ASIDE_COUNT', { count: setAside.length })}
       </summary>
       <ul class="collapse-content flex flex-col divide-y divide-base-300">
         {setAside.map((row) => (
@@ -524,7 +524,7 @@ function SetAsideItem(props: {
       ? [
           needUrl(row.need.id, viewOwner),
           row.need.name,
-          t('muse.SET_ASIDE_NEED'),
+          t('agent.SET_ASIDE_NEED'),
           reasonText(row.need.dismissedReason),
           needUrl(row.need.id, undefined, '/undo'),
         ]
@@ -552,7 +552,7 @@ function SetAsideItem(props: {
         <UndoForm
           action={undo}
           returnTo={props.returnTo}
-          ariaLabel={`${t('muse.UNDO')}: ${name}`}
+          ariaLabel={`${t('agent.UNDO')}: ${name}`}
         />
       )}
     </li>
@@ -564,7 +564,7 @@ function SetAsideItem(props: {
  * picks new since the owner last looked (each a link to its screen), or
  * empty when there are none.
  */
-export function NewFromMuse({ needs }: { needs: readonly NewNeed[] }) {
+export function NewFromAgent({ needs }: { needs: readonly NewNeed[] }) {
   const named = needs.slice(0, NEW_NAMED);
   const rest = needs.length - named.length;
   return (
@@ -573,9 +573,9 @@ export function NewFromMuse({ needs }: { needs: readonly NewNeed[] }) {
         <p
           class="alert alert-info alert-soft block py-2 text-sm mb-3"
           role="status"
-          data-new-from-muse=""
+          data-new-from-agent=""
         >
-          <span class="font-medium">{t('muse.NEW')}</span>{' '}
+          <span class="font-medium">{t('agent.NEW')}</span>{' '}
           {named.map((need, index) => (
             <>
               {index > 0 && ', '}
@@ -584,7 +584,7 @@ export function NewFromMuse({ needs }: { needs: readonly NewNeed[] }) {
               </a>
             </>
           ))}
-          {rest > 0 && ` ${t('muse.NEW_MORE', { count: rest })}`}
+          {rest > 0 && ` ${t('agent.NEW_MORE', { count: rest })}`}
         </p>
       )}
     </div>

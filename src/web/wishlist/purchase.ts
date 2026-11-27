@@ -29,7 +29,7 @@ export function purchaseNeed(archiveReplaced: boolean): WardrobeNeed {
 /**
  * "Bought it" (POST /wardrobe/:id/bought), in one owner transaction: the
  * buy (buyGarment: the wishlist item into the closet with its purchase,
- * and the garment it replaces archived when asked), then, for a Muse pick,
+ * and the garment it replaces archived when asked), then, for an agent pick,
  * its need settled (decide's `bought`: resolved by it, its other open
  * picks set aside as chose_another, #333). The lock is the wardrobe
  * owner's, not necessarily the actor's: a MANAGE grantee buys too. An id

@@ -424,7 +424,7 @@ describe('agent writes carry their token (#682)', () => {
     expect(hand).toMatchObject({ plannedBy: 'user' });
     expect(hand).not.toHaveProperty('agent');
   });
-  it("keeps what the agent made out of Muse's inbox and proposals: only the explicit markers make one", async () => {
+  it('keeps what the agent made out of the agent’s inbox and proposals: only the explicit markers make one', async () => {
     // An agent-made outfit and an agent's link import carry the token, not
     // the proposal's or the suggestion's mark (proposed_at, suggested_at).
     const made = await tool<{ id: number }>(t, token, 'create_outfit', {
@@ -464,16 +464,16 @@ describe('agent writes carry their token (#682)', () => {
     });
     expect(inbox.statusCode, inbox.body).toBe(200);
     const { items, needs, readyToBuy } = inbox.json<{
-      items: { id: number; fromMuse: boolean }[];
+      items: { id: number; fromAgent: boolean }[];
       needs: unknown[];
       readyToBuy: unknown[];
     }>();
     expect(items).toContainEqual(
-      expect.objectContaining({ id: imported.garment.id, fromMuse: false }),
+      expect.objectContaining({ id: imported.garment.id, fromAgent: false }),
     );
     expect(needs).toEqual([]);
     expect(readyToBuy).toEqual([]);
-    // Its page is the plain wishlist item's: no "Why Muse suggests this".
+    // Its page is the plain wishlist item's: no "Why the agent suggests this".
     const page = await t.inject({
       method: 'GET',
       url: `/wardrobe/${imported.garment.id}`,
@@ -630,8 +630,8 @@ describe('agent writes carry their token (#682)', () => {
       expect(own.agent).toBe('Dana’s agent');
     });
 
-    it('names Muse to the owner and "Agent" to a grantee, on its needs and suggestions', async () => {
-      // Outfits (Muse's proposals included) are the owner's alone: no
+    it('names the agent to the owner and "Agent" to a grantee, on its needs and suggestions', async () => {
+      // Outfits (the agent's proposals included) are the owner's alone: no
       // grantee reads one, so needs and picks are where the rule shows.
       sites.serve(
         '/products/knit',

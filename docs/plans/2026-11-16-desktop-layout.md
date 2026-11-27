@@ -245,7 +245,7 @@ OUTFIT_GRID    2 cols  →  lg  minmax(12rem, 1fr)     // outfits, looks, the Pl
 IDEA_GRID      1 col   →  lg  minmax(17rem, 1fr)     // new: Today's and Ideas' cards, 3 at 1440
 CANDIDATE_GRID 2 cols  →  lg  minmax(13rem, 1fr)
 CARD_GRID      1 col   →  lg  minmax(18rem, 1fr)     // new: trip cards, capsule cards
-CARD_COLUMNS, PAIR_GRID, MUSE_GRID                   // unchanged
+CARD_COLUMNS, PAIR_GRID, AGENT_GRID                   // unchanged
 ```
 
 The minimums are `--tile-*` tokens in `main.css` beside `--container-page-*`, read by arbitrary
@@ -411,7 +411,7 @@ It already uses `CARD_COLUMNS`. It only moves onto `PageShell`.
 
 ### Wishlist: `single` W, `CANDIDATE_GRID` auto-fill
 
-A need's decision screen keeps `MUSE_GRID`. Its options strip is already a row at `lg`.
+A need's decision screen keeps `AGENT_GRID`. Its options strip is already a row at `lg`.
 
 ### Profile and its settings: `index`
 

@@ -63,8 +63,8 @@ interface OwnerRecords {
  *   the owner's alone: it reads their closet and clashes;
  * - `brandSize`: the owner's size in a wishlist item's brand (#24), their
  *   body, so never read for a grantee;
- * - `suggestion`: Muse's note and the need it is a pick of, with its
- *   siblings (#333), for a suggestion; anyone who sees it reads Muse's
+ * - `suggestion`: the agent's note and the need it is a pick of, with its
+ *   siblings (#333), for a suggestion; anyone who sees it reads the agent's
  *   notes (owner decision, 2026-10-05);
  * - `agent`: the agent that made it over MCP (#682), as the viewer may see
  *   it (agentLabelSql: a grantee's agent's token name is that grantee's).

@@ -9,7 +9,7 @@ import { defineTool } from '../tool';
 
 /**
  * The owner's style profile, week and outfit rules (#34, #16, #21): the
- * caller's own. The rules in the Style page's words (labels.ts), so Muse
+ * caller's own. The rules in the Style page's words (labels.ts), so the agent
  * reads them as the owner wrote them.
  */
 export const styleTools = [

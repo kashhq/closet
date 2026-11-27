@@ -346,7 +346,7 @@ function stubPushServices(): void {
     Promise.resolve({ statusCode: 201, body: '', headers: {} });
 }
 
-let museProducts = 0;
+let agentProducts = 0;
 
 function productPage(image: string): string {
   return `<html><head><script type="application/ld+json">${JSON.stringify({
@@ -622,7 +622,7 @@ export async function createFixture(options: {
       today,
       productUrl: shop.url('/products/tee'),
       newProductUrl: () => {
-        const path = `/products/tee?muse=${++museProducts}`;
+        const path = `/products/tee?agent=${++agentProducts}`;
         shop.serve(path, html(productPage(shop.url(TEE_IMAGE_PATH))));
         return shop.url(path);
       },
@@ -796,7 +796,7 @@ async function subscribePhone(
     closet.db,
     theoId,
     endpoint,
-    { morning, evening, museRounds: false },
+    { morning, evening, agentRounds: false },
     new Date(Date.now() - 24 * 60 * 60 * 1000),
   );
   return endpoint;

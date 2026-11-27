@@ -23,7 +23,7 @@ import {
 import { callTool, createAccessToken, mcpRequest, tool } from './mcp';
 
 /**
- * Muse's MCP tools (#337, docs/plans/2026-10-05-muse-suggestions.md
+ * The agent's MCP tools (#337, docs/plans/2026-10-05-agent-suggestions.md
  * section 5), driven as a client: a need (create_option_group), its
  * options from product links (suggest_garment), an outfit
  * (suggest_outfit), what stands where (list_suggestions), the closet's
@@ -66,7 +66,7 @@ interface Feedback {
   wears: { garmentId: number; wears: number; status: string }[];
 }
 
-describe('MCP: Muse’s tools', () => {
+describe('MCP: the agent’s tools', () => {
   let t: TestApp;
   let sites: LinkSites;
   let token: string;
@@ -142,7 +142,7 @@ describe('MCP: Muse’s tools', () => {
   beforeAll(async () => {
     sites = await startLinkSites();
     t = await createTestApp({}, { outboundFetch: sites.outboundFetch });
-    token = await createAccessToken(t, { name: 'Muse' });
+    token = await createAccessToken(t, { name: 'Stylist' });
     const [row] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)
@@ -164,7 +164,7 @@ describe('MCP: Muse’s tools', () => {
   });
 
   describe('create_option_group', () => {
-    it('opens a need with Muse’s token, its budget and note', async () => {
+    it('opens a need with the agent’s token, its budget and note', async () => {
       const id = await need('  A navy blazer ', {
         budget: 300,
         note: 'Pairs with the raw jeans',
@@ -333,7 +333,7 @@ describe('MCP: Muse’s tools', () => {
       const url = await product('Linen Shirt');
       const first = await suggest(groupId, url);
       const again = await callTool(t, token, 'suggest_garment', {
-        url: `${url}?utm_source=muse#size`,
+        url: `${url}?utm_source=agent#size`,
         groupId,
       });
       expect(again.isError).toBe(true);
@@ -635,7 +635,7 @@ describe('MCP: Muse’s tools', () => {
           })
           .returning({ id: outfit.id }),
       );
-      const fresh = await createAccessToken(t, { name: 'Muse again' });
+      const fresh = await createAccessToken(t, { name: 'Stylist again' });
       const first = await tool<Feedback>(t, fresh, 'get_suggestion_feedback');
       expect(first.since).toBeNull();
       expect(first.outfits).toEqual(
@@ -647,7 +647,7 @@ describe('MCP: Muse’s tools', () => {
       await t.db
         .update(personalAccessToken)
         .set({ feedbackReadAt: sql`now()` })
-        .where(eq(personalAccessToken.name, 'Muse again'));
+        .where(eq(personalAccessToken.name, 'Stylist again'));
       const later = await tool<Feedback>(t, fresh, 'get_suggestion_feedback');
       expect(later.outfits.map((o) => o.outfitId)).not.toContain(migrated.id);
     });

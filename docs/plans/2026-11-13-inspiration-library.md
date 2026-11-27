@@ -18,7 +18,7 @@ Status: recommendations adopted by the coordinator 2026-11-13 under the owner's 
   judges a set, `goesWith` finds the best outfits holding one garment, and `goes_with_closet`
   already judges a **wishlist item** against the closet. `createOutfit` (`outfits/pick.ts`) saves an
   outfit and accepts a wishlist garment while nothing holds the outfit (#335).
-- **Muse** (`src/web/mcp/`): suggests wishlist garments and outfits; the owner reacts.
+- **The agent** (`src/web/mcp/`): suggests wishlist garments and outfits; the owner reacts.
 
 Nothing stores a look the owner *saw*, and nothing maps a look to the closet.
 
@@ -107,8 +107,8 @@ as a `SnapStrip` (swipe to choose), and each missing piece as "Find this". Then:
 - **MCP** (`tools/inspiration.ts`): `list_inspiration` and `get_inspiration` (pieces and the matches,
   the same function as the page) are reads; writes are `add_inspiration` (a URL through `importLink`;
   `blocked-by-site` leads the error as for link import, `MCP_LINK_IMPORT_LIMIT` applies) and
-  `set_inspiration_pieces` (so Muse reads a link's text and tags it, which is the vision step done by
-  the agent with no server model). Muse may then `suggest` the missing pieces as ordinary wishlist
+  `set_inspiration_pieces` (so the agent reads a link's text and tags it, which is the vision step done by
+  The agent with no server model). The agent may then `suggest` the missing pieces as ordinary wishlist
   suggestions. `tools.md` and the contract spec list them.
 - **Sharing: owner-only**, stated in `src/web/sharing/AGENTS.md`: `sessionUserId` alone, no `?ownerId=`,
   a row in `authorization-*.routes.ts` (another user's look is a 404, a grantee gets nothing). Matches
@@ -136,7 +136,7 @@ Slices, each at most M:
 ## 7. Owner decisions
 
 1. **Reading a look: manual tagging or a vision model in v1?** Recommend **manual tagging**, with the
-   page's metadata as a hint and Muse able to tag through MCP. A vision model is a new dependency, a
+   page's metadata as a hint and the agent able to tag through MCP. A vision model is a new dependency, a
    cost and a privacy question (photos leave the house); revisit it once tagging shows how often
    it is tedious.
 2. **Where it lives.** Recommend a **tab on Outfits** (Saved, Ideas, Inspiration): a look is the

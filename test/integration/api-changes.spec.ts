@@ -570,7 +570,7 @@ describe("the owner's own resources (#196b-2)", () => {
     expect(changeKeys(deleted.pages)).toEqual([`weekPlan:${weekPlanId}`]);
     expect(dataOf(deleted.pages, 'weekPlan')[0].entries).toEqual([]);
 
-    // Muse's proposal is the owner's to answer: in their feed with its
+    // The agent's proposal is the owner's to answer: in their feed with its
     // reaction (an outfit nothing holds now, as a proposal must be).
     await asFixture(t.db, (tx) =>
       tx

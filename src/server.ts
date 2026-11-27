@@ -32,7 +32,7 @@ const RECONCILE_HOUR = 3;
  * (with PWA_ENABLED), the order mail's poll (with ORDER_MAIL_JMAP_TOKEN),
  * the week's daily re-plan (the planner's entries
  * judged against the forecast with WEATHER_ENABLED, and always against
- * what can still be worn), the quiet close of Muse's rounds, the
+ * what can still be worn), the quiet close of the agent's rounds, the
  * background-removal queue started with
  * `runner`,
  * signal handling, listen. main.ts passes the model (ModelRunner), or none
@@ -137,13 +137,13 @@ export async function serve(
     jobs.push(...startReminders(config, logger, metrics, push, replan));
   }
   jobs.push(...startReplans(config, metrics, replan));
-  // A Muse round its agent never finished, closed once quiet
+  // An agent round its agent never finished, closed once quiet
   // (src/web/wishlist/round-end.ts); notified only with PWA_ENABLED.
-  const rounds = { db, push, logger: logger.child({ logger: 'Muse' }) };
+  const rounds = { db, push, logger: logger.child({ logger: 'Agent' }) };
   jobs.push(
     scheduleMinutely({
-      name: 'Muse round close',
-      run: metrics.timeJob('muse_rounds', (now: Date) =>
+      name: 'agent round close',
+      run: metrics.timeJob('agent_rounds', (now: Date) =>
         closeQuietRounds(rounds, now),
       ),
       logger: rounds.logger,

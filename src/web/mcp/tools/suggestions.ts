@@ -10,7 +10,7 @@ import {
 } from '../../../wardrobe/suggestions';
 import { HttpError } from '../../errors';
 import { proposeOutfitTo } from '../../outfits/outfit-actions';
-import { museOutfitsSql } from '../../outfits/proposals';
+import { agentOutfitsSql } from '../../outfits/proposals';
 import { OUTFIT_GARMENTS_MAX, OUTFIT_NAME_MAX } from '../../outfits/queries';
 import { CATEGORY_MAX, NAME_MAX } from '../../wardrobe/garment-input';
 import { findGarment } from '../../wardrobe/queries';
@@ -25,7 +25,7 @@ import { readSuggestionFeedback } from '../../wishlist/feedback';
 import { notifyRounds, QUIET_PERIOD_MS } from '../../wishlist/round-end';
 import { ROUND_SUMMARY_MAX } from '../../wishlist/rounds';
 import {
-  type MusePick,
+  type AgentPick,
   type Need,
   readInbox,
   type SetAsideRow,
@@ -38,7 +38,7 @@ import { addGarmentFromLink } from './link-import';
 const deps = (ctx: ToolContext) => ({ db: ctx.db, logger: ctx.webLogger });
 
 /**
- * Muse's tools (#337; docs/plans/2026-10-05-muse-suggestions.md section
+ * The agent's tools (#337; docs/plans/2026-10-05-agent-suggestions.md section
  * 5): the agent writes its suggestions as the app's own rows, through the
  * app's own writers, and reads back what the owner decided. The caller's
  * own wardrobe, no ownerId. A need is createOptionGroup's, a pick the
@@ -59,7 +59,7 @@ function unlocksOut(count: OutfitCount | undefined): number | string | null {
   return count.capped ? `${count.outfits}+` : count.outfits;
 }
 
-function pickOut(pick: MusePick, unlocks?: ReadonlyMap<number, OutfitCount>) {
+function pickOut(pick: AgentPick, unlocks?: ReadonlyMap<number, OutfitCount>) {
   return {
     id: pick.id,
     name: pick.name,
@@ -132,7 +132,7 @@ export const suggestionTools = [
           viewerId: ctx.userId,
           role: 'OWN',
         }),
-        selectScalars(ctx.db, { outfits: museOutfitsSql(ctx.userId) }),
+        selectScalars(ctx.db, { outfits: agentOutfitsSql(ctx.userId) }),
       ]);
       return {
         needs: inbox.groups.map(({ need, options, unlocks }) => ({

@@ -50,7 +50,7 @@ export const GarmentPageQuery = Type.Object({
   bought: Type.Optional(Type.String()),
   repairSaved: Type.Optional(Type.String()),
   copyAdded: Type.Optional(Type.String()),
-  // A Muse decision made on the page (#333): its toast, decisionToastOf.
+  // An agent decision made on the page (#333): its toast, decisionToastOf.
   decided: Type.Optional(Type.String({ maxLength: 16 })),
 });
 
@@ -58,7 +58,7 @@ export const GarmentPageQuery = Type.Object({
  * Where a new garment's form and the link import land: `?to=wishlist` from
  * the wishlist, and `&replaces=<id>` from a garment's "Find a replacement"
  * (a garment of the addressed wardrobe, else a 404). Absent is the closet; a
- * closet garment may carry `&forNeed=<id>`, a Muse need's "Bought a
+ * closet garment may carry `&forNeed=<id>`, an agent need's "Bought a
  * different one" (the requester's own open need, else a 404).
  */
 export const DestinationQuery = Type.Object({

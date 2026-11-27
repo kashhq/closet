@@ -18,7 +18,7 @@ import { ownerTransaction } from '../auth/queries';
 import { onWishlist, setGarmentStatus, wanted } from '../wardrobe/status';
 
 /**
- * The writers of suggestions and option groups (Muse, #333). decide is the
+ * The writers of suggestions and option groups (the agent, #333). decide is the
  * one writer of a decision: every This one, Not for me, Bought it's
  * settling of the group, Returned and Undo. markSuggestion is the one writer of provenance, and
  * createOptionGroup of a new need (the agent's tools, #337). All three

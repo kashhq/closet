@@ -7,7 +7,7 @@ import { roundCard, roundPushTitle, roundReviewPath } from './round-text';
 import { finishRound, quietRounds, type RoundCounts } from './rounds';
 
 /**
- * How a round of Muse's ends (#337): its one notification, the same
+ * How a round of the agent's ends (#337): its one notification, the same
  * whichever end it had, and the quiet close. The agent ends a round with
  * finish_round (src/web/mcp/tools/suggestions.ts), but an agent with its
  * own prompt may never call it (2026-10-06: 7 picks and 3 outfits, then
@@ -17,7 +17,7 @@ import { finishRound, quietRounds, type RoundCounts } from './rounds';
  */
 
 /**
- * How long an open round must go without a Muse write before the server
+ * How long an open round must go without an agent write before the server
  * closes it. Long enough that an agent between two writes (a slow product
  * page, its own research) is not cut off mid-round. An agent calling
  * finish_round later finds its round closed already: round: null, its
@@ -26,7 +26,7 @@ import { finishRound, quietRounds, type RoundCounts } from './rounds';
 export const QUIET_PERIOD_MS = 30 * 60_000;
 
 /** A newer round's notification replaces an unread one (the reminders' tags are today-morning, today-evening). */
-const ROUND_TAG = 'muse-round';
+const ROUND_TAG = 'agent-round';
 /** A round's notification is worth a day: past it, Today's card says it. */
 const ROUND_TTL_SECONDS = 24 * 60 * 60;
 
@@ -40,7 +40,7 @@ export interface EndedRound extends RoundCounts {
 function roundMessage(round: EndedRound): DeviceMessage {
   return {
     userId: round.ownerId,
-    devices: 'muse-rounds',
+    devices: 'agent-rounds',
     payload: {
       title: roundPushTitle(round.agent),
       body: roundCard(round.agent, round),
@@ -54,7 +54,7 @@ function roundMessage(round: EndedRound): DeviceMessage {
 /**
  * Each round's one notification (doc section 4 A), in one batch
  * (sendEach: one read of the devices): to its owner's devices taking
- * the agent's rounds, tagged so a newer round replaces an unread one, kept a
+ * The agent's rounds, tagged so a newer round replaces an unread one, kept a
  * day by the push service. After the rounds' commit: a failed send never
  * undoes a round, it is logged (the sender's own lines say which device).
  * How many devices each reached, in the rounds' order; none without
@@ -82,7 +82,7 @@ export interface RoundCloseDeps {
   db: Db;
   /** Undefined without PWA_ENABLED: rounds close, nobody is told. */
   push: PushSender | undefined;
-  /** Context `Muse`. */
+  /** Context `Agent`. */
   logger: Logger;
 }
 

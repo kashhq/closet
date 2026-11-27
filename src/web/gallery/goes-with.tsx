@@ -35,7 +35,7 @@ function countText(count: OutfitCount, card: boolean): Translated {
   return t(card ? 'goesWith.CARD' : 'goesWith.COUNT', { count: outfits });
 }
 
-/** A card's "Unlocks 12 outfits": the Muse inbox and a need's options. */
+/** A card's "Unlocks 12 outfits": the agent inbox and a need's options. */
 export function unlocksText(count: OutfitCount): Translated {
   return countText(count, true);
 }

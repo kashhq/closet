@@ -51,7 +51,7 @@ const OutfitListQuery = Type.Object({
   proposed: Type.Optional(
     Type.Boolean({
       description:
-        "`true`: your agent's proposals waiting on you (the Outfits tab's From Muse cards) instead of your own outfits; each carries its `proposal`",
+        "`true`: your agent's proposals waiting on you (the Outfits tab's From the agent cards) instead of your own outfits; each carries its `proposal`",
     }),
   ),
   show: Type.Optional(
@@ -90,7 +90,7 @@ export const outfitApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['outfits'],
         summary: 'Your outfits, newest first',
         description:
-          "Each with its garments in the order it was built and the pieces still to buy. Muse's proposals you have not made yours are not listed: `proposed=true` lists the ones waiting on you instead (set-aside ones stay out).",
+          'Each with its garments in the order it was built and the pieces still to buy. The agent’s proposals you have not made yours are not listed: `proposed=true` lists the ones waiting on you instead (set-aside ones stay out).',
         querystring: OutfitListQuery,
         response: apiResponses({ 200: OutfitList }),
       },

@@ -57,12 +57,12 @@ export function markLabel(mark: GarmentMarkKind, wash?: WashCount): Translated {
  * first mark in words, the rest in its accessible name only, so a small
  * tile never stacks badges. `dot` is for a frame too small for words (the
  * collage's thumbs): a dot of the mark's colour, every word for screen
- * readers. `text` puts other words in the first mark's look (Muse's price
+ * readers. `text` puts other words in the first mark's look (the agent's price
  * on a piece to buy). `class` is placement only (position, a responsive
  * size step), never a colour: the look is the mark's. `wash` counts the
  * copies of a multiple in the needs-wash words ("Wash 2/3").
  *
- * Used by the grid tiles, Styling's rows, the garment page, Muse's cards,
+ * Used by the grid tiles, Styling's rows, the garment page, the agent's cards,
  * the collage and the public share page. Nothing when there is no mark.
  */
 export function GarmentMark(props: {

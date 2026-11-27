@@ -82,7 +82,7 @@ export const OPERATIONS = [
   'setTripItemPacked',
   'removeTripItem',
   'copyTripItems',
-  // #194b: the wishlist (Muse's inbox, its decisions, "Bought it") and
+  // #194b: the wishlist (the agent's inbox, its decisions, "Bought it") and
   // capsules. A new wishlist item, and "Bought a different one", are
   // createGarment's (`destination`, `boughtForNeedId`).
   'getWishlist',
@@ -204,7 +204,7 @@ export type Parity =
 
 /**
  * MCP's view: a tool's API twin, the endpoint issue that adds it, or why
- * only an agent calls it (Muse's provenance-carrying suggestions). Listed,
+ * only an agent calls it (the agent's provenance-carrying suggestions). Listed,
  * not required: MCP and API parity is not retrofitted (#191).
  */
 export type ToolParity =
@@ -402,7 +402,7 @@ export const PAGE_WRITES: Readonly<
   'POST /trips/:id/items/:itemId/delete': { api: 'removeTripItem' },
   'POST /trips/:id/packed': { api: 'setTripGarmentPacked' },
 
-  // The wishlist (Muse's inbox).
+  // The wishlist (the agent's inbox).
   'POST /wardrobe/:id/choose': { api: 'decideWishlistPick' },
   'POST /wardrobe/:id/dismiss': { api: 'decideWishlistPick' },
   'POST /wardrobe/:id/undo': { api: 'decideWishlistPick' },
@@ -452,9 +452,9 @@ export const PAGE_WRITES: Readonly<
   'POST /errors/client': BROWSER_TELEMETRY,
 };
 
-const MUSE_ROUND = {
+const AGENT_ROUND = {
   agentOnly:
-    "Muse's suggestion round: what the agent proposes carries its token, and the owner decides it in the inbox",
+    'the agent’s suggestion round: what the agent proposes carries its token, and the owner decides it in the inbox',
 } as const;
 
 /**
@@ -469,12 +469,12 @@ export type Stamped = 'outfit' | 'calendarEntry' | 'tripOutfit' | 'garment';
  * What a writing tool leaves of the agent: the rows it stamps (each with a
  * scenario in test/integration/mcp-attribution.spec.ts, which fails one
  * that writes no stamp, and a `none` tool that writes one), why it stamps
- * nothing, or Muse's round, whose provenance is its own (mcp-muse.spec.ts).
+ * nothing, or the agent's round, whose provenance is its own (mcp-agent.spec.ts).
  */
 type Attribution =
   | { readonly stamps: readonly Stamped[] }
   | { readonly none: string }
-  | { readonly museRound: true };
+  | { readonly agentRound: true };
 
 export type McpWrite = ToolParity & { readonly attribution: Attribution };
 
@@ -482,9 +482,9 @@ const EDITS = {
   none: 'an edit of what exists: who made it does not change',
 } as const;
 const RECORDS = {
-  none: "the person's record (a wear, a wash): never the agent's choice",
+  none: "the person's record (a wear, a wash): never the agent’s choice",
 } as const;
-const MUSE = { museRound: true } as const;
+const AGENT = { agentRound: true } as const;
 
 /** Every MCP tool with `writes: true`, by name (src/web/mcp/tools/). */
 export const MCP_WRITES: Readonly<Record<string, McpWrite>> = {
@@ -527,8 +527,8 @@ export const MCP_WRITES: Readonly<Record<string, McpWrite>> = {
     api: 'addTripOutfit',
     attribution: { stamps: ['tripOutfit', 'outfit'] },
   },
-  create_option_group: { ...MUSE_ROUND, attribution: MUSE },
-  suggest_garment: { ...MUSE_ROUND, attribution: MUSE },
-  suggest_outfit: { ...MUSE_ROUND, attribution: MUSE },
-  finish_round: { ...MUSE_ROUND, attribution: MUSE },
+  create_option_group: { ...AGENT_ROUND, attribution: AGENT },
+  suggest_garment: { ...AGENT_ROUND, attribution: AGENT },
+  suggest_outfit: { ...AGENT_ROUND, attribution: AGENT },
+  finish_round: { ...AGENT_ROUND, attribution: AGENT },
 };

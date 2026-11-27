@@ -15,7 +15,7 @@ export interface PickResult {
   name: string | null;
   /** The garments were already an outfit of the owner's: it was reused, nothing was created. */
   alreadySaved: boolean;
-  /** That outfit was one of Muse's proposals, which this pick made the owner's (#335). */
+  /** That outfit was one of the agent's proposals, which this pick made the owner's (#335). */
   adoptedProposal: boolean;
   /**
    * The person's pick took over what the week planner had made of it: the

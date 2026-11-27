@@ -76,10 +76,10 @@ export interface DeviceMessage {
    * Which of the user's devices it goes to: these ids (a reminder goes to
    * the devices that claimed it; ids that are not the user's are ignored),
    * every one with the morning reminder on (the re-plan's swap notice,
-   * src/web/week-plan/replan.ts), or every one taking Muse's rounds
+   * src/web/week-plan/replan.ts), or every one taking the agent's rounds
    * (finish_round, #337).
    */
-  devices: readonly number[] | 'morning-reminder' | 'muse-rounds';
+  devices: readonly number[] | 'morning-reminder' | 'agent-rounds';
   payload: PushPayload;
   options: SendOptions;
 }
@@ -98,7 +98,7 @@ function isChosen(
   devices: DeviceMessage['devices'],
 ): boolean {
   if (devices === 'morning-reminder') return row.morningReminder;
-  if (devices === 'muse-rounds') return row.museRounds;
+  if (devices === 'agent-rounds') return row.agentRounds;
   return devices.includes(row.id);
 }
 

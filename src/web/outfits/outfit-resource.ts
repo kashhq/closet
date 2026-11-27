@@ -219,7 +219,7 @@ export function toOutfitResource(
  * whereabouts are the garment's, whose edits never move the outfit's
  * revision: the client draws them from its garments), no proposal `agent`
  * (the token's name) and no `planned` or `worn` (the calendar entries'
- * own). Muse's proposals are in it, with their reaction: the owner's feed
+ * own). The agent's proposals are in it, with their reaction: the owner's feed
  * only, as every outfit.
  */
 export const SyncedOutfit = Type.Object(
@@ -396,7 +396,7 @@ export const OutfitUpdated = Type.Object(
 );
 
 /**
- * POST /outfits/{id}/reactions: the owner's moves on one of Muse's outfits
+ * POST /outfits/{id}/reactions: the owner's moves on one of the agent's outfits
  * (reactToProposal): Love (Save, once complete), Not for me with a
  * reason, and its Undo.
  */

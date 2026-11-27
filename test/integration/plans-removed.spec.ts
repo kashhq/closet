@@ -19,8 +19,8 @@ describe('wardrobe plans, removed', () => {
   beforeAll(async () => {
     t = await createTestApp();
     fixture = await createPageFixture(t);
-    // A Muse need with a pick, so the inbox, the need's page and Today's
-    // card all render something of Muse's.
+    // An agent need with a pick, so the inbox, the need's page and Today's
+    // card all render something of the agent's.
     const [need] = await t.db
       .insert(optionGroup)
       .values({ ownerId: t.owner.id, name: 'A navy knit', budget: '100' })
@@ -94,13 +94,13 @@ describe('wardrobe plans, removed', () => {
 
   it('links no plan, shopping list or plan items from any page', async () => {
     const routes = pageRoutes(fixture, '00000000-0000-4000-8000-000000000000');
-    const muse = [
+    const agent = [
       '/wardrobe/wishlist',
       ...(await t.db.select({ id: optionGroup.id }).from(optionGroup)).map(
         ({ id }) => `/wardrobe/wishlist/needs/${id}`,
       ),
     ];
-    for (const url of [...routes.map((route) => route.url), ...muse]) {
+    for (const url of [...routes.map((route) => route.url), ...agent]) {
       const res = await t.inject({ method: 'GET', url });
       if (res.statusCode !== 200) continue;
       const html = unescapeHtml(res.body);

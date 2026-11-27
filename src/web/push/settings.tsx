@@ -159,7 +159,7 @@ export function TestResult({
 }
 
 /**
- * This device's reminders (#15): a toggle and a time for each, and Muse's
+ * This device's reminders (#15): a toggle and a time for each, and the agent's
  * rounds (#337), a toggle; an
  * `AutosaveForm` saved on every change (src/web/autosave.tsx: in order, the
  * whole form each time, answered by the status line alone, ReminderStatus,
@@ -201,19 +201,21 @@ export function ReminderSettingsForm(props: {
           hint={t('today.reminders.EVENING_HINT')}
           minute={settings.evening}
         />
-        {/* Muse's rounds (#337): a toggle, no time; off until turned on. */}
-        <div class="flex flex-col gap-1" data-muse-rounds="">
+        {/* the agent’s rounds (#337): a toggle, no time; off until turned on. */}
+        <div class="flex flex-col gap-1" data-agent-rounds="">
           <label class="label cursor-pointer gap-2 text-sm text-base-content">
             <input
               type="checkbox"
               class="toggle toggle-sm toggle-primary"
-              name="museRoundsOn"
+              name="agentRoundsOn"
               value="1"
-              checked={settings.museRounds}
+              checked={settings.agentRounds}
             />
-            {t('today.reminders.MUSE')}
+            {t('today.reminders.AGENT_ROUND')}
           </label>
-          <p class="text-xs text-muted">{t('today.reminders.MUSE_HINT')}</p>
+          <p class="text-xs text-muted">
+            {t('today.reminders.AGENT_ROUND_HINT')}
+          </p>
         </div>
       </AutosaveForm>
     </div>
@@ -222,7 +224,7 @@ export function ReminderSettingsForm(props: {
 
 /**
  * POST /push/reminders' answer: the form's status line. "A time already
- * past today starts tomorrow" only when a time changed, never for Muse's
+ * past today starts tomorrow" only when a time changed, never for the agent's
  * toggle alone (#337).
  */
 export function ReminderStatus(props: {

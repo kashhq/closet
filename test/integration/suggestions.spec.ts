@@ -18,7 +18,7 @@ import {
 import { createAccessToken, tool } from './mcp';
 
 /**
- * Muse's suggestions, phase 1A (#333): the provenance writer's wishlist
+ * The agent's suggestions, phase 1A (#333): the provenance writer's wishlist
  * rule, every decision's rows through the one writer (decide), "Bought it"
  * settling a suggestion's group, and the wishlist's exclusion rule held
  * for suggestions in every state: no closet read shows one, and no list of
@@ -46,7 +46,7 @@ describe('suggestions', () => {
     return row.id;
   }
 
-  /** A wishlist garment marked as Muse's pick of `groupId`, ranked `rank`. */
+  /** A wishlist garment marked as the agent's pick of `groupId`, ranked `rank`. */
   async function pick(
     name: string,
     groupId: number | null,
@@ -85,7 +85,7 @@ describe('suggestions', () => {
   beforeAll(async () => {
     t = await createTestApp();
     ownerId = t.owner.id;
-    mcpToken = await createAccessToken(t, { name: 'Muse' });
+    mcpToken = await createAccessToken(t, { name: 'Stylist' });
     const [token] = await t.db
       .select({ id: personalAccessToken.id })
       .from(personalAccessToken)

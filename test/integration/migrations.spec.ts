@@ -161,11 +161,11 @@ describe('migrations', () => {
         'order_item_garment_id_index',
         // The order mail's owner (#976): its user_id foreign key's.
         'order_mail_owner_user_id_unique',
-        // The quiet close of Muse's rounds (#337): each owner's newest
+        // The quiet close of the agent's rounds (#337): each owner's newest
         // suggestion and proposal, read every minute; the latest round.
         'garment_owner_id_suggested_at_index',
         'outfit_owner_id_proposed_at_index',
-        'muse_round_owner_id_finished_at_index',
+        'agent_round_owner_id_finished_at_index',
         // The sync (#196a): the feed's keyset per root and of the
         // tombstones (#196b), a replayed create's tombstone lookup, and a
         // retried create's client id.
@@ -319,7 +319,7 @@ describe('migrations', () => {
       return {
         proposal: await insertOutfit({
           ownerId: otherId,
-          name: 'Muse pick',
+          name: 'Stylist pick',
           proposedAt: new Date(),
           reaction: 'proposed',
         }),

@@ -1266,7 +1266,7 @@ describe('the weekly auto-plan', () => {
         t.db,
         t.owner.id,
         'https://fcm.googleapis.com/fcm/send/week-replan',
-        { morning: 450, evening: null, museRounds: false },
+        { morning: 450, evening: null, agentRounds: false },
         new Date('2020-01-01T00:00:00Z'),
       );
       expect(deviceId).toBeGreaterThan(0);
@@ -2006,7 +2006,7 @@ describe('the weekly auto-plan', () => {
           t.db,
           t.owner.id,
           endpoint,
-          { morning: hour * 60, evening: null, museRounds: false },
+          { morning: hour * 60, evening: null, agentRounds: false },
           new Date('2020-01-01T00:00:00Z'),
         );
       };

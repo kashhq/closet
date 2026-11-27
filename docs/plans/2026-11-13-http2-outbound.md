@@ -4,7 +4,7 @@ Status: recommendations adopted by the coordinator 2026-11-13 under the owner's 
 
 ## 1. Why
 
-#347 found Shopify storefronts answer our HTTP/1.1 client with a 429 and `Retry-After`. The same pages load over HTTP/2. Today they are `blocked-by-site`, and Muse's retailer suggestions skip them. The 429 is a protocol-level policy of the shop's CDN, not a content rule.
+#347 found Shopify storefronts answer our HTTP/1.1 client with a 429 and `Retry-After`. The same pages load over HTTP/2. Today they are `blocked-by-site`, and the agent's retailer suggestions skip them. The 429 is a protocol-level policy of the shop's CDN, not a content rule.
 
 ## 2. How the fetcher connects today (`src/web/security/outbound-fetch.ts`)
 

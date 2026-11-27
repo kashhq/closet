@@ -1,5 +1,5 @@
 /**
- * Where a Muse outfit is in the owner's reaction to their agent's design
+ * Where an agent outfit is in the owner's reaction to their agent's design
  * (#335; first the plans' looks, #290): an outfit the agent proposed,
  * owned garments and its suggestions together. Stored as outfit.reaction
  * (a check constraint lists LOOK_REACTIONS), null on an outfit of the

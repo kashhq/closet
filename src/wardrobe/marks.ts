@@ -5,7 +5,7 @@ import type { GarmentStatus } from './status';
  * What a garment's status mark can say, in the order a badge shows them:
  * the first is the one in words, the rest go to screen readers. Status
  * first (not owned yet, owned once), then why an owned garment cannot be
- * worn now (away, then the wash). `set-aside` is a Muse pick the owner
+ * worn now (away, then the wash). `set-aside` is an agent pick the owner
  * turned down and stands in for `to-buy`, so the two never meet; only a
  * wishlist garment is set aside (buying one keeps its `dismissedAt`).
  *
@@ -26,7 +26,7 @@ export type GarmentMarkKind = (typeof GARMENT_MARKS)[number];
 /**
  * What a surface knows of a garment. Status is always read; the rest is
  * optional because a surface marks only what it already reads (the grid
- * reads away and the wash for the owner, Muse reads setAside, Styling
+ * reads away and the wash for the owner, the agent reads setAside, Styling
  * neither): an absent field is no mark, never a guess.
  */
 export interface MarkedGarment {

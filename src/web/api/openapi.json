@@ -812,7 +812,7 @@
             "type": "integer"
           },
           "boughtForNeedId": {
-            "description": "\"Bought a different one\": your own Muse need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only",
+            "description": "\"Bought a different one\": your own agent need this closet garment was bought for instead of its options, settled by it in the same write. A need settled or set aside is a 404, one settled meanwhile a 409; `destination` closet only",
             "minimum": 1,
             "maximum": 2147483647,
             "type": "integer"
@@ -3687,16 +3687,16 @@
           }
         }
       },
-      "TodayMuse": {
-        "title": "TodayMuse",
-        "description": "Today's one Muse card, counted live: it shrinks as you decide and goes at zero",
+      "TodayAgent": {
+        "title": "TodayAgent",
+        "description": "Today's one agent card, counted live: it shrinks as you decide and goes at zero",
         "type": "object",
         "required": [
           "kind"
         ],
         "properties": {
           "kind": {
-            "description": "`round`: Muse's latest round while any of it waits; `needs`: else its needs with an option to choose (GET /wishlist)",
+            "description": "`round`: the agent’s latest round while any of it waits; `needs`: else its needs with an option to choose (GET /wishlist)",
             "type": "string",
             "enum": [
               "round",
@@ -3704,7 +3704,7 @@
             ]
           },
           "agent": {
-            "description": "The agent's token name; absent once gone",
+            "description": "The agent’s token name; absent once gone",
             "type": "string"
           },
           "roundId": {
@@ -3937,7 +3937,7 @@
       },
       "Today": {
         "title": "Today",
-        "description": "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), Muse's card while one waits, and a row per part of the day",
+        "description": "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), the agent’s card while one waits, and a row per part of the day",
         "type": "object",
         "required": [
           "today",
@@ -3951,8 +3951,8 @@
           "weather": {
             "$ref": "#/components/schemas/Weather"
           },
-          "muse": {
-            "$ref": "#/components/schemas/TodayMuse"
+          "agent": {
+            "$ref": "#/components/schemas/TodayAgent"
           },
           "rows": {
             "type": "array",
@@ -5346,7 +5346,7 @@
       },
       "WishlistNeed": {
         "title": "WishlistNeed",
-        "description": "One need Muse is shopping for (an option group): open, resolved (an option chosen or bought) or set aside",
+        "description": "One need the agent is shopping for (an option group): open, resolved (an option chosen or bought) or set aside",
         "type": "object",
         "required": [
           "id",
@@ -5454,7 +5454,7 @@
         "required": [
           "id",
           "category",
-          "fromMuse",
+          "fromAgent",
           "setAside"
         ],
         "properties": {
@@ -5481,7 +5481,7 @@
           "thumbUrl": {
             "type": "string"
           },
-          "fromMuse": {
+          "fromAgent": {
             "description": "Your agent suggested it",
             "type": "boolean"
           },
@@ -5489,7 +5489,7 @@
             "minimum": 1,
             "type": "integer"
           },
-          "museNote": {
+          "agentNote": {
             "type": "string"
           },
           "setAside": {
@@ -5583,7 +5583,7 @@
       },
       "Wishlist": {
         "title": "Wishlist",
-        "description": "The Wishlist tab, Muse's inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows",
+        "description": "The Wishlist tab, the agent’s inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows",
         "type": "object",
         "required": [
           "readyToBuy",
@@ -5601,7 +5601,7 @@
             }
           },
           "needs": {
-            "description": "Open needs with options to choose from: the most unlocks first (for the owner; else Muse's rank), each need's options likewise",
+            "description": "Open needs with options to choose from: the most unlocks first (for the owner; else the agent’s rank), each need's options likewise",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WishlistOpenNeed"
@@ -5615,7 +5615,7 @@
             }
           },
           "stillLooking": {
-            "description": "Open needs with no option left: Muse is still looking",
+            "description": "Open needs with no option left: the agent is still looking",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WishlistNeed"
@@ -5749,7 +5749,7 @@
         "required": [
           "id",
           "category",
-          "fromMuse",
+          "fromAgent",
           "setAside"
         ],
         "properties": {
@@ -5776,7 +5776,7 @@
           "thumbUrl": {
             "type": "string"
           },
-          "fromMuse": {
+          "fromAgent": {
             "description": "Your agent suggested it",
             "type": "boolean"
           },
@@ -5784,7 +5784,7 @@
             "minimum": 1,
             "type": "integer"
           },
-          "museNote": {
+          "agentNote": {
             "type": "string"
           },
           "setAside": {
@@ -8346,7 +8346,7 @@
       },
       "StyleProfile": {
         "title": "StyleProfile",
-        "description": "What Muse reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.",
+        "description": "What the agent reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.",
         "type": "object",
         "required": [
           "styles",
@@ -11163,7 +11163,7 @@
         "tags": [
           "garments"
         ],
-        "description": "The owner only: a share, MANAGE included, is a 403. A garment already gone is a 404, which a retry may read as done. A Muse suggestion is a 409: it is set aside, never deleted.",
+        "description": "The owner only: a share, MANAGE included, is a 403. A garment already gone is a 404, which a retry may read as done. An agent suggestion is a 409: it is set aside, never deleted.",
         "parameters": [
           {
             "schema": {
@@ -12626,7 +12626,7 @@
         "tags": [
           "outfits"
         ],
-        "description": "Each with its garments in the order it was built and the pieces still to buy. Muse's proposals you have not made yours are not listed: `proposed=true` lists the ones waiting on you instead (set-aside ones stay out).",
+        "description": "Each with its garments in the order it was built and the pieces still to buy. The agent’s proposals you have not made yours are not listed: `proposed=true` lists the ones waiting on you instead (set-aside ones stay out).",
         "parameters": [
           {
             "schema": {
@@ -12659,7 +12659,7 @@
             "in": "query",
             "name": "proposed",
             "required": false,
-            "description": "`true`: your agent's proposals waiting on you (the Outfits tab's From Muse cards) instead of your own outfits; each carries its `proposal`"
+            "description": "`true`: your agent's proposals waiting on you (the Outfits tab's From the agent cards) instead of your own outfits; each carries its `proposal`"
           },
           {
             "schema": {
@@ -13405,10 +13405,10 @@
         "tags": [
           "calendar"
         ],
-        "description": "The household's day (GET /me's `today`): your weather, Muse's card, and a row per part of the day. A row per occasion planned today with its entries (Wore it: PUT /calendar-entries/{id}/worn; Change: PUT /calendar-entries/{id}/outfit); while nothing that dresses the day (all day, work, daytime) is planned, an all-day row of ideas first. No ETag: it moves with the day and the forecast.",
+        "description": "The household's day (GET /me's `today`): your weather, the agent’s card, and a row per part of the day. A row per occasion planned today with its entries (Wore it: PUT /calendar-entries/{id}/worn; Change: PUT /calendar-entries/{id}/outfit); while nothing that dresses the day (all day, work, daytime) is planned, an all-day row of ideas first. No ETag: it moves with the day and the forecast.",
         "responses": {
           "200": {
-            "description": "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), Muse's card while one waits, and a row per part of the day",
+            "description": "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), the agent’s card while one waits, and a row per part of the day",
             "content": {
               "application/json": {
                 "schema": {
@@ -14637,11 +14637,11 @@
     "/api/v1/wishlist": {
       "get": {
         "operationId": "getWishlist",
-        "summary": "The wishlist, as Muse's inbox",
+        "summary": "The wishlist, as the agent’s inbox",
         "tags": [
           "wishlist"
         ],
-        "description": "Ready to buy, Muse's needs with their options, your own items, the needs Muse is still looking for, and what was set aside. A share reads it without the unlocks (they judge the owner's closet).",
+        "description": "Ready to buy, the agent’s needs with their options, your own items, the needs the agent is still looking for, and what was set aside. A share reads it without the unlocks (they judge the owner's closet).",
         "parameters": [
           {
             "schema": {
@@ -14657,7 +14657,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The Wishlist tab, Muse's inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows",
+            "description": "The Wishlist tab, the agent’s inbox: every need and item in exactly one section. Not paged: the needs are sorted by what their options unlock, which only the whole list knows",
             "content": {
               "application/json": {
                 "schema": {
@@ -14692,7 +14692,7 @@
     "/api/v1/wishlist/seen": {
       "post": {
         "operationId": "markWishlistSeen",
-        "summary": "\"New from Muse\": what came in since you last looked",
+        "summary": "\"New from the agent\": what came in since you last looked",
         "tags": [
           "wishlist"
         ],
@@ -14799,7 +14799,7 @@
     "/api/v1/garments/{id}/decisions": {
       "post": {
         "operationId": "decideWishlistPick",
-        "summary": "Decides one of Muse's options",
+        "summary": "Decides one of the agent’s options",
         "tags": [
           "wishlist"
         ],
@@ -14953,7 +14953,7 @@
         "tags": [
           "wishlist"
         ],
-        "description": "With the day and the price paid, and for one of Muse's options its need settled. Your own wardrobe or a MANAGE share; `archiveReplaced` the owner's alone. A garment no longer on the wishlist (bought already: a retry) is a 409.",
+        "description": "With the day and the price paid, and for one of the agent’s options its need settled. Your own wardrobe or a MANAGE share; `archiveReplaced` the owner's alone. A garment no longer on the wishlist (bought already: a retry) is a 409.",
         "requestBody": {
           "required": true,
           "content": {
@@ -15024,7 +15024,7 @@
     "/api/v1/garments/{id}/returns": {
       "post": {
         "operationId": "returnGarment",
-        "summary": "Returned it: one of Muse's options taken back after buying",
+        "summary": "Returned it: one of the agent’s options taken back after buying",
         "tags": [
           "wishlist"
         ],
@@ -17573,7 +17573,7 @@
         ],
         "responses": {
           "200": {
-            "description": "What Muse reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.",
+            "description": "What the agent reads of your taste: the profile (empty sets when never saved) and your outfit rules, oldest first. Your week is GET /week-template.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17813,7 +17813,7 @@
         "tags": [
           "sync"
         ],
-        "description": "Rows and deletions after `cursor`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its `cursor`; call again while `more`. A 410 `cursor_expired` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), the feed has carried more since (a new resource), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry `snapshot`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules. The style profile (with its outfit rules), the measurements and the week template are one per user, the change's `id` yours; the week template is never deleted, only emptied.\n\nWhat the feed keeps fresh, and what you fetch online each time:\n\n| What | Reads | Kept fresh by |\n| --- | --- | --- |\n| Garments (a share's too) | `listGarments`, `getGarment` | this feed: `garment`, `wear`, `capsule` |\n| Wears, washes and away | none: the feed only | this feed: `wear`, `garment` |\n| Outfits, Muse's proposals included | `listOutfits`, `getOutfit` | this feed: `outfit`, `garment`, `calendarEntry` |\n| The calendar and its selfies | `listCalendarEntries` | this feed: `calendarEntry`, `outfit`, `selfie` |\n| Plan my week's batches (for their undo) | none: the feed only | this feed: `weekPlan` |\n| The week template | `getWeekTemplate` | this feed: `weekTemplate` |\n| Trips and their packing | `listTrips`, `getTrip` | this feed: `trip`, `outfit`, `garment`, `calendarEntry` |\n| Capsules (a share's too) | `listCapsules`, `getCapsule` | this feed: `capsule`, `garment` |\n| Sizes and measurements | `getSizes`, `listBrandSizes` | this feed: `brandSize`, `measurements` |\n| The style profile and its outfit rules | `getStyleProfile` | this feed: `styleProfile` |\n| Today | `getToday` | fetching it online: its forecast and suggestions; its entries are the feed's calendarEntry |\n| Ideas, clashes and avoided pairs | `listIdeas`, `getGoesWith` | fetching it online: generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile |\n| The wishlist: Muse's inbox and needs | `getWishlist`, `getWishlistNeed` | fetching it online: the needs and suggestions are not synced; its garments are the feed's garment |\n| Saved looks and their photos | `listLooks`, `getLook`, `getLookRecreation`, `getLookPhoto` | fetching it online: not synced (owner decision, 2026-11-13) |\n| Selfie photos | `getSelfiePhoto` | fetching it online: image bytes, fetched when shown |\n| Insights and the year's recap | `getInsights`, `getRecap` | fetching it online: figures computed on the server over the whole history |\n| Weather, places and a trip's forecast | `getWeather`, `searchPlaces`, `getTripWeather` | fetching it online: a live forecast and the weather settings |\n| Shared wardrobes | `listSharedWardrobes` | fetching it online: who shares with you and how; a sync's `snapshot` lists their ids |\n| You, and this API's spec | `getMe`, `getOpenApi` | fetching it online: the account and the server's features, read at sign-in |",
+        "description": "Rows and deletions after `cursor`, oldest first, across your wardrobe and each one shared with you (its garments and capsules only). Apply each page's deletions, then its changes, then keep its `cursor`; call again while `more`. A 410 `cursor_expired` means the feed no longer holds what the cursor needs (a deletion older than 90 days was pruned), the cursor was answered to another account (a device that switched accounts), the feed has carried more since (a new resource), or the server's database was restored since: sync again from no cursor. A sync from no cursor is a full sync: its pages carry `snapshot`, and after its last one every synced row it did not send, and every wardrobe it did not list, is gone. The garment carries what is stored on it: a garment's wear counts and capsules are yours to derive from the wears and capsules. The style profile (with its outfit rules), the measurements and the week template are one per user, the change's `id` yours; the week template is never deleted, only emptied.\n\nWhat the feed keeps fresh, and what you fetch online each time:\n\n| What | Reads | Kept fresh by |\n| --- | --- | --- |\n| Garments (a share's too) | `listGarments`, `getGarment` | this feed: `garment`, `wear`, `capsule` |\n| Wears, washes and away | none: the feed only | this feed: `wear`, `garment` |\n| Outfits, the agent’s proposals included | `listOutfits`, `getOutfit` | this feed: `outfit`, `garment`, `calendarEntry` |\n| The calendar and its selfies | `listCalendarEntries` | this feed: `calendarEntry`, `outfit`, `selfie` |\n| Plan my week's batches (for their undo) | none: the feed only | this feed: `weekPlan` |\n| The week template | `getWeekTemplate` | this feed: `weekTemplate` |\n| Trips and their packing | `listTrips`, `getTrip` | this feed: `trip`, `outfit`, `garment`, `calendarEntry` |\n| Capsules (a share's too) | `listCapsules`, `getCapsule` | this feed: `capsule`, `garment` |\n| Sizes and measurements | `getSizes`, `listBrandSizes` | this feed: `brandSize`, `measurements` |\n| The style profile and its outfit rules | `getStyleProfile` | this feed: `styleProfile` |\n| Today | `getToday` | fetching it online: its forecast and suggestions; its entries are the feed's calendarEntry |\n| Ideas, clashes and avoided pairs | `listIdeas`, `getGoesWith` | fetching it online: generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile |\n| The wishlist: the agent’s inbox and needs | `getWishlist`, `getWishlistNeed` | fetching it online: the needs and suggestions are not synced; its garments are the feed's garment |\n| Saved looks and their photos | `listLooks`, `getLook`, `getLookRecreation`, `getLookPhoto` | fetching it online: not synced (owner decision, 2026-11-13) |\n| Selfie photos | `getSelfiePhoto` | fetching it online: image bytes, fetched when shown |\n| Insights and the year's recap | `getInsights`, `getRecap` | fetching it online: figures computed on the server over the whole history |\n| Weather, places and a trip's forecast | `getWeather`, `searchPlaces`, `getTripWeather` | fetching it online: a live forecast and the weather settings |\n| Shared wardrobes | `listSharedWardrobes` | fetching it online: who shares with you and how; a sync's `snapshot` lists their ids |\n| You, and this API's spec | `getMe`, `getOpenApi` | fetching it online: the account and the server's features, read at sign-in |",
         "parameters": [
           {
             "schema": {

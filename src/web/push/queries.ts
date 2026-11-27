@@ -34,7 +34,7 @@ export interface DeviceRow {
  * sending it again (every signed-in app start), with renewed keys, or signed
  * in as another account updates the one row instead of colliding with it.
  * The endpoint belongs to whoever is signed in on that browser now; its
- * reminders and Muse's rounds were the previous account's choice, so a
+ * reminders and the agent's rounds were the previous account's choice, so a
  * move turns them off (opt-in per device and per person).
  *
  * Undefined, storing nothing, when the session that sent it has ended: the
@@ -77,7 +77,7 @@ export async function upsertDevice(
       morning_reminder = case when ${userDevice.userId} = excluded.user_id then ${userDevice.morningReminder} end,
       evening_reminder = case when ${userDevice.userId} = excluded.user_id then ${userDevice.eveningReminder} end,
       reminders_set_at = case when ${userDevice.userId} = excluded.user_id then ${userDevice.remindersSetAt} end,
-      muse_rounds = ${userDevice.userId} = excluded.user_id and ${userDevice.museRounds}
+      agent_rounds = ${userDevice.userId} = excluded.user_id and ${userDevice.agentRounds}
     returning id`);
   return rows[0]?.id;
 }
@@ -119,8 +119,8 @@ export async function devicesOf(db: Db, userId: number): Promise<DeviceRow[]> {
 export interface UserDeviceRow extends DeviceRow {
   userId: number;
   morningReminder: boolean;
-  /** Muse's round notification (#337). */
-  museRounds: boolean;
+  /** The agent's round notification (#337). */
+  agentRounds: boolean;
 }
 
 /**
@@ -143,7 +143,7 @@ export async function devicesOfUsers(
       keyP256dh: userDevice.keyP256dh,
       keyAuth: userDevice.keyAuth,
       morningReminder: sql<boolean>`${userDevice.morningReminder} is not null`,
-      museRounds: userDevice.museRounds,
+      agentRounds: userDevice.agentRounds,
     })
     .from(userDevice)
     .where(inArray(userDevice.userId, [...new Set(userIds)]))
@@ -207,11 +207,11 @@ export async function deleteDeviceById(db: Db, id: number): Promise<void> {
   await db.delete(userDevice).where(eq(userDevice.id, id));
 }
 
-/** A device's reminder times (null when off), and whether it takes Muse's rounds (#337). */
+/** A device's reminder times (null when off), and whether it takes the agent's rounds (#337). */
 export interface ReminderSettings {
   morning: MinuteOfDay | null;
   evening: MinuteOfDay | null;
-  museRounds: boolean;
+  agentRounds: boolean;
 }
 
 /**
@@ -228,7 +228,7 @@ export async function findReminderSettings(
     .select({
       morning: userDevice.morningReminder,
       evening: userDevice.eveningReminder,
-      museRounds: userDevice.museRounds,
+      agentRounds: userDevice.agentRounds,
     })
     .from(userDevice)
     .where(
@@ -242,10 +242,10 @@ const deviceBefore = alias(userDevice, 'before');
 
 /**
  * The one writer of a device's reminders: saves both times (null turns one
- * off) and Muse's rounds on this user's device at `endpoint`, stamped `now`,
+ * off) and the agent's rounds on this user's device at `endpoint`, stamped `now`,
  * so a reminder whose time has passed today first goes out tomorrow
  * (dueReminders). The device id and whether a time changed (turned on, off
- * or moved: what the status line's "starts tomorrow" is about, never Muse's
+ * or moved: what the status line's "starts tomorrow" is about, never the agent's
  * toggle), in one statement; undefined when the endpoint is not one of
  * theirs.
  */
@@ -261,7 +261,7 @@ export async function saveReminderSettings(
     .set({
       morningReminder: settings.morning,
       eveningReminder: settings.evening,
-      museRounds: settings.museRounds,
+      agentRounds: settings.agentRounds,
       remindersSetAt: now,
     })
     .from(deviceBefore)

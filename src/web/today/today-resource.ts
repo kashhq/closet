@@ -21,7 +21,7 @@ import {
   WeatherResource,
 } from '../weather/weather-resource';
 import type { NeedsToDecide } from '../wishlist/inbox';
-import type { MuseRound } from '../wishlist/rounds';
+import type { AgentRound } from '../wishlist/rounds';
 import { TODAY_IDEAS, type TodayModel } from './today';
 
 /**
@@ -59,14 +59,14 @@ const TodayRow = Type.Object(
 );
 type TodayRow = Static<typeof TodayRow>;
 
-const TodayMuse = Type.Object(
+const TodayAgent = Type.Object(
   {
     kind: CloneType(literals(['round', 'needs'] as const), {
       description:
-        "`round`: Muse's latest round while any of it waits; `needs`: else its needs with an option to choose (GET /wishlist)",
+        '`round`: the agent’s latest round while any of it waits; `needs`: else its needs with an option to choose (GET /wishlist)',
     }),
     agent: Type.Optional(
-      Type.String({ description: "The agent's token name; absent once gone" }),
+      Type.String({ description: 'The agent’s token name; absent once gone' }),
     ),
     roundId: Type.Optional(Type.Integer()),
     summary: Type.Optional(Type.String()),
@@ -84,9 +84,9 @@ const TodayMuse = Type.Object(
     ),
   },
   {
-    title: 'TodayMuse',
+    title: 'TodayAgent',
     description:
-      "Today's one Muse card, counted live: it shrinks as you decide and goes at zero",
+      "Today's one agent card, counted live: it shrinks as you decide and goes at zero",
   },
 );
 
@@ -94,22 +94,22 @@ export const TodayResource = Type.Object(
   {
     today: IsoDateSchema,
     weather: Type.Optional(WeatherResource),
-    muse: Type.Optional(TodayMuse),
+    agent: Type.Optional(TodayAgent),
     rows: Type.Array(TodayRow),
   },
   {
     title: 'Today',
     description:
-      "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), Muse's card while one waits, and a row per part of the day",
+      "The home screen: the household's day, your weather today (its `days` today's alone; absent with the weather off), the agent’s card while one waits, and a row per part of the day",
   },
 );
 type TodayResource = Static<typeof TodayResource>;
 
-function toMuse(
-  round: MuseRound | null | undefined,
+function toAgent(
+  round: AgentRound | null | undefined,
   needs: NeedsToDecide | null | undefined,
-): Static<typeof TodayMuse> | undefined {
-  // The page's MuseCard: the waiting round's, else the needs'.
+): Static<typeof TodayAgent> | undefined {
+  // The page's AgentCard: the waiting round's, else the needs'.
   if (round) {
     return {
       kind: 'round',
@@ -159,7 +159,7 @@ export function toTodayResource(
   model: TodayModel,
   rainGear: readonly MatchGarment[],
 ): TodayResource {
-  const muse = toMuse(model.round, model.needs);
+  const agent = toAgent(model.round, model.needs);
   return {
     today: model.today,
     ...(model.weather && {
@@ -170,7 +170,7 @@ export function toTodayResource(
         rainGear,
       ),
     }),
-    ...(muse && { muse }),
+    ...(agent && { agent }),
     rows: model.rows.map((row) => toTodayRow(row, model)),
   };
 }

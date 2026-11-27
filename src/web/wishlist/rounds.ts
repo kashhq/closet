@@ -1,20 +1,20 @@
 import { and, eq, isNotNull, type SQL, sql } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
-import { garment, museRound, outfit } from '../../db/schema';
+import { garment, agentRound, outfit } from '../../db/schema';
 import { ownerTransaction } from '../auth/queries';
 import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
-import { museOutfitWaiting } from '../outfits/references';
+import { agentOutfitWaiting } from '../outfits/references';
 import { moveFeedbackCursor } from './feedback';
 import { OPEN_PICKS } from './inbox';
 
 /**
- * Muse's rounds (#337; docs/plans/2026-10-05-muse-suggestions.md section
+ * The agent's rounds (#337; docs/plans/2026-10-05-agent-suggestions.md section
  * 4 A): the agent ends a round of suggestions with finish_round, which
- * stores when (muse_round) and nothing of what: a round is the agent's
+ * stores when (agent_round) and nothing of what: a round is the agent's
  * outfits proposed and options suggested in (`since`, `finished_at`],
  * counted on every read, so Today's card shrinks as the owner decides and
  * goes at zero, with nothing to dismiss. One writer, finishRound; one
- * read, museRoundSql (Today's statement). An agent that never calls
+ * read, agentRoundSql (Today's statement). An agent that never calls
  * finish_round has its round closed for it once it has been quiet a while
  * (quietRounds, then round-end.ts's closeQuietRounds on the minute).
  */
@@ -24,16 +24,16 @@ export const ROUND_SUMMARY_MAX = 140;
 
 /** What a round brought that still waits on the owner. */
 export interface RoundCounts {
-  /** Its outfits not decided yet (museOutfitWaiting). */
+  /** Its outfits not decided yet (agentOutfitWaiting). */
   outfits: number;
   /** Its options of needs still open, still wanted (OPEN_PICKS). */
   pieces: number;
 }
 
 /** The latest round as Today's card shows it. */
-export interface MuseRound extends RoundCounts {
+export interface AgentRound extends RoundCounts {
   id: number;
-  /** Muse: Today is the owner's alone, so its token's name, or "Agent". */
+  /** The agent: Today is the owner's alone, so its token's name, or "Agent". */
   agent: AgentLabel | null;
   summary: string | null;
 }
@@ -48,7 +48,7 @@ function countsSql(ownerId: number | SQL, since: SQL, until: SQL) {
   return {
     outfits: sql<number>`(select count(*)::int from ${outfit} where ${and(
       eq(outfit.ownerId, ownerId),
-      museOutfitWaiting(),
+      agentOutfitWaiting(),
       inRound(sql`${outfit.proposedAt}`, since, until),
     )})`,
     pieces: sql<number>`(select count(*)::int from ${garment} where ${and(
@@ -66,13 +66,13 @@ const latest = sql.identifier('latest');
  * as a scalar subquery: Today reads it beside the day in one statement
  * (todayFor's `needs`, src/web/today/today.ts).
  */
-export function museRoundSql(ownerId: number): SQL<MuseRound | null> {
+export function agentRoundSql(ownerId: number): SQL<AgentRound | null> {
   const counts = countsSql(
     ownerId,
     sql`${latest}.since`,
     sql`${latest}.finished_at`,
   );
-  return sql<MuseRound | null>`(
+  return sql<AgentRound | null>`(
     select case when counted.outfits + counted.pieces = 0 then null else json_build_object(
       'id', counted.id,
       'agent', counted.agent,
@@ -85,7 +85,7 @@ export function museRoundSql(ownerId: number): SQL<MuseRound | null> {
         ${agentLabelSql(sql`${latest}.token_id`, OWNER_READS)} as agent,
         ${counts.outfits} as outfits,
         ${counts.pieces} as pieces
-      from ${museRound} as ${latest}
+      from ${agentRound} as ${latest}
       where ${latest}.owner_id = ${ownerId}
       order by ${latest}.finished_at desc, ${latest}.id desc
       limit 1
@@ -136,16 +136,16 @@ export function finishRound(
       pieces: number;
     }>(sql`
       with previous as (
-        select ${museRound.finishedAt} as finished_at from ${museRound}
-        where ${eq(museRound.ownerId, ownerId)}
-        order by ${museRound.finishedAt} desc, ${museRound.id} desc
+        select ${agentRound.finishedAt} as finished_at from ${agentRound}
+        where ${eq(agentRound.ownerId, ownerId)}
+        order by ${agentRound.finishedAt} desc, ${agentRound.id} desc
         limit 1
       ),
       counted as (
         select ${counts.outfits} as outfits, ${counts.pieces} as pieces
       ),
       created as (
-        insert into ${museRound} (owner_id, token_id, since, summary)
+        insert into ${agentRound} (owner_id, token_id, since, summary)
         select ${ownerId}::int, ${round.tokenId}::int, ${since}, ${round.summary}::text
         from counted where counted.outfits + counted.pieces > 0
         returning id
@@ -182,14 +182,14 @@ const last = sql.identifier('last');
 
 /**
  * The owners with an open round gone quiet, in one statement across
- * owners (the quiet close's minutely read): their newest Muse write (a
+ * owners (the quiet close's minutely read): their newest the agent write (a
  * garment's `suggested_at`, an outfit's `proposed_at`; each table's
- * partial index on the owner and the time, so only Muse's rows are read;
+ * partial index on the owner and the time, so only the agent's rows are read;
  * of writes at one instant, a token that still exists, then the highest)
  * is after their last round's end, or there is no round, and at or before
  * `quietSince`; and the round finishRound would store is not empty (what
  * the owner has decided already makes no round), so an owner who decided
- * everything is not found again every minute. Each tick reads every Muse
+ * everything is not found again every minute. Each tick reads every agent
  * write of every owner: fine at a household's scale, not a pattern for a
  * table that grows without bound.
  */
@@ -221,9 +221,9 @@ export async function quietRounds(
     select ${newest}.owner_id, ${newest}.token_id
     from ${newest}
     left join lateral (
-      select ${museRound.finishedAt} as finished_at from ${museRound}
-      where ${museRound.ownerId} = ${newest}.owner_id
-      order by ${museRound.finishedAt} desc
+      select ${agentRound.finishedAt} as finished_at from ${agentRound}
+      where ${agentRound.ownerId} = ${newest}.owner_id
+      order by ${agentRound.finishedAt} desc
       limit 1
     ) as ${last} on true
     where ${newest}.at <= ${quietSince}::timestamptz

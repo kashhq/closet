@@ -42,7 +42,7 @@ export const READ_COVERAGE: readonly CoverageRow[] = [
     feed: ['wear', 'garment'],
   },
   {
-    what: "Outfits, Muse's proposals included",
+    what: 'Outfits, the agent’s proposals included',
     reads: ['listOutfits', 'getOutfit'],
     feed: ['outfit', 'garment', 'calendarEntry'],
   },
@@ -94,7 +94,7 @@ export const READ_COVERAGE: readonly CoverageRow[] = [
       "generated on the server (the seeded generator, the forecast), and the avoided pairs are not synced; the outfit rules are the feed's styleProfile",
   },
   {
-    what: "The wishlist: Muse's inbox and needs",
+    what: 'The wishlist: the agent’s inbox and needs',
     reads: ['getWishlist', 'getWishlistNeed'],
     onlineOnly:
       "the needs and suggestions are not synced; its garments are the feed's garment",

@@ -332,7 +332,7 @@ export async function ownsOutfit(
  * `auto` and its swap, leaving two outfits in one slot (#122).
  *
  * **An outfit that may not be held is refused** (#335, outfitMayBeHeld:
- * one holding a piece not bought yet, OutfitIncomplete, or one of Muse's
+ * one holding a piece not bought yet, OutfitIncomplete, or one of the agent's
  * proposals not the owner's yet, OutfitNotYours; refuseUnholdable), a 409,
  * and nothing is written. The owner lock keeps it true until the
  * commit: a slot write that would add a piece (updateOutfit) takes it too.

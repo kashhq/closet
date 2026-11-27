@@ -182,7 +182,7 @@ describe('agent badges (#822)', () => {
     expect(await badges('/')).toEqual(['Laptop Claude']);
   });
 
-  it("leaves Muse's rows to their own 'From Muse': no badge on a suggested garment or a proposed outfit", async () => {
+  it("leaves the agent’s rows to their own 'From the agent': no badge on a suggested garment or a proposed outfit", async () => {
     const added = await tool<{ garment: { id: number } }>(
       t,
       token,

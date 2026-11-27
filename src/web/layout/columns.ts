@@ -20,7 +20,7 @@
  *    `--tile-outfit` (five at 1280, six at 1440).
  *  - `IDEA_GRID`: idea cards, from `lg` only: `--tile-idea` wide, four at
  *    1440. Below `lg` the cards are a strip (`SnapStrip desktop="grid"`,
- *    src/web/strip/snap-strip.tsx: Ideas, Today's ideas, a Muse need's
+ *    src/web/strip/snap-strip.tsx: Ideas, Today's ideas, an agent need's
  *    options) or the parent's stack (Today's planned cards beside them,
  *    so both sit on the same tracks), so it carries no phone layout.
  *  - `CANDIDATE_GRID`: large product photos with their price and actions
@@ -46,13 +46,13 @@
  *  - `CARD_COLUMNS`: blocks of mixed height (Insights' cards) flowing down
  *    CSS columns, so a short card leaves no hole: one on a phone (stacked
  *    with the same 1rem gap), two at `lg`, three at `xl`.
- *  - `PAIR_GRID`: two side by side from `lg` (the Wishlist inbox's Muse
+ *  - `PAIR_GRID`: two side by side from `lg` (the Wishlist inbox's the agent
  *    picks).
- *  - `MUSE_GRID`: Muse's outfit cards (the Outfits tab, #335), the page's
+ *  - `AGENT_GRID`: the agent's outfit cards (the Outfits tab, #335), the page's
  *    hero, every piece big: one on a phone, two from `lg` (never three:
  *    the pieces being decided on must stay the largest images on the page,
  *    about 150 px at 1440); a row's cards stretch to the tallest, so their
- *    actions line up at the foot. `MUSE_PIECES` is a card's four pieces.
+ *    actions line up at the foot. `AGENT_PIECES` is a card's four pieces.
  *  - `WEEK_DAYS`: the Calendar week's seven days, the phone's strip of
  *    letters (`WEEK_STRIP`) and the desktop grid's columns (`WEEK_COLUMNS`,
  *    #467; its rows are `weekRows`, layout/calendar-grid.ts).
@@ -95,8 +95,8 @@ export const CARD_GRID =
 export const CARD_COLUMNS =
   'space-y-4 lg:space-y-0 lg:columns-2 lg:gap-4 xl:columns-3 lg:*:mb-4 lg:*:break-inside-avoid';
 export const PAIR_GRID = 'grid grid-cols-1 items-start gap-4 lg:grid-cols-2';
-export const MUSE_GRID = 'grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2';
-export const MUSE_PIECES = 'grid grid-cols-4 gap-1.5';
+export const AGENT_GRID = 'grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2';
+export const AGENT_PIECES = 'grid grid-cols-4 gap-1.5';
 export const WEEK_STRIP = 'grid grid-cols-7 gap-1';
 export const WEEK_COLUMNS = 'lg:grid lg:grid-cols-7 lg:gap-2';
 export const MONTH_DAY =

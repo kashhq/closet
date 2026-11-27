@@ -55,7 +55,7 @@ owner's rules.
   - delete per rule;
   - the gallery's avoided pairs listed below, read-only, with "Allow again" (`allowPair`).
 - **Ideas and Styling:** a broken-rule chip on a flagged idea, using the problems' existing markup.
-- **MCP:** `get_style_profile` lists the rules, so Muse respects them. A write tool waits for the
+- **MCP:** `get_style_profile` lists the rules, so the agent respects them. A write tool waits for the
   owner's need.
 
 ## 5. Tests and budget

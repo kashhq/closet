@@ -17,7 +17,7 @@ export const SlotCategory = Type.String({
   pattern: '\\S',
 });
 
-/** "Not for me"'s optional note on one of Muse's outfits. */
+/** "Not for me"'s optional note on one of the agent's outfits. */
 export const DECLINE_NOTE_MAX = 500;
 
 /**

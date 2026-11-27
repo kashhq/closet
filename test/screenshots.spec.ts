@@ -377,7 +377,7 @@ test.describe('desktop', () => {
   });
 
   // The strip's desktop modes (#1065): Today's cards in a grid (Ideas' is
-  // 92 above) and Goes-with's best outfits a row. No persona has a Muse
+  // 92 above) and Goes-with's best outfits a row. No persona has an agent
   // need, so its options grid has no shot.
   test('demo: Theo, the strips at 1440', async ({ page }) => {
     await signInAs(page, 'demo');
