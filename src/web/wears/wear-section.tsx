@@ -142,7 +142,12 @@ export function WearStatus(props: {
         {garment.status === 'closet' && (
           <StyleThisLink garmentId={garment.id} viewOwner={viewOwner} />
         )}
-        <WoreToday garment={garment} laundry={laundry} viewOwner={viewOwner} />
+        <WoreToday
+          garment={garment}
+          laundry={laundry}
+          viewOwner={viewOwner}
+          calendarBadge={panel.record !== undefined}
+        />
         {offersWashed && <Washed garment={garment} viewOwner={viewOwner} />}
       </div>
     </div>
@@ -251,6 +256,12 @@ function WoreToday(props: {
   garment: WearGarment;
   laundry: LaundryState;
   viewOwner: number | undefined;
+  /**
+   * The calendar's badge: the owner's alone (#680). A partner's wash state
+   * never says a wear was an entry's (laundryStateSql), so their row is
+   * always Wore today, and the badge is not rendered at all.
+   */
+  calendarBadge: boolean;
 }) {
   const { garment, laundry, viewOwner } = props;
   // The badge is the region's sibling: the outbox's flip swaps every child
@@ -278,14 +289,16 @@ function WoreToday(props: {
       </div>
       {/* Focusable by script only: it takes focus when the row it
           replaces had it (showWornState, views/assets/outbox.ts). */}
-      <span
-        class="badge badge-success self-center"
-        hidden
-        tabindex={-1}
-        data-worn-by-entry=""
-      >
-        ✓ {t('wear.WORN_TODAY_CALENDAR')}
-      </span>
+      {props.calendarBadge && (
+        <span
+          class="badge badge-success self-center"
+          hidden
+          tabindex={-1}
+          data-worn-by-entry=""
+        >
+          ✓ {t('wear.WORN_TODAY_CALENDAR')}
+        </span>
+      )}
     </>
   );
 }

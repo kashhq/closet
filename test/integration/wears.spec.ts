@@ -1313,6 +1313,25 @@ describe('wears and washes', () => {
         .from(garment)
         .where(eq(garment.id, shirt));
       expect(row.lastWashedOn).toBe(today());
+
+      // The owner's calendar stays theirs: an entry's wear counts toward the
+      // partner's wash state as a plain wear, never as the entry's (no
+      // badge, no `entry` provenance), and their row is Wore today.
+      const coat = await newGarment('Partner coat', 'tops');
+      await markWorn(
+        await schedule(await newOutfit('Dinner', [coat]), today()),
+      );
+      expect(
+        (await garmentPage(coat)).body,
+        "the owner's page keeps the badge",
+      ).toContain('data-worn-by="entry"');
+      const shared = unescapeHtml((await garmentPage(coat, partner, q)).body);
+      expect(shared).not.toContain('data-worn-by="entry"');
+      expect(shared).not.toContain('data-worn-by-entry');
+      expect(shared).toContain(`data-worn-on="${today()}"`);
+      expect(shared).toContain(`action="/wardrobe/${coat}/wear${q}"`);
+      expect(hasText(shared, '1 since washed')).toBe(true);
+      expect(hasText(shared, 'Needs a wash')).toBe(true);
     });
 
     // The wash limit is the owner's record like the wears it counts

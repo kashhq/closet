@@ -121,7 +121,8 @@ export interface LaundryState {
    * How it was worn on `lastWorn`: by "Wore today" (undoable; it wins when
    * both), through a worn calendar entry, or null, never worn. No "worn
    * today": the page's script judges that on the tap's day (#708,
-   * src/page-day.ts), so the page reads the same tomorrow.
+   * src/page-day.ts), so the page reads the same tomorrow. Never `entry`
+   * for a MANAGE partner (laundryStateSql): the calendar is the owner's.
    */
   lastWornBy: 'single' | 'entry' | null;
 }
@@ -138,6 +139,25 @@ export interface WearRecord {
 export type WearSummary = LaundryState & WearRecord;
 
 /**
+ * The owner's `lastWornBy`: the last day's wears, a single one first (one
+ * aggregate, no subquery), so the page shows Wore today's undo or the
+ * calendar's badge.
+ */
+const WORN_BY_ON_LAST_DAY = sql`(array_agg(
+    case when ${garmentWear.outfitCalendarId} is null then 'single' else 'entry' end
+    order by ${garmentWear.day} desc, ${garmentWear.outfitCalendarId} desc nulls first
+  ) filter (where ${garmentWear.day} is not null))[1]`;
+
+/**
+ * A partner's `lastWornBy` (#680): `single` when the last day has a "Wore
+ * today" wear, else null, never `entry`. A calendar-entry wear counts as a
+ * plain wear (since the wash, last worn), but its provenance is the owner's
+ * calendar: no badge for an entry they cannot open, and their row offers
+ * Wore today.
+ */
+const SINGLE_ON_LAST_DAY = sql`(case when max(${garmentWear.day}) filter (where ${garmentWear.outfitCalendarId} is null) = max(${garmentWear.day}) then 'single' end)`;
+
+/**
  * The garment's wears as one JSON object over its row left-joined to its
  * wears (grouped with none or more), `pairs` the object's own beside the
  * wash state's. The caller has found the garment in the owner's wardrobe,
@@ -147,12 +167,8 @@ export type WearSummary = LaundryState & WearRecord;
 function wearsJsonSql<T extends LaundryState>(
   garmentId: number,
   pairs: SQL,
+  lastWornBy: SQL,
 ): SQL<T> {
-  // The last day's wears, a single one first: one aggregate, no subquery.
-  const lastWornBy = sql`(array_agg(
-    case when ${garmentWear.outfitCalendarId} is null then 'single' else 'entry' end
-    order by ${garmentWear.day} desc, ${garmentWear.outfitCalendarId} desc nulls first
-  ) filter (where ${garmentWear.day} is not null))[1]`;
   return sql<T>`(
     select json_build_object(
       ${pairs}
@@ -173,7 +189,7 @@ function wearsJsonSql<T extends LaundryState>(
  * `laundry`, wearStatusOf).
  */
 export function laundryStateSql(garmentId: number): SQL<LaundryState> {
-  return wearsJsonSql(garmentId, sql``);
+  return wearsJsonSql(garmentId, sql``, SINGLE_ON_LAST_DAY);
 }
 
 /**
@@ -191,6 +207,7 @@ export function wearSummarySql(
     garmentId,
     sql`'worn', count(distinct ${garmentWear.day})::int,
       'repairCost', ${repairCostSql(garment.id, today)},`,
+    WORN_BY_ON_LAST_DAY,
   );
 }
 
