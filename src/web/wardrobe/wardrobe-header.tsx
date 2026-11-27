@@ -6,7 +6,7 @@ import type { AppBarProps } from '../layout/app-bar';
 import type { LinkTabsProps } from '../layout/link-tabs';
 import { Sheet, sheetOpener } from '../layout/sheet';
 import { CameraIcon, PHOTO_ACCEPT, PhotoLibraryIcon } from '../layout/parts';
-import type { SharedWardrobe } from '../sharing/access';
+import { can, type SharedWardrobe, type WardrobeRole } from '../sharing/access';
 import { PermissionBadge } from '../sharing/pages';
 import { SHARING_PATH } from '../sharing/urls';
 import type { ViewContext } from '../view-context';
@@ -14,7 +14,7 @@ import { ORDERS_PATH } from './order-mail/urls';
 import {
   capsuleUrl,
   destinationParams,
-  LAUNDRY_PATH,
+  laundryUrl,
   LINK_IMPORT_PATH,
   PHOTO_ADD_PATH,
   TAG_PATH,
@@ -35,22 +35,45 @@ import { Icon } from '../layout/icon';
 
 export type WardrobeTab = 'closet' | 'capsules' | 'laundry' | 'wishlist';
 
+/** A wardrobe the header links into: its owner (undefined: one's own) and the requester's role there. */
+interface TabWardrobe {
+  viewOwner: number | undefined;
+  role: WardrobeRole;
+}
+
 /**
- * A tab's page in a wardrobe. Laundry is the signed-in user's own (it
- * reads no `?ownerId=`), so a shared wardrobe has no Laundry tab and the
- * switcher takes it to that wardrobe's closet.
+ * A tab's page in a wardrobe. Laundry is `launder`'s (#680: one's own and
+ * a MANAGE share), so a VIEW share has no Laundry tab and the switcher
+ * takes it to that wardrobe's closet.
  */
-function tabUrl(tab: WardrobeTab, viewOwner: number | undefined): string {
+function tabUrl(tab: WardrobeTab, { viewOwner, role }: TabWardrobe): string {
   switch (tab) {
     case 'closet':
       return wardrobeUrl(viewOwner);
     case 'capsules':
       return capsuleUrl(undefined, viewOwner);
     case 'laundry':
-      return viewOwner === undefined ? LAUNDRY_PATH : wardrobeUrl(viewOwner);
+      return can(role, 'launder')
+        ? laundryUrl(viewOwner)
+        : wardrobeUrl(viewOwner);
     case 'wishlist':
       return wardrobeUrl(viewOwner, {}, WISHLIST_PATH);
   }
+}
+
+/**
+ * The requester's role in the wardrobe shown, from the switcher's list
+ * (read on every page that draws the header): their own, or the share's.
+ */
+function shownWardrobe(props: WardrobeHeaderProps): TabWardrobe {
+  const { viewOwner } = props;
+  if (viewOwner === undefined) return { viewOwner, role: 'OWN' };
+  const shared = props.sharedWardrobes.find(
+    (wardrobe) => wardrobe.grantorId === viewOwner,
+  );
+  // Always listed (the page's guard has read the same share); were it not,
+  // the narrowest role offers nothing the page would refuse.
+  return { viewOwner, role: shared?.permission ?? 'VIEW' };
 }
 
 export interface WardrobeHeaderProps {
@@ -82,7 +105,7 @@ export function wardrobeBar(
   return {
     title: wardrobeTitle(props.sharedWardrobes, viewOwner),
     titleMenu: <SwitcherItems {...props} />,
-    tabs: wardrobeTabs(props.tab, viewOwner),
+    tabs: wardrobeTabs(props.tab, shownWardrobe(props)),
     actions: (
       <>
         <WardrobeMenu
@@ -144,7 +167,7 @@ function SwitcherItems(props: WardrobeHeaderProps) {
     <>
       <li>
         <a
-          href={tabUrl(tab, undefined)}
+          href={tabUrl(tab, { viewOwner: undefined, role: 'OWN' })}
           aria-current={viewOwner === undefined ? 'true' : undefined}
           class={viewOwner === undefined ? 'menu-active' : undefined}
         >
@@ -154,7 +177,10 @@ function SwitcherItems(props: WardrobeHeaderProps) {
       {props.sharedWardrobes.map((shared) => (
         <li>
           <a
-            href={tabUrl(tab, shared.grantorId)}
+            href={tabUrl(tab, {
+              viewOwner: shared.grantorId,
+              role: shared.permission,
+            })}
             aria-current={viewOwner === shared.grantorId ? 'true' : undefined}
             class={`justify-between ${viewOwner === shared.grantorId ? 'menu-active' : ''}`}
           >
@@ -421,15 +447,16 @@ const CAPSULE_ICON =
  * The Wardrobe's tabs (the bar's, through `wardrobeBar`): plain boosted
  * links, so the dock keeps its size (plan section 2). All carry `?ownerId=`
  * in a shared wardrobe, so a grantee moves between the grantor's closet,
- * capsules and wishlist; Laundry, the requester's own, is left out there.
+ * capsules and wishlist, and a MANAGE partner its laundry; Laundry is left
+ * out of a VIEW share.
  */
 function wardrobeTabs(
   active: WardrobeTab,
-  viewOwner: number | undefined,
+  wardrobe: TabWardrobe,
 ): LinkTabsProps<WardrobeTab> {
   const tab = (name: WardrobeTab, label: string) => ({
     name,
-    href: tabUrl(name, viewOwner),
+    href: tabUrl(name, wardrobe),
     label,
   });
   return {
@@ -439,7 +466,7 @@ function wardrobeTabs(
     tabs: [
       tab('closet', t('CLOSET')),
       tab('capsules', t('CAPSULES')),
-      viewOwner === undefined && tab('laundry', t('wear.LAUNDRY')),
+      can(wardrobe.role, 'launder') && tab('laundry', t('wear.LAUNDRY')),
       tab('wishlist', t('wishlist.TAB')),
     ],
   };

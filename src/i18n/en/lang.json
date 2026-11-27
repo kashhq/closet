@@ -326,7 +326,7 @@
     "FORBIDDEN": "Forbidden",
     "INTERNAL": "Something went wrong on our side. Try again in a moment.",
     "forbidden": {
-      "ownWearsOnly": "needsWash reads your own wears only"
+      "launderOnly": "needsWash needs your own wardrobe or a MANAGE share"
     },
     "notFound": {
       "account": "Account not found",

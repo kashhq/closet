@@ -23,10 +23,10 @@ import {
   RowId,
   TapInstantSchema,
 } from '../schemas';
-import { actorOf, sharedWardrobesOf } from '../sharing/access';
+import { actorOf, sharedWardrobesOf, wardrobeGuard } from '../sharing/access';
 import { viewContext } from '../view-context';
 import { garmentAddress, garmentNotFound } from '../wardrobe/garment-access';
-import { garmentUrl, LAUNDRY_PATH } from '../wardrobe/urls';
+import { garmentUrl, LAUNDRY_PATH, laundryUrl } from '../wardrobe/urls';
 import { CARE_NOTE_MAX } from '../wardrobe/garment-input';
 import { LaundryPage } from './laundry-page';
 import { laundryList, wearStatusOf } from './queries';
@@ -36,6 +36,7 @@ import {
   washGarments,
   WearClientIdRefusal,
   wearGarment,
+  type WearWrite,
 } from './wear-actions';
 import { WearStatus, type WearTap } from './wear-section';
 
@@ -75,6 +76,7 @@ const LaundryBody = Type.Union([
 ]);
 
 const LaundryQuery = Type.Object({
+  ...OwnerQuery.properties,
   // One-shot flag from POST /laundry's redirect (the toast).
   washed: Type.Optional(Type.Integer({ minimum: 0 })),
 });
@@ -82,12 +84,13 @@ const LaundryQuery = Type.Object({
 /**
  * Wears, washes and away (docs/plans/2026-09-26-wardrobe-features.md,
  * section 1): the garment page's Wore today, Washed and "where is it", and
- * /laundry. The owner's own records, like outfits and the calendar: a
- * garment in a shared wardrobe is refused to a grantee (403 with
- * `?ownerId=`, where they can see it; 404 without, where it is not in
- * their wardrobe), and /laundry is always the signed-in user's own
- * (a foreign `?ownerId=` is a 404). The calendar's worn pill is POST /calendar/:id/worn
- * (setEntryWorn, the same query layer).
+ * /laundry. Wore today, Washed and the laundry are `launder` (#680): the
+ * owner's and a MANAGE partner's, through `?ownerId=`; away is the owner's
+ * alone. A grantee without what a route needs is refused (403 with
+ * `?ownerId=`, where they can see the wardrobe; 404 without, where the
+ * garment is not in their wardrobe), each by its domain function
+ * (wear-actions.ts). The calendar's worn pill is POST /calendar/:id/worn
+ * (setEntryWorn, the same query layer), the owner's like the calendar.
  */
 export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   app,
@@ -96,6 +99,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
 ) => {
   const deps = { db, logger };
   const today = () => todayIn(config.timeZone, new Date());
+  const authorize = wardrobeGuard(db, 'wardrobe');
 
   /**
    * A replay's 204 (src/web/offline-writes.ts); the wear status again to
@@ -106,23 +110,29 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
   async function answer(
     request: FastifyRequest,
     reply: FastifyReply,
-    write: { id: number; ownerId: number; changed: boolean },
+    id: number,
+    write: WearWrite,
     result: { message: string; after: WearTap },
   ): Promise<FastifyReply> {
-    const { id, ownerId } = write;
+    const { access, viewOwner } = write.wardrobe;
     if (isReplay(request)) return answerReplay(reply, write.changed);
     if (!request.headers['hx-request']) {
-      return reply.redirect(garmentUrl(id, undefined), 303);
+      return reply.redirect(garmentUrl(id, viewOwner), 303);
     }
     const day = today();
-    const status = await wearStatusOf(db, id, ownerId, day);
+    const status = await wearStatusOf(db, id, access, day);
     if (!status) throw garmentNotFound();
     announce(reply, result.message);
     return renderFragment(
       reply,
       <WearStatus
         garment={status.garment}
-        panel={{ summary: status.summary, answeredOn: day }}
+        panel={{
+          laundry: status.laundry,
+          record: status.record,
+          viewOwner,
+          answeredOn: day,
+        }}
         after={result.after}
       />,
     );
@@ -145,7 +155,7 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const worn = request.body.worn === '1';
       const day = requestedDay(reply, request.body.day, today());
       const { clientId } = request.body;
-      const { ownerId, changed } = await wearGarment(
+      const write = await wearGarment(
         deps,
         actorOf(request),
         garmentAddress(request),
@@ -163,17 +173,12 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         }
         throw error;
       });
-      return answer(
-        request,
-        reply,
-        { id, ownerId, changed },
-        {
-          message: worn
-            ? t('wear.status.WORE_TODAY')
-            : t('wear.status.WORE_TODAY_UNDONE'),
-          after: 'wear',
-        },
-      );
+      return answer(request, reply, id, write, {
+        message: worn
+          ? t('wear.status.WORE_TODAY')
+          : t('wear.status.WORE_TODAY_UNDONE'),
+        after: 'wear',
+      });
     },
   );
 
@@ -193,18 +198,16 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { id } = request.params;
       const day = requestedDay(reply, request.body?.day, today());
       const at = postedInstant(request, request.body?.at, day, config.timeZone);
-      const { ownerId, changed } = await washGarment(
+      const write = await washGarment(
         deps,
         actorOf(request),
         garmentAddress(request),
         { day, at },
       );
-      return answer(
-        request,
-        reply,
-        { id, ownerId, changed },
-        { message: t('wear.status.WASHED'), after: 'wash' },
-      );
+      return answer(request, reply, id, write, {
+        message: t('wear.status.WASHED'),
+        after: 'wash',
+      });
     },
   );
 
@@ -236,14 +239,15 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
 
   // The laundry page, the Wardrobe's Laundry tab: what needs a wash
   // (checked) and what was worn but is not due yet, as one native form
-  // (PostForm).
+  // (PostForm). `?ownerId=` is a MANAGE partner's view of the owner's
+  // hamper (`launder`; a VIEW grantee is a 403).
   app.get(
     LAUNDRY_PATH,
     { schema: { querystring: LaundryQuery } },
     async (request, reply) => {
-      const userId = sessionUserId(request);
+      const { access, viewOwner } = await authorize(request, 'launder');
       const [items, sharedWardrobes] = await Promise.all([
-        laundryList(db, userId),
+        laundryList(db, access.ownerId),
         sharedWardrobesOf(db, actorOf(request)),
       ]);
       return renderPage(
@@ -251,6 +255,8 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         <LaundryPage
           ctx={viewContext(reply)}
           items={items}
+          viewOwner={viewOwner}
+          canEdit={access.canManage}
           sharedWardrobes={sharedWardrobes}
           washed={request.query.washed}
         />,
@@ -258,19 +264,27 @@ export const wearRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
-  // "Mark washed": every checked garment of the user's, today; other ids
-  // are ignored like unknown ones. Back to the page with the count.
+  // "Mark washed": every checked garment of the wardrobe's, today; other
+  // ids are ignored like unknown ones. Back to the page with the count.
   app.post(
     LAUNDRY_PATH,
-    { schema: { body: LaundryBody } },
+    { schema: { querystring: OwnerQuery, body: LaundryBody } },
     async (request, reply) => {
       const ids = request.body?.ids ?? [];
       const day = today();
-      const { washed } = await washGarments(deps, actorOf(request), ids, {
-        day,
-        at: postedInstant(request, undefined, day, config.timeZone),
-      });
-      return reply.redirect(`${LAUNDRY_PATH}?washed=${washed.length}`, 303);
+      // The redirect's wardrobe; washGarments' own check is then free.
+      const { access, viewOwner } = await authorize(request, 'launder');
+      const { washed } = await washGarments(
+        deps,
+        actorOf(request),
+        access.ownerId,
+        ids,
+        { day, at: postedInstant(request, undefined, day, config.timeZone) },
+      );
+      return reply.redirect(
+        laundryUrl(viewOwner, { washed: washed.length }),
+        303,
+      );
     },
   );
 

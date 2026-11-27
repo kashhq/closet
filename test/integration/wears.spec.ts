@@ -1,6 +1,11 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { garment, garmentWear, outfitCalendar } from '../../src/db/schema';
+import {
+  garment,
+  garmentWear,
+  outfitCalendar,
+  wardrobeShare,
+} from '../../src/db/schema';
 import {
   type AwayReason,
   isAvailable,
@@ -45,8 +50,10 @@ import {
  * Wears and washes (#7, plan section 1): the wear log that outfit edits
  * cannot rewrite, counted by distinct day; Wore today; Washed and the
  * laundry page; multiples; away; and the "available" rule, in SQL and in
- * TypeScript, agreeing. The owner's own records throughout: a grantee sees
- * none of it (the refusals are in authorization-wardrobe.spec.ts).
+ * TypeScript, agreeing. The owner's own records, but for the laundry: a
+ * MANAGE partner sees the wash state and taps Wore today and Washed (#680),
+ * a VIEW grantee none of it (the refusals are in
+ * authorization-wardrobe.spec.ts).
  */
 
 /** The wear line's day, which the page's script words (src/web/day-time.tsx). */
@@ -1186,6 +1193,145 @@ describe('wears and washes', () => {
       const own = await garmentPage(tees);
       expect(own.body).toContain('id="garment-wear"');
       expect(own.body).toContain('value="Sam"');
+    });
+
+    // #680: a MANAGE partner does the household's laundry. They see the
+    // wash state and tap Wore today and Washed on the owner's garment (the
+    // owner's rows), never the wear count, cost per wear or away.
+    it('gives a MANAGE partner the wash state, Wore today, Washed and the laundry, never the record or away', async () => {
+      const email = 'laundry-partner@example.com';
+      const partner = await t.register(email);
+      await asFixture(t.db, async (tx) =>
+        tx.insert(wardrobeShare).values({
+          grantorId: t.owner.id,
+          granteeId: await userIdOf(t, email),
+          permission: 'MANAGE',
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+        }),
+      );
+      const q = `?ownerId=${t.owner.id}`;
+      const shirt = await newGarment('Partner shirt', 'tops');
+      // A price, so the owner's line has a cost per wear the partner's must not.
+      await asFixture(t.db, (tx) =>
+        tx.update(garment).set({ price: '40.00' }).where(eq(garment.id, shirt)),
+      );
+      const jeans = await newGarment('Partner jeans', 'bottoms');
+      await post(`/wardrobe/${jeans}/away`, { away: 'lent', awayNote: 'Kim' });
+      const asPartner = (url: string, fields: Record<string, string> = {}) =>
+        t.inject({
+          method: 'POST',
+          url,
+          ...form(fields),
+          headers: {
+            ...form({}).headers,
+            'hx-request': 'true',
+            cookie: partner,
+          },
+        });
+
+      const worn = await asPartner(`/wardrobe/${shirt}/wear${q}`, {
+        worn: '1',
+      });
+      expect(worn.statusCode).toBe(200);
+      expectFragment(worn);
+      // Their line is the wash state, with no count or cost; the taps stay
+      // in the owner's wardrobe.
+      expect(hasText(worn.body, 'Needs a wash')).toBe(true);
+      expect(hasText(worn.body, 'Worn once')).toBe(false);
+      expect(worn.body).not.toMatch(/\d a wear/);
+      expect(unescapeHtml(worn.body)).toContain(
+        `action="/wardrobe/${shirt}/washed${q}"`,
+      );
+      const [wear] = await t.db
+        .select({ ownerId: garmentWear.ownerId })
+        .from(garmentWear)
+        .where(eq(garmentWear.garmentId, shirt));
+      expect(wear).toEqual({ ownerId: t.owner.id });
+      expect(t.logs.ops('garment.worn')).toContainEqual(
+        expect.objectContaining({ garmentId: shirt, ownerId: t.owner.id }),
+      );
+
+      const page = (await garmentPage(shirt, partner, q)).body;
+      expect(page).toContain('id="garment-wear"');
+      expect(page).not.toContain('id="garment-away"');
+      expect(hasText(page, 'Worn once')).toBe(false);
+      expect(page).not.toMatch(/\d a wear/);
+      // The owner's page keeps the record.
+      const owners = (await garmentPage(shirt)).body;
+      expect(hasText(owners, 'Worn once')).toBe(true);
+      expect(owners).toMatch(/\d a wear/);
+      // Away is the owner's record: a partner's grid has wash marks, no away.
+      const grid = unescapeHtml(
+        (
+          await t.inject({
+            method: 'GET',
+            url: `/wardrobe${q}&needsWash=true`,
+            headers: { cookie: partner },
+          })
+        ).body,
+      );
+      expect(grid).toContain('Partner shirt');
+      expect(grid).not.toContain('Partner jeans');
+      expect(grid).toContain('data-mark="needs-wash"');
+      expect(grid).toContain('name="needsWash"');
+      expect(grid).toContain(`href="/laundry${q}"`);
+      expect(
+        unescapeHtml(
+          (
+            await t.inject({
+              method: 'GET',
+              url: `/wardrobe${q}`,
+              headers: { cookie: partner },
+            })
+          ).body,
+        ),
+      ).not.toContain('data-mark="away:lent"');
+
+      const laundry = await t.inject({
+        method: 'GET',
+        url: `/laundry${q}`,
+        headers: { cookie: partner },
+      });
+      expect(laundry.statusCode).toBe(200);
+      expect(hasText(laundry.body, 'Partner shirt')).toBe(true);
+      expect(unescapeHtml(laundry.body)).toContain(
+        `data-outbox-path="/wardrobe/${shirt}/washed${q}"`,
+      );
+      const washed = await t.inject({
+        method: 'POST',
+        url: `/laundry${q}`,
+        ...form({ ids: String(shirt) }),
+        headers: { ...form({}).headers, cookie: partner },
+      });
+      expect(washed.statusCode).toBe(303);
+      expect(washed.headers.location).toBe(
+        `/laundry?washed=1&ownerId=${t.owner.id}`,
+      );
+      const [row] = await t.db
+        .select({ lastWashedOn: garment.lastWashedOn })
+        .from(garment)
+        .where(eq(garment.id, shirt));
+      expect(row.lastWashedOn).toBe(today());
+
+      // The owner's calendar stays theirs: an entry's wear counts toward the
+      // partner's wash state as a plain wear, never as the entry's (no
+      // badge, no `entry` provenance), and their row is Wore today.
+      const coat = await newGarment('Partner coat', 'tops');
+      await markWorn(
+        await schedule(await newOutfit('Dinner', [coat]), today()),
+      );
+      expect(
+        (await garmentPage(coat)).body,
+        "the owner's page keeps the badge",
+      ).toContain('data-worn-by="entry"');
+      const shared = unescapeHtml((await garmentPage(coat, partner, q)).body);
+      expect(shared).not.toContain('data-worn-by="entry"');
+      expect(shared).not.toContain('data-worn-by-entry');
+      expect(shared).toContain(`data-worn-on="${today()}"`);
+      expect(shared).toContain(`action="/wardrobe/${coat}/wear${q}"`);
+      expect(hasText(shared, '1 since washed')).toBe(true);
+      expect(hasText(shared, 'Needs a wash')).toBe(true);
     });
 
     // The wash limit is the owner's record like the wears it counts

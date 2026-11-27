@@ -79,7 +79,7 @@ const LaundryInput = Type.Object(
   {
     title: 'LaundryWash',
     description:
-      "Laundry day: every copy of each garment washed. Ids that are not your garments' (or wishlist items) are left out of the answer, never an error",
+      "Laundry day: every copy of each garment washed. Ids that are not the wardrobe's garments (or wishlist items) are left out of the answer, never an error",
   },
 );
 
@@ -118,12 +118,13 @@ const Away = Type.Object(
 
 /**
  * Wears, washes and away on /api/v1 (#193a; plan section 6), registered by
- * apiPlugin, each calling what its page twin calls (wear-actions.ts, the
- * laundry's markWashed). The owner's own records: a grantee who sees the
- * garment is a 403 through `?ownerId=`, a 404 without it, and the laundry
- * is always the token's user's. Every wear and wash names its day (plan
- * section 2), judged by the window the page's queued taps keep, and is
- * set-state, so a retry changes nothing.
+ * apiPlugin, each calling what its page twin calls (wear-actions.ts). Wears
+ * and washes are the owner's and a MANAGE partner's (`launder`, #680),
+ * through `?ownerId=`; away is the owner's alone. A grantee without what a
+ * route needs who sees the garment is a 403 through `?ownerId=`, a 404
+ * without it. Every wear and wash names its day (plan section 2), judged
+ * by the window the page's queued taps keep, and is set-state, so a retry
+ * changes nothing.
  */
 export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
   app,
@@ -148,7 +149,7 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['wears'],
         summary: 'Wore it that day',
         description:
-          "Wore today, for a day of the last week: the garment's own wear, apart from an outfit's (a calendar entry marked worn). Once a day: a repeat is `changed: false`. Your own garments only; a wishlist item is a 409.",
+          "Wore today, for a day of the last week: the garment's own wear, apart from an outfit's (a calendar entry marked worn). Once a day: a repeat is `changed: false`. Your own garments, or a MANAGE share's (the wear is the owner's); a wishlist item is a 409.",
         params: WearParams,
         querystring: GarmentQuery,
         body: WearBody,
@@ -211,7 +212,7 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['wears'],
         summary: 'Washed it that day',
         description:
-          'Every copy, clean from that day: wears that day count as before the wash. A wash never moves back, so an older one than the last is `changed: false`. Your own garments only; a wishlist item is a 409.',
+          "Every copy, clean from that day: wears that day count as before the wash. A wash never moves back, so an older one than the last is `changed: false`. Your own garments, or a MANAGE share's; a wishlist item is a 409.",
         params: Type.Object({ id: RowId }),
         querystring: GarmentQuery,
         body: WashInput,
@@ -239,7 +240,8 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['wears'],
         summary: 'Laundry day: washes many garments',
         description:
-          'The laundry\'s "Mark washed". GET /garments?needsWash=true lists what needs one. Always your own garments, whatever is shared with you.',
+          'The laundry\'s "Mark washed", in your own wardrobe or with `ownerId` one shared with you to MANAGE (VIEW is a 403). GET /garments?needsWash=true lists what needs one.',
+        querystring: GarmentQuery,
         body: LaundryInput,
         response: apiResponses({ 200: LaundryWashed }),
       },
@@ -250,6 +252,7 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { washed } = await washGarments(
         deps,
         actorOf(request),
+        request.query.ownerId,
         garmentIds,
         {
           day,
@@ -268,7 +271,7 @@ export const wearApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         tags: ['wears'],
         summary: 'Says where a garment is: lent, at the repair shop, or back',
         description:
-          'Away, it is never suggested or packed. Set-state: a repeat changes nothing. Your own garments only; a wishlist item is a 409.',
+          "Away, it is never suggested or packed. Set-state: a repeat changes nothing. Your own garments only (a MANAGE share is a 403: away is the owner's record); a wishlist item is a 409.",
         params: Type.Object({ id: RowId }),
         querystring: GarmentQuery,
         body: AwayInput,

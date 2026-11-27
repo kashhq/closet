@@ -8,21 +8,25 @@ import {
   outfitCalendar,
   tripGarmentPacked,
   tripItem,
+  wardrobeShare,
 } from '../../src/db/schema';
 import {
   QUEUEABLE_ROUTES,
   queueableKindOf,
   queuedTarget,
+  replayVerdict,
 } from '../../src/offline-writes';
 import { PAGE_ACCOUNT_HEADER } from '../../src/web/page-cache';
 import { setWoreToday, wearsSinceWashSql } from '../../src/web/wears/queries';
 import { createGarment } from './garments';
 import { interleave } from './interleave';
 import {
+  asFixture,
   createTestApp,
   recordQueries,
   type TestApp,
   unescapeHtml,
+  userIdOf,
 } from './harness';
 
 /**
@@ -612,6 +616,87 @@ describe('queued writes', () => {
     expect(await wearDays(shirt)).toEqual([]);
   });
 
+  // A MANAGE partner's taps on the owner's garment (#680) queue with the
+  // owner's `?ownerId=` and replay into that wardrobe; the replay is
+  // authorized again, so a share downgraded to VIEW since is a 403 and a
+  // revoked one a 404, each a failed record with its reason
+  // (replayVerdict), never dropped as saved nor retried.
+  it('replays a partner’s wear and wash into the owner’s wardrobe, and fails them after a downgrade or a revoke', async () => {
+    const email = 'queued-partner@example.com';
+    const partner = await t.register(email);
+    const partnerId = await userIdOf(t, email);
+    await asFixture(t.db, (tx) =>
+      tx.insert(wardrobeShare).values({
+        grantorId: t.owner.id,
+        granteeId: partnerId,
+        permission: 'MANAGE',
+        acceptedAt: new Date(),
+        createdAt: new Date(),
+      }),
+    );
+    const shared = await createGarment(t, {
+      name: 'Shared hamper tee',
+      category: 'tops',
+    });
+    const q = `?ownerId=${t.owner.id}`;
+    const asPartner = (url: string, fields: Fields) =>
+      post(url, fields, {
+        cookie: partner,
+        'x-closet-queued': String(partnerId),
+        'idempotency-key': KEY,
+        'sec-fetch-mode': 'cors',
+      });
+
+    const page = unescapeHtml(
+      (
+        await t.inject({
+          method: 'GET',
+          url: `/wardrobe/${shared}${q}`,
+          headers: { cookie: partner },
+        })
+      ).body,
+    );
+    const wear = queuedTarget('wear', shared, { ownerId: t.owner.id });
+    expect(wear.path).toBe(`/wardrobe/${shared}/wear${q}`);
+    expect(page).toContain(`data-outbox-path="${wear.path}"`);
+    expect(queueableKindOf(wear.path)).toBe('wear');
+
+    const day = t.today();
+    expect(outcome(await asPartner(wear.path, { worn: '1', day }))).toEqual([
+      204,
+      'changed',
+    ]);
+    const [row] = await t.db
+      .select({ ownerId: garmentWear.ownerId })
+      .from(garmentWear)
+      .where(eq(garmentWear.garmentId, shared));
+    expect(row).toEqual({ ownerId: t.owner.id });
+
+    const wash = queuedTarget('wash', shared, { ownerId: t.owner.id }).path;
+    const grant = and(
+      eq(wardrobeShare.grantorId, t.owner.id),
+      eq(wardrobeShare.granteeId, partnerId),
+    );
+    await asFixture(t.db, (tx) =>
+      tx.update(wardrobeShare).set({ permission: 'VIEW' }).where(grant),
+    );
+    const downgraded = await asPartner(wash, { day });
+    expect(downgraded.statusCode).toBe(403);
+    expect(replayVerdict(downgraded.statusCode, null)).toEqual({
+      verdict: 'failed',
+      reason: 'refused',
+    });
+    await asFixture(t.db, (tx) => tx.delete(wardrobeShare).where(grant));
+    const revoked = await asPartner(wash, { day });
+    expect(revoked.statusCode).toBe(404);
+    expect(replayVerdict(revoked.statusCode, null)).toEqual({
+      verdict: 'failed',
+      reason: 'gone',
+    });
+    expect(await lastWashed(shared)).toBeNull();
+    expect(await wearDays(shared)).toEqual([day]);
+  });
+
   it('costs a replay the writer’s statements and the session, no answer read', async () => {
     const entry = await newEntry(await newOutfit([shirt]), t.today());
     const tripId = await newTrip(await newOutfit([shirt]));
@@ -746,10 +831,10 @@ describe('queued writes', () => {
         ),
       );
       expect(
-        regionTag(trip, queuedTarget('packed', tripId, tee).key),
+        regionTag(trip, queuedTarget('packed', tripId, { part: tee }).key),
       ).toContain('data-outbox-label="Marked tee"');
       expect(
-        regionTag(trip, queuedTarget('item', tripId, itemId).key),
+        regionTag(trip, queuedTarget('item', tripId, { part: itemId }).key),
       ).toContain('data-outbox-label="Charger"');
       expect(trip).toMatch(
         new RegExp(

@@ -68,7 +68,10 @@ export interface GarmentPageModel {
   capsules: GarmentCapsule[];
   /** The shared wardrobe it is in; undefined for the requester's own. */
   viewOwner: number | undefined;
-  /** Wears, washes and away: the owner's alone, never a grantee's. */
+  /**
+   * The wear line, Wore today and Washed: the owner's and a MANAGE
+   * partner's (#680), with the owner's record (and away) the owner's alone.
+   */
   wear: WearPanel | undefined;
   /** The garment this one replaces (a wishlist item's, or a bought one's). */
   replaces: GarmentRef | undefined;
@@ -271,7 +274,8 @@ function Care({ model }: { model: GarmentPageModel }) {
           canEdit={model.canEdit}
         />
       )}
-      {model.wear && <WhereaboutsSection garment={garment} />}
+      {/* Away is the owner's record, like the wear count (#680). */}
+      {model.wear?.record && <WhereaboutsSection garment={garment} />}
       {model.repairs && (
         <RepairLogSection garmentId={garment.id} log={model.repairs} />
       )}

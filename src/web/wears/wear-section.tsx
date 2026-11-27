@@ -21,7 +21,7 @@ import {
   outboxRegion,
   queueForm,
 } from '../outbox';
-import type { WearGarment, WearSummary } from './queries';
+import type { LaundryState, WearGarment, WearRecord } from './queries';
 
 /** What Wore today and Washed answer: the wear line and the buttons. */
 const WEAR_STATUS_ID = 'garment-wear-status';
@@ -39,9 +39,17 @@ const TAP_BUTTON_ID: Record<WearTap, (garmentId: number) => string> = {
   wash: (garmentId) => `garment-${garmentId}-washed`,
 };
 
-/** What the section shows: the garment's wash state and away, and its wears. */
+/**
+ * What the section shows: the garment's wash state, for anyone who does
+ * the laundry (#680: the owner and a MANAGE partner), and the owner's own
+ * wear record (how often, cost per wear) for the owner alone.
+ */
 export interface WearPanel {
-  summary: WearSummary;
+  laundry: LaundryState;
+  /** The owner's; undefined for a MANAGE partner, whose line is the wash state alone. */
+  record: WearRecord | undefined;
+  /** The shared wardrobe the garment is in, for the taps' URLs; undefined for one's own. */
+  viewOwner: number | undefined;
   /**
    * The household's date a live answer was rendered on (APP_TIMEZONE): set
    * on the htmx answer of Wore today and Washed alone, never on the page,
@@ -64,13 +72,14 @@ const SWAP = {
 } as const;
 
 /**
- * The garment page's wear line and primary actions (the owner's alone:
- * wears and washes are their own records, like the calendar): "Worn 12
- * times · 2 since washed · last worn yesterday · $4.00 a wear", the wash
- * state ("2 of 3 need a wash"), then Style this, Wore today (or its undo,
- * the same day) and Washed. POST /wardrobe/:id/wear and /washed answer
- * `WearStatus` (src/web/wears/routes.tsx). Where it is sits lower on the
- * page, with the condition (WhereaboutsSection).
+ * The garment page's wear line and primary actions, for whoever does the
+ * laundry (the owner and a MANAGE partner, #680): the owner's "Worn 12
+ * times · 2 since washed · last worn yesterday · $4.00 a wear" (a
+ * partner's "2 since washed · last worn yesterday"), the wash state ("2 of
+ * 3 need a wash"), then Style this, Wore today (or its undo, the same day)
+ * and Washed. POST /wardrobe/:id/wear and /washed answer `WearStatus`
+ * (src/web/wears/routes.tsx). Where it is sits lower on the page, with the
+ * condition (WhereaboutsSection), the owner's alone.
  */
 export function WearSection(props: { garment: WearGarment; panel: WearPanel }) {
   return (
@@ -93,15 +102,15 @@ export function WearStatus(props: {
   after?: WearTap;
 }) {
   const { garment, panel } = props;
-  const { summary } = panel;
+  const { laundry, viewOwner } = panel;
   const limit = washLimit(garment.category, garment.washAfterWears);
   const dirty = dirtyCopies({
     quantity: garment.quantity,
     limit,
-    wearsSinceWash: summary.sinceWash,
+    wearsSinceWash: laundry.sinceWash,
   });
   const needsWash = limit !== null && dirty > 0;
-  const offersWashed = washedShown(garment, summary);
+  const offersWashed = washedShown(garment, laundry);
   const lostFocus = props.after === 'wash' && !offersWashed;
   return (
     <div
@@ -113,7 +122,7 @@ export function WearStatus(props: {
     >
       <div class="flex flex-col gap-1">
         <p class="text-sm">
-          <WornLine garment={garment} summary={summary} />
+          <WornLine garment={garment} panel={panel} />
         </p>
         {(needsWash || garment.lastWashedOn) && (
           <p class="flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -131,10 +140,15 @@ export function WearStatus(props: {
       <div class="flex flex-wrap gap-2">
         {/* Styling takes closet garments only, never an archived one. */}
         {garment.status === 'closet' && (
-          <StyleThisLink garmentId={garment.id} viewOwner={undefined} />
+          <StyleThisLink garmentId={garment.id} viewOwner={viewOwner} />
         )}
-        <WoreToday garment={garment} summary={summary} />
-        {offersWashed && <Washed garment={garment} />}
+        <WoreToday
+          garment={garment}
+          laundry={laundry}
+          viewOwner={viewOwner}
+          calendarBadge={panel.record !== undefined}
+        />
+        {offersWashed && <Washed garment={garment} viewOwner={viewOwner} />}
       </div>
     </div>
   );
@@ -149,42 +163,45 @@ export function WearStatus(props: {
  */
 export function washedShown(
   garment: Pick<WearGarment, 'category' | 'washAfterWears'>,
-  summary: Pick<WearSummary, 'sinceWash'>,
+  laundry: Pick<LaundryState, 'sinceWash'>,
 ): boolean {
   return (
-    summary.sinceWash > 0 &&
+    laundry.sinceWash > 0 &&
     washLimit(garment.category, garment.washAfterWears) !== null
   );
 }
 
 /**
  * "Worn 12 times · 2 since washed · last worn yesterday · $4.00 a wear";
- * "Not worn yet". The cost is the insights' rule (totalCost, repairs
- * included, over perWearCost), shown only with a price and a wear. The day
- * is the client's to word (DayTime).
+ * "Not worn yet". The count and the cost are the owner's record: a MANAGE
+ * partner's line is "2 since washed · last worn yesterday" (#680). The
+ * cost is the insights' rule (totalCost, repairs included, over
+ * perWearCost), shown only with a price and a wear. The day is the
+ * client's to word (DayTime).
  */
-function WornLine(props: { garment: WearGarment; summary: WearSummary }) {
-  const { garment, summary } = props;
-  if (summary.worn === 0 || summary.lastWorn === null) {
-    return <>{t('wear.NOT_WORN')}</>;
+function WornLine(props: { garment: WearGarment; panel: WearPanel }) {
+  const { laundry, record } = props.panel;
+  if (laundry.lastWorn === null) return <>{t('wear.NOT_WORN')}</>;
+  const sinceWash = t('wear.SINCE_WASH', { count: laundry.sinceWash });
+  const lastWorn = <Around text="wear.LAST_WORN" day={laundry.lastWorn} />;
+  if (!record) {
+    return (
+      <>
+        {sinceWash} · {lastWorn}
+      </>
+    );
   }
-  // The owner's line: their price is always read (`'OWN'`).
-  const { price = null, quantity } = garment;
-  const cost = totalCost({
-    price,
-    quantity,
-    repairCost: summary.repairCost,
-  });
-  const perWear = cost === null ? null : perWearCost(cost, summary.worn);
-  const counts = [
-    summary.worn === 1
+  // The owner's line: their price is read with their record.
+  const { price = null, quantity } = props.garment;
+  const cost = totalCost({ price, quantity, repairCost: record.repairCost });
+  const perWear = cost === null ? null : perWearCost(cost, record.worn);
+  const worn =
+    record.worn === 1
       ? t('wear.WORN_ONCE')
-      : t('wear.WORN_TIMES', { count: summary.worn }),
-    t('wear.SINCE_WASH', { count: summary.sinceWash }),
-  ].join(' · ');
+      : t('wear.WORN_TIMES', { count: record.worn });
   return (
     <>
-      {counts} · <Around text="wear.LAST_WORN" day={summary.lastWorn} />
+      {worn} · {sinceWash} · {lastWorn}
       {perWear !== null &&
         ` · ${t('wear.PER_WEAR', { cost: priceLabel(perWear) })}`}
     </>
@@ -235,8 +252,18 @@ function WashState(props: { dirty: number; quantity: number }) {
  * has no day either: the outbox adds that day, and refuses a tap on a live
  * answer of another day (left open overnight).
  */
-function WoreToday(props: { garment: WearGarment; summary: WearSummary }) {
-  const { garment, summary } = props;
+function WoreToday(props: {
+  garment: WearGarment;
+  laundry: LaundryState;
+  viewOwner: number | undefined;
+  /**
+   * The calendar's badge: the owner's alone (#680). A partner's wash state
+   * never says a wear was an entry's (laundryStateSql), so their row is
+   * always Wore today, and the badge is not rendered at all.
+   */
+  calendarBadge: boolean;
+}) {
+  const { garment, laundry, viewOwner } = props;
   // The badge is the region's sibling: the outbox's flip swaps every child
   // of a region with its template's.
   return (
@@ -244,35 +271,45 @@ function WoreToday(props: { garment: WearGarment; summary: WearSummary }) {
       <div
         class="flex flex-1 flex-col items-center gap-1"
         {...outboxRegion(
-          queuedTarget('wear', garment.id),
+          queuedTarget('wear', garment.id, { ownerId: viewOwner }),
           garmentName(garment),
         )}
-        data-worn-on={summary.lastWorn ?? undefined}
-        data-worn-by={summary.lastWornBy ?? undefined}
+        data-worn-on={laundry.lastWorn ?? undefined}
+        data-worn-by={laundry.lastWornBy ?? undefined}
       >
-        <WoreTodayForm garmentId={garment.id} worn={false} />
+        <WoreTodayForm
+          garmentId={garment.id}
+          viewOwner={viewOwner}
+          worn={false}
+        />
         <OutboxAlternate>
-          <WoreTodayForm garmentId={garment.id} worn />
+          <WoreTodayForm garmentId={garment.id} viewOwner={viewOwner} worn />
         </OutboxAlternate>
         <OutboxPending />
       </div>
       {/* Focusable by script only: it takes focus when the row it
           replaces had it (showWornState, views/assets/outbox.ts). */}
-      <span
-        class="badge badge-success self-center"
-        hidden
-        tabindex={-1}
-        data-worn-by-entry=""
-      >
-        ✓ {t('wear.WORN_TODAY_CALENDAR')}
-      </span>
+      {props.calendarBadge && (
+        <span
+          class="badge badge-success self-center"
+          hidden
+          tabindex={-1}
+          data-worn-by-entry=""
+        >
+          ✓ {t('wear.WORN_TODAY_CALENDAR')}
+        </span>
+      )}
     </>
   );
 }
 
 /** Wore today, or its undo once worn: each posts the state it asks for. */
-function WoreTodayForm(props: { garmentId: number; worn: boolean }) {
-  const url = garmentUrl(props.garmentId, undefined, '/wear');
+function WoreTodayForm(props: {
+  garmentId: number;
+  viewOwner: number | undefined;
+  worn: boolean;
+}) {
+  const url = garmentUrl(props.garmentId, props.viewOwner, '/wear');
   return (
     <form
       method="post"
@@ -298,13 +335,19 @@ function WoreTodayForm(props: { garmentId: number; worn: boolean }) {
  * Washed: every copy, today. It has no undo, so queued offline its other
  * state is only what the sync will show, "✓ Washed".
  */
-function Washed(props: { garment: WearGarment }) {
-  const { garment } = props;
-  const url = garmentUrl(garment.id, undefined, '/washed');
+function Washed(props: {
+  garment: WearGarment;
+  viewOwner: number | undefined;
+}) {
+  const { garment, viewOwner } = props;
+  const url = garmentUrl(garment.id, viewOwner, '/washed');
   return (
     <div
       class="flex flex-1 flex-col items-center gap-1"
-      {...outboxRegion(queuedTarget('wash', garment.id), garmentName(garment))}
+      {...outboxRegion(
+        queuedTarget('wash', garment.id, { ownerId: viewOwner }),
+        garmentName(garment),
+      )}
     >
       <form
         method="post"

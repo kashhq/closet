@@ -137,6 +137,27 @@ describe('sharing: statements per request', () => {
       expect(shareStatements(record.sql)).toEqual([]);
     });
 
+    // #680: the hamper of a wardrobe shared to MANAGE reads the share
+    // ahead like any shared page (the switcher's list is its own read, as
+    // on one's own laundry), and a plain Washed is the session and the write.
+    it('a MANAGE partner’s laundry and Washed cost what the owner’s do', async () => {
+      const laundry = await recordQueries(async () => {
+        const res = await get(`/laundry?${ownerQuery()}`, manager);
+        expect(res.statusCode).toBe(200);
+      });
+      expect(laundry.statements).toBe(3);
+      const washed = await recordQueries(async () => {
+        const res = await post(
+          `/wardrobe/${garmentId}/washed?${ownerQuery()}`,
+          manager,
+          {},
+        );
+        expect(res.statusCode).toBe(303);
+      });
+      expect(washed.statements).toBe(2);
+      expect(shareStatements(washed.sql)).toEqual([]);
+    });
+
     it('a stranger’s request is the 404 on the session’s statement alone', async () => {
       const stranger = await signUp('stranger');
       const record = await recordQueries(async () => {

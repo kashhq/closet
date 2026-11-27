@@ -8,6 +8,7 @@ import { Forbidden, NotFound } from '../refusals';
 import {
   type Actor,
   actorOf,
+  can,
   type AuthorizedWardrobe,
   authorizeWardrobe,
   type GrantedAccess,
@@ -199,9 +200,9 @@ export interface GarmentSearch {
 
 /**
  * A page of the closet `search.ownerId` names (the filters parsed as the
- * grid's), refusing where the grid would quietly drop or 404: needs-wash on
- * a shared wardrobe (it reads the owner's wears; an unfiltered answer would
- * be misread), a capsule outside the wardrobe. An unseen wardrobe is
+ * grid's), refusing where the grid would quietly drop or 404: needs-wash
+ * without `launder` (a VIEW share: it reads the owner's wears; an
+ * unfiltered answer would be misread), a capsule outside the wardrobe. An unseen wardrobe is
  * "Wardrobe not found": the caller named it. search_garments (MCP).
  */
 export async function searchGarments(
@@ -221,8 +222,8 @@ export async function searchGarments(
     'wardrobe',
   );
   const { filters } = search;
-  if (filters.needsWash && !access.isOwner) {
-    throw new Forbidden({ reason: 'ownWearsOnly' });
+  if (filters.needsWash && !can(access.role, 'launder')) {
+    throw new Forbidden({ reason: 'launderOnly' });
   }
   if (
     filters.capsule !== undefined &&

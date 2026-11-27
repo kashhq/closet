@@ -56,7 +56,7 @@ export class NotFound extends HttpError {
  * alone would be misread (an agent retrying a filter it may never use).
  */
 const FORBIDDEN_REASON = {
-  ownWearsOnly: 'refusal.forbidden.ownWearsOnly',
+  launderOnly: 'refusal.forbidden.launderOnly',
 } as const satisfies Record<string, StringKey>;
 
 export type ForbiddenReason = keyof typeof FORBIDDEN_REASON;

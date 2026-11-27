@@ -78,11 +78,19 @@ export const TAG_PATH = '/wardrobe/tag';
 export const WISHLIST_PATH = '/wardrobe/wishlist';
 
 /**
- * The Wardrobe's Laundry tab (src/web/wears): the signed-in user's own
- * hamper, outside /wardrobe (it takes no `?ownerId=`), so layout/sections.ts
- * names it Wardrobe on its own.
+ * The Wardrobe's Laundry tab (src/web/wears): the hamper of one's own
+ * wardrobe or, with `?ownerId=`, of one shared to MANAGE (#680), outside
+ * /wardrobe, so layout/sections.ts names it Wardrobe on its own.
  */
 export const LAUNDRY_PATH = '/laundry';
+
+/** The laundry of a wardrobe (`viewOwner` undefined: one's own), with the page's flags. */
+export function laundryUrl(
+  viewOwner: number | undefined,
+  params: Record<string, string | number | undefined> = {},
+): string {
+  return wardrobeUrl(viewOwner, params, LAUNDRY_PATH);
+}
 
 /**
  * Where a new garment lands, as the new form and the link import carry it

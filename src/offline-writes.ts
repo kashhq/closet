@@ -21,6 +21,14 @@ export const QUEUEABLE_ROUTES = {
 export type QueueableKind = keyof typeof QUEUEABLE_ROUTES;
 
 /**
+ * The kinds whose route takes `?ownerId=` (OwnerQuery): a MANAGE partner's
+ * Wore today and Washed on the owner's garment (#680), whose record must
+ * replay into that wardrobe. An entry and a trip's ticks are the owner's
+ * alone, so their paths never carry a query.
+ */
+const SHARE_AWARE_KINDS: ReadonlySet<QueueableKind> = new Set(['wear', 'wash']);
+
+/**
  * How far back a replayed wear or wash may be dated (owner decision 3,
  * 2026-11-13): a phone offline longer than a week asks for the wear to be
  * added from the calendar instead.
@@ -65,29 +73,41 @@ export interface QueuedTarget {
 
 /**
  * The target of a queued write: `id` is the route's `:id` (the garment, the
- * entry, the trip); `part` what the key adds, the trip's garment or extra.
+ * entry, the trip); `part` what the key adds, the trip's garment or extra;
+ * `ownerId` the shared wardrobe a wear or wash is in (SHARE_AWARE_KINDS),
+ * which the path carries and the key does not: a garment id is the
+ * garment's wherever it is seen from.
  */
 export function queuedTarget(
   kind: QueueableKind,
   id: number,
-  part?: number,
+  { part, ownerId }: { part?: number; ownerId?: number } = {},
 ): QueuedTarget {
+  const path = QUEUEABLE_ROUTES[kind].replace(':id', String(id));
   return {
     key: [kind, id, ...(part === undefined ? [] : [part])].join(':'),
-    path: QUEUEABLE_ROUTES[kind].replace(':id', String(id)),
+    path: ownerId === undefined ? path : `${path}?ownerId=${ownerId}`,
   };
 }
 
+const ROW_ID = '[1-9]\\d{0,9}';
+
 const QUEUEABLE_PATHS = Object.entries(QUEUEABLE_ROUTES).map(
-  ([kind, pattern]) => ({
-    kind: kind as QueueableKind,
-    path: new RegExp(`^${pattern.replace(':id', '[1-9]\\d{0,9}')}$`),
-  }),
+  ([kind, pattern]) => {
+    const query = SHARE_AWARE_KINDS.has(kind as QueueableKind)
+      ? `(?:\\?ownerId=${ROW_ID})?`
+      : '';
+    return {
+      kind: kind as QueueableKind,
+      path: new RegExp(`^${pattern.replace(':id', ROW_ID)}${query}$`),
+    };
+  },
 );
 
 /**
- * The kind a stored record's path replays as, or undefined: the outbox
- * replays nothing else (plan section 7), whatever its store holds.
+ * The kind a stored record's path (its pathname, and for a wear or wash
+ * in a shared wardrobe its `?ownerId=`) replays as, or undefined: the
+ * outbox replays nothing else (plan section 7), whatever its store holds.
  */
 export function queueableKindOf(path: string): QueueableKind | undefined {
   return QUEUEABLE_PATHS.find((route) => route.path.test(path))?.kind;

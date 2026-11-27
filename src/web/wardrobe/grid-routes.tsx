@@ -18,7 +18,7 @@ import type { WebOptions } from '../plugin';
 import { todayIn } from '../../calendar-date';
 import { postedInstant } from '../offline-writes';
 import { renderFragment, renderPage, wantsFragment } from '../render';
-import { actorOf, type GrantedAccess } from '../sharing/access';
+import { actorOf, can, type GrantedAccess } from '../sharing/access';
 import { viewContext } from '../view-context';
 import { normalizeCategory, normalizeSize } from './garment';
 import {
@@ -65,8 +65,8 @@ import {
 } from './grid-schemas';
 import { GarmentParams, OwnerQuery, pick } from '../schemas';
 
-/** The filters as the page echoes them. */
-function gridSearch(query: GridQuery, isOwner: boolean): GridSearch {
+/** The filters as the page echoes them; `launders` whether the reader sees the wash state. */
+function gridSearch(query: GridQuery, launders: boolean): GridSearch {
   const category = query.category ? normalizeCategory(query.category) : '';
   return {
     keyword: query.keyword?.trim() ?? '',
@@ -76,21 +76,22 @@ function gridSearch(query: GridQuery, isOwner: boolean): GridSearch {
     ...propertySearch(query, category),
     archived: query.archived === 'true' ? 'true' : '',
     capsule: query.capsule ? String(query.capsule) : '',
-    ...careSearch(query, isOwner),
+    ...careSearch(query, launders),
   };
 }
 
 /**
  * The care filters. "Needs a wash" reads the owner's wears, so it is
- * dropped on a shared wardrobe (`isOwner` false), like a type without its
- * category: the grid shows unfiltered, and reveals nothing.
+ * dropped for a reader without `launder` (a VIEW grantee; #680: the owner
+ * and a MANAGE partner keep it), like a type without its category: the
+ * grid shows unfiltered, and reveals nothing.
  */
 function careSearch(
   query: GridQuery,
-  isOwner: boolean,
+  launders: boolean,
 ): Pick<GridSearch, 'needsWash' | 'attention'> {
   return {
-    needsWash: isOwner && query.needsWash === 'true' ? 'true' : '',
+    needsWash: launders && query.needsWash === 'true' ? 'true' : '',
     attention: query.attention === 'true' ? 'true' : '',
   };
 }
@@ -222,9 +223,10 @@ function gridContextParts(answer: {
   // Select mode's "Select all N" and "Add to capsule" (#677).
   if (selecting) return new Set(['count', 'capsules']);
   const parts: GridContextPart[] = ['count', 'options', 'capsules'];
-  // Tagging and drafts are for someone who can write; wears are the owner's.
+  // Tagging and drafts are for someone who can write; the laundry prompt
+  // for whoever does the laundry.
   if (access.canManage) parts.push('toTag', 'drafts');
-  if (access.isOwner) parts.push('toWash');
+  if (can(access.role, 'launder')) parts.push('toWash');
   if (!fragment) parts.push('sharedWardrobes');
   return new Set(parts);
 }
@@ -264,7 +266,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     async (request, reply) => {
       const userId = sessionUserId(request);
       const { access, viewOwner } = await authorize(request, 'view');
-      const search = gridSearch(request.query, access.isOwner);
+      const search = gridSearch(request.query, can(access.role, 'launder'));
       const filters = gridFilters(search);
       const pick = access.canManage ? request.query.pick : undefined;
       // Only someone who may write can select for a bulk edit or pick.
@@ -275,10 +277,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       // Two statements (and the session's): the page, and everything
       // around it that this answer renders (gridContextParts).
       const [page, context] = await Promise.all([
-        gridPage(db, access, filters, {
-          ownerView: access.isOwner,
-          pick,
-        }),
+        gridPage(db, access, filters, { pick }),
         gridContext(
           db,
           { userId, ownerId: access.ownerId, role: access.role, filters },
@@ -295,7 +294,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         page,
         viewOwner,
         canEdit: access.canManage,
-        ownerView: access.isOwner,
+        role: access.role,
         selecting,
         picking: picking && { capsuleId: picking.id, name: picking.name },
         bulkOutcome: bulkOutcome(request.query),
@@ -327,11 +326,10 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       // the capsule's own wardrobe (inCapsule), and the page that started
       // the scroll already refused a foreign one. Neither does the picker:
       // a capsule of another wardrobe has no members here.
-      const search = gridSearch(request.query, access.isOwner);
+      const search = gridSearch(request.query, can(access.role, 'launder'));
       const pick = access.canManage ? request.query.pick : undefined;
       const page = await gridPage(db, access, gridFilters(search), {
         before: readGridCursor(request.query.before),
-        ownerView: access.isOwner,
         pick,
       });
       const picking = pick === undefined ? undefined : { capsuleId: pick };
@@ -362,7 +360,7 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     access: GrantedAccess,
     request: { query: GridQuery; body: SelectionBody },
   ): Promise<{ ids: number[]; all: boolean; search: GridSearch }> {
-    const search = gridSearch(request.query, access.isOwner);
+    const search = gridSearch(request.query, can(access.role, 'launder'));
     const all = request.body.all === '1';
     const ids = all
       ? await gridIds(db, access, gridFilters(search))
@@ -449,8 +447,8 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     },
   );
 
-  // Mark washed: the owner's own record (wears and washes are never a
-  // grantee's), today, as the laundry's batch (washGarments). The closet's
+  // Mark washed: the owner's and a MANAGE partner's (`launder`, #680), today,
+  // as the laundry's batch (washGarments). The closet's
   // garments only: Select all on "Include archived" must not wash the archive
   // (#816; a garment's own page still may), and the toast names each skip by
   // its reason (#819): one deleted in another tab, or a hand-built post's
@@ -461,12 +459,13 @@ export const gridRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
     '/wardrobe/bulk/washed',
     { schema: { querystring: GridQuery, body: SelectionBody } },
     async (request, reply) => {
-      const { access, viewOwner } = await authorize(request, 'own');
+      const { access, viewOwner } = await authorize(request, 'launder');
       const selection = await selected(access, request);
       const day = todayIn(config.timeZone, new Date());
       const { washed, skipped } = await washGarments(
         { db, logger },
         actorOf(request),
+        access.ownerId,
         selection.ids,
         { day, at: postedInstant(request, undefined, day, config.timeZone) },
         { closetOnly: true },

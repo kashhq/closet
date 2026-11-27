@@ -131,7 +131,7 @@ describe('searchGarments', () => {
     ).rejects.toMatchObject({
       statusCode: 403,
       code: 'forbidden',
-      message: 'needsWash reads your own wears only',
+      message: 'needsWash needs your own wardrobe or a MANAGE share',
     });
     expect(garmentSummaries).not.toHaveBeenCalled();
   });

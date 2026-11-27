@@ -2474,7 +2474,7 @@
       },
       "LaundryWash": {
         "title": "LaundryWash",
-        "description": "Laundry day: every copy of each garment washed. Ids that are not your garments' (or wishlist items) are left out of the answer, never an error",
+        "description": "Laundry day: every copy of each garment washed. Ids that are not the wardrobe's garments (or wishlist items) are left out of the answer, never an error",
         "type": "object",
         "required": [
           "garmentIds",
@@ -10625,7 +10625,7 @@
         "tags": [
           "garments"
         ],
-        "description": "The closet (with `includeArchived` the archive too; never the wishlist), newest first. A type without its category is a 400; `needsWash` on a shared wardrobe is a 403; a capsule outside the wardrobe a 404.",
+        "description": "The closet (with `includeArchived` the archive too; never the wishlist), newest first. A type without its category is a 400; `needsWash` on a VIEW share is a 403; a capsule outside the wardrobe a 404.",
         "parameters": [
           {
             "schema": {
@@ -10800,7 +10800,7 @@
             "in": "query",
             "name": "needsWash",
             "required": true,
-            "description": "Only garments with a copy that needs a wash: your own wardrobe only"
+            "description": "Only garments with a copy that needs a wash: your own wardrobe or a MANAGE share"
           },
           {
             "schema": {
@@ -12233,7 +12233,7 @@
         "tags": [
           "wears"
         ],
-        "description": "Wore today, for a day of the last week: the garment's own wear, apart from an outfit's (a calendar entry marked worn). Once a day: a repeat is `changed: false`. Your own garments only; a wishlist item is a 409.",
+        "description": "Wore today, for a day of the last week: the garment's own wear, apart from an outfit's (a calendar entry marked worn). Once a day: a repeat is `changed: false`. Your own garments, or a MANAGE share's (the wear is the owner's); a wishlist item is a 409.",
         "requestBody": {
           "required": false,
           "content": {
@@ -12410,7 +12410,7 @@
         "tags": [
           "wears"
         ],
-        "description": "Every copy, clean from that day: wears that day count as before the wash. A wash never moves back, so an older one than the last is `changed: false`. Your own garments only; a wishlist item is a 409.",
+        "description": "Every copy, clean from that day: wears that day count as before the wash. A wash never moves back, so an older one than the last is `changed: false`. Your own garments, or a MANAGE share's; a wishlist item is a 409.",
         "requestBody": {
           "required": true,
           "content": {
@@ -12485,7 +12485,7 @@
         "tags": [
           "wears"
         ],
-        "description": "The laundry's \"Mark washed\". GET /garments?needsWash=true lists what needs one. Always your own garments, whatever is shared with you.",
+        "description": "The laundry's \"Mark washed\", in your own wardrobe or with `ownerId` one shared with you to MANAGE (VIEW is a 403). GET /garments?needsWash=true lists what needs one.",
         "requestBody": {
           "required": true,
           "content": {
@@ -12495,8 +12495,21 @@
               }
             }
           },
-          "description": "Laundry day: every copy of each garment washed. Ids that are not your garments' (or wishlist items) are left out of the answer, never an error"
+          "description": "Laundry day: every copy of each garment washed. Ids that are not the wardrobe's garments (or wishlist items) are left out of the answer, never an error"
         },
+        "parameters": [
+          {
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            "in": "query",
+            "name": "ownerId",
+            "required": false,
+            "description": "A wardrobe shared with you (its owner's id); absent, your own"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -12538,7 +12551,7 @@
         "tags": [
           "wears"
         ],
-        "description": "Away, it is never suggested or packed. Set-state: a repeat changes nothing. Your own garments only; a wishlist item is a 409.",
+        "description": "Away, it is never suggested or packed. Set-state: a repeat changes nothing. Your own garments only (a MANAGE share is a 403: away is the owner's record); a wishlist item is a 409.",
         "requestBody": {
           "required": true,
           "content": {

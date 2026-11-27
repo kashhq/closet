@@ -43,7 +43,7 @@ import {
   SheetCancel,
   sheetOpener,
 } from '../layout/sheet';
-import type { SharedWardrobe } from '../sharing/access';
+import { can, type SharedWardrobe, type WardrobeRole } from '../sharing/access';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from './garment';
 import { type LabelledProperty, valueLabel } from './labels';
@@ -54,7 +54,7 @@ import {
   draftUrl,
   garmentUrl,
   idListValue,
-  LAUNDRY_PATH,
+  laundryUrl,
   TAG_PATH,
   wardrobeUrl,
 } from './urls';
@@ -142,11 +142,14 @@ export interface WardrobeModel {
   /** The shared wardrobe shown; undefined for the requester's own. */
   viewOwner: number | undefined;
   canEdit: boolean;
-  /** The requester's own wardrobe: wash state and away show (never a share's). */
-  ownerView: boolean;
+  /**
+   * Who the requester is to the wardrobe: the wash filter and Mark washed
+   * with `launder` (the owner and a MANAGE partner, #680), Archive with `own`.
+   */
+  role: WardrobeRole;
   /** Garments still needing their type, warmth or formality (0 for a viewer). */
   toTag: number;
-  /** Garments with a copy that needs a wash (0 on a shared wardrobe). */
+  /** Garments with a copy that needs a wash (0 without `launder`: a VIEW share). */
   toWash: number;
   /** Select mode (?select=1, or the picker): tiles are checkboxes. */
   selecting: boolean;
@@ -312,7 +315,7 @@ function wardrobeFacets(
         search={model.search}
         options={model.options}
         viewOwner={model.viewOwner}
-        ownerView={model.ownerView}
+        launders={can(model.role, 'launder')}
       />
     ),
   };
@@ -449,7 +452,7 @@ function Prompts({ model }: { model: WardrobeModel }) {
               ? t('wear.LAUNDRY_PROMPT_ONE')
               : t('wear.LAUNDRY_PROMPT', { count: toWash })
           }
-          href={LAUNDRY_PATH}
+          href={laundryUrl(model.viewOwner)}
         />
       )}
     </div>
@@ -784,9 +787,9 @@ function TileContent(props: {
 
 /**
  * What a tile says over its photo, small: "×3" for identical copies in the
- * bottom corner; in the top one its status mark (archived, and to the
- * owner alone away and the wash, "Wash 2/3" of a multiple: `care` is the
- * owner's grid's only), then
+ * bottom corner; in the top one its status mark (archived, and the care
+ * state its reader read, `care`: the wash, "Wash 2/3" of a multiple, for
+ * the owner and a MANAGE partner, away for the owner alone), then
  * the condition when it is not good.
  */
 function TileMarks({ tile }: { tile: GarmentTile }) {
@@ -1190,7 +1193,8 @@ function FilterSheet(props: {
   search: GridSearch;
   options: FilterOptions;
   viewOwner: number | undefined;
-  ownerView: boolean;
+  /** The wash filter: the owner and a MANAGE partner (#680). */
+  launders: boolean;
 }) {
   const { search, options, viewOwner } = props;
   return (
@@ -1248,8 +1252,8 @@ function FilterSheet(props: {
         )}
         <PropertyFilterGroups search={search} options={options} />
         <FilterGroup id="filter-care" title={t('CARE')}>
-          {/* Wears are the owner's own: a share offers no wash filter. */}
-          {props.ownerView && (
+          {/* The wash state is `launder`'s: a VIEW share offers no wash filter. */}
+          {props.launders && (
             <Toggle
               name="needsWash"
               checked={search.needsWash !== ''}
@@ -1571,9 +1575,10 @@ function SelectAll(props: { count: number; checked: boolean }) {
 
 /**
  * The verbs beside "Set…": Add to capsule (owner and MANAGE: the
- * wardrobe's capsules, the first chosen, so the field always posts), and
- * on one's own wardrobe Mark washed and Archive (wears and the status are
- * the owner's). Outside the form, like the "Set…" dialog, each button
+ * wardrobe's capsules, the first chosen, so the field always posts), Mark
+ * washed (`launder`: the owner and a MANAGE partner, #680) and on one's
+ * own wardrobe Archive (the status is the owner's). Outside the form, like
+ * the "Set…" dialog, each button
  * joins it through `form` and posts to its own `formaction`. Online only
  * (data-needs-network): "Select all" is resolved by the server, so none
  * of them is queued like the laundry's batch.
@@ -1620,7 +1625,7 @@ function BulkActions({ model }: { model: WardrobeModel }) {
             </button>
           </div>
         )}
-        {model.ownerView && (
+        {can(model.role, 'launder') && (
           <div class="flex gap-2">
             <button
               type="submit"
@@ -1630,14 +1635,16 @@ function BulkActions({ model }: { model: WardrobeModel }) {
             >
               {t('BULK_MARK_WASHED')}
             </button>
-            <button
-              type="submit"
-              form={BULK_FORM_ID}
-              formaction={verbUrl('archive')}
-              class="btn btn-sm flex-1"
-            >
-              {t('BULK_ARCHIVE')}
-            </button>
+            {can(model.role, 'own') && (
+              <button
+                type="submit"
+                form={BULK_FORM_ID}
+                formaction={verbUrl('archive')}
+                class="btn btn-sm flex-1"
+              >
+                {t('BULK_ARCHIVE')}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -71,10 +71,11 @@ function entryForAgent(
 }
 
 /**
- * The calendar and the wears are the caller's own records (src/web/wears):
- * no tool reaches them through a share. Garment-level writes take ownerId
- * only to refuse a shared wardrobe as the pages do (403 where the garment
- * is visible, 404 where it is not).
+ * The calendar is the caller's own record: no tool reaches it through a
+ * share. The laundry (laundry_status, mark_washed, mark_worn's "Wore
+ * today") takes `ownerId` for a wardrobe shared to MANAGE (`launder`,
+ * #680), as the pages do; a VIEW share is a 403 (Forbidden), a wardrobe
+ * not shared "Wardrobe not found".
  */
 export const calendarTools = [
   defineTool({
@@ -148,11 +149,12 @@ export const calendarTools = [
     name: 'laundry_status',
     title: 'What needs a wash',
     description:
-      'Your garments worn since their last wash that can get dirty, in the closet: those needing a wash first (dirty copies of how many), then those worn but not due yet.',
-    input: z.object({}),
+      'The garments worn since their last wash that can get dirty, in the closet: those needing a wash first (dirty copies of how many), then those worn but not due yet. Your own, or with ownerId a wardrobe shared with you to MANAGE.',
+    input: z.object({ ownerId: ownerIdInput }),
     writes: false,
-    async run(_args, ctx) {
-      const items = await laundryList(ctx.db, ctx.userId);
+    async run({ ownerId }, ctx) {
+      const access = await wardrobeFor(ctx, ownerId, 'launder');
+      const items = await laundryList(ctx.db, access.ownerId);
       return {
         garments: items.map(({ id, name, category, quantity, dirty }) => ({
           id,
@@ -170,7 +172,7 @@ export const calendarTools = [
     name: 'mark_worn',
     title: 'Mark worn',
     description:
-      'WRITES: records a wear. With entryId: marks that calendar entry worn, which records each of its outfit’s garments as worn that day (not for a future day). With garmentId: "Wore today", one garment worn today on its own. Your own records only.',
+      'WRITES: records a wear. With entryId: marks that calendar entry worn, which records each of its outfit’s garments as worn that day (not for a future day; your own calendar only). With garmentId: "Wore today", one garment worn today on its own, in your own wardrobe or with ownerId one shared with you to MANAGE (the wear is the owner’s).',
     input: z
       .object({
         entryId: rowId().optional().describe('A calendar entry id.'),
@@ -202,8 +204,7 @@ export const calendarTools = [
         }
         return { entryId, worn: true, garmentsRecorded: outcome.wears };
       }
-      // Wears are the owner's own: a shared wardrobe's garment is refused
-      // as the garment page's Wore today refuses it.
+      // As the garment page's Wore today: the owner's or a MANAGE partner's.
       await wearGarment(
         { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
@@ -219,7 +220,7 @@ export const calendarTools = [
     name: 'mark_washed',
     title: 'Mark washed',
     description:
-      'WRITES: marks your garments washed today (every copy, like laundry day); wears today count as before the wash. Ids that are not your garments are ignored. Your own records only.',
+      'WRITES: marks garments washed today (every copy, like laundry day); wears today count as before the wash. Your own, or with ownerId a wardrobe shared with you to MANAGE; ids that are not that wardrobe’s garments are ignored.',
     input: z.object({
       garmentIds: z.array(rowId()).min(1).max(500),
       ownerId: ownerIdInput,
@@ -227,12 +228,12 @@ export const calendarTools = [
     writes: true,
     idempotent: true,
     async run({ garmentIds, ownerId }, ctx) {
-      await wardrobeFor(ctx, ownerId, 'own');
       const now = new Date();
       const today = todayIn(ctx.timeZone, now);
       const { washed } = await washGarments(
         { db: ctx.db, logger: ctx.webLogger },
         actorOf(ctx),
+        ownerId,
         garmentIds,
         { day: today, at: now },
       );

@@ -1332,7 +1332,7 @@ describe('the MCP endpoint', () => {
       expect(answer.isError).toBe(true);
     });
 
-    it('MANAGE writes the garments but not the wears', async () => {
+    it('MANAGE writes the garments and does the laundry, but not the wash limit', async () => {
       // The wash limit is the owner's record (FormAudience): a grantee's
       // save through the form's reader leaves it as stored.
       await asFixture(t.db, (tx) =>
@@ -1363,32 +1363,52 @@ describe('the MCP endpoint', () => {
         size: '32',
         washAfterWears: 5,
       });
-      for (const [name, args] of [
-        ['mark_worn', { garmentId: garments.jeans.id, ownerId: t.owner.id }],
-        [
-          'mark_washed',
-          { garmentIds: [garments.jeans.id], ownerId: t.owner.id },
-        ],
-      ] as const) {
-        const answer = await callTool(t, manager.token, name, args);
-        expect(answer, name).toEqual({
-          isError: true,
-          value: { error: 'Forbidden' },
-        });
-      }
+      // Wore today and the wash are `launder`'s (#680): the owner's rows,
+      // written by the partner.
+      const ownerId = t.owner.id;
+      await tool(t, manager.token, 'mark_worn', {
+        garmentId: garments.jeans.id,
+        ownerId,
+      });
+      const [wear] = await t.db
+        .select({ ownerId: garmentWear.ownerId })
+        .from(garmentWear)
+        .where(
+          and(
+            eq(garmentWear.garmentId, garments.jeans.id),
+            eq(garmentWear.day, t.today()),
+          ),
+        );
+      expect(wear).toEqual({ ownerId });
+      const hamper = await tool<{ garments: { id: number }[] }>(
+        t,
+        manager.token,
+        'laundry_status',
+        { ownerId },
+      );
+      expect(hamper.garments.map(({ id }) => id)).toContain(garments.jeans.id);
+      const washed = await tool<{ washed: number[] }>(
+        t,
+        manager.token,
+        'mark_washed',
+        { garmentIds: [garments.jeans.id], ownerId },
+      );
+      expect(washed.washed).toEqual([garments.jeans.id]);
     });
 
     // Each tool through a share, as the pages grant it: a VIEW grantee
-    // reads, a MANAGE grantee also changes garments and capsule membership,
-    // wears stay the owner's, a stranger finds nothing.
+    // reads, a MANAGE grantee also changes garments and capsule membership
+    // and does the laundry (#680), a stranger finds nothing.
     it.each([
       ['viewer', 'get_capsule', undefined],
       ['viewer', 'list_capsules', undefined],
       ['viewer', 'list_wishlist', undefined],
       ['viewer', 'set_capsule_membership', 'Forbidden'],
       ['manager', 'set_capsule_membership', undefined],
-      ['manager', 'mark_washed', 'Forbidden'],
+      ['manager', 'mark_washed', undefined],
+      ['viewer', 'mark_washed', 'Forbidden'],
       ['viewer', 'mark_worn', 'Forbidden'],
+      ['viewer', 'laundry_status', 'Forbidden'],
     ] as const)(
       '%s calling %s on the shared wardrobe: %s',
       async (actor, name, refusal) => {
@@ -1400,6 +1420,7 @@ describe('the MCP endpoint', () => {
           set_capsule_membership: { id: capsuleId, add: [garments.boots.id] },
           mark_washed: { garmentIds: [garments.tee.id] },
           mark_worn: { garmentId: garments.tee.id },
+          laundry_status: {},
         };
         const answer = await callTool(t, caller.token, name, {
           ...args[name],

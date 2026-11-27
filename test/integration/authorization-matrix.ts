@@ -87,12 +87,13 @@ import { startWeatherStub } from '../support/weather-stub';
  * Calendar entries and outfits are never shared, so every refusal there is
  * a 404. The wishlist (#18) is the wardrobe's too: a VIEW grantee reads it,
  * a MANAGE grantee buys, only the owner restores an archived garment (and
- * archives what a purchase replaces). Wears, washes and away (#7) are the
- * owner's own records too, but
- * about a garment a grantee can see: with `?ownerId=` a 403, without it a
- * 404 (the garment is not in their wardrobe); a garment's condition is a
- * property like any other (MANAGE writes it). /laundry and insights (#17)
- * are always the requester's own: another user's ids are ignored. The
+ * archives what a purchase replaces). Day-level wears, washes and the
+ * laundry are `launder`'s (#680): the owner and a MANAGE partner; away (#7)
+ * is the owner's own record, about a garment a grantee can see: with
+ * `?ownerId=` a 403, without it a 404 (the garment is not in their
+ * wardrobe); a garment's condition is a property like any other (MANAGE
+ * writes it). Insights (#17) are always the requester's own: a foreign
+ * `?ownerId=` is a 404, and /laundry's batch ignores another's ids. The
  * style profile (#34) is private like outfits: anyone else sees their own.
  * Outfit selfies (#19) are the calendar's: taking,
  * removing and seeing one is the owner's alone, and the public /file/**

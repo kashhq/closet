@@ -50,11 +50,11 @@ describe('garment keyset index order', () => {
     await t.db.execute(sql`analyze garment`);
 
     const { statements } = await recordStatements(() =>
+      // A VIEW reader's grid: the tiles alone, no wash count per tile.
       gridPage(
         t.db,
-        { ownerId: owner, role: 'OWN' },
+        { ownerId: owner, role: 'VIEW' },
         { scope: 'closet', needsWash: false, attention: false },
-        { ownerView: false },
       ),
     );
     expect(statements).toHaveLength(1);

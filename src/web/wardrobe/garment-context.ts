@@ -11,10 +11,15 @@ import {
   readGoesWithInputs,
 } from '../gallery/queries';
 import { GARMENT_OUTFITS_SHOWN } from '../outfits/garment-outfits';
-import type { WardrobeRole } from '../sharing/access';
+import { can, type WardrobeRole } from '../sharing/access';
 import { type GarmentOutfits, outfitsWithGarmentSql } from '../outfits/queries';
 import { type BrandSize, brandSizeSql } from '../sizes/queries';
-import { type WearSummary, wearSummarySql } from '../wears/queries';
+import {
+  type LaundryState,
+  laundryStateSql,
+  type WearSummary,
+  wearSummarySql,
+} from '../wears/queries';
 import {
   type SuggestionContext,
   suggestionContextSql,
@@ -49,7 +54,11 @@ interface OwnerRecords {
  * - `capsules`: the capsules row, for anything owned (anyone who sees it);
  * - `replaces`: the garment it replaces (a wishlist item's, or a bought one's);
  * - `replacedBy`: "On the wishlist", for a closet garment;
- * - `own`: the owner's records (OwnerRecords), the owner's alone;
+ * - `laundry`: the wash state (since the wash, last worn and how), for an
+ *   owned garment to anyone with `launder` (#680: the owner and a MANAGE
+ *   partner): it drives Wore today and Washed;
+ * - `own`: the owner's records (OwnerRecords), the owner's alone (`own`):
+ *   the wear count and cost per wear among them, never a partner's;
  * - `goesWith`: "Goes with my closet"'s inputs for a wishlist item (#18b),
  *   the owner's alone: it reads their closet and clashes;
  * - `brandSize`: the owner's size in a wishlist item's brand (#24), their
@@ -64,6 +73,7 @@ export interface GarmentContext {
   capsules: GarmentCapsule[];
   replaces: GarmentRef | undefined;
   replacedBy: Replacement[];
+  laundry: LaundryState | undefined;
   own: OwnerRecords | undefined;
   goesWith: GoesWithInputs | undefined;
   brandSize: BrandSize | undefined;
@@ -73,7 +83,6 @@ export interface GarmentContext {
 
 /** Who reads the page: the wardrobe's access, and the viewer the agent's name depends on. */
 interface ContextReader {
-  isOwner: boolean;
   ownerId: number;
   role: WardrobeRole;
   viewerId: number;
@@ -84,11 +93,12 @@ interface ContextReader {
  * (selectScalars): they share no rows, and each was its own round trip
  * until #160. Which parts are read is decided here, from the garment and
  * the access, and nowhere else: a part the page does not show for this
- * garment or requester is never read, so **owner-only data (wears, washes,
+ * garment or requester is never read, so **owner-only data (the wear count,
  * outfits, cost, avoided pairs, the repair log, the closet and the brand
- * notes behind "Goes with my closet") is read only when `isOwner`**. A new
- * owner-only read joins `own`, never a view. Nothing is sent when no part
- * applies (a grantee's wishlist item that replaces nothing).
+ * notes behind "Goes with my closet") is read only with `own`**, and the
+ * wash state only with `launder`. A new owner-only read joins `own`, never
+ * a view. Nothing is sent when no part applies (a grantee's wishlist item
+ * that replaces nothing).
  */
 export async function garmentContext(
   db: Db,
@@ -106,12 +116,25 @@ export async function garmentContext(
     capsules: row.capsules ?? [],
     replaces: row.replaces ?? undefined,
     replacedBy: row.replacedBy ?? [],
+    laundry: laundryOf(row),
     own,
     goesWith: row.goesWith && readGoesWithInputs(row.goesWith),
     brandSize: row.brandSize ?? undefined,
     suggestion: row.suggestion ?? undefined,
     agent: row.agent ?? null,
   };
+}
+
+/**
+ * The wash state as read: the owner's summary holds it, so `laundry` is
+ * its own column only for a partner (contextColumns), and a garment's
+ * wears are read once.
+ */
+function laundryOf(row: {
+  own?: { wear: LaundryState } | null;
+  laundry?: LaundryState | null;
+}): LaundryState | undefined {
+  return row.own?.wear ?? row.laundry ?? undefined;
 }
 
 /** Each part's column, or undefined where the page shows none (see above). */
@@ -125,10 +148,11 @@ function contextColumns(
     suggestionGroupId,
     madeByAgent,
   }: GarmentDetail,
-  { isOwner, ownerId, role, viewerId }: ContextReader,
+  { ownerId, role, viewerId }: ContextReader,
   today: IsoDate,
 ) {
   const owned = status !== 'wishlist';
+  const isOwner = can(role, 'own');
   const when = <T>(read: boolean, column: () => T) =>
     read ? column() : undefined;
   return {
@@ -138,6 +162,9 @@ function contextColumns(
         ? undefined
         : garmentRefSql(replacesGarmentId, ownerId),
     replacedBy: when(status === 'closet', () => replacementsOfSql(id, ownerId)),
+    laundry: when(owned && !isOwner && can(role, 'launder'), () =>
+      laundryStateSql(id),
+    ),
     own: when(owned && isOwner, () => ownerRecordsSql(ownerId, id, today)),
     goesWith: when(!owned && isOwner, () => goesWithInputsSql(ownerId, id)),
     brandSize:

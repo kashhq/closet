@@ -309,8 +309,8 @@ export const ROUTES: Route[] = [
     },
   },
   // Select mode's other verbs (#677), as POST /wardrobe/bulk: only
-  // ?ownerId. Archive and Mark washed are the owner's alone (the status and
-  // the washes), MANAGE included; Add to capsule is MANAGE's too.
+  // ?ownerId. Archive is the owner's alone (the status), MANAGE included;
+  // Mark washed and Add to capsule are MANAGE's too (#680: `launder`).
   ...(['archive', 'washed'] as const).map(
     (verb): Route => ({
       name: `POST /wardrobe/bulk/${verb}`,
@@ -325,7 +325,7 @@ export const ROUTES: Route[] = [
       }),
       expect: {
         owner: 'ok',
-        manager: 'forbidden',
+        manager: verb === 'washed' ? 'ok' : 'forbidden',
         viewer: 'forbidden',
         stranger: 'notFound',
       },
@@ -941,8 +941,10 @@ export const ROUTES: Route[] = [
     },
   },
 
-  // Wears, washes and away (#7): the owner's own records about a garment a
-  // grantee may see, so `?ownerId=` is a 403 and their own wardrobe a 404.
+  // Wears, washes and away (#7) about a garment a grantee may see: Wore
+  // today and Washed are `launder`'s (#680: a MANAGE partner does the
+  // laundry), away the owner's own record, so without the capability
+  // `?ownerId=` is a 403, and the grantee's own wardrobe a 404 either way.
   // Plain posts (no htmx): the 303 back to the garment. Their /api/v1 twins
   // (#193a) name the day; the wear's undo is authorization-wardrobe.spec.ts'.
   ...(['wear', 'washed', 'away'] as const).map(
@@ -963,7 +965,7 @@ export const ROUTES: Route[] = [
       }),
       expect: {
         owner: 'ok',
-        manager: ['notFound', 'forbidden'],
+        manager: ['notFound', action === 'away' ? 'forbidden' : 'ok'],
         viewer: ['notFound', 'forbidden'],
         stranger: 'notFound',
       },

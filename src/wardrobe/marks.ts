@@ -38,9 +38,10 @@ export interface MarkedGarment {
 
 export interface MarkOptions {
   /**
-   * The wardrobe's owner is looking. Away and the wash are the owner's own
-   * records: a viewer of a shared wardrobe never gets those marks, even
-   * when the surface passes them.
+   * Someone who may see the care state is looking: the owner, or for the
+   * wash a MANAGE partner (#680), whose surfaces read no away. A VIEW
+   * grantee never gets the away or wash marks, even when the surface
+   * passes them.
    */
   ownerView: boolean;
 }

@@ -281,7 +281,7 @@ const SearchInput = z.object({
     .boolean()
     .default(false)
     .describe(
-      'Only garments with a copy that needs a wash (your own wardrobe only).',
+      'Only garments with a copy that needs a wash (your own wardrobe or one shared with you to MANAGE).',
     ),
   needsAttention: z
     .boolean()

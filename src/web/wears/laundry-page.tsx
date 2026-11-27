@@ -13,7 +13,7 @@ import type { SharedWardrobe } from '../sharing/access';
 import { OutboxPending, outboxRegion } from '../outbox';
 import type { ViewContext } from '../view-context';
 import { categoryLabel } from '../wardrobe/garment';
-import { LAUNDRY_PATH } from '../wardrobe/urls';
+import { laundryUrl, wardrobeUrl } from '../wardrobe/urls';
 import {
   WardrobeAddSheet,
   type WardrobeHeaderProps,
@@ -28,24 +28,28 @@ const LAUNDRY_FLAGS = ['washed'] as const;
 const LAUNDRY_FORM_ID = 'laundry-form';
 
 /**
- * GET /laundry, the Wardrobe's Laundry tab: the signed-in user's own hamper
- * as one native form (PostForm; the answer is this page again): what needs
- * a wash, checked, then what was worn but is not due yet (jeans after one
- * wear), unchecked. "Mark washed" posts the checked ones to POST /laundry,
- * which washes every copy today. Offline it queues (#178): each checked row
- * is its own record, replayed through the garment's Washed, so laundry day
- * in a basement saves without a signal. Always the user's own wardrobe, so the
- * header is theirs (a shared one's closet is a switch away).
+ * GET /laundry, the Wardrobe's Laundry tab: a wardrobe's hamper (one's own,
+ * or with `?ownerId=` one shared to MANAGE, #680) as one native form
+ * (PostForm; the answer is this page again): what needs a wash, checked,
+ * then what was worn but is not due yet (jeans after one wear), unchecked.
+ * "Mark washed" posts the checked ones to POST /laundry, which washes every
+ * copy today. Offline it queues (#178): each checked row is its own record,
+ * replayed through the garment's Washed (in the same wardrobe), so laundry
+ * day in a basement saves without a signal.
  */
 export function LaundryPage(props: {
   ctx: ViewContext;
   items: LaundryItem[];
+  /** The shared wardrobe shown; undefined for the requester's own. */
+  viewOwner: number | undefined;
+  /** Adding garments in the header: the owner and a MANAGE partner. */
+  canEdit: boolean;
   /** The wardrobes shared with the user: the header's switcher. */
   sharedWardrobes: SharedWardrobe[];
   /** After POST /laundry: how many were washed (the toast). */
   washed: number | undefined;
 }) {
-  const { ctx, items } = props;
+  const { ctx, items, viewOwner } = props;
   const due = items.filter((item) => item.dirty > 0);
   const worn = items.filter((item) => item.dirty === 0);
   // Back from Mark washed (#679): focus starts where the tap left it, on
@@ -54,9 +58,9 @@ export function LaundryPage(props: {
   const header: WardrobeHeaderProps = {
     ctx,
     tab: 'laundry',
-    viewOwner: undefined,
+    viewOwner,
     sharedWardrobes: props.sharedWardrobes,
-    canEdit: true,
+    canEdit: props.canEdit,
   };
   return (
     <PageShell
@@ -98,22 +102,34 @@ export function LaundryPage(props: {
     >
       {items.length === 0 ? (
         <EmptyState message={t('wear.LAUNDRY_EMPTY')}>
-          <a href="/wardrobe" class="btn btn-sm" autofocus={landed}>
+          <a
+            href={wardrobeUrl(viewOwner)}
+            class="btn btn-sm"
+            autofocus={landed}
+          >
             {t('WARDROBE')}
           </a>
         </EmptyState>
       ) : (
         <PostForm
           id={LAUNDRY_FORM_ID}
-          action={LAUNDRY_PATH}
+          action={laundryUrl(viewOwner)}
           class="flex flex-col gap-6"
           offlineQueue="wash"
         >
           {due.length > 0 && (
-            <LaundryGroup title={t('wear.LAUNDRY_DUE')} items={due} />
+            <LaundryGroup
+              title={t('wear.LAUNDRY_DUE')}
+              items={due}
+              viewOwner={viewOwner}
+            />
           )}
           {worn.length > 0 && (
-            <LaundryGroup title={t('wear.LAUNDRY_WORN')} items={worn} />
+            <LaundryGroup
+              title={t('wear.LAUNDRY_WORN')}
+              items={worn}
+              viewOwner={viewOwner}
+            />
           )}
         </PostForm>
       )}
@@ -121,14 +137,18 @@ export function LaundryPage(props: {
   );
 }
 
-function LaundryGroup(props: { title: string; items: LaundryItem[] }) {
+function LaundryGroup(props: {
+  title: string;
+  items: LaundryItem[];
+  viewOwner: number | undefined;
+}) {
   return (
     <section>
       <h2 class="text-sm text-muted mb-2">{props.title}</h2>
       <ul class="flex flex-col gap-2">
         {props.items.map((item) => (
           <li>
-            <LaundryRow item={item} />
+            <LaundryRow item={item} viewOwner={props.viewOwner} />
           </li>
         ))}
       </ul>
@@ -137,7 +157,11 @@ function LaundryGroup(props: { title: string; items: LaundryItem[] }) {
 }
 
 /** A checkbox row: the whole row is its label; due garments start checked. */
-function LaundryRow({ item }: { item: LaundryItem }) {
+function LaundryRow(props: {
+  item: LaundryItem;
+  viewOwner: number | undefined;
+}) {
+  const { item } = props;
   const name = item.name ?? categoryLabel(item.category);
   return (
     <label
@@ -145,7 +169,10 @@ function LaundryRow({ item }: { item: LaundryItem }) {
         'content',
         'flex-row items-center gap-3 p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-primary',
       )}
-      {...outboxRegion(queuedTarget('wash', item.id), name)}
+      {...outboxRegion(
+        queuedTarget('wash', item.id, { ownerId: props.viewOwner }),
+        name,
+      )}
     >
       <input
         type="checkbox"
