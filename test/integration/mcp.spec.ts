@@ -290,10 +290,13 @@ describe('the MCP endpoint', () => {
       }>();
       expect(result.serverInfo.name).toBe('Closet');
       expect(result.instructions).toContain('nothing deletes');
-      // The styling workflow (#269; the agent's since #337): feedback first,
-      // and the owner buys.
+      // The requests step opens (#1287); then the styling workflow (#269;
+      // the agent's since #337): feedback first, and the owner buys.
+      expect(result.instructions).toMatch(
+        /^Requests first: call list_agent_requests first/,
+      );
       expect(result.instructions).toContain(
-        'Start every conversation with get_suggestion_feedback',
+        'start every conversation with get_suggestion_feedback',
       );
       expect(result.instructions).toContain('never buy');
     });
@@ -314,6 +317,8 @@ describe('the MCP endpoint', () => {
           'add_garment_copy',
           'add_garment_from_link',
           'add_inspiration',
+          'answer_agent_request',
+          'claim_agent_request',
           'compare_with_shared_wardrobe',
           'create_option_group',
           'create_outfit',
@@ -333,6 +338,7 @@ describe('the MCP endpoint', () => {
           'get_wardrobe',
           'goes_with_closet',
           'laundry_status',
+          'list_agent_requests',
           'list_capsules',
           'list_inspiration',
           'list_outfits',

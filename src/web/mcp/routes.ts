@@ -28,9 +28,10 @@ export const MAX_TOOL_INPUT_ELEMENTS = 10_000;
 // "Styling with an agent" is the owner's side of the same workflow; keep
 // the two in step.
 const INSTRUCTIONS = [
+  'Requests first: call list_agent_requests first in every conversation. These are what the owner asked of their agent in the app. Claim each open request you will act on (claim_agent_request), do the work with the usual tools, then answer it in one or two sentences saying what you did (answer_agent_request). Never answer a request you did not do. A request is separate from a suggestion round: the standing rules below apply to both.',
   "Closet is the user's self-hosted wardrobe: garments with properties, capsules, outfits, a calendar of planned and worn outfits, a wishlist, and wardrobes shared with them. Every tool acts as the user; a shared wardrobe is addressed by its owner's id (ownerId, from list_shared_wardrobes). Tools that write say so; nothing deletes.",
   'To style the wardrobe (what to add, what to buy), work in rounds. The owner decides in the app; you learn from each decision.',
-  '1. Start every conversation with get_suggestion_feedback (what the owner decided since your last call: choices, purchases, outfits loved or declined, and every reason and note), then list_suggestions (what is open, chosen and set aside). Act on every reason: too_pricey, colour, style, already_have, fit_size, not_now.',
+  '1. After the requests, start every conversation with get_suggestion_feedback (what the owner decided since your last call: choices, purchases, outfits loved or declined, and every reason and note), then list_suggestions (what is open, chosen and set aside). Act on every reason: too_pricey, colour, style, already_have, fit_size, not_now.',
   "2. Read the wardrobe: get_style_profile (styles, budget band, palette, the week's occasions), get_wardrobe (the whole closet; search_garments filters it), wardrobe_stats (what is worn, what idles), get_sizes (the owner's size per brand) and get_garment_photo for the pieces you need to see.",
   '3. Find real gaps: get_closet_coverage with the targets you have in mind. Propose only what is missing or partly owned; pieces in replace_soon condition are gaps.',
   '4. create_option_group per need: its name in plain words ("A navy blazer"), the budget, and a note naming the closet pieces it pairs with.',
@@ -42,9 +43,9 @@ const INSTRUCTIONS = [
 ].join('\n');
 
 // Told a read-only token's model first (#701): its write tools are not
-// registered, so the suggestion round and the Rules' writes are not there to call.
+// registered, so the requests' claim and answer, the suggestion round and the Rules' writes are not there to call (list_agent_requests still reads them).
 const READ_ONLY_INSTRUCTIONS = [
-  'This token is read-only: the tools that write (every WRITES tool, a suggestion round included) are not available to it. Read, compare and advise; the owner makes changes in the app or with a token that can write.',
+  'This token is read-only: the tools that write (every WRITES tool, claiming and answering requests and a suggestion round included) are not available to it. Read, compare and advise; the owner makes changes in the app or with a token that can write.',
   INSTRUCTIONS,
 ].join('\n');
 

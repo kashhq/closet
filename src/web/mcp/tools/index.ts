@@ -8,6 +8,7 @@ import { garmentTools } from './garments';
 import { insightTools } from './insights';
 import { inspirationTools } from './inspiration';
 import { outfitTools } from './outfits';
+import { requestTools } from './requests';
 import { sharingTools } from './sharing';
 import { sizeTools } from './sizes';
 import { styleTools } from './style';
@@ -30,7 +31,8 @@ import { weekPlanTools } from './week-plan';
  * (#18b, goes_with_closet), insights (#17) tools/insights.ts's
  * wardrobe_stats, Today (#15) tools/today.ts. A garment's photo for
  * tagging (#90) is tools/garments.ts's get_garment_photo, its queue
- * search_garments' needsTagging. Sizes (#24) are tools/sizes.ts's
+ * search_garments' needsTagging. "Ask your agent" (#681) is tools/requests.ts's
+ * list_agent_requests, claim_agent_request and answer_agent_request. Sizes (#24) are tools/sizes.ts's
  * get_sizes, read only. Saved looks (#22d) are tools/inspiration.ts's.
  */
 export function mcpTools(options: {
@@ -53,5 +55,6 @@ export function mcpTools(options: {
     ...sizeTools,
     ...coverageTools,
     ...suggestionTools,
+    ...requestTools,
   ];
 }
