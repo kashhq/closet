@@ -7,6 +7,7 @@ import {
   listClaimableRequests,
   transitionRequest,
 } from '../../requests/request-actions';
+import { notifyRequestAnswered } from '../../requests/request-push';
 import { listTrips } from '../../trips/queries';
 import { TripListItem, tripListRecord } from '../../trips/trip-resource';
 import {
@@ -191,12 +192,21 @@ export const requestTools = [
         .describe('What you did, in one or two sentences.'),
     }),
     writes: true,
-    run: ({ id, answer }, ctx) =>
-      transitionRequest(deps(ctx), actorOf(ctx), {
+    async run({ id, answer }, ctx) {
+      const outcome = await transitionRequest(deps(ctx), actorOf(ctx), {
         kind: 'answer',
         id,
         tokenId: ctx.tokenId,
         answer,
-      }),
+      });
+      if (outcome.changed) {
+        await notifyRequestAnswered(
+          { db: ctx.db, push: ctx.push, logger: ctx.webLogger },
+          ctx.userId,
+          id,
+        );
+      }
+      return outcome;
+    },
   }),
 ];
