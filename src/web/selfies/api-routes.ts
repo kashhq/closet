@@ -9,6 +9,7 @@ import {
   PrivatePhotoQuery,
 } from '../api/private-photo-bytes';
 import { servePrivatePhoto } from '../files/private-photo';
+import { formFiles } from '../form-body';
 import { IsoDateSchema, RowId } from '../schemas';
 import { actorOf } from '../sharing/access';
 import { isOwnSelfie } from './queries';
@@ -87,7 +88,7 @@ export const selfieApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const taken = await attachSelfie(deps, actorOf(request), {
         entryId: request.params.id,
         // One file: the photo (a second is a 413).
-        parts: request.files({ limits: { files: 1 } }),
+        parts: formFiles(request, { limits: { files: 1 } }),
         today: todayIn(config.timeZone, new Date()),
         via: ' (API)',
       });

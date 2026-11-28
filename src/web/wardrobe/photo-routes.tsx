@@ -1,5 +1,6 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { sessionUserId } from '../auth/require-session';
+import { formFile, formFiles } from '../form-body';
 import { imageUrl } from '../files/image-url';
 import { draftsHeld, MAX_DRAFTS_PER_USER } from '../files/pending-photos';
 import type { WebOptions } from '../plugin';
@@ -76,7 +77,7 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const room = MAX_DRAFTS_PER_USER - (await draftsHeld(db, userId));
       const staged = await stagePhotoUploads(
         deps,
-        request.files({ limits: { files: Math.max(room, 1) } }),
+        formFiles(request, { limits: { files: Math.max(room, 1) } }),
         userId,
         access.ownerId,
       );
@@ -184,7 +185,7 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         deps,
         actorOf(request),
         garmentAddress(request),
-        request.files({ limits: { files: 2 } }),
+        formFiles(request, { limits: { files: 2 } }),
       );
       const saved = garmentUrl(id, viewOwner, '', { photoSaved: 1 });
       if (request.headers['hx-request']) {
@@ -239,7 +240,7 @@ export const photoRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         deps,
         actorOf(request),
         garmentAddress(request),
-        () => request.file(),
+        () => formFile(request),
       );
       return reply.send({
         version: edited.version,

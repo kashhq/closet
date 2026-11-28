@@ -5,7 +5,7 @@ import { todayIn } from '../../calendar-date';
 import { sessionUserId } from '../auth/require-session';
 import { actorOf } from '../sharing/access';
 import { AutosaveSaved } from '../autosave';
-import { formParts } from '../form-body';
+import { formFiles, formParts } from '../form-body';
 import { HttpError } from '../errors';
 import { INSPIRATION_PHOTO_ROOT } from '../files/image-url';
 import { sendPrivatePhoto } from '../files/private-photo';
@@ -324,7 +324,7 @@ export const inspirationRoutes: FastifyPluginCallbackTypebox<
         deps,
         id,
         sessionUserId(request),
-        request.files({ limits: { files: 1 } }),
+        formFiles(request, { limits: { files: 1 } }),
       );
       return reply.redirect(inspirationUrl(id), 303);
     },

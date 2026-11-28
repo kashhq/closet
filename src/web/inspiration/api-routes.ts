@@ -9,7 +9,7 @@ import {
 } from '../api/private-photo-bytes';
 import type { ApiOptions } from '../api/plugin';
 import { idCursor, readIdCursor } from '../api/resource';
-import { formParts } from '../form-body';
+import { formFiles, formParts } from '../form-body';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { servePrivatePhoto } from '../files/private-photo';
@@ -320,7 +320,7 @@ export const lookApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         request.params.id,
         actorOf(request).userId,
         // One file: the photo (a second is a 413).
-        request.files({ limits: { files: 1 } }),
+        formFiles(request, { limits: { files: 1 } }),
         via,
       );
       return {

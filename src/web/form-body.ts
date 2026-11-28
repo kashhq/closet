@@ -1,4 +1,8 @@
-import type { Multipart, MultipartValue } from '@fastify/multipart';
+import type {
+  Multipart,
+  MultipartFile,
+  MultipartValue,
+} from '@fastify/multipart';
 import type {
   FastifyReply,
   FastifyRequest,
@@ -33,7 +37,7 @@ export function normalizeUrlencodedBody(
 ): void {
   const body = request.body;
   if (
-    !request.headers['content-type']?.startsWith(URLENCODED) ||
+    !request.headers['content-type']?.toLowerCase().startsWith(URLENCODED) ||
     typeof body !== 'object' ||
     body === null
   ) {
@@ -55,7 +59,8 @@ export function normalizeUrlencodedBody(
 /**
  * `request.parts(options)` with each text field's value normalized; file
  * parts pass untouched, their bytes are never read here. Every multipart
- * reader uses this, never `request.parts` itself.
+ * reader goes through this file, never `request.parts`, `file`, `files` or
+ * `saveRequestFiles` itself (guards.conf `@multipart-readers`).
  */
 export async function* formParts(
   request: FastifyRequest,
@@ -70,4 +75,19 @@ function normalizedField(field: MultipartValue): MultipartValue {
   return typeof field.value === 'string'
     ? { ...field, value: lfLineBreaks(field.value) }
     : field;
+}
+
+/** `request.files(options)`: the file parts only, text fields skipped unread. */
+export function formFiles(
+  request: FastifyRequest,
+  options?: Parameters<FastifyRequest['files']>[0],
+): AsyncIterableIterator<MultipartFile> {
+  return request.files(options);
+}
+
+/** `request.file()`: the body's first file part, its text fields skipped unread. */
+export function formFile(
+  request: FastifyRequest,
+): Promise<MultipartFile | undefined> {
+  return request.file();
 }
