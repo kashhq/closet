@@ -1181,30 +1181,45 @@ describe('outbound fetch (SSRF guard)', () => {
       expect(docs.hits).toEqual([]);
     });
 
-    it('bounds DNS, the connect and a dripping body together by its own 5 s', async () => {
-      // Two of the five seconds go to DNS: the cap covers the whole fetch.
+    it('bounds DNS, the connect and a dripping body together by its own cap', async () => {
+      // The production cap is UNTRUSTED_JSON_TIMEOUT_MS; this fetcher's is
+      // 250 ms, under the general 10 s, and 100 ms of it go to DNS: the cap
+      // covers the whole fetch.
+      const capMs = 250;
       const slowDns = (): Promise<ResolvedAddress[]> =>
         new Promise((done) => {
-          setTimeout(() => done([{ address: PUBLIC_IP, family: 4 }]), 2_000);
+          setTimeout(() => done([{ address: PUBLIC_IP, family: 4 }]), 100);
         });
       const docs = await serveDocs((_req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' });
         const drip = setInterval(() => {
           if (res.destroyed) clearInterval(drip);
           else res.write(' ');
-        }, 50);
+        }, 20);
         res.on('close', () => clearInterval(drip));
+      });
+      const fetcher = createOutboundFetcher({
+        logger: captureLogs().logger,
+        resolve: slowDns,
+        destinations: TEST_INTERNET,
+        tls: { ca: [certificate.cert] },
+        untrustedJsonTimeoutMs: capMs,
       });
 
       const started = Date.now();
       await expectRefused(
-        fetchDoc(`https://${DOCS_HOST}:${docs.port}/meta`, slowDns),
+        fetcher.fetch(`https://${DOCS_HOST}:${docs.port}/meta`, {
+          accept: ['json'],
+          untrustedJson: true,
+        }),
         'timeout',
       );
       const took = Date.now() - started;
-      expect(took).toBeGreaterThanOrEqual(UNTRUSTED_JSON_TIMEOUT_MS - 100);
-      expect(took).toBeLessThan(UNTRUSTED_JSON_TIMEOUT_MS + 2_000);
-    }, 15_000);
+      expect(docs.hits).toHaveLength(1);
+      expect(took).toBeGreaterThanOrEqual(capMs - 20);
+      expect(took).toBeLessThan(capMs + 1_000);
+      expect(UNTRUSTED_JSON_TIMEOUT_MS).toBe(5_000);
+    });
 
     it('refuses to be loosened, as a programming error', async () => {
       const fetcher = fetcherFor();

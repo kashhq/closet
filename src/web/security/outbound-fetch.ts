@@ -243,6 +243,12 @@ export interface OutboundFetcherOptions {
    */
   tls?: TrustedCertificates;
   timeoutMs?: number;
+  /**
+   * `untrustedJson`'s whole-fetch bound; defaults to
+   * UNTRUSTED_JSON_TIMEOUT_MS. Specs only, so a timeout spec costs
+   * milliseconds rather than the production five seconds.
+   */
+  untrustedJsonTimeoutMs?: number;
 }
 
 /**
@@ -327,6 +333,7 @@ export function createOutboundFetcher(
     destinations = PUBLIC_DESTINATIONS,
     tls,
     timeoutMs = FETCH_TIMEOUT_MS,
+    untrustedJsonTimeoutMs = UNTRUSTED_JSON_TIMEOUT_MS,
   } = options;
 
   /** The URL's destination, checked, with the address to connect to. */
@@ -467,7 +474,7 @@ export function createOutboundFetcher(
       const started = performance.now();
       const timeout = AbortSignal.timeout(
         request.untrustedJson
-          ? Math.min(timeoutMs, UNTRUSTED_JSON_TIMEOUT_MS)
+          ? Math.min(timeoutMs, untrustedJsonTimeoutMs)
           : timeoutMs,
       );
       const trail: Trail = { hosts: [] };

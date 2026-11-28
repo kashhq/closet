@@ -3,9 +3,9 @@ import { Type } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   checkSignIn,
+  enforceSignInLimits,
   failedSignInFor,
   type SignInLimits,
-  signInGuards,
 } from '../auth/sign-in';
 import { Email, Password } from '../auth/validation';
 import { t } from '../i18n';
@@ -203,10 +203,20 @@ export const oauthConsentRoutes: FastifyPluginCallbackTypebox<
     AUTHORIZE_PATH,
     {
       config: { public: true, secretPath: true, sessionless: true },
-      // SIGN_IN_LIMIT and SIGN_IN_ACCOUNT_LIMIT: one budget with the login
-      // and the API's device sign-in (sign-in.ts).
-      ...signInGuards(signInLimits, log),
       schema: { body: ConsentBody },
+      // After the body's schema, which says which budget pays. Allow checks
+      // a password, so SIGN_IN_LIMIT and SIGN_IN_ACCOUNT_LIMIT, one budget
+      // with the login and the API's device sign-in (sign-in.ts). Deny
+      // checks nothing and names no email: on the account budget every
+      // Deny would share one '' bucket, so it counts per address on the
+      // GET's OAUTH_AUTHORIZE_LIMIT alone.
+      preHandler: (request) =>
+        request.body.decision === 'allow'
+          ? enforceSignInLimits(signInLimits, request, log)
+          : enforceLimit(authorizeLimit, request, {
+              logger: log,
+              who: request.ip,
+            }),
     },
     async (request, reply) => {
       const { issuer, resource } = servedHere(request);

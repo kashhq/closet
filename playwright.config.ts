@@ -36,6 +36,12 @@ process.env.METRICS_ENABLED ??= 'true';
 // listens on; the server's events fail to send, logged and dropped, never
 // reaching a real tracker.
 process.env.SENTRY_DSN ??= E2E_SENTRY_DSN;
+// OAuth on wherever SITE_URL is https (make ci-e2e's), which it requires:
+// the consent scenario (test/oauth-consent.spec.ts) needs it, and the test
+// server then stubs the client's document (test/support/oauth-client-stub.ts).
+if (process.env.SITE_URL?.startsWith('https:')) {
+  process.env.MCP_PUBLIC_URL ??= `${new URL(process.env.SITE_URL).origin}/mcp`;
+}
 
 /**
  * A Safari tab (not the installed app) opens the install dialog over the

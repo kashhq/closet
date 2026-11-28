@@ -151,7 +151,14 @@ describe('OAuth consent', () => {
     expect(page.body).toContain('but access goes to claude.ai');
     expect(page.body).not.toContain('class="dock"');
 
-    const res = await allow(fieldOf(page.body));
+    // Least privilege by default: own wardrobe only, writes off though asked.
+    const toggle = (name: string) =>
+      new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(page.body)?.[0];
+    expect(toggle('ownWardrobeOnly')).toContain('checked');
+    expect(toggle('writes')).not.toContain('checked');
+
+    // What the page submits untouched: only the ticked box travels.
+    const res = await allow(fieldOf(page.body), { ownWardrobeOnly: 'on' });
     expect(res.statusCode).toBe(303);
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['set-cookie']).toBeUndefined();
@@ -182,9 +189,8 @@ describe('OAuth consent', () => {
       codeChallenge: CHALLENGE,
       resource: RESOURCE,
       name: 'Claude',
-      // Read-only and own-wardrobe-only unless ticked, whatever was asked.
       readOnly: true,
-      ownWardrobeOnly: false,
+      ownWardrobeOnly: true,
       passwordFingerprint: owner.password.slice(-8),
       usedAt: null,
       tokenId: null,
@@ -251,6 +257,52 @@ describe('OAuth consent', () => {
     expect(res.headers.location).toBe(
       `${withQuery}&error=access_denied&state=${STATE}&iss=${encodeURIComponent(ISSUER)}`,
     );
+  });
+
+  it('budgets Deny per address, never on the sign-in account budget', async () => {
+    // An account budget of 2: the old code keyed every Deny on one '' email.
+    const tight = await createTestApp(
+      { SITE_URL, ALLOWED_HOSTS: MCP_HOST, MCP_PUBLIC_URL: RESOURCE },
+      { outboundFetch: sites.outboundFetch, signInAccountMax: 2 },
+    );
+    try {
+      const inject = (
+        method: 'GET' | 'POST',
+        url: string,
+        client: Record<string, string>,
+        payload?: Record<string, string>,
+      ) =>
+        tight.inject({
+          method,
+          url,
+          anonymous: true,
+          payload,
+          headers: client,
+        });
+      for (let i = 0; i < 3; i++) {
+        const client = uniqueClient();
+        const page = await inject('GET', authorizeUrl(), client);
+        const res = await inject('POST', '/oauth/authorize', uniqueClient(), {
+          consent: fieldOf(page.body),
+          decision: 'deny',
+        });
+        expect(res.statusCode).toBe(303);
+      }
+      // One address: the GET's budget (10 a minute) holds the GET and its denies.
+      const client = uniqueClient();
+      const field = fieldOf((await inject('GET', authorizeUrl(), client)).body);
+      const answers: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        const res = await inject('POST', '/oauth/authorize', client, {
+          consent: field,
+          decision: 'deny',
+        });
+        answers.push(res.statusCode);
+      }
+      expect(answers).toEqual([...Array(9).fill(303), 429]);
+    } finally {
+      await tight.cleanup();
+    }
   });
 
   it('answers Deny with access_denied, state and iss, asking no password', async () => {

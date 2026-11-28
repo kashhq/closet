@@ -487,7 +487,6 @@ Consequence: interactive sessions here lose the artifact publish flow and the qu
 **Why:** a desktop week read as a 40rem column of seven stacked days; `/calendar` is a cached tab root, so a `?view=` page would be another cache key that fails offline, and the server cannot see the width.
 **Decision:** CSS only: the days' wrapper is `lg:grid-cols-7` with a row per week occasion (`weekOccasions`, template plus used, pure); each day a subgrid; pieces placed by `lg:row-start-*` inside `contents` cell wrappers, keeping the phone's DOM order (entries, then open slots) rather than interleaving them by occasion. Empty cells from today on hold a desktop-only "+ Occasion" opener; past empty cells render nothing. `PageMain` gains `agenda` (narrow, wide from lg).
 **Consequence:** the phone renders pixel-identical (390 px screenshots against main); desktop focus order is the phone's, so an open slot can be focused after an entry drawn below it. A seventh occasion means a longer `WEEK_ROWS`/`ROW_START` table.
-
 ## 2026-11-13 — Outfit rules on the Style page: one select per side, its options the schema (#21b)
 
 **Why:** the plan's §4: the owner adds and removes rules as a native form on a phone, with no script, and a side is a garment, a category (and maybe its type), a colour or a pattern.
@@ -655,7 +654,6 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 **Why:** the sync triggers (#196a-2, plan 2026-11-12-json-api.md §7) bump a per-owner revision by updating the owner's `user` row from inside the write, after the written row is locked. Garment, trip, capsule, size and photo writers locked their row first, so the bump would have closed deadlock cycles with owner-first writers (`pickIdea`, `deleteOutfit`'s cascade into a trip, `swapPhoto` against a cutout result).
 **Decision:** every write to a synced table takes the owner lock before any other row lock, folded into its existing first statement (`ownerLockCte`, `src/db/owner-lock.ts`: no new statements), and marks the transaction once the row is held. A test-only guard on every spec database (`test/support/sync-guard.ts`) refuses a synced write without the mark; fixtures write through `asFixture`. The migrations (columns, tombstones, triggers that raise on an unlocked write) are #196a-2.
 **Consequence:** **#196a-2 merges only after #196a-1 is deployed**: its strict triggers would fail every write of a build that predates this one, during the deploy overlap or a rollback. A rollback two releases back (to before #196a-1) onto the trigger schema is unsupported. Inspiration (#22) is not synced: its API endpoints decide that later. The guard catches forgetfulness, not malice. Review found two traps: `ownerLocked` counts the CTE's rows, since an `exists` locks only the first of several owners (account deletion's set), and a write that deletes a row the owner's holder also deletes (a pending photo's claim) takes the owner first too.
-
 ## 2026-11-13 — Every owner lock bounds its waits; a name is locked only behind its owner (#196a-1, review 2)
 
 **Why:** folding the owner lock into garment, wear, trip, capsule, size and cutout writes made them wait on the holders `lockOwner`'s writers wait on (planMyWeek, the re-plan, deleteOutfit), but only `lockOwner` set `lock_timeout`, so a folded wait ran to statement_timeout and answered a 500. The discard and the look's save still took the photo name before the owner.
@@ -667,7 +665,6 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 **Why:** plan section 6 wanted `PATCH /garments/{id}` through "a JSON reader beside the form reader"; MCP's `update_garment` already had one (stored form values + changes, `formPost`, `readGarmentForm`), private to its tool file. Answering each write with the garment read again would cost statements its page twin (a redirect) never pays.
 **Decision:** that reader moved to `wardrobe/garment-changes.ts` (`readGarmentEdit` for an edit, `readNewGarment` for a create or clone), the one path MCP and the API save by; `garment-api-input.ts` maps the resource-shaped JSON (`properties`, `careLabel`, `care`) onto it, and a form refusal is a 400 problem whose `errors` name `body/<field>` (`HttpError`'s new `validation`). Writes answer what changed (`{ id }` + `Location`, `{ ignored }`, `{ status }`...), never the garment. `PUT .../status` is set-state (`putGarmentStatus`: already there is a 200, not Archive's 409). The plan's `POST .../copies` for a clone is `POST .../clones`; `.../copies` is "add a copy" (quantity), as the pages name them. Bulk edit is `PATCH /garments`. `clientId` is accepted and logged, not stored, until #196a.
 **Consequence:** every write costs what its page twin does, but PATCH: one more (it reads the garment it merges into, as `update_garment` does) and tags one less (`api-statements.spec.ts` pins each against its twin). Still `pending: '#192'`: the repair log, the photo routes (#192c) and the link import.
-
 ## 2026-11-13 — /api JSON bodies are validated without type coercion
 
 **Why:** Fastify's ajv coerces types (`coerceTypes: 'array'`), so under `Nullable`'s null-first union a `0` became null: "never wash" (`care.washAfterWears: 0`) silently became the role's default on POST, PATCH and clone.
@@ -691,7 +688,6 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 **Why:** account deletion folded its `file` delete into its lock statement, whose READ COMMITTED snapshot predates the lock wait: a save that held the lock and committed meanwhile (the account's own garment photo, a grantee's save into its wardrobe) was invisible to the delete, and the user's cascade dropped that row with its bytes left behind. A MANAGE grantee's save locked the wardrobe owner but not the uploader whose deletion deletes the pending row, so the two raced. The suggested "own row first, then the owner set" is not one order: holding 5 while waiting on 3 deadlocks a save holding 3 and waiting on 5.
 **Decision:** every transaction locks every account whose rows it writes in one statement, ascending, before any other lock (`ownersLockCte` takes ids; `lockOwnersAndPhotoName(tx, [ownerId, userId], name)`, true only when all were locked). `deleteUserAndFileRows` locks its set alone, then deletes files and pending rows in one statement under the locks that re-reads the owner set; an unlocked owner deletes nothing and `deleteAccount` relocks (3 attempts). `lockCutoutRows` has its EXPLAIN pin.
 **Consequence:** statement counts are unchanged (the deletion still sends three). A grantee save beside the uploader's deletion now takes turns with it, whichever goes first. No writer since #40 gives a garment another account's photo, so the retry guards legacy-shaped rows only; migrating those rows to their garment's owner would retire the cross-account set (not done: it changes what a deletion removes).
-
 ## 2026-11-13 — The API's photo and link import: multipart documented, not validated; the import saves at once (#192c)
 
 **Why:** a `body` schema on a multipart route makes Fastify validate the unparsed body (null), and the parts must be read only after the garment is judged; the page's link import answers a form a person reviews, which a client has no use for; and @fastify/swagger marks every body required (#546).
@@ -701,8 +697,8 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 ## 2026-11-13 — The sync columns and the strict sync triggers (#196a-2)
 
 **Why:** plan 2026-11-12-json-api.md §7 needs a per-owner revision cursor, tombstones and offline creates' client ids before the area endpoints; #196a-1 made every synced writer owner-first, so the revision bump can live in triggers without new waits.
-**Decision:** 0051 adds `user.revision`/`sync_floor`/`week_template_revision`, `revision` + `updated_at` (default now(): the migration's instant, no rewrite) + `(owner, revision)` per root, `client_id` (unique per owner, roots only: a child table such as trip*item gets one only together with a tombstone trigger, which nothing needs yet) and `sync_tombstone`; 0052 (hand-written) the triggers, which replace the test-only guard and raise on an unlocked write. The cache is `closet.revision*<id>`(the plan's`.<id>`is not a valid GUC name). A tombstoned client id is refused in the trigger (SQLSTATE`CL410`, a 410 `gone`), whose fresh snapshot sees a tombstone committed during the lock wait. Both migrations set `lock_timeout`5 s. Inspiration stays unsynced.
-**Consequence:** **merges only after #196a-1 is deployed**; a rollback two releases back onto this schema is unsupported. Only Wore today stores a client id so far (the outbox's); the API's garment create still only logs its own (#563). The outbox takes a 410 for saved. The export leaves`revision`and`client_id` out. Statement counts are unchanged.
+**Decision:** 0051 adds `user.revision`/`sync_floor`/`week_template_revision`, `revision` + `updated_at` (default now(): the migration's instant, no rewrite) + `(owner, revision)` per root, `client_id` (unique per owner, roots only: a child table such as trip_item gets one only together with a tombstone trigger, which nothing needs yet) and `sync_tombstone`; 0052 (hand-written) the triggers, which replace the test-only guard and raise on an unlocked write. The cache is `closet.revision_<id>` (the plan's `.<id>` is not a valid GUC name). A tombstoned client id is refused in the trigger (SQLSTATE `CL410`, a 410 `gone`), whose fresh snapshot sees a tombstone committed during the lock wait. Both migrations set `lock_timeout` 5 s. Inspiration stays unsynced.
+**Consequence:** **merges only after #196a-1 is deployed**; a rollback two releases back onto this schema is unsupported. Only Wore today stores a client id so far (the outbox's); the API's garment create still only logs its own (#563). The outbox takes a 410 for saved. The export leaves `revision` and `client_id` out. Statement counts are unchanged.
 
 ## 2026-11-13 — The API's outfits and wears: wears keyed by day, rename without rows (#193a)
 
@@ -817,7 +813,6 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 **Why:** 0051's ~30 `ALTER TABLE`s on root tables ran before 0052's `SET LOCAL lock_timeout`, so behind a long reader (a backup's `pg_dump`) the boot could wait without limit instead of failing and retrying. A new migration cannot help: the timeout must be in force while 0051 runs.
 **Decision:** edit 0051 (a leading `SET LOCAL lock_timeout = '5s'`) before production ever ran it (last ship 96b3ebc predates #566), under the `migration-contract` label. No schema changes; a database that already applied 0051 (dev, worktrees) is unaffected since Drizzle never re-checks hashes.
 **Consequence:** once a migration has shipped to production this hatch is closed; fix forward then.
-
 ## 2026-11-13 — A migration that locks a table must start with lock_timeout (#603)
 
 **Decision:** `src/db/migration-lock-timeout.spec.ts` (unit tier, reads `drizzle/*.sql`) fails any file from 0051 on with `ALTER TABLE`, trigger, `DROP`, `TRUNCATE` or non-concurrent `CREATE INDEX` whose first statement is not `SET LOCAL lock_timeout`; 0000-0050 are exempt by number.
@@ -828,7 +823,6 @@ Consequence: a new Origin-less route is a reviewed CSRF exemption with a list en
 **Decision:** every migration from 0051 on starts with a positive `SET LOCAL lock_timeout`, not only those with a locking statement (#603's list). A statement list cannot be complete: `ALTER INDEX`, `REINDEX`, `LOCK TABLE`, policies and FK references in `CREATE TABLE` all lock, and a miss is silent.
 
 ## 2026-11-13 — createGarmentOnce's settle runs on its transaction (#615)
-
 Why: `settle` resolved the Muse need through `postedDestination(db, ...)` on the pool while the insert's transaction held a connection and the owner lock: two connections for one create, and a pool at its limit could deadlock the request on itself.
 Decision: `settle(tx)` receives the transaction; `postedDestination`, `resolveNeed`, `resolveOrderItem` and `findPendingOrderItem` take `Queryable`. No other `db.transaction` callback in `src/` reaches the pool (audited).
 Consequence: no per-app pool size exists in the harness (`POOL_MAX` is a constant), so the proof is the type (a pool-typed closure no longer compiles) plus the retry and need specs in api-wishlist.
@@ -847,25 +841,21 @@ Consequence: no per-app pool size exists in the harness (`POOL_MAX` is a constan
 A full sync is marked: every page of one begun without a cursor carries `snapshot: { wardrobes }` (the cursor's `s: 1` holds it to the last page), and after it the client drops what was not re-sent, since a cursorless read can send neither pruned deletions nor revoked shares.
 
 ## 2026-11-13 — Sync tombstones are pruned nightly; the cursor names its user (#609, #617)
-
 Why: tombstones grow forever; a cursor replayed by another account (a device switching users) had its positions trusted, reading the caller's wardrobe as a delta without `snapshot`.
 Decision: `pruneSyncTombstones` (`src/maintenance/sync-prune.ts`, nightly `sync_prune`) deletes client-id-less tombstones past 90 days by Postgres `now()` and raises `sync_floor` in one statement per 1000, owners locked in id order (`ownersLockSql`): a page's snapshot sees both or neither. The cursor carries `u`, the user it was answered to; any other presenter, or a cursor without `u`, is a 410 `cursor_expired`, not a 400.
 Consequence: a device offline over 90 days, or one that switched accounts, syncs in full once; every cursor answered before this deploy expires once. `u` is optional in `v: 1`, so no version bump.
 
 ## 2026-11-13 — Shared integration workers keep built-in prototypes clean (#620)
-
 Why: `GET /api/v1/changes` 500'd in full-suite runs (`Cannot read properties of undefined (reading 'replace')`, ajv `safeStringify` under `required`). drizzle-kit/api assigns `Array.prototype.random` and six `String.prototype` helpers, enumerable, at import (`schema-drift.ts`, loaded by the two migration specs); fast-json-stringify's `cloneOriginSchema` copies inherited keys with `for...in`, rfdc then turned the extra key into a hole in each `required` array, and ajv's codegen threw on it. Only a worker that ran a migration spec before a feed request hit it.
 Decision: `schema-drift.ts` makes them non-enumerable right after the import (`hidePrototypeExtensions`, `test/support/prototype-hygiene.ts`; drizzle-kit still calls them); `shared-worker-setup.ts` fails any integration file that leaves an enumerable key on Object, Array or String's prototype, naming it. No drizzle-kit patch: it would drop on every bump.
 Consequence: production is unaffected (drizzle-kit is a devDependency, omitted from the image, and `src/` never imports it). A new polluting import fails the file that loads it, not a random later spec.
 
 ## 2026-11-13 — 0.1 is driven by the pre-0.1 audit's epic (#631)
-
 Why: before a first release tag the owner wanted every core job working and everything beautiful, checked by evidence rather than feature lists: seven reviewers (journeys driven in the real app at 390 px, security, performance, quality, errors, portability, UI/UX) plus six gap reviews, P0–P2 findings adversarially verified (`docs/reports/2026-11-13-pre-0.1-audit.md`).
 Decision: the 141 surviving findings became 103 issues under the pinned epic #631 and milestone `0.1`, one issue per fix (shared root causes merged, polish batched per area), ordered P1s, journey blockers, UX, ops, security, perf, structure, polish; 9 product/legal/policy questions are `agent-blocked` until the owner answers (#637 #638 #639 #655 #670 #680 #681 #695 #725).
 Consequence: the work loop's lane order is #631's checklist; the 0.1 tag waits on the release-identity decision (#637), since 2026-10-13 retired semver tags.
 
 ## 2026-11-13 — Stdout is the only default log sink; LOG_FILE is opt-in and async (#632)
-
 Why: every log line was a synchronous write to `DATA_PATH/app.log`, and production's DATA_PATH is an NFS mount over Wi-Fi: a link stall blocked the event loop (`/health/live`, the timers, DB-only pages), a full share raised an `error` nothing listened to, and the file sat where `/file/**` serves from, unrotated, in every photo backup. Loki already reads stdout.
 Decision: `createLogger` writes stdout only. `LOG_FILE` (unset by default) adds JSON lines to a file through an async pino destination whose `error` is reported to stdout once, after which the file is dropped and stdout continues. A `LOG_FILE` under `DATA_PATH` (both resolved) is a `ConfigError` naming the key. The harness's `appLog` option is gone; specs read `t.logs`.
 Consequence: lines still buffered at a crash are lost from the opt-in file (stdout stays synchronous). The file is never rotated (out of scope). `PhotoStorage.list` and the `/file` guards no longer name `app.log`; the name stays only as a refused-name fixture in specs.
@@ -877,7 +867,6 @@ Consequence: lines still buffered at a crash are lost from the opt-in file (stdo
 **Consequence:** edit the README block and the smoke follows; keep the marker and the `<secret>`/`<password>` placeholders, or the smoke fails. The sender still checks the VAPID keypair's shape.
 
 ## 2026-11-13 — Touch sizing lives at the theme token (#636)
-
 Why: every field was under 16 px (iOS zoomed the installed app into it and left it side-scrollable; the `@supports (-webkit-overflow-scrolling: touch)` guard died with iOS 13) and controls were daisyUI's desktop scale (btn-sm 32 px, btn-xs 24), patched per call site with 13 `min-h-11 fine:min-h-8`.
 Decision: one `@media (pointer: coarse)` block in `views/assets/main.css`: `--size-field` 0.275rem (default btn/input/select/tab 44 px), text fields `max(16px, 1em)`, small fields at default height, menu rows 44 px; btn-sm/-xs, tabs, checkboxes, radios, toggles, `.link` and control badges keep their look and gain a transparent 44 px pseudo-element (components layer, so a site's utilities win). The calendar row's × moved into its Change menu. `test/support/touch-targets.ts` holds both rules in the trips scenario (390 px, `hasTouch`).
 Consequence: no call site sizes for touch; a text link that truncates puts `truncate` on an inner span (its own overflow clips the hit area); a stretched link on a btn-sm adds `static`. A fine pointer keeps daisyUI's scale.
@@ -901,7 +890,6 @@ Consequence: a route throws to refuse an htmx request; the link photo choice's 2
 **Consequence:** a new status that needs its own shape is a new `ErrorClass`; the h1 is no longer "Error NNN", so specs find the page by its title.
 
 ## 2026-11-13 — Limb targets stop at 3 above a cold snap; a layer is judged on its own too (#645)
-
 Why: legs and feet asked 4-5 below about 8 °C, which only heavy denim and boots reach, so on an ordinary New York January day one pair of jeans and one of boots filled every idea and no office outfit fit; the torso was a plain sum, so a parka over a linen shirt "fit" at 44-61 °F; one limb tolerance let suede boots through at 32 °C.
 Decision (`src/weather/match.ts`, pinned by `src/weather/real-days.spec.ts`: four real 2025 Central Park days, ERA5, against the demo closet): `limbTarget` is capped at 3 above `COLD_SNAP` (-10 °C feels-like, 8 of January 2025's 31 days) and at 4 below it, never 5, so ordinary trousers and closed shoes pass an ordinary winter. The cap judges only too-cold: too-warm is judged against the uncapped target (`limbsCeiling`, up to 5), so warmth-5 boots still fit a winter day (review of #743). Legs keep +2 above the target, feet get +1. A layer may be at most one step warmer than the coolest hours' torso target less a tee (too-warm), and at most `LAYER_SPREAD` (3) warmer than the tops under it (too-cold). Every part stays non-negative and additive (scoreFloor). GENERATOR_VERSION 2.
 Consequence: thresholds came from the real days, not from tuning; a new real-world complaint gets a row in real-days.spec.ts first. Which fitting layer is chosen (#646), workout (#647) and rain (#648) are untouched.
@@ -995,7 +983,6 @@ Consequence: a server-only deploy keeps every `?v=` and the precache. The releas
 **Why:** `refreshed-at` was written only when no key failed, so one page answering 500 made every `WARM_PAGES` rescan `pages-v2` and refetch it; the per-build precache (#742) stopped matching `/favicon.ico?v=` and answered fonts only from the active build's precache.
 **Decision:** a failed key gets a `RefreshBackoff` record beside it (5 min doubling to a day, reset by any other answer or a later activation, whose `activated-at` it carries); `refreshed-at` is JSON `{ at, retryAt }`, written once every key was asked or is backing off, and due again at `retryAt` (`refreshDue`, `page-cache.ts`). The PrecacheRoute strips `v` only outside the versioned roots (`unversionedPrecacheVariants`); `/vendor/fonts/` without `?v=` is answered from the own precache, then the latest-activated other (`answerContentHashed`).
 **Consequence:** a failing page is asked at most on its backoff, never per load; a versioned root's `?v=X` still never meets another build's bytes. A new content-hashed path joins `isContentHashed`.
-
 ## 2026-11-14 — The keyword is a word-start AND-search, keys resolved from labels (#673)
 
 **Why:** one literal phrase over name, brand and notes found "navy blazer" but not "blazer navy", nothing for "blue shirt" (colour and type are keys) or "jcrew", and a blazer for "tee" through its notes; Muse's `search_garments` inherited it.
@@ -1021,7 +1008,6 @@ Consequence: a server-only deploy keeps every `?v=` and the precache. The releas
 **Consequence:** `test/integration/offline-warm.spec.ts` fails when a page `showsQueuedWrite` names is neither a tab root, Today, a garment page nor a warmed queueable page, and checks each listed page renders a control. A new queueable page joins the list in `offline-writes.ts`.
 
 ## 2026-11-13 — Plan my week answers the week and day it starts on
-
 Why: the calendar shows Sunday to Saturday, the plan covers today and six days, so on a Friday the first planned day was off-screen under a text banner (#683).
 Decision: the POST redirects to `?week=<startOfWeek(first planned day)>&planned=<batch>#day-<first>`; banner rows are links (`#day-D` in the shown week, `dayUrl` otherwise) with a `thumb` collage. Nothing planned keeps `/calendar?planned=none`.
 Consequence: `plannedWeekUrl(planned, firstDay?)` is the one builder; the banner's garments ride `batchEntriesSql`, still the week's one statement.
@@ -1065,7 +1051,6 @@ Consequence: MCP_WRITES' required `attribution` says what each tool stamps; `mcp
 **Consequence:** a backup of the photos must include the marker; recovery and re-adoption are in `docs/operations.md#photo-storage-marker`.
 
 ## 2026-11-14 — A workflow file that does not parse cannot merge, and a silent nightly is reported (#635)
-
 **Why:** #532 put a bootstrap step between `uses: actions/checkout` and its `with:`; GitHub refused nightly.yml, so no scheduled run existed for two days and nothing said so (no PR job parses workflows; a nightly that never starts opens no issue).
 **Decision:** `make actionlint-check` (in `ci-guards`, so both hooks and ci-quick) runs `scripts/ci/actionlint.sh`: the upstream release, pinned by version and sha256, cached under `~/.cache/closet`, never vendored. The npm `actionlint` wasm is 1.6.x (rejects `ubuntu-24.04`) and was refused. `nightly-watchdog.yml`, a file of its own, runs `scripts/nightly-staleness.sh` daily: no completed scheduled nightly in 48 h opens or updates one issue.
 **Consequence:** the first run on a machine needs curl and network (or `ACTIONLINT_BIN`); a version bump needs the four checksums from the release's checksums.txt.
@@ -1077,7 +1062,6 @@ Consequence: MCP_WRITES' required `attribution` says what each tool stamps; `mcp
 **Consequence:** a drop mid-warm costs one more run, never a lost one. A spec asserting the warm calls `withoutWarming(context)` and `warmOnce(page)` so it alone decides when the single WARM_PAGES goes.
 
 ## 2026-11-14 — Third-party notices are generated at build and served, forecasts credit Open-Meteo (#640)
-
 **Why:** client files are minified or copied without their banners, `@fontsource` (OFL 1.1) is a devDependency absent from the final stage, and Open-Meteo's data is CC BY 4.0 with no credit shown.
 **Decision:** `npm run generate:notices` (`scripts/third-party-notices.ts`, in `build` before `generate:sw`) writes `public/THIRD-PARTY-NOTICES.txt` from `package-lock.json` (every non-`dev` package, plus the build-bundled fonts, daisyUI and the workbox modules with their dependencies) and each installed package's licence files, no new dependency; icons (Heroicons, Hugeicons, MIT) and the weather credit are hand-written sections. It is served by the static root (`/THIRD-PARTY-NOTICES.txt`: a static path, revalidating since /about links it without `?v=`, not precached) and the image gets it with `public/`. Every forecast surface renders `OpenMeteoCredit` (`src/web/weather/views.tsx`): plain text, no link.
 **Consequence:** a new `CLIENT_MODULES` entry or bundled devDependency must be in the lock's production tree or `BUNDLED_AT_BUILD` (`third-party-notices.spec.ts` fails otherwise). Optional platform packages appear only where installed.
@@ -1090,13 +1074,11 @@ Consequence: MCP_WRITES' required `attribution` says what each tool stamps; `mcp
 **Consequence:** DATA_PATH holds at most 30 days of orphans. A restored set without its row is quarantined again the next night; re-attaching is out of scope.
 
 ## 2026-11-14 — One AgentBadge shows who made a row (#822)
-
 **Why:** #821 resolved the viewer's label in SQL (`agentLabelSql`) but nothing in the app showed it.
 **Decision:** `src/web/agent-badge.tsx` words an `AgentLabel` (`agentName`) as a `badge-soft badge-secondary` pill, the name truncating inside it, "Made by <name>" for assistive tech. Pages get the label as one more column of their own statement (the Saved tab's `savedOutfitsSql`, the wishlist's `ownItemsSql`, the garment page's existing context), so no statement count moves. Muse's rows keep "From Muse" and get no second badge.
 **Consequence:** the month grid shows none (its cells are collages only). A new surface for an agent-made row adds its label to its own query and renders `AgentBadge`, never a token name read another way.
 
 ## 2026-11-14 — The database records its photo storage's install id (#833)
-
 **Why:** #650's marker proved DATA_PATH is a closet install's storage, not this database's: another household's or a staging copy's marked share mounted before a boot was accepted.
 **Decision:** a one-row `install` table (boolean primary key checked true; not synced, no owner) holds the marker's install id, written by the claim that writes or adopts the marker, or from the marker found when no row exists (the deploy pairs production with its own share). A different id is `unpaired`: with `APP_ENV=production` boot, CLIs and reconciliation refuse; elsewhere one warn line (worktrees share pgvault-dev with their own DATA_PATH). Readiness never reads the row: it compares the marker with the id claimed and paired at boot, so database trouble never reads as storage trouble. A marker written over an unmarked share takes the row's id, so a 90% re-adoption pairs. Re-pairing is `maintenance:reconcile -- --repair-storage-identity --confirm`, never a hand SQL: it reads the marker and never writes one.
 **Consequence:** production's reconciliation costs one more statement (4). A database repointed under a running server is caught by the next reconciliation and boot, not by readiness. A database restored without its `install` row pairs with whatever marked share it next boots on, as the deploy did.
@@ -1118,21 +1100,17 @@ Consequence: MCP_WRITES' required `attribution` says what each tool stamps; `mcp
 Why: `timeJob` records `failure` only when `run()` throws, but reminders, the re-plan and reconciliation caught per person (or refused) and returned, so a person's reminder failing daily, a refused guard or photo rows without bytes showed a green dashboard; the re-plan also claimed the day after a failure.
 Decision: the per-person loop is unchanged; the scheduled wrapper (`*Whole`, `src/metrics/partial-failure.ts`) throws `PartialFailure` after the others finished when `failed > 0`, the run was refused or `missingOriginals > 0`. `JOB_OUTCOMES` is unchanged. A failed re-plan leaves its day unclaimed and is retried at 5, 15 and 60 minutes (`ReplanRetries`, in process: no table, a restart only retries sooner), the fourth failure claiming the day as before; only the first failure of a person-day is counted, so one metric and one capture, not one a minute. A forecast fetch that fails with nothing cached is no forecast (`userWeatherOrNone`), never a failed person.
 Consequence: a new per-person job throws at its end the same way; callers wanting the report call the unwrapped function.
-
 ## 2026-11-14 — Each re-plan job reports its own first failure (#858)
-
 Why: the minutely re-plan and the morning reminder share one `ReplanRetries`; a reminder failing first used up the person-day's single `reported` slot where nothing counted it, so `replanWeeksWhole` never ended as a PartialFailure.
 Decision: the retry schedule stays shared; "first failure" is tracked per job (`ReplanJob`: `replan`, `reminders`) and the reminder counts its own into its `run.failed`.
 Consequence: a person-day failing in both paths yields one failure metric and capture per job; a reminder whose re-plan failed still sends and its run reports `failed`.
 
 ## 2026-11-14 — The outbox gives up on a record the server keeps failing (#691)
-
 Why: `replayVerdict` retried every 5xx forever and the drain stops at the first retry, so one deterministic 500 left every later queued write unsent with no sign online. A per-record count alone would let a server-wide outage (restart, deploy) fail the whole queue.
 Decision: a 5xx counts against a record only when the server answers another record properly in the same drain (`replayQueue`: the head waits as a suspect, the next is tried); 5 counted answers within 10 min fail it ("server") and the drain goes on. Two 5xx in a row, or a lone record, back off and spend nothing. Network errors, timeouts, 408, 429 and 503 (the busy page) never spend it; they neither spend nor clear the count. The counters are optional fields on the IndexedDB record, so no schema bump.
 Consequence: an outage never fails a wear; a lone poisoned record retries until a neighbour proves the server healthy. A tap on a failed record's key is sent as a newer intent.
 
 ## 2026-11-14 — A model the queue cannot have is a state of the queue (#689)
-
 Why: `runnerReady` caught a refused download, a bad checksum, EACCES or a missing onnxruntime binding, slept 5 min and claimed nothing, while `cutout_queue` read `up` (it reported only "started") and every open garment page polled every 2 s forever.
 Decision: the queue owns an explicit state (`src/cutout/queue-state.ts`: stopped, running, waiting-for-model with a closed kind), moved only by `queueTransition` through `CutoutQueue.transition`, which logs and captures the first failure of an outage and each new kind once (source `cutout_model`). The binding is proven by a short-lived model process answering `probe` (`ModelRunner.ready`), never by loading onnxruntime in the web process. `cutout_queue_oldest_age_seconds` comes from the depth's own count (no extra statement). The pending poll backs off by a poll count in its URL (2 s for 30 s, then 10 s), no server clock or per-page state; past 2 min it stops with a "queued" line only while the queue is waiting-for-model, since a busy working queue (a bulk upload) would otherwise strand cutouts that land seconds later (review of #864).
 Consequence: a smoke boot with the placeholder model reads `cutout_queue` down (`checksum`), still 200. A new way the model can fail adds a kind and its fix, never a free-text reason in the body.
@@ -1150,7 +1128,6 @@ Decision: `outfit_calendar.outfit_created` (nullable boolean, 0060), written tru
 Consequence: existing entries are null, so their outfits are kept as before (planner entries made before 0060 lose x-pruning until re-planned). The column is internal: not in the sync feed or the API.
 
 ## 2026-11-14 — A 5xx makes a queued write stuck, never failed (#865, #866; replaces #691's budget)
-
 Why: #691 failed a record after 5 counted 5xx, but only if a neighbour was answered, i.e. it inferred server health. Three review rounds found the inference wrong each way (a lone poisoned record never failed; an outage could fail valid writes; evidence went stale), and a durable health stamp only moved the error.
 Decision: no inference, nothing dropped. 3 consecutive 5xx (`STUCK_AFTER_SERVER_ERRORS`) make the record `stuck`: still pending, skipped by the drain with its key, listed in the notice with Try again and Discard. It is retried when a record saves in a drain or after 30 min (`STUCK_RETRY_MS`), and stays stuck while it fails. Other keys keep going; the network, 408, 429 and 503 still stop the drain and count nothing.
 Consequence: a server-wide outage marks records stuck and loses none; a poisoned wear waits for the user. A same-day wear and wash are different keys, so their order rests on the taps' `day`/`at` (absent on pre-#676 records).
@@ -1168,23 +1145,19 @@ Decision: setOffline(true), `unrouteAll({ behavior: 'ignoreErrors' })` (Playwrig
 Consequence: teardown waits on no handler. A route handler on a switched context must not catch its own `abort()` rejection: Playwright then never marks the route handled and the invocation stays pending.
 
 ## 2026-11-14 — The schema check has three states; an older image refuses a newer schema (#651)
-
 Why: redeploying a previous `sha-` image after a migration booted (drizzle's `migrate()` finds nothing newer than its last row) and old code wrote to the new schema; destructive migrations ran under the hourly autoupdater with no dump taken.
 Decision: `schemaState` (`src/db/migrate.ts`): behind / current / ahead, the one rule for the boot (`SchemaAheadError`, checked first, writes nothing), the CLIs (exit 1) and `/health/ready` (`migrations` down with `schema`). A migration is identified by `created_at` (the journal `when`), drizzle's own key; `hash` is never re-read by drizzle, so it decides nothing. A newest row the journal lacks is ahead, whether newer or not (a branch build's migration too).
 Consequence: a rollback either restores the pre-migration dump or undoes each newer migration and deletes its row (`docs/operations.md#migrations-and-rollback`; the 0057 steps now delete its row). The deploy takes `pg_dump -Fc` whenever the image has pending migrations, kept until the next: the deploy script is homelab's, tracked there.
 
 ## 2026-11-14 — Background removal can be switched off (`CUTOUT_ENABLED`); the image keeps its own platform's onnxruntime binary (#690)
-
 Why: `main.ts` always fetched the 940 MB model and the child peaks near 3 GB RSS, so on a 1-2 GB host every photo ended on "Try again"; a broken Hugging Face URL left no clean way to run without cutouts. The Dockerfile also deleted linux/arm64's binary unconditionally.
 Decision: `CUTOUT_ENABLED` (default true). Off: `bootModelRunner` returns no runner (no `CutoutModel`, no download), `serve()` starts no queue and no retry, new uploads and rotates start `none` through `initialCutoutState` (no new photo state), and the queue sits in a terminal `disabled` state of #689's machine rather than `stopped`+reason: `stopped` means "not yet or no longer running" and reads as down. `/health/ready` reports `cutout_queue` `up` with `disabled: true` (the contract allows only up/down). The Dockerfile deletes every onnxruntime binary directory not matching BuildKit's `TARGETARCH`.
 Consequence: the API's photo-write answers may now say `none`. A photo already `pending` or `failed` when the switch flips is shown as `none` at read time by every surface (`shownPhoto`, `cutout-shown.ts`: the garment page and poll fragment with no spinner, poll or "Try again", the API's garment reads and the changes feed with no `pending` to poll for; MCP exposes no cutout status), never rewritten, so turning removal back on resumes it; a hand-posted retry is refused (`not-allowed`). A rotate with removal off turns an existing `ready` or `none` cutout along with its photo (stored `edited`), since nothing would re-cut it. `serve()` starts the queue from `config.CUTOUT_ENABLED` alone, never from a runner being passed.
 
 ## 2026-11-14 — The changes cursor carries a sync epoch; a restore bumps it (#652)
-
 Why: a database restored to an older revision reuses revisions and serial ids a device already holds; its cursor read `> 500` forever and never learnt the lost rows were gone.
 Decision: one-row `sync_epoch` table (a random uuid, `bumped_at`), not a column on `install`: that row exists only once photo storage is paired, its id is NOT NULL and the storage repair upserts it, while the epoch must exist from the migration on. Random, never a counter: two restores of one dump would mint the same next integer. The cursor carries it as `e`; another is a 410 `cursor_expired`. It is cross-joined onto the wardrobes statement, so a page sends no statement more and no process cache goes stale when a CLI bumps it. A cursor without `e` (pre-#652) is current until the first bump: nothing was restored before it, so the deploy re-syncs no device. Second guard: a position above its wardrobe's current revision is a 410.
 Consequence: `bumpSyncEpoch(db)` (`src/db/sync-epoch.ts`) is the post-restore step #653's CLI runs; until then a restore is caught only by the revision guard, and only where the restore went below the device's revision.
-
 ## 2026-11-14 — Deletes ask in the app's sheet or offer Undo, never confirm() (#686)
 
 Why: the 11 `hx-confirm`/`data-confirm` sites fell through to the browser's confirm(), titled with the server host, unstyled in the installed app; reversible removals asked anyway, and a page's guess of "reversible" and a client-posted Undo were both forgeable or stale.
@@ -1229,7 +1202,7 @@ Consequence: one epoch now owns both cursors and sessions: anything else that ev
 
 ## 2026-11-14 — A reminder run's abort cancels its compose and re-plan, never abandons them (#920)
 
-Why: #918 stopped _waiting_ on an aborted compose (`guard`), but the compose ran on: `replanToday` could commit swaps and send the swap notice after its claim was given back, use the pool while shutdown closed it, and `markFailed` a run already logged; a give-back that threw still ended `interrupted`, losing reminders with no alert. Third round on this path, so the structure changed, not an edge.
+Why: #918 stopped *waiting* on an aborted compose (`guard`), but the compose ran on: `replanToday` could commit swaps and send the swap notice after its claim was given back, use the pool while shutdown closed it, and `markFailed` a run already logged; a give-back that threw still ended `interrupted`, losing reminders with no alert. Third round on this path, so the structure changed, not an edge.
 Decision: the run's `AbortSignal` is threaded into `readBatch`, `morningPayload`, `replanToday` and the forecast reads (`ReadOptions.signal`: an ask stops waiting on the cache's refresh, which `settled()` still awaits); each checks it at its step boundaries, the re-plan before its commit too, so an abort throws and rolls back. The run awaits every step it started, then gives back; `interrupted` only when every unsent claim was released, else `lost` makes a `PartialFailure`. The send alone is still not awaited after the abort: web-push takes no signal and a device's socket timeout (10 s) exceeds the grace.
 Consequence: a step the signal cannot cut (a statement in flight, the owner lock's 5 s wait, a swap notice already started) holds the run past the 500 ms grace; stop() then gives up on it as for any job, and its give-back may meet the ended pool, which is now a captured failure, not a silent loss.
 
@@ -1240,7 +1213,6 @@ Decision: `file.original_missing_since` means "its pages cannot show it": the or
 Consequence: a lone thumb no longer keeps a photo unmarked; the photo-ref helpers and the API's `photoMissingSince` follow the new rule.
 
 ## 2026-11-14 — Each order email gets its own outcome (#693)
-
 Why: the poll recorded an email only on success, so one that threw (a 9-digit JSON-LD price past `numeric(10,2)`, a NUL in a name) was re-read first every poll and stalled every later email, with a Bugsink event each poll; a newer email recorded first could also move the watermark past it.
 Decision: `order_email` gets `status` (decided, failed, parked), `attempts`, `mailbox_failures` and `error_kind` (a SQLSTATE or name, never text; 0063). A read is caught per email; an email-level failure spends an attempt, 3 park it; a mailbox-level one (`JmapError.scope`: transport, auth, 5xx) fails the run and spends none, but 3 in a row on one email spend one. The watermark is the oldest failing email's arrival; every outcome upserts over a `failed` row only. The job fails while any email is failing, captured once per email (`PartialFailure.reported`). `parsePrice` and `plainText` bound what the extractor hands on to what the columns hold.
 Consequence: a new failure path in the poll is classified by scope; a parked email is never retried (no UI yet: the row says why).
@@ -1258,19 +1230,16 @@ Decision: `@sentry/node` stays `^10` (the range blocks 11); the tracker sets `se
 Consequence: revisit when Sentry drops bundler-plugins from node's runtime deps or the owner settles licences (#638, #639); the reason is in `src/metrics/AGENTS.md`.
 
 ## 2026-11-14 — Order mail strikes count only an email's own fetch (#932, #933)
-
 Why: #923 counted every mailbox-level failure as a strike on the email being read, so a 10-poll session 503, a 429 or a database blip parked healthy emails.
 Decision: `failureScope` returns `email` (spends an attempt), `message` (that id's own body fetch: 5xx or wrong shape; a strike, 3 in a row spend one) or `outage` (everything else, every database error that is not a refusal of the email's values: no row written). Strikes left by the old rule are harmless: the next strike or outcome resets them.
 Consequence: a new failure path picks one of the three in `failureScope` or `JmapError.scope`, nowhere else.
 
 ## 2026-11-14 — Old order-mail strikes are not reset by the next one (#938; supersedes the entry above's "harmless" sentence)
-
 Why: `recordOrderEmailFailure` adds a strike to the stored `mailbox_failures`; it resets only when strikes spend an attempt, on an `email` failure or a decided outcome.
 Decision: no data fix; an email left at 2 by the old rule spends one attempt on its first `message` strike, at most one early attempt of three.
 Consequence: `src/web/wardrobe/order-mail.md` says so; a future counter change states what it does to stored values.
 
 ## 2026-11-14 — The order-mail poll fetches by allowlist, every redirect judged (#698)
-
 Why: link selection was a deny list applied once to the unwrapped href, and redirects were followed unjudged, so a tracker in front of "Cancel this order" or a single-use sign-in link was requested from the home IP.
 Decision: `judgeLink` fetches only https product paths (`isProductLink`) and at most 2 opaque trackers of a known shape whose anchor text names no action; the fetcher's `mayFollow` asks `isProductLink` of every redirect before it is resolved (`redirect-not-followed`). Fail closed: unknown product shapes, `?code=` and the "host that already yielded a product" bypass are refused.
 Consequence: a shop whose product URLs fit no shape lists nothing; widen `isProductPath` or the tracker shapes with a spec, never the deny words alone. `src/web/wardrobe/order-mail.md`, Gotchas.
@@ -1282,43 +1251,36 @@ Decision: `createBearerGate` (`src/web/auth/bearer-gate.ts`) is both surfaces' o
 Consequence: a valid token is never throttled by its address, so a household behind one IP keeps working; the cost is one indexed SELECT for each throttled `closet_` guess. Past the budget, 401 versus 429 tells a prober that a token existed and was revoked: accepted, since it needs the revoked token's value. A pre-2025-06 MCP client that batches is refused.
 
 ## 2026-11-14 — An untrusted proxy shows in readiness; refusals past the budget log one summary (#671, #940)
-
 Why: a proxy missing from TRUSTED_PROXIES makes SIGN_IN_LIMIT and BEARER_REFUSAL_LIMIT household-wide and nothing said so; and an address over its refusal budget still wrote one warn per revoked-token 401 and per 429 (the NAS log freeze, #632).
 Decision: `UntrustedProxyWatch` (root onRequest hook) flags a peer whose `request.ips` is just itself while it sent X-Forwarded-For: one `Security` warning per boot, and the optional `trusted_proxies` check down (readiness stays 200, no peer in the body). `RefusalSummaries` counts refusals past BEARER_REFUSAL_LIMIT per address and writes one line per window, found by the next refusal of any address or by capacity (1000), never a timer; the 401 for revoked and wrong-kind tokens is unchanged.
 Consequence: a direct caller can set the header and flip the check, so it prompts a look and never refuses. An address that stops while no one else is refused leaves its summary unwritten. The homelab compose default (172.16.0.0/12) and README value (172.23.0.0/16 for linuxbox_web, 172.16.53.0/24) both cover Caddy and the gate; the live `.env` is what the check now confirms.
 
 ## 2026-11-14 — The order-mail poll fails closed: no opaque tracker is fetched, deny words match inside segments (#946)
-
 Why: #939 still decided two cases by deny lists: an opaque click tracker was fetched unless its anchor text named a listed action word (the tracker records the click on that first request), and a product path was refused only when a segment equalled a deny word (`/products/123/cancel-order` passed). A deny list cannot fail closed.
 Decision: an opaque tracker (known shape, no plain target in its query) is never fetched, so the tracker fetch path, `MAX_TRACKERS_PER_EMAIL`, the anchor-text check and the anchors' text window in `html.ts` are gone; a tracker carrying its target in the query is still unwrapped and judged on that target. Deny words match word tokens (split on non-letters) of every path segment, on every path.
 Consequence: a shop that wraps every link in an opaque tracker is not auto-imported (the household uses "Add from a link"), and `/products/confirm-hoodie` is refused: both accepted false refusals. Widen `isProductPath` or unwrapping with a spec, never a longer deny list. `src/web/wardrobe/order-mail.md`, Gotchas.
 
 ## 2026-11-14 — Invite links expire after 7 days, edit links ask for the password, a new password ends open invites (#668)
-
 Why: a borrowed phone or stolen cookie could mint a MANAGE link, accept it elsewhere and keep write access after the owner signed out and changed the password; open links never expired.
 Decision: expiry is derived (`created_at` + `INVITE_LIFETIME_MS`, no column), compared with a cutoff from the app's clock in the accept's read and its write guard, the landing and Profile. A MANAGE create is step-up (`checksPassword`, `INVITE_LIMIT` = ACCOUNT_LIMIT for edit links only; a view link stays one tap). `createInvite` mints under the user's row lock against the session fingerprint, and `updatePasswordHash` deletes the user's unanswered invites in its revocation statement.
 Consequence: no migration, so MANAGE invites minted before this deploy stay valid until their 7 days from `created_at` run out (older ones expired at deploy). Accepted shares are untouched by expiry and by a new password; the confirmation lists them for the owner to revoke.
 
 ## 2026-11-14 — HEIC decodes on one worker thread; link import never fetches HEIC; uploads get a per-user budget (#699)
-
 Why: heic-decode ran libheif's WASM inline: a 50 MP photo stalled every request for seconds (and `/health/live` with it), link import let any site make the server decode up to six, and uploads had no per-user limit.
 Decision: one `worker_threads` thread (`HeicDecoder`), not a pool and not the cutout's forked child: `terminate()` interrupts WASM, so the deadline needs no process, and a decode's cost is memory, so one at a time. At most 4 queued behind the running one, checked before buffering (a fifth is a 503) and after, so a body still sending holds no place; one 30 s deadline from enqueue covers wait and decode; a timeout, crash or heap OOM is the bad-photo 400 and the next decode gets a fresh thread. The fetcher refuses `image/heic`/`image/heif` and a `fetched` ImageSource is never HEIC. `PHOTO_UPLOAD_LIMIT` (60 a minute per user, pages and API on one checker) on routes marked `photoUpload`; a multipart body elsewhere is a 415.
 Consequence: `resourceLimits` bounds the thread's JS heap, not libheif's WASM memory: the 64 MP pixel check stays the memory bound. A burst past four concurrent HEICs gets a retryable 503. The page audit paces its upload steps on the new budget.
 
 ## 2026-11-14 — A HEIC decode that ends at its deadline is the busy 503, not the bad-photo 400 (#961)
-
 Why: #699's entry answered a timeout as the bad-photo 400, a permanent verdict on a photo that merely waited behind others (or was slow under load); the 64 MP pixel cap already bounds a hostile file.
 Decision: 'timeout' joins 'busy' and 'closed' in `heicBusy` (`heic.ts`): 503 `SERVER_BUSY` with `Retry-After`. Undecodable bytes and a crashed thread stay 400; the byte and pixel caps stay 413/400.
 Consequence: supersedes the timeout clause of the #699 entry above.
 
 ## 2026-11-14 — A public garment or outfit link is a state: none until Share, gone at Stop sharing (#669)
-
 Why: every garment, outfit and file got a permanent `shareable_id` at insert and `/share` served it with no opt-in, so a link sent once, or collected by a former MANAGE grantee, stayed public for the row's life.
 Decision: `garment.shareable_id` and `outfit.shareable_id` are nullable (0064); `setPublicShare` (`src/web/share/queries.ts`) is the one writer, one UPDATE under the owner lock (`coalesce`, so racing taps answer one id; Stop nulls it, a later Share mints a new one). Inserts and clones mint nothing. Garments: owner and MANAGE; outfits: owner. `/share` is a 404 for anything not shared, and `/file/watermark/:id` is keyed by the item's id, not the photo's (`SHARE_PREVIEW_CACHE` 300 s).
 Consequence (the kept ids superseded 2026-11-27, #964): existing ids were kept (the issue's migration note), so links already sent keep working and every pre-0064 garment and outfit reads "Shared publicly" until its owner stops it. Stop ends the /share page and the watermark; it does not end a shared outfit's garments' `/file/**` photo URLs a viewer saw (unguessable names, public by design), Open Graph previews other services already fetched, or `file.shareable_id` (no reader now; dropped in #960). API twins: #959.
 
 ## 2026-11-14 — A photo's file row is its showing row's owner's, held by composite foreign keys (#703)
-
 Why: before #40 a MANAGE grantee's upload made a `file` row of the grantee's; their account deletion (file rows cascade from the user) emptied the owner's garment and unlinked its bytes. The code handled that (`ownersShowingPhotosOf`, a three-attempt relock) instead of making it impossible. Production's count was not checked (closet_db out of reach).
 Decision: 0065 aborts on a photo shown by two owners, gives every photo row to its garment's, selfie's or look's owner, then replaces each single-column photo FK with one composite `(photo_id, owner_id)` to `file (id, created_by_id)` (new unique `file_id_created_by_id_unique`), ON UPDATE NO ACTION; garment's `ON DELETE SET NULL ("photo_id")` is hand-written (drizzle cannot say the column list; plain SET NULL would null owner_id), selfie and inspiration CASCADE. One FK per table, never two beside each other: their RI order is by name/OID, which a restore can flip. No owner lock: `created_by_id` moves no synced field. Account deletion locks only itself.
 Consequence: no writer can make the cross-owner row again. drizzle-kit's FK introspection read composite columns unordered and crossed; `patches/drizzle-kit+0.31.11.dev.patch` now pairs them by position, or the drift test fails on these keys.
@@ -1330,49 +1292,41 @@ Decision: `user.session_version` (integer, default 0), carried as the token's `s
 Consequence: the acting session survives; production is Secure only once `TRUSTED_PROXIES` covers Caddy. Rolling back to an older image revives sessions ended by a bump (it ignores `sv`).
 
 ## 2026-11-14 — The coverage guard keys on `RowId` in a body or querystring, not on `ownerId` alone (#704)
-
 Why: `takesId` saw a path parameter or a property literally named `ownerId`, so a new route taking `garmentIds` in its body passed CI with no matrix case; eight such routes had none.
 Decision: `RowId` carries a `RESOURCE_ID` symbol key (not a JSON Schema keyword: ajv strict mode refuses `x-` unknowns, and openapi.json stays unchanged); `carriesResourceId` walks properties, items and unions of a route's body and querystring. Such a route needs a matrix case or an EXEMPT reason. TypeBox's Clone and CloneType keep symbol keys.
 Consequence: a request's resource id must be `RowId`, never `Type.Integer()`, or the guard cannot see it. Exempt: `POST /outfits/ideas/feedback` (ids only echoed into a redirect), `POST /outfits/ideas/allow` (needs an avoided pair).
 
 ## 2026-11-14 — Agent tokens are scoped at mint: read-only by tool list, own-only by the resolver (#701)
-
 Why: every agent token got every tool and acted fully as its user, so a hostile page read through link import could steer writes across the owner's and a MANAGE-shared wardrobe.
 Decision: `personal_access_token.read_only` and `own_wardrobe_only` (0067, default false: older tokens keep full power), chosen on Agent Access (read-only unless ticked), never changed after. Read-only is enforced where every tool passes, the per-request tool list (`scopedTools`: only `writes === false`), not the access resolver: most writers (calendar, outfits, wears, trips, Muse) are owner-only and never call it. Own-only is the Actor's `ownWardrobeOnly`, refused in `resolveWardrobeAccess` as an unknown id. A hidden tool's call is the SDK's unknown-tool error, logged by the route.
 Consequence: `writes: false` is a security flag; `mcp-statements.spec.ts` holds every read tool to writing nothing a person sees (only the forecast caches and the last-use mark). A scope check in a tool is a smell: the tool list or the resolver owns it.
 
 ## 2026-11-14 — Order mail: Authentication-Results scanned whole, DKIM/DMARC only; the owner is an id from the boot (#706)
-
 Why: `split(';')` let a quoted, sender-chosen `smtp.mailfrom` or `header.i` inject `dkim=pass header.d=<owner's domain>`; and `ORDER_MAIL_OWNER` was matched by email per request and poll, so an email change broke the feed and an account taking the old address inherited it.
 Decision: `parseAuthenticationResults` is one scanner over quoted strings (escapes) and nested comments that fails closed (null: unterminated quote or comment, stray `)`, a property twice with two values, a header past 16 KB, never cut); DKIM or DMARC named twice with two results is refused; only `dkim=pass header.d=` (aligned) or `dmarc=pass header.from=` (exact) vouches, SPF alone never. The owner is resolved to an id once in `createApp` (a `ConfigError` naming the key when no account has it); routes, ViewContext and the poll compare ids.
 Consequence: the owner signs up before setting the token. Two DKIM signatures with one failing are refused (accepted). Playwright runs with the order mail off; the harness inserts its owner before an order-mail boot; the page audit seeds on a boot without it first. A restart after another account took the owner's old address still binds to that account: only a stored id would close it.
 
 ## 2026-11-14 — A missing order-mail owner turns the order mail off, never the boot
-
 Why: the owner changing their email or deleting their account in the app made the next deploy refuse to boot (a ConfigError): a whole-app outage from a user action.
 Decision: no account for ORDER_MAIL_OWNER logs one OrderMail error naming the key and runs with the order mail off; /health/ready reports the optional `order_mail_owner` check down (OrderMailOwnerWatch). A poll that finds the owner deleted sets the same flag, and later polls return before reading anything.
 Consequence: this supersedes the boot refusal in the 706 entry above; the fix is ORDER_MAIL_OWNER set to the account's current email and a redeploy.
 
 ## 2026-11-14 — Saved outfits page by id through one reader, with the grid's sentinel (#660)
-
 Why: the Saved tab, the plan page, a trip's add page, list_outfits and the warm list each read every outfit with its garments (65 KB at 26, growing a tile a day); only the API paged, by its own `limit + 1` read.
 Decision: `outfitPageSql` (`src/web/outfits/queries.ts`) is the one outfit page reader: newest first, keyset `id < before` (unique, so no tiebreaker), `OUTFIT_PAGE_SIZE` (30) a page, `{ outfits, next }` in the page's own statement. The sentinel is the wardrobe grid's, lifted to `src/web/page-sentinel.tsx` and shared by every paged list. No index: `outfit_owner_id_index` and a top-N sort over the owner's rows suffice at household size.
 Consequence: no unpaged outfit list read remains; a new outfit list pages through it. The plan page is 2 statements (3 before). Later pages are not warmed: offline the scroll ends where the cache does, with the offline banner.
 
 ## 2026-11-14 — Single-column owner indexes dropped; the weather caches pruned nightly (#709)
-
 Why: `outfit_`, `garment_wear_` and `week_plan_owner_id_index` duplicated the leading column of their `(owner_id, revision)` index (0051) and cost a write each; `weather_forecast`/`weather_normals` grew a row per rounded cell a phone ever visited.
 Decision: 0068 drops the three (EXPLAIN on 60k outfits and 100k wears: the owner lookups and the cascade use the `(owner_id, ...)` indexes, the outfit page walks `outfit_pkey` with or without the old index, so #660's "no index" holds). `pruneWeatherCaches` (nightly `weather_prune`) deletes rows unused by any home, here or trip location and last attempted over 30 days ago.
 Consequence: matched on coordinates, not zone (a pre-#678 trip has none); a location in use is never pruned. Rollback of 0068 is `CREATE INDEX ... (owner_id)` for the three.
 
 ## 2026-11-14 — Sign-in's per-account budget covers both doors; device tokens idle out; the test push is limited (#705)
-
 Why: SIGN_IN_ACCOUNT_LIMIT guarded only the API, so distributed guessing through the login form was uncapped per account; a device token from a sold phone worked forever; `/push/test` could be looped into throttling the VAPID identity.
 Decision: one `createSignInLimits` pair (address, account) in webPlugin, applied by one `signInGuards` both doors spread; every attempt counts (a 429 tells a guesser nothing), so a guesser holds an account shut only while guessing, at most a minute after. A device token unused for 90 days (`last_used_at`, else `created_at`) is refused as revoked on the row `authenticateToken` already reads: no statement, no refusal kind, the bearer gate's 401. Agent tokens never idle out (monthly agents; minted behind the password, scoped). `PUSH_TEST_LIMIT` is 3 a minute per user, answered as the button's own 200 fragment, not a 429 or a toast: nothing failed.
 Consequence: `created_at` is now stamped from the app's clock at mint (the clock-shift tiers would idle out every new token against the column's `now()`). A spec signing one account in more than 5 times a minute, at either door, gets a 429.
 
 ## 2026-11-14 — Idempotent creates share one helper and store the client id (#717)
-
 Why: `brand_size`, `capsule` and `trip` had a `client_id` column and unique constraint, but their API creates only logged the id: a retried create after a lost 201 was a 400 (taken brand, taken capsule name) or a duplicate trip. Outfits and calendar entries do not need it: their own key (a garment set, an outfit on a day) already makes a retry a 200.
 Decision: `createOnce` (`src/db/create-once.ts`): insert with `on conflict (owner, client_id) do nothing`, else find the first row, CL410 is `gone` (410). Garments, brand sizes, capsules and trips use it; the retry's body is ignored. A different client id for a taken name is still the 400. Outfits, picks and entries keep logging the id (a delete-then-retry recreates them; accepted).
 Consequence: a new create of a synced root uses `createOnce`; `api-idempotent-creates.spec.ts` gains a row.
@@ -1384,31 +1338,26 @@ Decision: `renderPage` (GET/HEAD, 200) sends `W/"<sha256(account, body)>"`, weak
 Consequence: the caps rose to 500 garments and 250 outfits. A 304 still runs the handler: it saves bytes, not statements. Next week and trips still name today and download daily. Before the script runs, a day reads "Sep 29, 2025" and Wore today shows briefly. Judging Wore today on the page's day refused every tap without a worker (the HTTP twin): never tie a queueable write to the copy's stamp.
 
 ## 2026-11-14 — MCP tools project the API's resource mappers (#711)
-
 Why: `garmentOut`, get_trip, the outfit, calendar and capsule tools each re-mapped what `*-resource.ts` already mapped; the shapes had drifted (a packing garment's and an extra's fields, `care.washedAt`), so Muse read a different wardrobe than a client syncs.
 Decision: each entity's mapper returns a record with its nulls kept; the API sends it through `asResource(Schema, record)`, a tool through `project(record, Schema, X_FOR_MCP, own)`; both shape it by the resource's schema (its keys at every level; the API drops an undeclared null, MCP keeps it), so an internal column can reach neither and a declared `Nullable` stays. A blanket deep null strip (the first cut) would have dropped a declared null and turned a Date into `{}`. A projection is `Projection<Record>`: every field `keep`, `omit` or `own`, so a new field is a type error until decided; `projections.spec.ts` holds each to its schema. No URLs for an agent, `agent` stays the bare name, MCP keeps its nulls and its old names (`tripOutfitId`, list_trips' `outfits`).
 Consequence: the garment tools read `garmentContext` (the page's and the API's one statement; a wishlist item no longer carries a `care` block). Renames are `omit` plus an `own` key; `get_wardrobe` and `list_wishlist` have no API resource of their shape and still map by hand.
 
 ## 2026-11-14 — Two page-audit baselines, demo and scale, and the threshold a page is held to (#707)
-
 Why: every number came from Theo's 83 garments and 13 weeks, so what grows (Saved, the generator, insights, the strips) was never timed at the 0.1 target, and the baseline predated half the app.
 Decision: `scale` (src/seed/scale.ts) is Theo grown by a generator over demo's bible (500 garments, 1,000 outfits, 1,095 days), not a second bible; `audit:pages --persona demo|scale` writes `docs/perf/baseline.json` and `baseline-scale.json`, a report names its persona and a compare across personas is refused. `make perf-compare` runs both against theirs. A page or fragment read at scale is over the threshold at a p50 above 50 ms, more than 15 statements, or a body above 256 KB (docs/perf/README.md).
 Consequence: a page over it is a finding for the owner, not a failing gate (times are one box's, counts and bytes are exact). `--persona all` never seeds scale: it is for the audit and local checks, never production. Regenerate both baselines in the PR that moves them.
 
 ## 2026-11-14 — The changes feed declares its coverage; the week template is a stamp, outfit rules the profile's child (#716)
-
 Why: the week template's trigger stamped `user.week_template_revision` and nothing read it; a rule write moved no revision; which screens a client could keep offline was learnt by trial.
 Decision: `READ_COVERAGE` (`src/web/sync/coverage.ts`) sorts every `/api/v1` GET into feed-backed or online only, rendered into `listChanges` and held to `openapi.json` by `coverage.spec.ts`. The template is a `SYNC_STAMPS` entry read from the user row, one per user, sent empty at revision 0 when never set (the client never guesses "absent"), never tombstoned. `outfit_rule` is a `SYNC_CHILDREN` row of `style_profile` with `createsParent` (0069's `closet_sync_touch_or_create` inserts a missing profile row), so every writer (page, API, garment cascade, psql) stamps it; the feed's profile carries the rules without their garment-named words.
 Consequence: rule writers take the owner lock (the previous image's unlocked rule writes are a 500 until the swap). The stamp's coverage bit 410s every cursor once: a full re-sync after deploy. Every full sync now opens with the user's `weekTemplate`.
 
 ## 2026-11-14 — The "features never share pages" rule is lint; API modules import no view (#718)
-
 Why: the rule was prose, and four pages were drawn across features while three API modules took wire schemas from `.tsx` files (`place-picker.tsx`, `garment-form.tsx`, `outfit-list.tsx`). `PostForm`, every feature's, lived in `auth/`.
 Decision: no intra-web layers (layers.conf keeps `src/web` one layer). Two ESLint rules, `scripts/lint/web-imports.mjs`, resolve imports on disk: a page or routes module only by its own feature and web/plugin.ts, and API, resource, sync and MCP modules import no `.tsx` but `errors.tsx`. A first version as ~200 guards.conf lines (the guard kit judges one module per rule) was dropped: it missed files by name and needed a line per new view. `PostForm` moved to `src/web/form.tsx`, the place schemas to `weather/place-input.ts`, `formAudience` to `garment-input.ts`, the outfit list's constants to `outfit-list.ts`.
 Consequence: direct imports only (a re-exported view is not followed). The four existing cross-feature page imports carry an `eslint-disable-next-line` with their reason. `no-restricted-imports` cannot express it (specifiers have no extension); eslint-plugin-import is not installed.
 
 ## 2026-11-14 — Styling windows each row around its garment; the generator draws less of each base, not from a cursor (#996)
-
 Why: at 500 garments "Edit an outfit", "Style this" and Shuffle sent 315 to 411 KB (the strip ran from a role's newest to its deepest choice), and Ideas page 50 took 50 ms, 35 of them judging every layer of every base in its full rotation order.
 Decision: `roleWindowsSql` reads a role's first page and a page either side of each chosen garment; a deep window gets a leading sentinel (`GET /styling/garments?after=`) and snap-strip.js keeps the chosen item in place when a page lands before it (the strip's new contract). The generator scores each kind of layer once per base and draws the rotation order only until the best passing layer turns up, which gives the pinned output exactly. A resume cursor was rejected: a page past what fits needs every draw judged (the near misses are sorted), and the sentinel, API and MCP would each have carried it.
 Consequence: a score input that reads more of a layer joins `layerKinds`' key. The anchor is put back at `htmx:afterSwap`, never `htmx:load` (after htmx's settle delay, too late), and a newer page arriving mid-scroll waits for `scrollend`, so the instant scroll back never cuts a fling short.
@@ -1420,13 +1369,11 @@ Consequence: a score input that reads more of a layer joins `layerKinds`' key. T
 **Consequence:** `test/support/tab-contrast.ts` (called from `screenshots.spec.ts`' `shot`, light and dark) asserts 4.5:1 on every inactive tab. `LinkTabs` owns the spacing (`mb-4 px-4`) once for every bar; callers add no wrapper.
 
 ## 2026-11-14 — One copy voice, held by a spec over lang.json (#729)
-
 **Why:** upstream's Title Case, "Login"/"Logout" and three meanings each of Style and Closet made the app read as two products.
 **Decision:** sentence case; Sign in / Sign out / Create account; Wardrobe is the section and what is shared, Closet the garments you own (as against the wishlist), "All garments" the unscoped capsule scope, Styling the composer, Style profile the taste profile (`docs/conventions.md#copy`). The nouns follow the nav and the sharing copy; "closet" stays in running prose about what you own.
 **Consequence:** `src/i18n/copy-voice.spec.ts` fails a Title Case label outside its proper-noun allowlist and any Login/Logout/Register. The garment form shows a category through its label (`Tops`), and the server still stores it lower case.
 
 ## 2026-11-14 — An operation logs once, in its domain action, as an op with fields (#712)
-
 Why: each door formatted the same outcome by hand (`Trip 5 outfit 9 worn by user 2 ...; API`, `(MCP)`), so a Loki query for one operation needed three patterns, the ids sat in prose, and a new door meant a new template.
 Decision: `Actor` carries `surface` (`actorOf(request)` from `surfaceOf`, `actorOf(ctx)` `mcp`); a write action takes `{ db, logger }` (`ActionDeps`) and ends with `logOp` (`src/web/op-log.ts`): `{ op, userId, surface, ...ids }`, the op its message, named `<entity>[.<part>].<past participle>`, a no-op the same op with `changed: false`. Trips and calendar converted; a replay is the queued-write hook's own line. A `logger` on the Actor was rejected: it is identity, spec'd with `toEqual`, and built where no logger is.
 Consequence: `guards.conf [op-logs]` bans `logger.info` in `api-routes.ts` and `mcp/tools`, 21 files and 81 calls in its shrink-only `known` lines, converted by the recipe in docs/conventions.md#logging. Specs read `t.logs.ops(op)`.
@@ -1438,7 +1385,6 @@ Consequence: `guards.conf [op-logs]` bans `logger.info` in `api-routes.ts` and `
 **Consequence:** the scale persona, derived from the demo bible, has a closet value $525 lower per demo-derived copy; its committed baselines were not regenerated here.
 
 ## 2026-11-14 — The worker forgets expiration rows with a cache; a 204 or 200 is ours only with our header (#731)
-
 Why: `caches.delete` left every URL an account loaded in Workbox's `workbox-expiration` IndexedDB after a sign-out; a quota purge took `/offline.html` until the next drop; on the plain-HTTP twin a captive portal's 204 deleted queued wears as saved and its 200 showed the app online.
 Decision: every whole-cache delete is the worker's `deleteCacheAndMetadata` (`CacheExpiration.delete()`, not the plugin's method, which forgets only caches it touched since the worker started: a cold drop would forget nothing). The first page stored into a cache with no owner re-warms a missing offline page (`ensureOfflinePage`), simpler than a separate cache, which would need its own owner check and activation refresh. A replay's 204 is saved only with `X-Closet-Outcome` (else retried as unreachable); the heartbeat is online only with `/health/live`'s `X-Closet-Live: up` (`public/js/live-answer.js`).
 Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `imageStore`) still leave their row: Workbox has no public per-URL forget; the rows age out under maxEntries. A rollback to a server without the live header shows the app offline until its worker activates; queued writes wait, none is lost.
@@ -1450,101 +1396,84 @@ Consequence: per-URL deletes (a gone page; a photo whose write raced a drop, `im
 **Consequence:** a store after the last step leaves an entry and its row together in a fresh cache, never a lone row; no store/drop locking exists to maintain.
 
 ## 2026-11-14 — Large text is read from a container query in rem (#730)
-
 Why: a media query ignores `html { font-size }`, so the dock could not tell 200% text from 100%.
 Decision: `.dock` is an inline-size container below lg and `@container dock (width < 22rem)` hides its labels (sr-only); rem in a container query follows the root font.
 Consequence: the 22rem threshold is five labels at text-xs; a new dock tab means rechecking it.
 
 ## 2026-11-14 — The op-log conversion finished: every feature's writes log in their actions (#712)
-
 Why: #1011 converted trips and calendar and left 21 files on the guard's `known` list.
 Decision: auth tokens, capsules, clash pairs, looks, outfits (create, update, share, delete, reaction, Muse's proposal), Muse's needs, picks and rounds, wishlist decisions and purchases, sizes, style, wears and washes, the week plan, Today's Wear this, garments (create, clone, edit, condition, tags, share, status, delete, copies, bulk, cutouts, repairs) and the weather settings each log one `logOp` line from an action file beside them; the page routes, API routes and MCP tools log no success. The `known` list is empty.
 Consequence: a read that logged (the changes feed's dropped wardrobes, get_suggestion_feedback) is a debug line; a rule held already (`outfit.rule.added`) and an API retry log `changed: false`, but a tagging card left alone logs nothing. The creation sentences of link import and a photo's bytes-and-rows lines (`writes.ts`, `link-import/save.ts`) stay, outside the guard's globs.
 
 ## 2026-11-14 — Wardrobe chrome is one chip row; Styling rows share one tile size from lg (#732)
-
 Why: six rows of chrome (weather line, a banner per prompt) put the first garment ~300 px down at 390 px; the accessory strips used a smaller tile and different spacers than the garment strips at lg.
 Decision: the closet drops the weather line (it has no job there) and shows "N photos to add", "N to tag", "N to wash" as chips in one row (`Prompts`); `small` strips are `w-40` with `roomy`'s spacers from lg. A shared wardrobe was already titled with its owner's name.
 Consequence: strips still centre their choice, so their first tile sits half a column in; starting at the column edge needs the observer's choice line (`rootMargin`, `centre()`) to move with the breakpoint and was not done.
 
 ## 2026-11-14 — Profile is an index; each setting is its own page (#728)
-
 Why: Profile at 390 px was ten sections in 3,600 px, Your week's lone Save sat among autosaving neighbours, and Sign out lay past every form; Insights listed every unworn garment inline (7,200 px).
 Decision: Profile is Account, a `SettingsRow` per setting (label, summary, chevron), Export and Sign out. Sharing, Weather, Your week, Notifications and Devices moved whole to `/auth/profile/{sharing,weather,week,notifications}` and `/auth/devices` (`SettingsPage`), owned by their features (weather and notifications 404 with their flag off); every form posts where it did. A row keeps its section's id, so an old `/auth/profile#sharing` lands on the row that opens the page: a fragment never reaches the server, and a script hop would be script navigation. Insights shows five rows per garment list; the unworn list's "See all" is `/wardrobe/insights/unworn`.
 Consequence: the settings' one-shot flags moved to their pages (`/auth/profile/week?saved=1`, `/auth/profile/sharing?shareError=`, `/auth/devices?revoked=`); sign-in may return to one segment under Profile (`PROFILE_PAGE`). None is warmed (`offline-warm.md`): their writes are online only.
 
 ## 2026-11-14 — A synced page fetches its own server copy, conditionally; Discard leaves a tombstone (#900)
-
 Why: the worker's `PAGES_RENEWED` reached only pages it had cached, controlled and could refetch, so an uncontrolled page (the HTTP twin), an uncached one or a stopped walk kept stale counts; a synced tick's counter fell back to the page-load number.
 Decision: after a drain saves, each tab whose page shows a saved path (`showsSyncedWrite`, told on the outbox channel) dispatches `outbox:synced`, and `freshness.js`, now started on every PWA page with or without a worker, fetches the page itself with `If-None-Match` of the tag on screen (the page's ETag, repeated as a `Server-Timing` `etag` entry for the document's script): a 304 is current, only a 200 with another tag is offered; one fetch per page wins (`latestOnly`). `PAGES_RENEWED` is gone. A region's end is read from the store alone (`regionEnd`): Discard writes a `discarded` tombstone in the record's place, so no tab, whatever the order of its read and the channel's message, takes a discard for a save (a channel `reverted` message raced its refresh); tombstones are pruned at load after a day.
 Consequence: with `PWA_ENABLED` off nothing takes the server's copy after a sync (no freshness.js); a fragment display has no tag, so any copy after a sync is newer there. Tabs of an older build list a tombstone as a failure until dismissed.
 
 ## 2026-11-14 — One Card, two variants, no shadows outside floating layers (#727)
-
 Why: the theme doc said flat, but ~20 sites composed `card bg-base-100 shadow-sm`, Profile's sections were `base-200` fills (so a cutout inside lost its plinth, which is `base-200`) and the Muse cards were hairline-bordered: three treatments, so Today, Profile and Wishlist read as different apps.
 Decision: `src/web/card.tsx`: `Card` (and `cardClass` for an element it cannot be, a `PostForm` or a `label`) with `content` (hairline `border-base-300` on `base-100`: what a page shows, and anything a cutout sits on) and `inset` (`base-200`: an inset form panel, never behind a cutout). ESLint's `no-restricted-syntax` refuses any `shadow-` class string unless it also names `dropdown-content`, an `alert` (a toast) or a sheet's dialog box (daisyUI's modal box class). Insights' own `Card` is now `InsightCard`.
 Consequence: a new card is `Card`; a shadow elsewhere fails lint (`public/js/toast.js` builds its alert in script, outside the rule). The Profile sections and trip outfit cards moved from `base-200` to `content`.
 
 ## 2026-11-14 — The storage probe never lists a directory; the boot sweeps its leftovers (#855, #901)
-
 Why: each 5 s window's probe ran a readdir of DATA_PATH and MODELS_PATH to remove its stale files; on a large NFS share that listing alone could outlast the 3 s bound and flap readiness, and a stale file it could not rm made storage read down though a write would succeed (#856).
 Decision: `probeWritable` is a mkdir, its own named write and its unlink, nothing else. A hung write unlinks once it settles, so only a dead process leaves a file; `sweepProbeLeftovers` removes every `.write-probe-` file once per boot (main.ts, both directories), best effort: a failure is a warn line, never a refusal or a verdict.
 Consequence: a file left by a write that never settles stays until the next boot (4 KB, a dotfile: reconciliation and `/file/**` never see it). The nightly run does not sweep: it never touches MODELS_PATH.
 
 ## 2026-11-14 — An unmarked DATA_PATH gets the paired id only by coverage (#850, #851)
-
 Why: the marker was written with a fresh id before the pairing, so a claim that lost the pairing race left a marker its database refused forever (#851); and with an empty `file` table a bare mountpoint was marked with the paired id, so the real share mounted over it later passed as the claimed one and the uploads made meanwhile vanished unseen (#850).
 Decision: an unpaired database is paired after its marker is written, never before (a pairing whose marker write failed left an id no marker carries, and the rule below refused every boot after: PR #1046's review): the marker gets a fresh id exclusively, EEXIST pairs with the winner's, and a claim whose pairing loses to another share withdraws its own marker and marks as beside the winner; a marker beside an unpaired database is adopted, so every crash point heals at the next boot. The paired id goes only to a directory holding 90% of the rows' sets; an empty table beside a paired database is refused with APP_ENV production (`absent`) and marked with a fresh id elsewhere (worktrees on one database), whose claim then warns as any mismatch.
 Consequence: a production database paired with a share but holding no photos cannot start on new, empty storage by itself: the operator re-adopts by hand and re-pairs (`docs/operations.md#photo-storage-marker`).
 
 ## 2026-11-14 — A trash restore that went live is finished, never refused (#841)
-
 Why: a restore whose links all landed but whose trash names could not be removed rejected and logged "rolled back, the trash keeps it", while the set was live; a retry was then refused as "storage already holds a photo set", so only hand work could clear the trash. A failing rollback unlink replaced the original error the same way.
 Decision: a live name with the same dev+ino as its trash file is restored, not a conflict (`liveFromTrash`, `linkBack` on EEXIST). Once every file is live, letting go of the trash is best effort (`leftInTrash`, a warn line, exit 0); a rollback that cannot unlink throws `RestoreFailed` with `stranded`, and the log says "rolled back" only when nothing is.
 Consequence: running `--restore-from-trash` again always finishes a partial restore; a different live photo of the name is still refused.
 
 ## 2026-11-16 — The boot's probe sweep never blocks listen (#1048)
-
 Why: the sweep's readdir of MODELS_PATH ran before listen, so a stalled models share hung the whole boot, where it should only show `storage` down on /health/ready.
 Decision: `sweepLeftoversInBackground` runs after `serve()` is listening, unawaited, each directory bounded by `STORAGE_PROBE_TIMEOUT_MS` (the readiness probe's 3 s, now exported from `src/storage-probe.ts`) and logging one structured line (removed, failed with a code, or timed out). The DATA_PATH writable check stays before listen.
 Consequence: a probe file may outlive a boot by up to the bound; a timed-out readdir keeps its libuv thread until the share answers.
 
 ## 2026-11-16 — The probe sweep is a step of the probe, not a second operation (#1074, #1075)
-
 Why: a separate boot sweep competed with the readiness probe for each share's single-flight: a probe arriving mid-readdir answered TIMEOUT at once (#1074), and a sweep meeting a probe was skipped for the boot (#1075). Third review round on the same collision.
 Decision: `probeWritable` sweeps `.closet-probe` itself, once per process per directory (mkdir, list, remove leftovers, then write and unlink), inside the check's flight and 3 s bound. Flights are a join map in `createStorageCheck`; `sweepLeftoversInBackground`, `tryStart`, `storageFlights` and the late-outcome log are deleted.
 Consequence: a caller waits for an in-flight probe up to its own bound and never answers TIMEOUT early; a held list times the run out at the deadline and the next run retries the sweep. DATA_PATH's boot probe now also sweeps before listen (a list of one small directory, on a share the probe already writes).
 
 ## 2026-11-16 — The desktop layout is a named system, not per-page lg: patches
-
 Why: at 1440 px most pages were phone columns centred on the screen (detail pages 512 px wide, idea carousels centred in half the width, bottom bars across the viewport), and every desktop fix so far was a page's own `lg:` classes (193 in `src/web`).
 Decision: `docs/plans/2026-11-16-desktop-layout.md`, approved with every recommendation. One breakpoint (`lg`) plus auto-fill density. `PageShell` with named layouts (`single`, `split`, `panel`, `facets`, `index`) as CSS grid areas. Profile in the rail and section tabs in the app bar. `Sheet` with a desktop placement per kind (Wardrobe filters docked). `ActionBar` sticky in its column. `SnapStrip` desktop modes (`strip`, `row`, `grid`; Styling keeps `strip`). `/` is the one shortcut.
 Consequence: the phone at 390 px is unchanged. A page file carries no layout `lg:` classes (a shrink-only count, slice D8), and `<main` lives only in `page-shell.tsx`.
 
 ## 2026-11-16 — An HttpError's message is a catalog key; the catalog has no dead keys (#734)
-
 Why: 40 refusals were English literals beside 30 that used `t()`, worded differently per site and invisible to a copy review; the catalog and the export surface kept what retired features left (27 dead keys, 55 exports nothing imported).
 Decision: `refusal.*` (and `api.*`) in `lang.json` hold every message; ESLint's `no-restricted-syntax` refuses a string or template literal as `new HttpError`'s second argument (specs exempt: fixtures). `src/i18n/unused-keys.spec.ts` fails on a key no source names, a family built at runtime being a declared prefix (checked against the code). `reasonLed` (`link-import/import.ts`) is the one place a machine word leads the copy (`blocked-by-site: ...`). Knip's unused exports were narrowed.
 Consequence: knip does not follow `views/assets/src-sw.ts`'s imports (it flagged `WARM_USAGE_BUDGET_BYTES`, `serverUnavailable`, `clearFragments`): `npm run typecheck` is the check after narrowing an export. 8 findings are used nowhere, not even in their file (`isKept`, `instantNote`, `WARM_MAX_AGE_MS`, test support helpers, `UndoStore`): left, for a dead-code pass.
 
 ## 2026-11-16 — The db tier's headroom: validators compiled once per process (#724)
-
 Why: `make ci-db` ran 113-182 s on the Mac (135 s measured) against 110 s. Per-file timing put 117 of 375 worker-seconds in `app.ready()` (every route's ajv validators compiled afresh for each of ~185 boots).
 Decision: `sharedValidators` (`src/web/schema-validators.ts`) is Fastify's own ajv factory with each compiled validator kept per process, keyed by externals, ajv options, part and schema JSON; createApp's `schemaController` and the API scope's `jsonApiValidator` use it. A first attempt also built the authorization matrix's successful-write fixtures from only the parts a request reads; dropped: a write that touches rows the request never names (bulk, replan, cascade) then leaked state between cases, and a garment delete acted on an unlinked garment, so the cascade paths went unproved. The matrix is the proof of authorization; its full fixture per write stays.
 Consequence: serializers (fast-json-stringify) still compile per boot: caching them needs `@fastify/fast-json-stringify-compiler` as a direct dependency.
 
 ## 2026-11-16 — Grid columns live in columns.ts; galleries auto-fill from lg (#1064)
-
 Why: desktop density was the phone's scaled up (six 200 px garment tiles at 1440, a 1900 px month), and 19 `grid-cols-*` were spelled by hand across 14 page files, so a count could not change in one place.
 Decision: every grid's and CSS columns' count is a named constant in `src/web/layout/columns.ts`; ESLint (`no-restricted-syntax`, `COLUMN_STEPS`) refuses `grid-cols-*`/`columns-*` anywhere else, `collage.tsx` and `month-page.tsx` included (the issue allowed them; neither needs a count). The galleries keep their phone counts and from lg auto-fill `minmax(var(--tile-*), 1fr)`, the minimums plain `:root` properties beside `--container-page-*` (`--tile-garment` 8.75rem, not the design's 9.5rem, which fits seven at 1440 and five at 1024; 8.75rem gives the eight it promised and keeps six at 1024). `OutfitCollage` gains its desktop step per size: `cell` (the week card, about 150 px tall) and a new `month` (the phone's `cell`, about 80 px from lg, under a one-line date row).
 Consequence: no `xl:grid-cols` remains (Insights' `CARD_COLUMNS` keeps `xl:columns-3`, as §3.6 says); 1024, 1440 and 1920 differ only in how many tiles fit. `IDEA_GRID` and `CARD_GRID` are named but unadopted until D7/D12/D13. The phone at 390 px is pixel-identical (#1064's diff).
 
 ## 2026-11-16 — PageShell owns the page frame; regions are its, padding is the regions' (#1059)
-
 Why: 18 pages assembled `Layout`, `AppBar`, `PageMain` and `Dock` by hand, each with its own `p-4 pt-20 pb-24` variant, so no page could gain a second column without a page-level `lg:` patch.
 Decision: `PageShell` (`src/web/layout/page-shell.tsx`) renders the frame; `<main class="page-shell" data-layout>` holds a body region (always a `div.page-body`, so every layout has one shape) and, per layout, an aside in DOM order = desktop order. Offsets are CSS in `main.css` (`.page-shell`, `@layer components`): `--app-bar-h` above, `--spacing-dock` + 2rem below (only the gutter at the rail); the gutter sits on each region (`data-gutter` page/bleed/flush), so a tab row between the bar and the regions stays flush. Sheets and toasts are `overlays`, after `<main>`. `PageMain`/`PageColumn` are folded in and gone. **The swap target is a region, never a page-chosen id**: each region's id is the shell's, `<name>-body` / `<name>-aside` (`regionId`), so when D9 docks filters in `facets`' aside and D5 moves the select bar to an action bar, a fragment swaps the region it owns or goes out of band; the Wardrobe's `#wardrobe-main` became `#wardrobe-body`. Only `single` takes a `width` (the others' frame is wide, in `main.css`, so a split cannot sit inside 40rem); the body takes a named `gap`, never a class.
 Consequence: phone pixels are unchanged except the error page (its `EmptyState` now sits below the bar's offset) and select mode's foot (the frame leaves `--action-bar-h` under the last row while a `fixed bottom-dock` bar shows, in the scroll-padding rule's own selector). Desktop pages end with 2rem below, not 6rem. A `<main>` outside page-shell.tsx is guards.conf `@page-main` debt (`known`, shrink-only) until D2 moves it.
-
 ## 2026-11-16 — Guards that enumerate bad shapes become allowlists (#1093-#1095)
 
 **Why:** #1092 refused literals, templates and concatenations in an HttpError message with ESLint selectors, and the validator cache key with a deny-list; review kept finding another shape (conditionals, `??`, class expressions, `errors.HttpError`, grandchildren; a format function in ajv options).
@@ -1552,56 +1481,46 @@ Consequence: phone pixels are unchanged except the error page (its `EmptyState` 
 **Consequence:** a new message is a `lang.json` key (`FieldErrors` and the form readers carry `Translated` too); specs cast their fixtures `as Translated`.
 
 ## 2026-11-16 — Translated is made only by t(), joinCopy() and errors.tsx (#1098)
-
 Why: #1097 typed HttpError's message as `Translated`, but `reasonLed(reason: string, message: string)` and `joinCopy` callers could still launder English through format-only keys (`linkImport.REASON_LED`, `refusal.form.fieldErrors`).
 Decision: a function returning `Translated` takes `Translated` for its text parts (`reasonLed`'s reason is a refusal word); the MCP form refusal joins its field messages with `joinCopy`. ESLint refuses `as Translated` outside `src/web/i18n.ts` and `src/web/errors.tsx`; specs are exempt (they forge copy to test the handler).
 Consequence: `t()` params stay `string`, so a format-only key can still be handed a raw string directly; a new helper wrapping one takes `Translated`.
 
 ## 2026-11-16 — Section tabs are the app bar's; Profile is the rail's foot (#1061)
-
 Why: each tab page drew its section's `LinkTabs` inside its own `<main>` width, so the row jumped between siblings (Week at x=164, Trips centred at 548 at 1440), and Profile, a place, was an avatar in every bar.
 Decision: `AppBar` takes `tabs: LinkTabsProps` from one builder per section (`wardrobeBar`, `calendarTabs`, `outfitTabs`); `PageShell`'s `tabs` and its `"tabs tabs"` grid row are gone. Below lg the tabs are the header's second row (flex wrap, `order`), `:root:has(.app-bar-tabs)` growing `--app-bar-h` by `--app-bar-tabs-h`, so every offset follows; from lg inline after the title. CSS only. Rows sticking under the bar use `top-bar` (`--spacing-bar`), not `top-16`. The dock gains Profile (`hidden lg:flex mt-auto`), the bar's avatar is `lg:hidden` (owner decision 1).
 Consequence: the phone is not pixel-identical on tabbed pages, and cannot be: the sections differed (Wardrobe's row flush under the bar, the Calendar's and Outfits' 1rem lower and 1rem further in). Now the row sits flush under the title row everywhere, the bar's border under it, and content starts 1rem below the bar like on every other page, so tabbed pages are 16 px shorter at the top.
 
 ## 2026-11-16 — One Sheet places every dialog; confirm-sheet.js opens them all (#1062)
-
 Why: nine hand-written `modal modal-bottom sm:modal-middle` dialogs each chose their own desktop look (always a centred modal) and opened through an inline `showModal()`, so focus never came back to a tapped trigger in Safari and nothing could anchor a menu.
 Decision: `Sheet` (`src/web/layout/sheet.tsx`) owns the dialog, the box and the backdrop, placed by `kind`: a bottom sheet below lg; from lg `choice` centred, `form` a right panel (`modal-end`), `menu` under its trigger (anchor positioning under `@supports`, `position: fixed`, since an anchor outside the dialog is valid only for a viewport-based box). Openers spread `sheetOpener(id)`; `public/js/confirm-sheet.js` gained `openSheet` (anchor, Tab kept inside, focus back to the trigger) rather than a second module, as the confirmation already needed both. Headings stay the content's and `gap` keeps each box's old flow, so the phone is pixel-identical.
 Consequence: guards.conf `@sheet` refuses daisyUI's modal box class and the placement classes outside `sheet.tsx`; the mask editor and a selfie's dialog (centred on the phone too) are its `known` lines. Evening out the sheets' headings and feet is a phone change of its own. D9 adds the docked `filters` kind on `data-sheet`.
 
 ## 2026-11-16 — D2: every page is on PageShell; `centred` and `meta` are its two additions (#1060)
-
 Why: 20 files wrote their own `<main>`, bar offset and `max-w-lg mx-auto`. Seventeen fit the shell as it was (`single`, `narrow`; toasts and strip flags are `overlays`; recap's `data-year/from/to` test hooks moved to `#recap-range`, as the shell puts no attribute on `<main>`). Three could not: sign-in, register, the invite landing and the offline page are centred frames, and the share page and About carry their own link preview.
 Decision: `PageShell` gains the `centred` layout (one column centred between the bar and the dock, from the top once taller; defined once in `main.css`; `AccountShell` is its preset, as `FormPage` is of `single`) and `meta` (`PageMeta`, `Layout`'s og fields, passed straight through). Capsules, Laundry and the trips list moved with `bar.tabs` once D3 (#1061) had put the tabs in the bar. The plan page and the trips list are `narrow` although §4 gives them `wide`: their wide look is a grid (D12, D13), and one 80rem column is worse than the column.
 Consequence: `guards.page-main.known` is empty. Phones are unchanged except the tokens page, which never had a dock and now shows the one every signed-in settings page has, and the two pages `centred` unifies: the invite landing (it centred in 80vh, now in the room between bar and dock, as sign in does) and the offline page (centred 0.5rem higher: it had equal 5rem padding, the shared frame leaves the dock's 6rem below).
 
 ## 2026-11-16 — Correction: the mask editor and a selfie's dialog are on Sheet's `dialog` kind (#1107)
-
 Why: the entry "One Sheet places every dialog" (2026-11-16, #1062) says they are `@sheet`'s `known` lines. They are not: both moved onto `Sheet`'s `dialog` kind (centred at every size, `boxClass` for its own width), and `[sheet]` in guards.conf has no `known` lines.
 Decision: read that entry's last sentence as "the mask editor and a selfie's dialog are Sheet's `dialog` kind; `@sheet` has no `known` lines". The log is append-only, so the entry stays as written.
 Consequence: none for code; `src/web/layout/AGENTS.md` already said so.
 
 ## 2026-11-16 — Every placeholder has a kind; forged copy is judged by type (#1100)
-
 Why: after #1098, `t()` took every parameter as `string`, so any key (`linkImport.REASON_LED`, "Breaks: {rule}") wrapped raw English into `Translated`; the `as Translated` selector missed `<Translated>x`, `as i18n.Translated`, aliases and `as never`.
 Decision: `src/web/placeholder-kinds.ts` classifies all 426 placeholders of lang.json's 321 keys, 84 `copy` (catalogue text: takes `Translated`) and 342 `data` (names, counts, dates, money, machine words, browser-filled values: any string or number), with no default; `i18n.spec.ts` fails on a placeholder without a kind or an entry the catalogue lacks. A key type wider than one literal must pass `Translated` for every placeholder that is copy in any key it may be. A table, not a `{name:copy}` marker in lang.json: TypeScript widens a JSON import's values to `string`, so no type can read a marker.
 `closet/no-forged-copy` (`scripts/lint/forged-copy.mjs`, on the existing projectService) refuses any `as`, `<T>x` or type predicate whose type is any, never, or carries the brand anywhere; `as const` passes. Specs stay exempt: they forge messages to test the handler, and nothing ships or imports one. Lint time is unchanged.
 Consequence: a placeholder that may be either catalogue text or user data (a name or a category label) is data. Known limits: overloads, `declare` and `any`-typed values passed in (`no-unsafe-argument` warns) are outside the rule; `tHtml`/`tAround` mint no `Translated`, so they keep plain params.
 
 ## 2026-11-16 — SnapStrip desktop modes: a choice keeps its strip, browsing strips become rows or grids (#1065)
-
 Why: from lg Today's and Ideas' cards were a phone carousel (the first centred beside a 500 px spacer, the second cut off), and the `options` size had solved the same for one page with its own classes.
 Decision: `SnapStrip` takes `desktop: 'strip' | 'row' | 'grid'`, typed by `StripDesktop` so a `listbox` strip (Styling, Recreate: the centred item is the value) allows only `strip` and `listbox={false}` must name one. `grid` lays the items on `IDEA_GRID` (now `lg:`-only) and scrolls nothing; `row` drops the spacers and snaps to the start. Sizes split their phone classes from their `lg` step so a mode drops the step rather than overriding it; `options` became `peek` + `grid`. snap-strip.js reads `data-snap-desktop` and, while `(min-width: 64rem)` matches (decided at a strip's first watch and again on the query's `change`), gives it no observer and no centring; a row's steps page by `scrollBy`, its arrows move focus.
 Consequence: the design listed Recreate as a `row`, but its strips are choices, so they stay strips. A window resized across lg switches each watched strip's mode live (the observer and tap-to-centre attach or detach). Today renders "Plan my week" twice (beside the weather from lg, the foot below it) rather than reordering the DOM.
 
 ## 2026-11-16 — A key made only of data placeholders returns string, not Translated (#1109)
-
 Why: `gallery.PAIR` "{a} + {b}" and `sizes.BRAND_NOTE` hold no catalogue copy, yet `t()` returned `Translated` for them, so any string could be laundered into a copy sink; #1100 only justified each one in a `FORMAT_ONLY_DATA` table.
 Decision: `t()` returns `TextFor<K>`: `string` for a key in `DATA_ONLY_KEYS` (`placeholder-kinds.ts`; text only placeholders and punctuation, every placeholder data), else `Translated`. The list is written (TypeScript cannot read a template) and `i18n.spec.ts` derives it from lang.json and PLACEHOLDER_KINDS. `FORMAT_ONLY_DATA` is gone. A table of copy keys is typed `CopyKey`, not `StringKey`.
 Consequence: a new all-data format key fails the spec until listed. `gallery.FEELS`, `FEELS_TYPICAL` and `trips.TYPICAL_DAY` `range` became data (they took `weather.RANGE`, a laundering site); `trips/weather.tsx` `rangeLabel` returns `string`.
-
 ## 2026-11-16 — ActionBar: the shell places a page's bar; a row's height is one token (#1063, #1030)
-
 Why: Laundry's Mark washed and select mode's bar were `fixed bottom-dock left-rail right-0`, so at 1440 the button sat 400 px from the rows it acts on; the scroll padding keyed off `.fixed.bottom-dock` and reserved a hand-copied 3.5rem, short of the bar on a coarse pointer and once its text wrapped at 200%.
 Decision: `PageShell actionBar` renders `ActionBar` (`src/web/layout/action-bar.tsx`) as `#<name>-actions`. Every bar follows the body in the DOM (the phone's visual order). A `row` is fixed above the dock below lg and from lg sticks under the app bar at the column's head, lifted there by `order` in a flex `<main>`, not by the markup. A `stack` (Styling's, height varies) follows the body, sticky in its flow below lg, the 20rem column beside it from lg (`COMPOSER_COLUMNS` and `endsOnBar` are gone). Box, places, scroll padding and the shell's reservation live in main.css's action bar block. A row is `--action-bar-h` tall by construction (padding, border, `--size-field * 8`, in rem) and never wraps, scrolling sideways at large text, so CSS alone keeps the reservation equal to its real height; measuring it in script was the alternative.
 Consequence: the phone's first screens are pixel-identical; a page ending on a row is 1 CSS px taller (57 px reserved, the bar's real height, not 56). Controls outside their form use `form=`, and script reads a form's controls through `form.elements` (outbox.ts's full-queue guard did not). On a phone Tab reaches the rows before the bar. Every page renders `#<name>-actions` (empty and `hidden` without a bar), and a body swap answers through `PageFragment`, which sends it out of band: a filter in select mode once left no bar, or a stale one whose Save named a missing `#pick-form`. The share page's "Shared by" line stays fixed: it holds no control, so it is no action bar. Styling's column now starts beside its header; D15 moves it onto `panel`, whose aside top is the bar's place there.
@@ -1613,7 +1532,6 @@ Decision: the phone order wins (coordinator, 2026-11-16). The subject region hol
 Consequence: phone pixel-identical (exact diff at 390); at a desktop the outfit's garments are last and small. Tiles there would need a phone change, decided on its own.
 
 ## 2026-11-16 — lg-check asks Tailwind, not a regex (#1126-#1129)
-
 Why: three review rounds each found a class spelling (`not-max-lg:`, `*:`, `[@media(min-width:64rem)]:`, `word:word` strings) the guard's own regex and allowlist got wrong; Tailwind's grammar is not regular.
 Decision: `scripts/lg-check.ts` takes candidates from `@tailwindcss/oxide`'s scanner, compiles each against `views/assets/main.css` and counts it when the CSS it adds has a width `@media` that holds at 64rem+ but not just below it (`sm:`/`md:`/`max-lg:`/container queries do not). `build()` is cumulative, so a candidate is judged by the media preludes it adds. Counts are occurrences.
 Consequence: needs node_modules (runs in ci-quick after ci-deps and in pre-commit, ~1 s); `@tailwindcss/node` is a transitive dependency of `@tailwindcss/cli` (typed by `scripts/tailwind-node.d.ts`). Re-seeded: calendar-page 44 to 43 and styling-page 28 to 26 (prose mentions of `lg:`); total 112 to 109.
@@ -1625,63 +1543,51 @@ Decision: `storage_claim` (migration 0070) records each fresh id before `markThe
 Consequence: an unrecorded id, or one once paired then re-paired away, stays the `unpaired` refusal; so does an orphan from before 0070 (recovery: docs/operations.md, Orphaned markers). The table holds only first boots' losing claims, never pruned.
 
 ## 2026-11-16 — `closeSwitchedContext` is only `close()`: no CDP fan-out at teardown (#1104; replaces #886's unroute)
-
 Why: trips' warm step timed out with `unrouteAll` pending after `setOffline(true)` had answered (a hang earlier in the step reports `setOffline` instead, tried). Both are calls Playwright sends to every page and service worker of the context and awaits without a deadline; a worker stopped through CDP hangs either one every run, while `close()` (the browser's own call) still answers. The natural stop was not caught in about 100 local runs.
 Decision: the switch's route stays until the close and fails every request once closing, its handler dropping target-closed errors only then (#867); `closeSwitchedContext` marks the switch offline and closing, then `close()`. `test/support/service-worker.spec.ts` stops the worker and bounds the close (the helper's contract, no app server; not a scenario).
 Consequence: #886's "a handler must not catch its own abort()" no longer applies: nothing awaits the handlers' invocations now. Never add `setOffline` or `unrouteAll` back to the teardown.
 
 ## 2026-11-16 — A session or account drop leaves Discard's tombstone, label emptied (#1042)
-
 Why: since #1037 tabs read how a write ended from the store alone, and a record gone means saved. A sign-out's discard and another account's claim (page and worker) deleted records, so a second tab still open on the old account showed the dropped tick as saved until it reloaded.
 Decision: every drop runs `dropQueuedWrites` (`outbox-store.ts`) in one readwrite transaction: `atDrop` turns each unsent record it names into `droppedRecord` (a `discarded` tombstone, its label emptied: the garment's name does not outlive the account here) and prunes expired tombstones of any account. No new state: every reader already treats `discarded` as ended, unsent and uncounted.
 Consequence: another account's tombstones now stay up to `DISCARD_TOMBSTONE_MS` instead of going at the claim; they carry key, path and fields, never a label. Only the drain's deletion of a non-queueable path still deletes.
 Review round: they share keys with the next account's records (`packed:<trip>:<item>` on a shared trip), so the page reads only its account's (`recordsOfAccount`, the `account` index) and `regionEnd` judges by account and key. Not a store re-keyed by account: `keyPath` is the record `id`, never the key, and a version bump would stay blocked behind older tabs (#871). A drop looks readonly first and writes nothing when nothing changes: the page claims on every load.
 
 ## 2026-11-16 — A drop gives every entry stored meanwhile its expiration row (#1025)
-
 Why: rows, cache, rows (#1019) left one window: a store between `caches.delete` and the second sweep kept its entry and lost its row, so maxEntries never evicted it until the next drop. A gate was tried in #1023 and reverted; a store lands whenever it lands.
 Decision: `dropCacheAndRows` (`src/web/shell/cache-drop.ts`, unit-tested on a fake cache) ends by giving each entry of a recreated cache its row (`CacheExpiration.updateTimestamp`), skipping the worker's records, the offline page (`outsideExpiration`) and an image an ended generation's store is still writing (`createStoreFlights`: its cacheDidUpdate deletes it). Restamping, not deleting: a store whose put has landed and whose row has not yet would otherwise lose its entry, and a seconds-old entry's restamp moves nothing.
 Consequence: after a drop every governed entry has a row; any store after the last step writes both itself. The step runs only if something recreated the cache (`caches.has`), so a drop never creates an empty one.
 
 ## 2026-11-16 — Calendar density: the room beside the collage, and the Calendar's `lg:` as roles (#1070)
-
 Why: D12 asked for a month of about 760 px and a three-occasion week of about 900 at 1440, but D6 (#1096) ruled that no desktop step draws a garment smaller than the phone; `OUTFIT_GRID` for the plan page would have turned the phone's rows into two columns.
 Decision: a month cell from lg puts its date column beside the phone-sized `month` collage (`MONTH_CELL`, `MONTH_DAY`): 1042 to about 830 px. The week keeps D6's `cell` step: a five-occasion week stays 1793 px, since only smaller pieces would shorten it. The plan page is `wide`, its head a `PageBand`, its outfits `PICK_GRID` (rows on a phone, `--tile-pick` 18rem from lg: 3172 to 1074 px). Every Calendar `lg:` became a role in `layout/calendar-grid.ts`, still counted: `layout/` is no longer exempt wholesale, only its shared primitives by name (lg-check 109 to 112: the Calendar's 72 are 67 there, plus `page-band.tsx`'s 8).
 Consequence: a Calendar page adds desktop behaviour as a role there, never a page class; the phone stays pixel-identical (390 px diff against main: only the weather line's clock differs). A trip's add page shares `PICK_GRID` through `SavedOutfitPicker`.
-
 ## 2026-11-16 — Wardrobe facets: one docked filter sheet, re-rendered by every answer (#1067)
-
 Why: at 1440 the filters were a modal over the grid. Docking must not render the form twice. A first cut kept the docked form across its own Apply, for focus and scroll, but htmx's history snapshot serialises attributes, not a radio's `checked` property, so Back showed a filtered grid beside facets with nothing checked.
 Decision: the Closet tab is `layout="facets"`, its aside one `Sheet kind="filters"` that main.css shows closed in place from lg (`expectDockedFilters`); its opener is `dockedFiltersOpener`, hidden there by CSS (no page `lg:`). Every fragment answers the aside out of band as `innerHTML` (`PageFragment`), so its markup is always the URL's state. The aside, not the box, scrolls, so the region element and its scroll survive. Apply and Clear keep ids, so htmx refocuses them.
 The page has one keyword field, the scope row's `#search-form` at every width, which Apply and Clear `hx-include`. A field of the filter form (`form=`) cannot submit on the phone: WebKit and Blink skip implicit submission when the default button (Apply, in the closed sheet) is not rendered. Search at the facets' head (§4's picture) would have drawn the body's field into the aside, which comes earlier in the DOM, so Tab would reach it after every facet.
 Consequence: from lg search stays in the scope row, not at the facets' head. `/` focuses it (`public/js/search-shortcut.js`). The `@hidden-control` grep became `closet/no-hidden-control` (scripts/lint/hidden-control.mjs), which reads computed classes. Select mode stays `single`.
 
 ## 2026-11-17 — Dock labels key on the widest label's need; the week's scroll was never the app's (#1027, #1087)
-
 Why: the dock's `width < 22rem` query hid labels on 320-350 px phones where they fit. A CSS-only overflow test that hides all five together does not exist (a flex-wrap clip hides each label alone, so 200% at 390 would show "Today" and drop "Wardrobe"; scroll-state queries are Chromium-only).
 Decision: the query stays a container width, in rem so it follows the text size, set from the labels' measured need: Wardrobe, the widest, is 3.2rem at the label's size, and the query reads the content box (five links), so 5 x 3.2 = 16rem, 17rem with a margin (a 288 px dock). `test/trips.spec.ts` measures every label fitting at 290 and 340 px and hiding at 340 px / 200%. 390 px is byte-identical (100% and 200%).
 Consequence: a longer label (a rename, a sixth tab) fails that measurement until the 17rem is raised. Separately, the calendar week was not "opening a day higher": 36 throttled captures with the weather delayed up to 1.2 s were byte-identical at scrollY 760. Only the spec's click scrolled. The shot now settles and scrolls itself, and is taken twice.
 
 ## 2026-11-17 — The garment form's photo is a subject from lg only; its actions stick in the form (#1069)
-
 Why: §3.7 makes FormPage `aside` the shell's `split`, whose phone stacks the subject first, but the issue holds the phone at 390 unchanged (a 4:5 photo would push every field a screen down on a form reached from that photo's page). ActionBar was checked for Cancel and Save and does not fit: it is the page's region outside the form, fixed above a phone's dock.
 Decision: `split` takes `subjectBelowLg: 'hidden'` (`data-subject="lg"`: below lg no subject and the narrow single column), used only by FormPage's `aside`. The subject is `GarmentPhotoView place="form"` (moved to `garment-photo.tsx`): the page's photo and cutout state without its tools, its image lazy so a phone never fetches it, its poll carrying `place`. Cancel and submit are `.form-actions`, sticky at the window's foot inside the PostForm from lg (`--form-actions-h` in the scroll padding). `FieldRow` (`FIELD_ROW`) pairs brand and size from lg; the repair's day and cost already pair at every size (`FIELD_GRID`), so it stays.
 Consequence: a hidden subject still polls a pending cutout on a phone (htmx trigger conditions need eval, refused by the CSP); rare and capped. A new subject for a form goes through FormPage `aside`, never a page `lg:`.
-
 ## 2026-11-17 — `panel`'s aside continues the body's flow on a phone; `CARD_GRID` has no gap (#1071)
-
 Why: a trip's phone order is days, packing, extras, notes; `panel` stacks body then aside with the region's own 1rem, not the body's 1.5rem gap, and `CARD_GRID`'s `gap-4` matched neither the trips list's `gap-2` nor Capsules' `gap-6`.
 Decision: the aside that follows the body takes its `gap` (`PageAside`'s `data-gap`; above it on a phone, 1rem from lg), so packing, extras and the notes move into it unchanged; it is sticky and capped like `split`'s subject. `CARD_GRID` carries only columns; each list keeps its own gap at both sizes. `PICK_GRID` is `OUTFIT_ROW_GRID` (`--tile-outfit-row`), as a trip day's outfits use it too.
 Consequence: phone pixel-identical (exact 390 px diff against main). The notes are in the packing aside at a desktop: only what the phone shows last can move to `panel`'s aside.
 
 ## 2026-11-17 — Profile's rows are one list behind the index and the settings nav (#1072)
-
 Why: the nav beside a setting's page and Profile's index list the same settings; two lists would drift (a new setting on one only), and the nav may read nothing (the statement budget).
 Decision: `SETTINGS_ROWS` (`src/web/auth/settings-rows.tsx`) is the one list (id, href, label, optional `when`); `ProfilePage` renders it with `SETTING_SUMMARIES` (`pages.tsx`), `SettingsPage` (`index` layout; style, sizes and tokens moved onto it) renders `SettingsNav`, labels only. A page names its row (`section`), which gives its back arrow and its `aria-current`. Below lg the aside is hidden and the shell is as narrow as `single`, so the phone is unchanged.
-Consequence: a row's `when` reads config only (Notifications: PWA*ENABLED, Weather: WEATHER_ENABLED); Devices was shown only while a device token existed, which the nav cannot know without a query on every settings page, so it is always a row and its page has the empty state (`devices.NONE`). `PUSH_SETTINGS*\*`moved to`push/urls.ts` so the list imports no view.
+Consequence: a row's `when` reads config only (Notifications: PWA_ENABLED, Weather: WEATHER_ENABLED); Devices was shown only while a device token existed, which the nav cannot know without a query on every settings page, so it is always a row and its page has the empty state (`devices.NONE`). `PUSH_SETTINGS_*` moved to `push/urls.ts` so the list imports no view.
 
 ## 2026-11-18 — Styling is a `panel` whose aside is the phone's bar; the `stack` action bar is gone (#1073)
-
 Why: D5 left Styling on a `stack` action bar whose desktop grid (`body bar`, 1fr 20rem) was a second `panel` written in the action bar's CSS, and its preview's whole shape spelled every class twice (`group-open:` and `lg:`, which had to agree). Rows at w-40 made seven rows 1768 px at 1440.
 Decision: Styling is `PageShell layout="panel"` with `StylingAside` (preview, fit line, Shuffle and Save) as its aside and `asideBelowLg: 'bar'` (`data-aside="bar"`): the phone keeps #664's sticky bar from the same markup. `ActionBar` is one `row` again (no `kind`). The preview's whole shape is main.css's `preview-whole:` variant (details open, or from lg). Snap strip's `roomy` size is gone: garment rows are `regular`, `small` steps to it from lg.
 Consequence: phone pixel-identical (exact 390 px diff against main: new, an outfit, a locked row, the preview opened). Seven rows 1768 to 1432 px at 1440 and 1280 (the design's 1150 assumed smaller row chrome; a desktop tile never draws a garment smaller than the phone's w-28). lg-check 112 to 103 (styling-page 26 to 17, 16 of them `preview-whole:`).
@@ -1711,13 +1617,11 @@ Decision: `styling/styling-actions.ts` holds every read and Save, each taking th
 Consequence: a new Save branch goes in `saveStyled`, and its op line in the action it ends in; `routes.tsx` stays parse, call, render.
 
 ## 2026-11-18 — The scope row asks from the facets, so an unapplied tick survives (#1144)
-
 Why: from lg the facets are always on screen, and search Enter, a chip's × and the capsule menu answered facets rendered from their URL, which lacked a tick not yet applied: the tick vanished.
 Decision: a chip's × and the capsule menu send the filter form's fields (`fromFilters` in `wardrobe-page.tsx`: bare `hx-get="/wardrobe"`, `hx-include="#filter-form"` plus the keyword, `hx-params="not <name>"` for a chip and for All garments, `hx-vals` for a capsule, never an empty value: it would push `capsule=`); search's Enter submits the filter form (`SEARCH_THROUGH_FILTERS`, inline `onsubmit`, `hx-boost="false"`). The tick is in the pushed URL and comes back checked: the facets still mirror the URL after every navigation (#1067's rule); answers that skip the facets would break it for a chip or a capsule.
 Consequence: the search form's hidden filters stay for the no-script GET; including the filter form into it sent each filter twice (a 400), and `<noscript>` around them fails because htmx parses swaps with scripting off. Closing the phone's `filters` sheet without Apply resets its form (`DISCARD_UNAPPLIED`, `sheet.tsx`), so a tick left there is never applied by a later request; the docked facets never close and send their live ticks.
 
 ## 2026-11-18 — From lg the bar's title shrinks before its tabs, by shrink weight (#1110)
-
 Why: tabs at `flex: 1 0 auto` never shrank, so at 200% text at 1024 px the title's floor, the tabs and the actions overflowed the header and pushed the actions off screen; at `1 1 0%` a long title squeezed the tabs to nothing.
 Decision: the title is `flex: 0 100000 auto` with a 5rem floor and the tabs `1 1 auto` (main.css). Flex has no shrink priority; a weight that large gives the title the whole shortfall (the tabs' share is under a layout unit) until its floor, then the tab row shrinks and scrolls inside the bar.
 Consequence: `test/trips.spec.ts` at 1024 holds both: a 60-character title cut, tabs unscrolled at 100%; the row scrolling and the Wardrobe's actions on screen at 200%.
@@ -1735,13 +1639,11 @@ Decision: `nameSchemas` (`scripts/api-spec.ts`) hoists each title into `componen
 Consequence: a new resource schema needs a unique `title`; a feed branch is titled `<Resource>Change` so the discriminator can map to it.
 
 ## 2026-11-18 — Client modules are TypeScript sharing the views' names; plain JS only shrinks (#713)
-
 Why: the installed app's offline state, freshness, back and push ran as unchecked JS: a renamed `data-*` attribute or dataset key shipped with every check green, and freshness.js duplicated four server constants because it could not import TS.
 Decision: connectivity, freshness, back, pwa, push and six small modules moved to `views/assets/page/*.ts` (strict `tsconfig.page.json`, in `npm run typecheck`), bundled by `buildPageModules` (`npm run generate:pages`, which replaced `generate:outbox`) to their old `public/js/` URLs with every importmap name kept external. The names they read are `src/web/page-contract.ts`'s constants, spread by the writing view; the heartbeat's header became `src/live-answer.ts` (one spelling, bundled into connectivity: the `live-answer` importmap entry is gone) and the page tag `src/page-tag.ts`.
 Consequence: no new plain-JS module: `scripts/ci/plain_js.conf` is the 17 left, shrink-only (`make plain-js-check`), and replaces follow-up issues. main.css still spells data-needs-network and data-connectivity by hand; Tailwind scans `views/assets/page` and `outbox.ts`.
 
 ## 2026-11-18 — The server compiles under `strict: true` (#710)
-
 Why: `noImplicitAny` and `strictBindCallApply` were off (upstream's NestJS-era flags), so an untyped parameter or an imported JS module flowed as `any` with the type-check green. Turning them on found 10 errors, none in raw-SQL rows.
 Decision: `tsconfig.json` is `strict`. It sets `allowJs` with a TS-only `include`, so a spec importing `public/js/*.js` or `scripts/lint/*.mjs` gets the module's JSDoc types; JS is reached only through an import, never checked (`checkJs` off). Fastify's logger is typed `FastifyBaseLogger` in `createApp`, so the app is the plain `FastifyInstance` every `register*` takes (`strictFunctionTypes` refuses a pino-typed one).
 Consequence: `no-unsafe-*` is `error` everywhere but `test/integration`, where 93 of the 109 violations strict surfaced are parsed JSON bodies asserted by value (four rules off there; a typed JSON helper would turn them on). Vitest's asymmetric matchers return `any`: in a typed literal one is cast to what it stands for (`expect.stringMatching(...) as string`), an object matcher `as unknown`.
@@ -1765,7 +1667,6 @@ Consequence: converting a plain module moves its URL to `pageModuleUrl`. A check
 **Consequence:** a new generated file under `src/` that is not TS gets an ignore there.
 
 ## 2026-11-18 — htmx settles no attributes
-
 Why: htmx inserts an element that replaces one of the same id wearing the old element's `class` and `style`, applying its own only after the 20 ms settle delay, for CSS transitions. A month cell's weather chip arrived in its empty slot's classes (base size, not `text-xs`), widening the lg date column, then shrank; `calendar.spec.ts` measured the date and the chip on either side of the settle and failed once.
 Decision: `HTMX_CONFIG.attributesToSettle` is `[]` (`src/web/layout/layout.tsx`): every swapped element is drawn as the server sent it from its first frame. Nothing used the settle for a transition.
 Consequence: a CSS transition between an old and a new class on swap is unavailable; one that needs it animates on its own (`@starting-style`, a keyframe). The calendar scenario records the chip at insertion (a MutationObserver, ahead of the settle timer) and requires the settle to move nothing.
@@ -1783,7 +1684,6 @@ Decision: an API twin is a `TwinCase` (`test/integration/twin-statements.ts`): `
 Consequence: a new twin's count is one line in the table; a case naming a page route the manifest does not twin fails at collection. The before and after `statements.json` of the spec matched key for key.
 
 ## 2026-11-19 — The spec emitter walks schemas by structure (#1197)
-
 Why: `nameSchemas` walked every object in the OpenAPI document as a schema and skipped keyword lists (`DATA_KEYWORDS`, `NAME_MAP_KEYWORDS`); three review rounds (#1167, #1196, #1197) each found a name that was also a keyword (a `default` response, a component called `example`).
 Decision: it visits only the document's schema positions (parameters, media types, headers, `components.schemas`) and, inside a schema, only JSON Schema's applicator keywords (with draft-07's tuple `items: [...]` and `additionalItems`, which `Type.Tuple` emits); every other value is data by construction. A position it does not walk (another component kind, `webhooks`, `callbacks`, encoding headers) fails the emit.
 Consequence: a new applicator keyword or schema position is added to its list in `scripts/api-spec.ts`; there is no list of data keywords to keep.
@@ -1795,43 +1695,36 @@ Decision: `audit:pages` first opens each plain-GET page step in Chromium at 390 
 Consequence: a PR that adds a violation fails the nightly; one that fixes some refreshes the baseline. The counts are a baseline of what exists (serious `label-content-name-mismatch`, `nested-interactive`, hundreds of small targets), not a pass.
 
 ## 2026-11-19 — Accessibility kinds come from the element, not axe's selector (#1207)
-
 Why: `--compare` fails the nightly on a new kind, so a kind must not follow the seed or the clock; three review rounds each found another hole in deriving it from axe's selector strings by regex (escapes, data values, coarseness).
 Decision: axe-core runs in the page with `elementRef` (injected from `axe-core`, no `@axe-core/playwright`), and the same `page.evaluate` describes each violating element axe returns, after htmx is idle, so no target is looked up again; a run the page changed during (a MutationObserver around it) is rerun, twice at most, then the page fails (`runWhileStill`, injected by its source). A kind is the tag, explicit role, an input's or button's type, its classes, a link's route shape (like a form action's) and its nearest region (a form's action, a section's id or `aria-labelledby`, a landmark). `kindOf` keeps only design-system classes (main.css's and daisyUI's components', no BEM modifier) and, of any value, only a code word (lower-case letters and hyphens), else `*`.
 Consequence: no selector is parsed anywhere; a new region worth telling apart is a section with an id. The unit spec fails on a digit in any baseline kind.
 
 ## 2026-11-20 — A tap target is what a fingertip's hit test reaches (#1210)
-
 Why: the audit's `target < 44 px` read each control's own box, so the 44 px hit areas `main.css` has drawn on a coarse pointer since #636 never counted (125 kinds, most of them already reachable), and an overlap between two areas never counted against either. The 44 px is our rule (WCAG 2.5.5, Apple's minimum); axe's `target-size` is 2.5.8's 24 px and never fired.
 Decision: one definition, `tapMisses` (`test/support/tap-area.ts`), serves the audit and `expectTouchTargets`: a 44 px disc centred on the control's tap box (it, its labels, its positioned pseudo-elements), each control scrolled into view, its centre and eight rim points hit tested with `elementFromPoint`, each probe's pixel square inside the disc (Chromium tests the square from the point, and the later of two meeting boxes wins it), the rim half a pixel in, so a disc within a pixel of 44 passes. Scrolling and its restore run in one synchronous pass, so no paging sentinel fires.
 Consequence: a hit area counts and a neighbour's over it counts against; the fix for an overlap is spacing, never loosening the measure. A calendar day cell links only its date, stretched over the cell (`cell-link.ts`), so its label starts with its visible text.
 
 ## 2026-11-22 — The tap measure tolerates one pixel, not two (#1209)
-
 Why: the rim sat half a pixel in, so a 42 px control passed `tapMisses` while the documented tolerance is a pixel for whole-pixel hit testing.
 Decision: the rim is at `min / 2`, each probe square ending on it: a box 43 across passes and 42 fails. The audit's own 0.5 px sub-pixel slack (`TARGET_TOLERANCE_PX`) is separate. The measure is pinned in `scripts/audit/a11y.browser.spec.ts`, its own vitest project (`audit-browser`) run by `make ci-e2e`, never by ci-unit or ci-db (no browser there).
 Consequence: audit counts rise on controls of 42 to 43.5 px; #1218 regenerated `docs/perf/baseline.json` under this measure (`target < 44 px` 71 to 173), and the tap-target PR (#1210 PR B) brings that count down.
 
 ## 2026-11-22 — The last small targets are fixed by their cause, read off the hit test (#1210)
-
 Why: PR A grouped the 71 remaining nodes by audit kind as "wrapped rows"; the hit tests said otherwise: a chip scroller clipping its chips' areas, a strip painted over each lock, a stretched FormField label taking a narrow field's tap box, a join's 1 px overlap, side-by-side btn-sm 4 px apart, list rows of btn-xs.
 Decision: `main.css` owns touch sizes (fields 44 px wide, joined btn-sm segments 44 px plus the border, `tap-row` 44 px tall); spacing between two controls is a `pointer-coarse:` gap or margin at the call site, so a fine pointer's layout is unchanged; fixes with no visible effect (`self-stretch`, `items-start`) apply at every width.
 Consequence: the demo's `target < 44 px` is 0 under #1209's one-pixel measure (173 before). A wrapping row of btn-sm chips is `chip-row` (rows 10 px apart on touch, since a btn-sm is 35.2 px there); a btn-xs row needs more and has none yet. A new node is diagnosed from its `lands on`, not its kind name.
 
 ## 2026-11-22 — An h2 session collected undestroyed aborts the process; every one is destroyed and observable
-
 Why: a `make ci-db` worker died with SIGABRT in `outbound-fetch.spec.ts` after every test passed: `node::Assert` from `Http2Session::~Http2Session()`, run by V8's weak callbacks in a minor GC (crash report node-2026-11-22-163347). The destructor CHECKs `!is_in_scope()` and `current_nghttp2_memory_ == 0`; the run was Node 22.20.0, which lacks 22.23.2's http2 fixes to exactly those (CVE-2026-56846, session memory accounting; CVE-2026-56848, RST deferred while in scope). The specs' h2 servers destroyed sockets but never sessions.
 Decision: every client session `dial` builds is published on `H2_SESSION_CHANNEL` (`outbound-dial.ts`, diagnostics_channel, free without a subscriber: Node's `http2.client.stream.created` misses a session that ends before its request); `outbound-fetch.spec.ts` holds every fetch to a destroyed session at settle and pins the four exits (timed out between dial and request, a session error after the answer, an answer refused unread, each redirect hop). The specs' h2 servers destroy their sessions before `server.close()`.
 Consequence: no client path leaked; the fetcher needed no change. The crashing run was Node 22.20.0, the Mac's mise global, which devkit's `node_toolchain.sh` accepted under its old major-only check (owner 2026-11-13); devkit #508, pinned here by #1219, made that check exact against `.nvmrc`'s 22.23.3. `--report-on-fatalerror` writes nothing on a CHECK failure (node::Assert prints the native and JS backtraces to the worker's stderr, which Vitest pipes through), so it was not added.
 
 ## 2026-11-25 — The mask editor and colour field are client modules written afresh (#1225, PR A)
-
 Why: the relicense needs no upstream-authored line in the tree; `public/js/mask-editor.js` and `color-multiselect.js` were mostly upstream's, and both were on plain_js.conf's debt list.
 Decision: rewritten from their behaviour as `views/assets/page/mask-editor.ts` and `color-picker.ts`, names in `page-contract.ts`. The colour field's pills and count are server-rendered for every colour and only shown or hidden by the module (no node built from a value); its listeners are all delegated on the document. The editor uses pointer events with `touch-none`, paints a stroke as discs a third of a radius apart, and ends at the dialog's `close`.
 Consequence: closing the editor by Close, the backdrop or Escape no longer leaves the pencil disabled (the old promise never settled). Ids and data attribute names are unchanged, so the specs read the same markup. A page cached before the deploy still imports `/js/mask-editor.js?v=<old id>`, which its own build's precache answers (an older copy is kept, and deleted on read only once its build has no installed precache: 2026-11-13, #656), so its pencil keeps working until the page is renewed; no shim.
 
 ## 2026-11-25 — Closet is MIT; every inherited line was rewritten first (#1225)
-
 Why: the owner decided Closet becomes MIT and drops every reference to where it began; only a copyright holder can relicense, so no inherited expression could stay. `make upstream-check` (`scripts/ci/upstream_lines.sh`: `git blame -w -M -C -C -C`, so a copy from any file of any commit counts, a line whose author email is not the owner's, with a letter or digit; the lockfile and drizzle-kit's generated snapshots skipped; then `scripts/upstream-rewraps.ts`, since blame matches whole lines: an owner line of 40+ characters found in any upstream blob, whitespace and line breaks ignored, counts too, which catches a formatter's split or join and text kept inside a new wrapper; no `.git-blame-ignore-revs`, as the squash-merged history has no format-only commit) measured 1,680 inherited lines in 67 files on origin/main (544 the AGPL text itself); PR A (#1226) had already replaced the two plain-JS modules.
 Decision: every substantive inherited line is rewritten from what it does, or deleted (DESIGN.md, the colour field's never-shown swatches, the Handlebars prettier override, two .vscode files, and the frozen MikroORM migration tree, verbatim upstream SQL: `test/support/legacy-database.ts` builds the same legacy database from `drizzle/0000_baseline.sql` and the fifteen `mikro_orm_migrations` names, since the runner judges it by those rows, and the three `@mikro-orm/*` devDependencies go); `LICENSE` is MIT (`Copyright (c) 2026 kashhq`), as are package.json and the image (`/app/LICENSE`, `org.opencontainers.image.licenses/source/revision`, asserted by `smoke-image.sh`). 204 inherited lines are facts with one possible form (a Dockerfile instruction, a schema key, a package and its range, a one-word label, a month's name, an API call as its library spells it, icon path data) and are listed in `scripts/ci/upstream_exempt.txt` with their reasons; a stale entry fails the check.
 Consequence: `make upstream-check` reports 0 at the relicense commit (minutes, so in no tier; run it on any change that brings in outside code). Git history is not rewritten: commits before the relicense keep the original AGPL licence, and the tree from that commit on is MIT. `make docs-check` refuses the original project's name anywhere in the tree, this file included.
@@ -1849,22 +1742,20 @@ Decision: `scripts/upstream-match.ts` keeps the single-line rule (a core of 40+ 
 Consequence: a run broken by a punctuation-only line (`}, {`, not in the owner-line input) is not joined; that split is left to blame and review.
 
 ## 2026-11-25 — A spent destination budget drops a new trip's place, never the trip (#863, #861)
-
 Why: with a picked place, Save charged `WEATHER_LOCATION_LIMIT` first and answered 429 with nothing created once it was spent, on the page and the API; with WEATHER_ENABLED off a posted place was still stored and charged.
 Decision: `addTrip` takes a `PlaceAsk` (the place and a `charge` the route builds from the request's budget, `withinLimit`, or none without weather: `newTripPlace`); the place's label always names the destination, and the create's transaction asks `locate` only after its insert, so a clientId retry or a 410 spends no slot. Unlocated, it answers why: `placeUnlocated` `budget` (the page's `?created=later` toast) or `no-weather` (coordinates never stored there).
 Consequence: a create never fails for the budget; the place is set later from the trip page or PUT /trips/{id}/destination, which still answer 429.
 
 ## 2026-11-25 — A known wash time never replaces a timeless one; the keyword split is one fixed set (#903)
-
 Why: markWashed let any known instant replace a same-day wash stored without one (#793), so a 09:00 wash posted after a timeless one (really 21:00, say) counted the 19:00 wear after it. The SQL keyword fold split on `[[:space:]]`, which follows the collation: it worked for U+00A0 only because `pg_unicode_fast` reached the regex, and still differed from JS `\s` on U+FEFF and U+0085 (#789).
 Decision: `knownAfter` (`src/wardrobe/availability.ts`) is the one same-day ordering: after only with both instants known. `wornSinceWash` and `washMoves` use it; markWashed's update is washMoves' SQL twin, held to `WASH_MOVE_CASES`. `WORD_SPACES` (JS `\s` plus Unicode White_Space, pinned by a unit test) builds both the JS split and the SQL bracket.
 Consequence: a timeless same-day wash stays until a later day, so that day's later wears stay uncounted (the safe side). Select mode's Mark washed counts only archived ids as skipped (#819); `washGarments` returns and logs each reason, a foreign and an unknown id as one `unseen`.
 
-## 2026-11-25 — The CSP allows no inline script: behaviour is a data-\* name a head module reads, and the importmap is a hash, not a nonce (#672)
+## 2026-11-25 — The CSP allows no inline script: behaviour is a data-* name a head module reads, and the importmap is a hash, not a nonce (#672)
 
 Why: `script-src 'unsafe-inline'` let any escaping miss run; `base-uri` and `form-action` do not fall back to `default-src`. The issue asked for a per-response nonce, which breaks what the app relies on: a tab root renders byte for byte the same (stale-while-revalidate's compare), a page's ETag hashes its body (#708), and the worker's confirming 304 lays the new headers over the stored body (`confirmedHeaders`), so a new nonce would block the stored copy's scripts. A boosted navigation keeps the first load's CSP, so a nonce works only through htmx's `inlineScriptNonce`, which stamps any script a swap carries, an injected one too.
-Decision: no `on*` attribute and no executable inline script. The importmap, the one inline script, is allowed by its `sha256` (`csp.ts`, fixed per build). That meets the issue's nonce criterion in substance: no `'unsafe-inline'`, and the one inline script is pinned by hash. A page's per-visit setup is a `data-page-module` element that `page-mount.ts` mounts once per element on `htmx:load`; a mount whose effect belongs to the server's render (the photo sheet opening after a rotate, the flags, a saved share) is `once(...)` and drops its marker as it runs, so a history restore never repeats it; a one-line handler is a delegated `data-*` action (`actions.ts`), a sheet's Cancel included (a `type="button"`, never a dialog form, which nested in the sheet's form would be dropped and submit it). htmx runs no script from a swap (`allowScriptTags: false`, `allowEval: false`), data included, so no `<script>` sits outside the head: the recap's island is an attribute and the sign-in page's schema.org data is in the head. The importmap's text is made once, by createApp, and that one string goes to the CSP and to every page (`ViewContext.importMap`). Adds `base-uri 'self'; form-action 'self'; object-src 'none'`. Overturns AGENTS.md's "one-line inline handler reading data-_".
-Consequence: ESLint, guards.conf `@importmap` and `expectFullPage`/`expectFragment` refuse an inline script or `on_` attribute; every Playwright scenario fails on a CSP violation (`fixtures.ts`). Accepted, no code for either: an older build's open document lacks `actions.ts`and`page-mount.ts`, so a boosted tap into a new build's page has no actions or mounts until the update toast's reload heals it. The reverse, offline: the page cache is shared across builds (`PAGES_CACHE`; `servedCopies`in`src-sw.ts` serves an older build's copy while its precache is installed, #656), so a new document can boost into a page an older build stored, whose inline handlers and modules its CSP refuses (photo pick, copy, plan occasion, filter reset do nothing); it heals once online, when the activation refresh (`refreshOlderBuildPages`) or the next visit fetches the page again.
+Decision: no `on*` attribute and no executable inline script. The importmap, the one inline script, is allowed by its `sha256` (`csp.ts`, fixed per build). That meets the issue's nonce criterion in substance: no `'unsafe-inline'`, and the one inline script is pinned by hash. A page's per-visit setup is a `data-page-module` element that `page-mount.ts` mounts once per element on `htmx:load`; a mount whose effect belongs to the server's render (the photo sheet opening after a rotate, the flags, a saved share) is `once(...)` and drops its marker as it runs, so a history restore never repeats it; a one-line handler is a delegated `data-*` action (`actions.ts`), a sheet's Cancel included (a `type="button"`, never a dialog form, which nested in the sheet's form would be dropped and submit it). htmx runs no script from a swap (`allowScriptTags: false`, `allowEval: false`), data included, so no `<script>` sits outside the head: the recap's island is an attribute and the sign-in page's schema.org data is in the head. The importmap's text is made once, by createApp, and that one string goes to the CSP and to every page (`ViewContext.importMap`). Adds `base-uri 'self'; form-action 'self'; object-src 'none'`. Overturns AGENTS.md's "one-line inline handler reading data-*".
+Consequence: ESLint, guards.conf `@importmap` and `expectFullPage`/`expectFragment` refuse an inline script or `on*` attribute; every Playwright scenario fails on a CSP violation (`fixtures.ts`). Accepted, no code for either: an older build's open document lacks `actions.ts` and `page-mount.ts`, so a boosted tap into a new build's page has no actions or mounts until the update toast's reload heals it. The reverse, offline: the page cache is shared across builds (`PAGES_CACHE`; `servedCopies` in `src-sw.ts` serves an older build's copy while its precache is installed, #656), so a new document can boost into a page an older build stored, whose inline handlers and modules its CSP refuses (photo pick, copy, plan occasion, filter reset do nothing); it heals once online, when the activation refresh (`refreshOlderBuildPages`) or the next visit fetches the page again.
 
 ## 2026-11-25 — The order mail's owner is a stored id, adopted once, moved only by the CLI (#976)
 
@@ -1897,7 +1788,6 @@ Decision: upstream is the fork point and its ancestors. `scripts/ci/upstream_bas
 Consequence: a different fork point means editing that file; the owner emails now only classify the report.
 
 ## 2026-11-25 — A request for a Host that is not this site is a 421 (#702)
-
 Why: the same-origin check compares Origin with the request's own Host, so a DNS-rebinding page (attacker.example resolving to the server) passed it on every surface.
 Decision: one root onRequest hook before it (`allowed-host.ts`) allows `SITE_URL`'s host, `ALLOWED_HOSTS` entries and loopback at any port (HEALTHCHECK, smoke, dev, Playwright, inject), judged on `request.host`, case-insensitive, 80/443 as no port, any other port exact; no Host at all (HTTP/1.0) is refused too. The answer is a 421 sent by the hook with one `text/plain` line naming `ALLOWED_HOSTS` and `SITE_URL` (never the host asked for), not an `HttpError`: the error handler writes a problem or a page, and a new problem `code` would change the OpenAPI contract. Logged by the access line plus one warn per distinct host (the first 20 a boot).
 Consequence: the twin's name is not in config, so it is not derived: every name a client, gate or scraper uses (Caddy passes the original Host) must be in `ALLOWED_HOSTS` before a deploy, or that door is a 421; a production boot whose only host is loopback (the default `SITE_URL`, no `ALLOWED_HOSTS`) warns.
@@ -1915,7 +1805,6 @@ Decision: `CAPABILITIES` (`sharing/access.ts`) names what each role grants (`vie
 Consequence: a link carrying `?ownerId=` onto an owner-only page 404s; a page that should serve a grantee declares OwnerQuery and goes through the resolver. `launder` and `private` take effect in #680's next two PRs.
 
 ## 2026-11-25 — Registration is a mode, closed after the first account by default (#670)
-
 Why: `DISABLE_REGISTRATION` defaulted to false, so a fresh install exposed to the internet let anyone create accounts after the first.
 Decision: owner chose `REGISTRATION=first-user|open|closed`, default `first-user`; `DISABLE_REGISTRATION` is read for one release as `closed`/`open` with a boot warning, and a disagreeing pair is a ConfigError naming both (letting either win could open a sign-up the operator closed). One `RegistrationGate` (`src/web/auth/registration.ts`) answers the routes' hook and the login and invite pages' link. A first-user insert takes `pg_advisory_xact_lock`, then checks for an account, then inserts, as separate statements (#189: a statement's snapshot predates its lock wait).
 Consequence: a refused sign-up is today's 302 to login, with `?registrationClosed=1` for the notice. The gate's latch is per process and never re-opens without a restart. A second member joins through a temporary `REGISTRATION=open`; there is no CLI. Specs and Playwright run `open`. Homelab's compose must replace its `DISABLE_REGISTRATION` line, not add `REGISTRATION` beside it.
