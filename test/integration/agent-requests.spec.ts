@@ -287,6 +287,23 @@ describe('the asker', () => {
     expect(expectProblem(refused, 404, 'not_found').detail).toBe(
       'Trip not found',
     );
+    // A trip page is the owner's alone (a partner's visit, with or without
+    // ?ownerId=, is a 404 page), so the trip's ask entry never reaches a
+    // partner: #1320.
+    const tripPage = (who: Asker, query = '') =>
+      t.inject({
+        method: 'GET',
+        url: `/trips/${tripId}${query}`,
+        headers: { cookie: who.cookie },
+      });
+    const ownerView = await tripPage(owner);
+    expect(ownerView.statusCode).toBe(200);
+    expect(ownerView.body).toContain('data-ask-agent="trip"');
+    for (const query of ['', `?ownerId=${owner.id}`]) {
+      const partnerView = await tripPage(partner, query);
+      expect(partnerView.statusCode, query).toBe(404);
+      expect(partnerView.body, query).not.toContain('data-ask-agent');
+    }
     // The share ended: the request stays, its subject no longer shown.
     const removed = await t.inject({
       method: 'POST',
