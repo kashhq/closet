@@ -37,6 +37,10 @@ import {
 } from './form';
 import { SignOutForm } from './logout';
 import { type SettingsRowId, settingsRows } from './settings-rows';
+import { REQUESTS_PATH } from '../requests/urls';
+
+/** Profile's row to the requests to the agent (`/auth/profile#requests`). */
+const REQUESTS_ROW_ID = 'requests';
 import { RETURN_TO_PARAM } from './return-to';
 import {
   DEVICE_IDLE_DAYS,
@@ -377,6 +381,22 @@ export function ProfilePage(props: ProfileProps) {
               summary={SETTING_SUMMARIES[row.id](props)}
             />
           ))}
+        </ul>
+      </Card>
+      {/* Not a setting (SETTINGS_ROWS): what the user asked their agent (#1286). */}
+      <Card
+        as="nav"
+        variant="content"
+        class="w-full"
+        aria-label={t('requests.TITLE')}
+      >
+        <ul class="card-body py-1 gap-0">
+          <SettingsRow
+            id={REQUESTS_ROW_ID}
+            href={REQUESTS_PATH}
+            label={t('requests.TITLE')}
+            summary={t('requests.PROFILE_SUMMARY')}
+          />
         </ul>
       </Card>
       <ExportSection />

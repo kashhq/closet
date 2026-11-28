@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, type SQL, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { TOKEN_PREFIX, type TokenKind } from '../../credential-names';
 import type { Db, Queryable } from '../../db/client';
@@ -122,6 +122,18 @@ const inForce = (userId: number) =>
     eq(personalAccessToken.userId, userId),
     isNull(personalAccessToken.revokedAt),
   );
+
+/**
+ * Whether the user has an agent token in force, as a scalar for the
+ * reader's own statement: "Ask your agent" says when none is (#1286), so a
+ * request is known to wait until one connects.
+ */
+export function agentConnectedSql(userId: number): SQL<boolean> {
+  return sql<boolean>`exists (select from ${personalAccessToken} where ${and(
+    inForce(userId),
+    eq(personalAccessToken.kind, 'mcp'),
+  )})`;
+}
 
 /**
  * The user's tokens still in force, newest first: of one kind, or every

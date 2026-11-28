@@ -87,6 +87,7 @@ import {
   type ReplayDriver,
   replayQueue,
   replayVerdict,
+  requestRecordKey,
   routesThroughOutbox,
   takesDay,
   takesInstant,
@@ -191,6 +192,7 @@ const ACTION_TEXT: Record<QueueableKind, string> = {
   entry: 'textOutboxActionEntry',
   packed: 'textOutboxActionPacked',
   item: 'textOutboxActionPacked',
+  request: 'textOutboxActionRequest',
 };
 
 // ---- The page ---------------------------------------------------------------
@@ -815,6 +817,46 @@ function toRecord(
   };
 }
 
+/**
+ * The ask's `clientId` field (src/web/requests/ask-sheet.tsx): the sheet's
+ * one form inside its region. Empty until the first tap mints one.
+ */
+function askClientField(region: HTMLElement): HTMLInputElement | undefined {
+  const field = region
+    .querySelector<HTMLFormElement>('form')
+    ?.elements.namedItem('clientId');
+  return field instanceof HTMLInputElement ? field : undefined;
+}
+
+const askClientId = (region: HTMLElement): string | undefined =>
+  askClientField(region)?.value || undefined;
+
+/**
+ * Every tap of an ask is a new request: a fresh client id before the tap is
+ * decided, so the live post and a queued replay carry the same one (the
+ * server stores it once, on `(owner_id, client_id)`), and a page restored
+ * from history never sends an earlier ask's id again. A hidden input's
+ * value is its default (its value mode), so the reset after queueing
+ * (closeAsk) keeps it, and the region's "Waiting to sync" stays keyed to
+ * the ask it queued.
+ */
+function mintAsk(form: HTMLFormElement): void {
+  const region = form.closest<HTMLElement>(REGION);
+  const field =
+    region && kindOf(region) === 'request' && askClientField(region);
+  if (field) field.value = newId();
+}
+
+/** A queued ask's sheet: closed, its text cleared for the next one. */
+function closeAsk(writes: readonly Draft[]): void {
+  for (const write of writes) {
+    if (write.kind !== 'request') continue;
+    const form = write.region.querySelector<HTMLFormElement>('form');
+    form?.reset();
+    form?.closest('dialog')?.close();
+  }
+}
+
 /** A tap that cannot be queued: why, and a checklist's tick put back. */
 function refuse(message: string, trigger: EventTarget | null): void {
   if (trigger instanceof HTMLInputElement && trigger.type === 'checkbox') {
@@ -860,6 +902,7 @@ async function queue(
     refuse(text('textOutboxUnavailable'), trigger);
   } else {
     console.info(`[outbox] queued ${keys}`);
+    closeAsk(writes);
     // The autosave line says "Saved" for the last answer the server gave;
     // this tap has none, and the row's "Waiting to sync" is the state.
     for (const write of writes) {
@@ -898,6 +941,7 @@ function route(
   trigger: EventTarget | null,
   proceed: () => void,
 ): Promise<void> {
+  mintAsk(form);
   // Read at the tap: a checklist's tick is the tapped state.
   const writes = drafts(form, trigger);
   const keys = writes.map((draft) => draft.key);
@@ -1396,7 +1440,12 @@ function wearDayOf(region: HTMLElement, timeZone: string): string {
  */
 function regionKey(region: HTMLElement): string | undefined {
   const key = region.dataset.outboxKey ?? '';
-  if (kindOf(region) !== 'wear') return key;
+  const kind = kindOf(region);
+  if (kind === 'request') {
+    const clientId = askClientId(region);
+    return clientId ? requestRecordKey(clientId) : undefined;
+  }
+  if (kind !== 'wear') return key;
   const { timeZone } = appStatus();
   return timeZone ? `${key}:${wearDayOf(region, timeZone)}` : undefined;
 }

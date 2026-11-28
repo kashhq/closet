@@ -150,7 +150,7 @@ In full: `docs/conventions.md`, `docs/web-layer.md#client-behavior`.
 - **No runtime CDN imports**: client packages from `public/modules/` or `public/vendor/`; zero external requests (`delivery.spec.ts`).
 - **Postgres in every tier**; no second driver for test speed.
 - **Cookies are `Secure` only when the request is https** (`sessionCookieOptions`); never a blanket `secure: true` (#700). `SameSite=Lax` must stay (CSRF).
-- **Offline-first per `frontend-pwa.md`**: cached reads show freshness; unreachable writes are disabled with a reason, never dropped, except wears, washes and packing ticks, which the outbox queues and replays (`src/web/shell/outbox.md`, #178); heartbeat, not `navigator.onLine`.
+- **Offline-first per `frontend-pwa.md`**: cached reads show freshness; unreachable writes are disabled with a reason, never dropped, except wears, washes, packing ticks and asks of your agent, which the outbox queues and replays (`src/web/shell/outbox.md`, #178); heartbeat, not `navigator.onLine`.
 - **"Today" is `todayIn(APP_TIMEZONE, now)`** in app and tests (`t.today()`, `householdToday()`): a UTC date is tomorrow on a New York evening. A new consumer gets a row in `test/integration/today.spec.ts`.
 
 ### Changing the schema

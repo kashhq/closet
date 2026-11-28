@@ -1863,3 +1863,10 @@ Superseded 2026-11-27: the owner dropped the alias; no clients exist.
 Why: the plan's `garment_id` FK `ON DELETE SET NULL` breaks a shared subject: a grantor deleting their garment would set null on the grantee's synced `agent_request` row without the grantee's owner lock, which the sync triggers refuse, so the grantor's delete would fail.
 Decision: `garment_id` has no foreign key (like `garment.suggested_by_token_id`), and every read joins the garment only while the asker still sees it. Trip and need stay FKs (always the asker's own). Each move is one `ownerTransaction`: the row `FOR UPDATE`, the pure `requestMove` (src/wardrobe/agent-requests.ts), then one UPDATE guarded by the judged status, so refusals name their reason exactly. withdraw and seen twice are `changed: false`, not errors.
 Consequence: a key from any synced row into another account's rows must be soft (src/db/AGENTS.md). `PAGE_WRITES`/`MCP_WRITES` lines land with #1286/#1287: the parity spec refuses a line whose route or tool does not exist yet.
+
+## 2026-11-28 — The outbox queues a create: "Ask your agent" (#1286)
+
+Why: frontend-pwa.md disables unreachable writes, and #178's exception covered only set-state taps (wears, washes, ticks); an ask typed on a phone offline would be lost to the disabled sheet, and a request is a create with nothing to conflict with.
+Decision: outbox kind `request` (`QUEUEABLE_ROUTES.request = '/requests'`). Every ask is its own record, `request:<clientId>`: the page mints the `clientId` into the sheet's form at each tap (`mintAsk`), so the live post and its replays carry one id, and `insertRequest`'s `(owner_id, client_id)` arbiter stores it once (a replay of a stored one answers 204 `unchanged`). Withdraw and Got it stay `data-needs-network`. Whether an agent is connected is said on Today's card and the request's pages, never in the sheet, so the pages holding it (the Wishlist, a tab root) stay byte-stable.
+Consequence: a future queued create follows this shape: a client-minted id in the form, a key per id, a unique-constraint arbiter on the server, never a key that collapses two creates.
+

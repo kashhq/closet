@@ -39,6 +39,7 @@ import { outfitRoutes } from './outfits/routes';
 import { pushRoutes } from './push/routes';
 import type { OutboundFetcher } from './security/outbound-fetch';
 import type { PushSender, VapidConfig } from './push/sender';
+import { requestRoutes } from './requests/routes';
 import { selfieRoutes } from './selfies/routes';
 import { shareRoutes } from './share/routes';
 import { shellRoutes } from './shell/routes';
@@ -254,6 +255,7 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   await app.register(lookalikeRoutes, options);
   await app.register(calendarRoutes, options);
   await app.register(tripRoutes, shared);
+  await app.register(requestRoutes, options);
   await app.register(selfieRoutes, options);
   await app.register(weekPlanRoutes, options);
   await app.register(outfitRoutes, options);

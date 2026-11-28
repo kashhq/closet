@@ -127,6 +127,7 @@ export const ADDRESS: Fixture = {
   weekPlanId: 118,
   agentRequestId: 121,
   agentRequestBody: 'Ask',
+  answeredRequestId: 122,
   inviteShareId: 119,
   inviteToken: 'invite-token',
   photo: Buffer.alloc(0),

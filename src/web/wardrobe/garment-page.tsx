@@ -11,6 +11,7 @@ import type { AvoidedPartner } from '../gallery/queries';
 import { AgentBadge } from '../agent-badge';
 import { t } from '../i18n';
 import { GarmentMark } from '../layout/garment-mark';
+import { AskAgent } from '../requests/ask-sheet';
 import { PageShell } from '../layout/page-shell';
 import {
   CameraIcon,
@@ -189,6 +190,8 @@ export function GarmentPage(props: {
       }
     >
       <Summary model={model} />
+      {/* Anyone who sees the garment may ask about it, a grantee too (#1286). */}
+      <AskAgent subject={{ kind: 'garment', id: garment.id }} label={title} />
       {model.canEdit && (
         <PublicSharePanel siteUrl={ctx.siteUrl} share={publicShareOf(model)} />
       )}

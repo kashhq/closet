@@ -269,6 +269,8 @@ export const PLACEHOLDER_KINDS = {
   'today.push.IDEA': { outfit: 'data' },
   'today.push.SWAPPED': { garments: 'data', why: 'copy' },
   'today.push.EVENING_PLANNED': { outfits: 'data' },
+  'requests.ASKED': { day: 'copy' },
+  'requests.MORE': { count: 'data' },
   'selfie.ALT': { day: 'copy' },
   'selfie.VIEW': { day: 'copy' },
   'selfie.WORN_HEADING': { count: 'data' },

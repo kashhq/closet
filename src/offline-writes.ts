@@ -16,6 +16,8 @@ export const QUEUEABLE_ROUTES = {
   entry: '/calendar/:id/worn',
   packed: '/trips/:id/packed',
   item: '/trips/:id/items/packed',
+  // "Ask your agent" (#1286): a create, keyed by its client id (requestRecordKey).
+  request: '/requests',
 } as const;
 
 export type QueueableKind = keyof typeof QUEUEABLE_ROUTES;
@@ -88,6 +90,22 @@ export function queuedTarget(
     key: [kind, id, ...(part === undefined ? [] : [part])].join(':'),
     path: ownerId === undefined ? path : `${path}?ownerId=${ownerId}`,
   };
+}
+
+/**
+ * A request's region (src/web/requests/ask-sheet.tsx) names only its kind:
+ * every ask is its own record, keyed by the client id the outbox mints
+ * into the sheet's form at the tap (requestRecordKey), so two asks never
+ * collapse into one and a replay is idempotent on `(owner_id, client_id)`.
+ */
+export const REQUEST_TARGET: QueuedTarget = {
+  key: 'request',
+  path: QUEUEABLE_ROUTES.request,
+};
+
+/** A request record's key: `request:<clientId>`, one per ask. */
+export function requestRecordKey(clientId: string): string {
+  return `${REQUEST_TARGET.key}:${clientId}`;
 }
 
 const ROW_ID = '[1-9]\\d{0,9}';
@@ -428,11 +446,15 @@ export type OfflineNotice = 'none' | 'wears' | 'washes' | 'ticks' | 'changes';
  * several of them. The page's views map each to its string.
  */
 export function offlineNotice(kinds: readonly QueueableKind[]): OfflineNotice {
+  // An ask is the sheet's, which says offline what it does itself: a page's
+  // notice names what the page's own controls keep.
   const groups = new Set(
-    kinds.map((kind) => {
-      if (isChecklist(kind)) return 'ticks';
-      return kind === 'wash' ? 'washes' : 'wears';
-    }),
+    kinds
+      .filter((kind) => kind !== 'request')
+      .map((kind) => {
+        if (isChecklist(kind)) return 'ticks';
+        return kind === 'wash' ? 'washes' : 'wears';
+      }),
   );
   if (groups.size === 0) return 'none';
   if (groups.size > 1) return 'changes';
@@ -663,6 +685,9 @@ export function showsQueuedWrite(writePath: string, pagePath: string): boolean {
     case 'packed':
     case 'item':
       return pagePath === `/trips/${id}`;
+    case 'request':
+      // Today's card lists it; /requests reads fresh on every open.
+      return pagePath === '/';
     case undefined:
       return false;
   }

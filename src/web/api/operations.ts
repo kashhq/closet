@@ -158,9 +158,9 @@ export const OPERATIONS = [
   'addOutfitRule',
   'deleteOutfitRule',
   'listSharedWardrobes',
-  // #1285 (#681 B1): "Ask your agent", the asker's side. The page twins
-  // (POST /requests, its withdraw and seen) join PAGE_WRITES with #1286;
-  // the agent's claim and answer are MCP_WRITES' agentOnly with #1287.
+  // #1285 (#681 B1): "Ask your agent", the asker's side, the twins of
+  // #1286's pages (PAGE_WRITES); the agent's claim and answer are
+  // MCP_WRITES' agentOnly with #1287.
   'listAgentRequests',
   'createAgentRequest',
   'getAgentRequest',
@@ -409,6 +409,11 @@ export const PAGE_WRITES: Readonly<
   'POST /trips/:id/items/packed': { api: 'setTripItemPacked' },
   'POST /trips/:id/items/:itemId/delete': { api: 'removeTripItem' },
   'POST /trips/:id/packed': { api: 'setTripGarmentPacked' },
+
+  // "Ask your agent" (#1286): the asker's side; the ask is also the outbox's `request` kind.
+  'POST /requests': { api: 'createAgentRequest' },
+  'POST /requests/:id/withdraw': { api: 'withdrawAgentRequest' },
+  'POST /requests/:id/seen': { api: 'markAgentRequestSeen' },
 
   // The wishlist (the agent's inbox).
   'POST /wardrobe/:id/choose': { api: 'decideWishlistPick' },

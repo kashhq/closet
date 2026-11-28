@@ -7,6 +7,7 @@ import { t } from '../i18n';
 import { PageSentinel } from '../page-sentinel';
 import { CANDIDATE_GRID, OPTION_ROW, PAIR_GRID } from '../layout/columns';
 import { PageShell } from '../layout/page-shell';
+import { AskAgent } from '../requests/ask-sheet';
 import { EmptyState } from '../layout/parts';
 import { PostForm } from '../form';
 import type { BrandSizeLookup } from '../sizes/queries';
@@ -385,6 +386,15 @@ function GroupCard(props: {
       >
         {t('agent.DECIDE')}
       </a>
+      {/* A need is its owner's to ask about (#1286): above the stretched
+            link, like the thumbs. */}
+      {viewOwner === undefined && (
+        <AskAgent
+          subject={{ kind: 'need', id: need.id }}
+          label={need.name}
+          class="relative z-10"
+        />
+      )}
     </Card>
   );
 }

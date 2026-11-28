@@ -121,6 +121,7 @@ function outboxText(): Record<`data-text-outbox-${string}`, string> {
     'action-wash': t('outbox.action.WASH'),
     'action-entry': t('outbox.action.ENTRY'),
     'action-packed': t('outbox.action.PACKED'),
+    'action-request': t('outbox.action.REQUEST'),
     'reason-gone': t('outbox.reason.GONE'),
     'reason-too-old': t('outbox.reason.TOO_OLD'),
     'reason-future': t('outbox.reason.FUTURE'),

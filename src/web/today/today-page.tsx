@@ -32,6 +32,8 @@ import { SnapStrip, SnapStripsInit, snapItem } from '../strip/snap-strip';
 import type { ViewContext } from '../view-context';
 import { UserWeatherLine } from '../weather/views';
 import { PlanWeekForm } from '../week-plan/views';
+import { AskAgent } from '../requests/ask-sheet';
+import { TodayRequestsCard } from '../requests/today-card';
 import type { FirstRun, IdeasRow, PlannedRow, TodayModel } from './today';
 import { TODAY_PATH, todayIdeasUrl, WEAR_THIS_PATH, WORE_FLAG } from './urls';
 
@@ -47,6 +49,8 @@ import { TODAY_PATH, todayIdeasUrl, WEAR_THIS_PATH, WORE_FLAG } from './urls';
  * all of it is the day's (the plan, the ideas, what was worn), so a copy
  * from yesterday would offer yesterday's decision. Offline, the worker's
  * last copy shows with its age, and every write is data-needs-network.
+ * "Ask your agent" (#1286) sits under the agent's card: its requests still
+ * to show, then the sheet's opener, which queues offline (the outbox).
  * Being the day's anyway, it renders the weather line itself, from the
  * read its ideas are matched with, where the stale-while-revalidate pages
  * load it after them (WeatherSlot): one request and one weather read
@@ -114,6 +118,11 @@ export function TodayPage(props: {
         {t('today.OFFLINE')}
       </p>
       <AgentCard round={model.round} needs={model.needs} />
+      {model.requests && <TodayRequestsCard requests={model.requests} />}
+      {/* Not on the first-run path: its one primary is adding a garment. */}
+      {!firstRun && (
+        <AskAgent subject={null} label={t('today.TITLE')} class="self-start" />
+      )}
       {model.rows.map((row) =>
         row.kind === 'planned' ? (
           <PlannedRowView row={row} today={model.today} wore={wore} />

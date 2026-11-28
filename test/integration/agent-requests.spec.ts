@@ -16,13 +16,19 @@ import { createInvite } from '../../src/web/sharing/queries';
 import type { Actor } from '../../src/web/sharing/access';
 import { deviceToken, expectProblem } from './api';
 import { createGarment } from './garments';
-import { asFixture, createTestApp, type TestApp, userIdOf } from './harness';
+import {
+  asFixture,
+  createTestApp,
+  type TestApp,
+  unescapeHtml,
+  userIdOf,
+} from './harness';
 import { interleave } from './interleave';
 import { mintToken } from './mcp';
 
 /**
  * "Ask your agent" requests (#681 B1, src/web/requests/AGENTS.md): the
- * asker's API, and the machine's moves as the agent's tools (#1287) will
+ * asker's API and pages (#1286: Today's card, the list and a request), and the machine's moves as the agent's tools (#1287) will
  * call them, through transitionRequest. Races are sequenced on the owner
  * lock (interleave), never slept. Another user's request on every API
  * route is authorization-account.spec.ts's.
@@ -162,6 +168,79 @@ describe('the asker', () => {
       'conflict',
     );
     expectProblem(await ask(a, { body: '   ' }), 400, 'validation');
+  });
+
+  // The asker's pages (#1286): Today's card lists what is open, claimed or
+  // answered and not seen yet, the no-agent line until a token is minted;
+  // Got it takes one off Today; the request's page links its subject.
+  it('shows Today and the pages where each request stands', async () => {
+    const a = await asker('requests-pages@example.com');
+    const page = async (url: string) => {
+      const res = await t.inject({
+        method: 'GET',
+        url,
+        headers: { cookie: a.cookie },
+      });
+      expect(res.statusCode, url).toBe(200);
+      return unescapeHtml(res.body);
+    };
+    const cardOf = (html: string) =>
+      /<section[^>]*data-today-requests="(\d+)"[\s\S]*?<\/section>/.exec(html);
+    const tee = await createGarment(t, { name: 'Pages tee', cookie: a.cookie });
+    const asks = await t.inject({
+      method: 'POST',
+      url: '/requests',
+      payload: {
+        body: 'What goes with this?',
+        subjectKind: 'garment',
+        subjectId: String(tee),
+      },
+      headers: { cookie: a.cookie },
+    });
+    expect(asks.statusCode).toBe(303);
+    const open = Number(/^\/requests\/(\d+)$/.exec(asks.headers.location!)![1]);
+    const waiting = cardOf(await page('/'))!;
+    expect(waiting[1]).toBe('1');
+    expect(waiting[0]).toContain('Waiting for your agent');
+    expect(waiting[0]).toContain('data-no-agent');
+    const detail = await page(`/requests/${open}`);
+    expect(detail).toContain(`href="/wardrobe/${tee}" class="link">Pages tee`);
+    expect(detail).toContain(`action="/requests/${open}/withdraw"`);
+
+    const tokenId = await a.agent('Pages agent');
+    const claimed = await asked(a, 'Pack me for this');
+    const answered = await asked(a, 'Find me three cheaper options');
+    const gone = await asked(a, 'Never mind');
+    for (const move of [
+      { kind: 'claim', id: claimed, tokenId },
+      { kind: 'answer', id: answered, tokenId, answer: 'Three under $40.' },
+    ] as const) {
+      await transitionRequest(deps(), agentOf(a.id), move);
+    }
+    await transitionRequest(deps(), agentOf(a.id), {
+      kind: 'withdraw',
+      id: gone,
+    });
+    const card = cardOf(await page('/'))!;
+    expect(card[1]).toBe('3');
+    expect(card[0]).toMatch(/data-agent="Pages agent"[\s\S]*is on it/);
+    expect(card[0]).toContain('Three under $40.');
+    expect(card[0]).toContain(`action="/requests/${answered}/seen"`);
+    expect(card[0]).not.toContain('Never mind');
+    expect(card[0]).not.toContain('data-no-agent');
+
+    const seen = await t.inject({
+      method: 'POST',
+      url: `/requests/${answered}/seen`,
+      payload: { returnTo: '/' },
+      headers: { cookie: a.cookie },
+    });
+    expect([seen.statusCode, seen.headers.location]).toEqual([303, '/']);
+    expect(cardOf(await page('/'))![0]).not.toContain('Three under $40.');
+    const list = await page('/requests');
+    expect(
+      Array.from(list.matchAll(/data-request="(\d+)"/g), (m) => Number(m[1])),
+    ).toEqual([gone, answered, claimed, open]);
   });
 
   it('names a subject it sees (a shared garment), never one it does not; a replayed client id answers the first', async () => {
