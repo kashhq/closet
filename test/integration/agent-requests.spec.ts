@@ -6,8 +6,6 @@ import {
   CLAIM_LEASE_MINUTES,
   REQUEST_ANSWER_MAX,
 } from '../../src/wardrobe/agent-requests';
-import { agentRequestsByIds } from '../../src/web/requests/queries';
-import { toSyncedAgentRequest } from '../../src/web/requests/request-resource';
 import { HttpError } from '../../src/web/errors';
 import {
   type RequestTransition,
@@ -193,12 +191,6 @@ describe('the asker', () => {
     expect(replay.statusCode).toBe(200);
     expect(replay.json()).toEqual({ id });
     expect((await rowOf(id)).body).toBe('What goes with this?');
-    // The feed's row and the API's resource name the garment while it is seen.
-    const feedRow = async () =>
-      toSyncedAgentRequest((await agentRequestsByIds(t.db, [id]))[0]);
-    expect(await feedRow()).toMatchObject({
-      subject: { kind: 'garment', id: garmentId },
-    });
 
     // The owner's trip is not the partner's to name: its 404.
     const ownerTrip = await t.api(owner.device, {
@@ -227,8 +219,6 @@ describe('the asker', () => {
       url: `/api/v1/agent-requests/${id}`,
     });
     expect(read.json()).not.toHaveProperty('subject');
-    // The feed agrees (#1310): it never hands the partner the ex-grantor's id.
-    expect(await feedRow()).not.toHaveProperty('subject');
     // The garment's owner deletes it: no write reaches the partner's row.
     const deleted = await t.inject({
       method: 'DELETE',

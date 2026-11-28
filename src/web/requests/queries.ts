@@ -1,5 +1,4 @@
 import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Queryable } from '../../db/client';
 import { isDeletedClientId } from '../../db/errors';
 import { OWNER_LOCKED, ownerLockSql } from '../../db/owner-lock';
@@ -47,9 +46,8 @@ export interface AgentRequestRow {
 
 /**
  * A request's subject as the asker sees it now: the stored one only while
- * it is seen. The one definition of that, for the API's reads and the
- * changes feed alike (#1310): the garment is the joined `seenGarment`,
- * never the stored garment_id, which stays after a share ends.
+ * it is seen. The API resource's (a fresh read, #1285); the feed sends the
+ * stored reference instead (agentRequestsByIds).
  */
 const subjectSql = sql<RequestSubject | null>`case
   when ${garment.id} is not null then json_build_object('kind', 'garment', 'id', ${garment.id})
@@ -74,14 +72,6 @@ const ROW = {
 };
 
 /**
- * The join condition that keeps a request's garment only while its asker
- * (`viewerId`: an id, or the request's own owner column) still sees it
- * (garment_id is a soft reference: schema.ts).
- */
-const seenGarment = (viewerId: number | AnyPgColumn) =>
-  sql`${garment.id} = ${agentRequest.garmentId} and ${viewsWardrobeSql(garment.ownerId, viewerId)}`;
-
-/**
  * The asker's requests matching `where`, the garment subject joined only
  * while they still see it. Joined, so every column keeps its table
  * (src/db/AGENTS.md).
@@ -90,7 +80,13 @@ function readRequests(db: Queryable, ownerId: number, where: SQL | undefined) {
   return db
     .select(ROW)
     .from(agentRequest)
-    .leftJoin(garment, seenGarment(ownerId))
+    .leftJoin(
+      garment,
+      and(
+        eq(garment.id, agentRequest.garmentId),
+        viewsWardrobeSql(garment.ownerId, ownerId),
+      ),
+    )
     .where(and(eq(agentRequest.ownerId, ownerId), where));
 }
 
@@ -123,8 +119,11 @@ export function requestPage(
 }
 
 /**
- * The changes feed's rows (src/web/sync/feed.ts): one statement for any
- * owners, each request's subject judged for its own asker like the API's.
+ * The changes feed's rows (src/web/sync/feed.ts): as stored, one statement
+ * for any owners. The feed is a replica: the subject is the stored
+ * reference (garment_id included), never judged against the live share,
+ * which moves no request's revision; the client resolves it against the
+ * garments it holds and drops a wardrobe's on `revokedWardrobes`.
  */
 export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
   return db
@@ -132,7 +131,9 @@ export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
       id: agentRequest.id,
       body: agentRequest.body,
       status: agentRequest.status,
-      subject: subjectSql,
+      garmentId: agentRequest.garmentId,
+      tripId: agentRequest.tripId,
+      optionGroupId: agentRequest.optionGroupId,
       claimedAt: agentRequest.claimedAt,
       answer: agentRequest.answer,
       answeredAt: agentRequest.answeredAt,
@@ -141,7 +142,6 @@ export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
       createdAt: agentRequest.createdAt,
     })
     .from(agentRequest)
-    .leftJoin(garment, seenGarment(agentRequest.ownerId))
     .where(inArray(agentRequest.id, [...ids]));
 }
 export type SyncedAgentRequestRow = Awaited<
