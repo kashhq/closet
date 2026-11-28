@@ -12,6 +12,8 @@ import type { OrderMailOwnerWatch } from './wardrobe/order-mail/owner-watch';
 import type { UntrustedProxyWatch } from './security/untrusted-proxy';
 import { sizesRoutes } from './sizes/routes';
 import { mcpRoutes } from './mcp/routes';
+import type { OAuthDiscovery } from './oauth/discovery';
+import { oauthRoutes } from './oauth/routes';
 import {
   BEARER_REFUSAL_LIMIT,
   createWeatherLimits,
@@ -82,6 +84,11 @@ interface WebConfig {
   pwaEnabled: boolean;
   /** Web Push identity; set exactly when PWA_ENABLED (no /push routes otherwise). */
   vapid: VapidConfig | undefined;
+  /**
+   * OAuth for /mcp's names (oauthDiscovery), set exactly when MCP_PUBLIC_URL
+   * is: its discovery documents and /mcp's 401 pointer. Undefined is OAuth off.
+   */
+  oauth: OAuthDiscovery | undefined;
   /**
    * The order mail's stored owner, read at boot, when the order mail is on
    * (#25, #706, #976): the one account whose review list exists
@@ -281,6 +288,7 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // The bearer surfaces (src/web/surface.ts): the session gate above passes
   // them, each authenticates its own kind of token.
   await app.register(mcpRoutes, shared);
+  await app.register(oauthRoutes, options);
   await registerApi(app, shared);
   const { vapid } = options.config;
   if (vapid && options.push) {

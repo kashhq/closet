@@ -63,6 +63,7 @@ import {
 } from './web/security/same-origin';
 import { UntrustedProxyWatch } from './web/security/untrusted-proxy';
 import { assignSurface, surfaceOf } from './web/surface';
+import { oauthDiscovery } from './web/oauth/discovery';
 import { isWarmRequest } from './warm-request';
 import {
   createQueuedReplayLog,
@@ -583,6 +584,7 @@ export async function createApp(
       timeZone: config.APP_TIMEZONE,
       pwaEnabled: config.PWA_ENABLED,
       vapid,
+      oauth: oauthDiscovery(config.MCP_PUBLIC_URL, config.SITE_URL),
       orderMailOwnerId: orderMail?.ownerId,
       release: build.release,
       storageDirs: [

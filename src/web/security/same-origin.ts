@@ -6,7 +6,7 @@ import type {
 } from 'fastify';
 import type { IncomingHttpHeaders } from 'node:http';
 import { loggableUrl } from '../loggable-url';
-import { sendProblem } from '../errors';
+import { sendOAuthError, sendProblem } from '../errors';
 import { type Surface, surfaceOf } from '../surface';
 import type { Logger } from '../../logger';
 import { originOf, requestOrigin } from './origin';
@@ -72,7 +72,8 @@ function claimedOrigin(headers: IncomingHttpHeaders): string | undefined {
 /**
  * A request that may come with no Origin (and no Referer). A bearer surface
  * (/mcp, /api: the route's config, or the not-found config of an unmatched
- * /api path, surfaceOf) is called by programs, which send no Origin. The
+ * /api path, surfaceOf) and OAuth's (`oauth`: the token endpoint, which an
+ * agent vendor's server calls) are called by programs, which send no Origin. The
  * cookie is never read there and a page cannot attach the Authorization
  * header cross-site without a CORS preflight, which is never answered, so
  * an absent Origin is no CSRF. A `stateless` route (STATELESS_ROUTES)
@@ -91,8 +92,8 @@ function mayOmitOrigin(request: FastifyRequest, surface: Surface): boolean {
  * absent), either the origin it was sent to (requestOrigin: the Host as
  * Fastify trusts it) or SITE_URL's origin (the canonical https name, which a
  * proxy missing from TRUSTED_PROXIES reports as plain http). Anything else,
- * including neither header, is a 403; only a bearer surface (/mcp, /api)
- * and a `stateless` route (STATELESS_ROUTES) accept neither header.
+ * including neither header, is a 403; only a bearer surface (/mcp, /api),
+ * the `oauth` surface and a `stateless` route (STATELESS_ROUTES) accept neither header.
  *
  * The session cookie is SameSite=Lax as well (session-cookie.ts); this
  * check does not depend on the browser's cookie policy, and it covers the
@@ -119,16 +120,30 @@ export function createSameOriginHook(options: {
     logger.warn(
       `Refused ${request.method} ${loggableUrl(request)} from origin ${claimed ?? 'none'} (accepts ${own} and ${siteOrigin ?? 'no SITE_URL'})`,
     );
-    if (surface === 'api') {
+    return refuseCrossOrigin(request, reply, surface);
+  };
+}
+
+/** The 403, in the surface's own error shape. */
+function refuseCrossOrigin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  surface: Surface,
+): FastifyReply {
+  switch (surface) {
+    case 'api':
       return sendProblem(request, reply, {
         status: 403,
         message: CROSS_ORIGIN_REFUSED,
         code: 'forbidden',
       });
-    }
-    return reply
-      .status(403)
-      .type('text/plain; charset=utf-8')
-      .send(CROSS_ORIGIN_REFUSED);
-  };
+    case 'oauth':
+      return sendOAuthError(reply, 403, 'forbidden', CROSS_ORIGIN_REFUSED);
+    case 'mcp':
+    case 'page':
+      return reply
+        .status(403)
+        .type('text/plain; charset=utf-8')
+        .send(CROSS_ORIGIN_REFUSED);
+  }
 }

@@ -169,6 +169,23 @@ describe('pages', () => {
     expect(res.json()).toEqual({});
   });
 
+  // OAuth off (no MCP_PUBLIC_URL, #1289): a discovering client must read
+  // "no OAuth here", never the catch-all's `{}` as broken metadata.
+  it.each([
+    '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-authorization-server',
+    '/.well-known/openid-configuration',
+  ])('GET %s is a JSON 404 with OAuth off', async (url) => {
+    const res = await t.inject({ method: 'GET', url, anonymous: true });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['content-type']).toMatch(/^application\/json/);
+    expect(res.json()).toEqual({
+      error: 'not_found',
+      error_description: 'Not Found',
+    });
+  });
+
   it('an unknown garment renders the error page', async () => {
     const res = await t.inject({ method: 'GET', url: '/wardrobe/999999' });
     expect(res.statusCode).toBe(404);

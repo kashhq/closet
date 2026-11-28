@@ -25,10 +25,31 @@ describe('assignSurface', () => {
   });
 
   it.each([
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-authorization-server',
+    '/.well-known/openid-configuration',
+    '/oauth/token',
+  ])('lets %s be the oauth surface', (url) => {
+    const options = route(url, { surface: 'oauth' });
+    assignSurface(options);
+    expect(options.config).toEqual({ surface: 'oauth' });
+  });
+
+  it.each([
     ['an api route outside /api/v1', route('/wardrobe', { surface: 'api' })],
     ['another surface under /api/v1', route('/api/v1/me', { surface: 'mcp' })],
     ['a path under /api but not /api/v1', route('/api/v2/me')],
     ['/api itself', route('/api')],
+    ['oauth on a page path', route('/wardrobe', { surface: 'oauth' })],
+    [
+      'oauth on the consent page, a page',
+      route('/oauth/authorize', { surface: 'oauth' }),
+    ],
+    [
+      'oauth on another well-known name',
+      route('/.well-known/assetlinks.json', { surface: 'oauth' }),
+    ],
   ])('stops the boot for %s', (_case, options) => {
     expect(() => assignSurface(options)).toThrow();
   });

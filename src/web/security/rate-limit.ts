@@ -11,7 +11,7 @@ import type { Logger } from '../../logger';
  * once at the root by createApp() with `global: false`: nothing is limited
  * unless its route opts in with `config: { rateLimit: SIGN_IN_LIMIT }` (or
  * ACCOUNT_LIMIT, LINK_IMPORT_LIMIT, WEATHER_SEARCH_LIMIT, WEATHER_LOCATION_LIMIT,
- * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
+ * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT, OAUTH_DISCOVERY_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
  * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, API_LIMIT, API_PHOTO_LIMIT, PHOTO_UPLOAD_LIMIT and PUSH_TEST_LIMIT through one
  * createRateLimit checker each). Every limited route counts on its own. Counters live in
  * process memory, which is right for the single container this runs as.
@@ -330,6 +330,17 @@ export const PUSH_TEST_LIMIT = {
  * check says when it does not) each phone is its own address. /health/live checks nothing and is never limited.
  */
 export const HEALTH_LIMIT = {
+  max: 60,
+  timeWindow: MINUTE_MS,
+  keyGenerator: (request: FastifyRequest) => request.ip,
+};
+
+/**
+ * OAuth's discovery documents (src/web/oauth/routes.ts), per client
+ * address, HEALTH_LIMIT's shape: a client fetches each once per connect,
+ * so 60 a minute only stops a scraper looping on the public MCP host.
+ */
+export const OAUTH_DISCOVERY_LIMIT = {
   max: 60,
   timeWindow: MINUTE_MS,
   keyGenerator: (request: FastifyRequest) => request.ip,

@@ -536,6 +536,63 @@ describe('allowedHosts (#702)', () => {
   });
 });
 
+describe('MCP_PUBLIC_URL (#1289)', () => {
+  const PUBLIC = {
+    ...REQUIRED,
+    SITE_URL: 'https://closet.example.com',
+    ALLOWED_HOSTS: 'closet-mcp.example.com',
+  };
+
+  it('is unset, OAuth off, by default', () => {
+    expect(load({}).MCP_PUBLIC_URL).toBeUndefined();
+  });
+
+  it("takes the public /mcp on an allowed host, or on SITE_URL's own", () => {
+    for (const url of [
+      'https://closet-mcp.example.com/mcp',
+      'https://closet.example.com:443/mcp',
+    ]) {
+      expect(load({ ...PUBLIC, MCP_PUBLIC_URL: url }).MCP_PUBLIC_URL).toBe(url);
+    }
+  });
+
+  it.each([
+    ['plain http', 'http://closet-mcp.example.com/mcp', 'an https: URL'],
+    ['not a URL', 'closet-mcp.example.com/mcp', 'an https: URL'],
+    ['another path', 'https://closet-mcp.example.com/', 'followed by /mcp'],
+    ['a query', 'https://closet-mcp.example.com/mcp?x=1', 'followed by /mcp'],
+    ['a fragment', 'https://closet-mcp.example.com/mcp#x', 'followed by /mcp'],
+    [
+      'credentials',
+      'https://a:b@closet-mcp.example.com/mcp',
+      'followed by /mcp',
+    ],
+    [
+      'a host not allowed',
+      'https://elsewhere.example.com/mcp',
+      'ALLOWED_HOSTS',
+    ],
+  ])('refuses %s, naming the key without the value', (_case, url, rule) => {
+    const problems = problemsOf({ ...PUBLIC, MCP_PUBLIC_URL: url });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/^MCP_PUBLIC_URL: /);
+    expect(problems[0]).toContain(rule);
+    expect(problems[0]).not.toContain('example.com');
+  });
+
+  it('refuses a plain-http SITE_URL beside it', () => {
+    expect(
+      problemsOf({
+        ...REQUIRED,
+        SITE_URL: 'http://closet.example.com',
+        MCP_PUBLIC_URL: 'https://closet.example.com/mcp',
+      }),
+    ).toEqual([
+      'SITE_URL: must be an https: URL when MCP_PUBLIC_URL is set (the OAuth authorization endpoint is on it)',
+    ]);
+  });
+});
+
 describe('trustedProxies', () => {
   it('splits and trims the list', () => {
     expect(

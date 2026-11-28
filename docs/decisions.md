@@ -1875,3 +1875,9 @@ Consequence: a future queued create follows this shape: a client-minted id in th
 Why: a form sends each textarea line break as CRLF while its `maxlength` counts it as one, and the route schema checked `maxLength` before trimming, so a near-limit multi-line ask passed the sheet, got a 400, and queued offline its replay failed and the text was lost.
 Decision: `storedText` (src/wardrobe/agent-requests.ts) normalizes CRLF to LF and trims; `checkedText` in `transitionRequest` is the one length check of the body and the answer, on every surface. The route schemas bound only what is sent (`REQUEST_BODY_SENT_MAX`, twice the limit).
 Consequence: any other textarea with a `maxlength` and a server-side length bound has the same trap: measure after normalizing, in the domain writer.
+
+## 2026-11-28 — OAuth discovery ships switched off by MCP_PUBLIC_URL (#1289)
+
+Why: the plan's discovery (A1) lands before the consent page (#1290) and the token endpoint (#1291), yet its Authorization Server Metadata must name both.
+Decision: OAuth is on exactly when `MCP_PUBLIC_URL` is set; nothing sets it until homelab's #1293, after #1291. Off, every OAuth name is a JSON 404 on the `oauth` surface; `/.well-known/openid-configuration` is one always, so `assignSurface` admits that path beside `/.well-known/oauth-*` and `/oauth/token` (the plan named only those). The `/mcp` 401 adds `resource_metadata` and `scope` only when on; `error="invalid_token"` waits for #1291's expiry.
+Consequence: setting `MCP_PUBLIC_URL` before #1291 points clients at endpoints that 404 (`src/web/oauth/AGENTS.md`).
