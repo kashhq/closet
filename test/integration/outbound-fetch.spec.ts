@@ -49,6 +49,8 @@ import {
   type OutboundFetchRefusal,
   PUBLIC_DESTINATIONS,
   type ResolvedAddress,
+  UNTRUSTED_JSON_BYTES,
+  UNTRUSTED_JSON_TIMEOUT_MS,
 } from '../../src/web/security/outbound-fetch';
 import {
   END_HEADERS,
@@ -1059,6 +1061,174 @@ describe('outbound fetch (SSRF guard)', () => {
       expect(PUBLIC_DESTINATIONS.allowsPort(443, 'https:')).toBe(true);
       expect(PUBLIC_DESTINATIONS.allowsPort(8080, 'http:')).toBe(false);
       expect(PUBLIC_DESTINATIONS.allowsPort(443, 'http:')).toBe(false);
+    });
+  });
+
+  // #1290: an OAuth client's metadata document, at a URL a stranger names.
+  describe('an untrusted JSON document', () => {
+    const DOCS_HOST = 'docs.test';
+    const certificate = selfSignedCertificate([DOCS_HOST]);
+    const serveDocs = async (handler: RequestListener) => {
+      const server = await listenTls(certificate, handler);
+      servers.push(server);
+      return server;
+    };
+    const fetcherFor = (
+      resolve = scriptedResolver({
+        [DOCS_HOST]: PUBLIC_IP,
+        'intranet.test': PRIVATE_IP,
+      }).resolve,
+    ) =>
+      createOutboundFetcher({
+        logger: captureLogs().logger,
+        resolve,
+        destinations: TEST_INTERNET,
+        tls: { ca: [certificate.cert] },
+      });
+    const json =
+      (
+        body: string | Buffer,
+        type = 'application/json; charset=utf-8',
+      ): RequestListener =>
+      (_req, res) => {
+        res.writeHead(200, { 'content-type': type });
+        res.end(body);
+      };
+    const fetchDoc = (
+      url: string,
+      resolve?: Parameters<typeof fetcherFor>[0],
+    ) =>
+      fetcherFor(resolve).fetch(url, { accept: ['json'], untrustedJson: true });
+
+    it('reads JSON up to its cap, naming only the software', async () => {
+      const body = JSON.stringify({
+        pad: 'a'.repeat(UNTRUSTED_JSON_BYTES - 10),
+      });
+      const docs = await serveDocs(json(body));
+
+      const fetched = await fetchDoc(`https://${DOCS_HOST}:${docs.port}/meta`);
+      expect(fetched.body.length).toBe(UNTRUSTED_JSON_BYTES);
+      expect(UNTRUSTED_JSON_BYTES).toBe(8 * 1024);
+      expect(docs.hits[0].headers['user-agent']).toBe('Closet/1.0');
+      expect(docs.hits[0].headers.cookie).toBeUndefined();
+      expect(docs.hits[0].headers.authorization).toBeUndefined();
+    });
+
+    it('refuses a byte past the cap, and a gzip bomb by its decoded bytes', async () => {
+      const docs = await serveDocs((req, res) => {
+        if (req.url === '/bomb') {
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'content-encoding': 'gzip',
+          });
+          res.end(gzipSync(Buffer.alloc(1024 * 1024, ' ')));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(' '.repeat(UNTRUSTED_JSON_BYTES + 1));
+      });
+
+      await expectRefused(
+        fetchDoc(`https://${DOCS_HOST}:${docs.port}/big`),
+        'too-large',
+      );
+      await expectRefused(
+        fetchDoc(`https://${DOCS_HOST}:${docs.port}/bomb`),
+        'too-large',
+      );
+    });
+
+    it.each(['application/jwt', 'text/json', 'text/html', undefined])(
+      'refuses the content type %s',
+      async (type) => {
+        const docs = await serveDocs((_req, res) => {
+          res.writeHead(200, type ? { 'content-type': type } : {});
+          res.end('{}');
+        });
+        await expectRefused(
+          fetchDoc(`https://${DOCS_HOST}:${docs.port}/meta`),
+          'unexpected-content-type',
+        );
+      },
+    );
+
+    it('follows no redirect, never dialling its target', async () => {
+      const target = await serveDocs(json('{}'));
+      const docs = await serveDocs((_req, res) => {
+        res.writeHead(302, {
+          location: `https://${DOCS_HOST}:${target.port}/meta`,
+        });
+        res.end();
+      });
+
+      await expectRefused(
+        fetchDoc(`https://${DOCS_HOST}:${docs.port}/meta`),
+        'redirect-not-followed',
+      );
+      expect(target.hits).toEqual([]);
+    });
+
+    it('fetches over https only, and never a private address', async () => {
+      const docs = await serveDocs(json('{}'));
+      await expectRefused(
+        fetchDoc(`http://${DOCS_HOST}:${docs.port}/meta`),
+        'unsupported-scheme',
+      );
+      await expectRefused(
+        fetchDoc(`https://intranet.test:${privateServer.port}/meta`),
+        'blocked-address',
+      );
+      expect(docs.hits).toEqual([]);
+    });
+
+    it('bounds DNS, the connect and a dripping body together by its own 5 s', async () => {
+      // Two of the five seconds go to DNS: the cap covers the whole fetch.
+      const slowDns = (): Promise<ResolvedAddress[]> =>
+        new Promise((done) => {
+          setTimeout(() => done([{ address: PUBLIC_IP, family: 4 }]), 2_000);
+        });
+      const docs = await serveDocs((_req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        const drip = setInterval(() => {
+          if (res.destroyed) clearInterval(drip);
+          else res.write(' ');
+        }, 50);
+        res.on('close', () => clearInterval(drip));
+      });
+
+      const started = Date.now();
+      await expectRefused(
+        fetchDoc(`https://${DOCS_HOST}:${docs.port}/meta`, slowDns),
+        'timeout',
+      );
+      const took = Date.now() - started;
+      expect(took).toBeGreaterThanOrEqual(UNTRUSTED_JSON_TIMEOUT_MS - 100);
+      expect(took).toBeLessThan(UNTRUSTED_JSON_TIMEOUT_MS + 2_000);
+    }, 15_000);
+
+    it('refuses to be loosened, as a programming error', async () => {
+      const fetcher = fetcherFor();
+      const url = `https://${DOCS_HOST}/meta`;
+      for (const request of [
+        { accept: ['json', 'html'] as const, untrustedJson: true as const },
+        {
+          accept: ['json'] as const,
+          untrustedJson: true as const,
+          hosts: [DOCS_HOST],
+        },
+        {
+          accept: ['json'] as const,
+          untrustedJson: true as const,
+          mayFollow: () => true,
+        },
+      ]) {
+        const error = await fetcher.fetch(url, request).then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(error).not.toBeInstanceOf(OutboundFetchError);
+      }
     });
   });
 

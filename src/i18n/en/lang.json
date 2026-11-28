@@ -1932,5 +1932,25 @@
     "TYPE_NEEDS_CATEGORY": "A type needs its category",
     "NOT_A_TYPE_OF": "{type} is not a type of {category}: {types}",
     "NO_TYPES": "{category} has no types"
+  },
+  "oauth": {
+    "TITLE": "Connect an agent",
+    "SENDS_TO": "{appName} will send access to {host}",
+    "CALLS_ITSELF": "The app calls itself “{name}”. Its details are listed at {host}.",
+    "HOST_MISMATCH": "Its details are listed at {listed}, but access goes to {host}. Allow only if you expected that.",
+    "LOOPBACK": "Access goes only to an app on this device.",
+    "SCOPE": "What it may do",
+    "NAME": "Name this connection",
+    "CONFIRM": "Confirm with your {appName} email and password",
+    "ALLOW": "Allow",
+    "DENY": "Deny",
+    "FULL": "Agent access is full ({max} agents). Revoke one in Agent access, then connect again.",
+    "CLIENT_UNREADABLE": "This app’s sign-in details could not be read. Try connecting again from the app.",
+    "REDIRECT_UNLISTED": "This app asked to send access to an address it has not listed, so nothing was sent.",
+    "EXPIRED": "This request has expired. Start again from the app.",
+    "INVALID": "This request could not be read. Start again from the app.",
+    "ERROR_TITLE": "Could not connect",
+    "REFUSED": "The app’s request could not be accepted ({error}).",
+    "RETURN_TO": "Return to {host}"
   }
 }

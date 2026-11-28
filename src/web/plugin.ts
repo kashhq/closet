@@ -12,6 +12,8 @@ import type { OrderMailOwnerWatch } from './wardrobe/order-mail/owner-watch';
 import type { UntrustedProxyWatch } from './security/untrusted-proxy';
 import { sizesRoutes } from './sizes/routes';
 import { mcpRoutes } from './mcp/routes';
+import type { ConsentTokens } from './oauth/consent-token';
+import { oauthConsentRoutes } from './oauth/consent-routes';
 import type { OAuthDiscovery } from './oauth/discovery';
 import { oauthRoutes } from './oauth/routes';
 import {
@@ -112,6 +114,11 @@ export interface WebOptions {
   logger: Logger;
   db: Db;
   tokens: SessionTokens;
+  /**
+   * The OAuth consent page's signed hidden field (src/web/oauth/
+   * consent-token.ts), on ACCESS_TOKEN_SECRET, built by createApp().
+   */
+  consentTokens: ConsentTokens;
   /**
    * REGISTRATION, built by createApp() (its first-user latch must be shared):
    * the registration routes and the login and invite pages' register link.
@@ -289,6 +296,9 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // them, each authenticates its own kind of token.
   await app.register(mcpRoutes, shared);
   await app.register(oauthRoutes, options);
+  // The consent page (#1290): a page, on SITE_URL, counting its POST on
+  // the sign-in's shared budgets.
+  await app.register(oauthConsentRoutes, shared);
   await registerApi(app, shared);
   const { vapid } = options.config;
   if (vapid && options.push) {

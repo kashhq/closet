@@ -5,7 +5,7 @@ import { SettingsPage } from '../layout/settings-page';
 import { CopyableText } from '../share/share-button';
 import type { ViewContext } from '../view-context';
 import { PostForm } from '../form';
-import { Field, UsernameTwin } from './form';
+import { Field, ScopeToggle, UsernameTwin } from './form';
 import { AGENT_ACCESS_SECTION_ID } from './urls';
 import {
   MAX_ACTIVE_TOKENS,
@@ -58,35 +58,6 @@ function scopeText(scope: TokenScope): string {
   ];
   if (scope.ownWardrobeOnly) words.push(t('agentAccess.OWN_WARDROBE_ONLY'));
   return words.join(' · ');
-}
-
-/** One scope checkbox, a toggle as the garment form's booleans are. */
-function ScopeToggle({
-  name,
-  label,
-  hint,
-  checked,
-}: {
-  name: string;
-  label: string;
-  hint: string;
-  checked: boolean;
-}) {
-  return (
-    <label class="label cursor-pointer justify-start items-start gap-3 whitespace-normal">
-      <input
-        type="checkbox"
-        name={name}
-        value="on"
-        class="toggle toggle-sm mt-0.5"
-        checked={checked}
-      />
-      <span class="flex flex-col gap-0.5">
-        <span class="label-text">{label}</span>
-        <span class="text-xs text-muted">{hint}</span>
-      </span>
-    </label>
-  );
 }
 
 /**

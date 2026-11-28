@@ -283,6 +283,10 @@ export const PAGE_WRITES: Readonly<
   'POST /auth/delete-account': STEP_UP,
   'POST /auth/sign-out-everywhere': STEP_UP,
   'POST /auth/tokens': STEP_UP,
+  // The OAuth consent (#1290): hands a client a code for a grant, behind
+  // the account's email and password; OAuth itself is plumbing, not a
+  // domain operation (plan 4.9).
+  'POST /oauth/authorize': STEP_UP,
   'POST /auth/tokens/:id/revoke': AGENT_ACCESS,
   'POST /auth/devices/:id/revoke': AGENT_ACCESS,
 

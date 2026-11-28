@@ -381,6 +381,11 @@ export const personalAccessToken = pgTable(
     // token, which never reads either.
     readOnly: boolean('read_only').default(false).notNull(),
     ownWardrobeOnly: boolean('own_wardrobe_only').default(false).notNull(),
+    // An OAuth grant's client (#681, src/web/oauth/AGENTS.md): its Client ID
+    // Metadata Document URL; null for a token minted in Agent Access. The
+    // consent's cap check leaves out the user's grant from the same client,
+    // which its mint replaces (#1290, #1291).
+    oauthClientId: text('oauth_client_id'),
   },
   (table) => [
     unique('personal_access_token_token_hash_unique').on(table.tokenHash),
@@ -396,6 +401,58 @@ export const personalAccessToken = pgTable(
     })
       .onUpdate('cascade')
       .onDelete('cascade'),
+  ],
+);
+
+// An OAuth consent's one-time authorization code (#1290;
+// src/web/oauth/AGENTS.md, docs/plans/2026-11-27-mcp-oauth.md 4.5): stored
+// only as its hash, two minutes long (`expires_at`, Postgres's clock), used
+// once (`used_at`, by the token exchange, #1291), stamped with the password
+// fingerprint read in the statement that wrote it, so a new password kills
+// it. `token_id` is the grant the code minted, revoked on a second use. Not
+// synced (no owner lock); the nightly prune deletes rows a day past expiry
+// (src/maintenance/oauth-code-prune.ts).
+export const oauthAuthorizationCode = pgTable(
+  'oauth_authorization_code',
+  {
+    id: serial('id').primaryKey(),
+    codeHash: varchar('code_hash', { length: 64 }).notNull(),
+    userId: integer('user_id').notNull(),
+    clientId: text('client_id').notNull(),
+    redirectUri: text('redirect_uri').notNull(),
+    codeChallenge: varchar('code_challenge', { length: 128 }).notNull(),
+    resource: text('resource').notNull(),
+    name: text('name').notNull(),
+    readOnly: boolean('read_only').notNull(),
+    ownWardrobeOnly: boolean('own_wardrobe_only').notNull(),
+    passwordFingerprint: varchar('password_fingerprint', {
+      length: 8,
+    }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    tokenId: integer('token_id'),
+  },
+  (table) => [
+    unique('oauth_authorization_code_code_hash_unique').on(table.codeHash),
+    index('oauth_authorization_code_user_id_index').on(table.userId),
+    index('oauth_authorization_code_token_id_index').on(table.tokenId),
+    foreignKey({
+      name: 'oauth_authorization_code_user_id_foreign',
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
+    foreignKey({
+      name: 'oauth_authorization_code_token_id_foreign',
+      columns: [table.tokenId],
+      foreignColumns: [personalAccessToken.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
   ],
 );
 

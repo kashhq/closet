@@ -49,6 +49,8 @@ describe('bypassesWorker', () => {
     '/API/v1/me',
     '/wardrobe/export.csv',
     '/wardrobe/export.json',
+    '/oauth/authorize?client_id=https%3A%2F%2Fclaude.ai%2Fx&state=s',
+    '/oauth/token',
   ])('leaves %s alone', (path) => {
     expect(bypassesWorker(new URL(`${ORIGIN}${path}`))).toBe(true);
   });
@@ -58,6 +60,7 @@ describe('bypassesWorker', () => {
     '/wardrobe/export',
     '/mcpx',
     '/apix',
+    '/oauthx',
     '/auth/tokens',
     '/',
   ])('handles %s as the app', (path) => {
