@@ -1,4 +1,14 @@
-import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
 import { isDeletedClientId } from '../../db/errors';
 import { OWNER_LOCKED, ownerLockSql } from '../../db/owner-lock';
@@ -36,8 +46,11 @@ export interface AgentRequestRow {
   subject: RequestSubject | null;
   /** What the pages name and link the subject by, with `subject`; never in a resource. */
   subjectView: SubjectView | null;
+  /** The owner of a garment subject's wardrobe (the asker's, or a sharer's); null for any other. */
+  subjectOwnerId: number | null;
   /** The token holding the claim, as its owner reads it; null once the token is gone. */
   claimedBy: AgentLabel | null;
+  claimedByTokenId: number | null;
   claimedAt: Date | null;
   answer: string | null;
   answeredBy: AgentLabel | null;
@@ -84,7 +97,9 @@ const rowOf = (ownerId: number) => ({
   status: agentRequest.status,
   subject: subjectSql,
   subjectView: subjectViewSql(ownerId),
+  subjectOwnerId: garment.ownerId,
   claimedBy: agentLabelSql(agentRequest.claimedByTokenId, OWNER_READS),
+  claimedByTokenId: agentRequest.claimedByTokenId,
   claimedAt: agentRequest.claimedAt,
   answer: agentRequest.answer,
   answeredBy: agentLabelSql(agentRequest.answeredByTokenId, OWNER_READS),
@@ -121,6 +136,50 @@ export async function requestOf(
 ): Promise<AgentRequestRow | undefined> {
   const [row] = await readRequests(db, ownerId, eq(agentRequest.id, id));
   return row;
+}
+
+/**
+ * The requests an agent token may claim or has claimed, oldest first: the
+ * open ones, those this token holds, and those whose lease ran out or
+ * whose token is gone (the machine's "free" claims, lockRequestState).
+ * The agent's list_agent_requests (#1287).
+ */
+export function claimableRequests(
+  db: Queryable,
+  ownerId: number,
+  tokenId: number,
+  limit: number,
+): Promise<AgentRequestRow[]> {
+  return readRequests(
+    db,
+    ownerId,
+    or(
+      eq(agentRequest.status, 'open'),
+      and(
+        eq(agentRequest.status, 'claimed'),
+        or(
+          eq(agentRequest.claimedByTokenId, tokenId),
+          sql`not ${leaseRunsSql}`,
+          claimTokenRevokedSql,
+        ),
+      ),
+    ),
+  )
+    .orderBy(asc(agentRequest.id))
+    .limit(limit);
+}
+
+/** The asker's needs `ids` (a request's subject), as the agent reads one. */
+export function needsOf(db: Queryable, ownerId: number, ids: number[]) {
+  return db
+    .select({
+      id: optionGroup.id,
+      name: optionGroup.name,
+      budget: optionGroup.budget,
+      note: optionGroup.note,
+    })
+    .from(optionGroup)
+    .where(and(eq(optionGroup.ownerId, ownerId), inArray(optionGroup.id, ids)));
 }
 
 /**
@@ -267,6 +326,12 @@ export async function insertRequest(
   return written.seen ? 'gone' : 'unseen';
 }
 
+/** The claim's token is revoked: its claim is free (src/wardrobe/agent-requests.ts). */
+const claimTokenRevokedSql = sql`exists (select 1 from ${personalAccessToken} where ${personalAccessToken.id} = ${agentRequest.claimedByTokenId} and ${personalAccessToken.revokedAt} is not null)`;
+
+/** The claim's lease runs, judged by the statement's `now()`, as the move's update stamps it. */
+const leaseRunsSql = sql`coalesce(${agentRequest.claimedAt} > now() - make_interval(mins => ${CLAIM_LEASE_MINUTES}::int), false)`;
+
 /**
  * The request as the machine reads it, row-locked inside the caller's
  * ownerTransaction (the owner first, then the row: src/db/AGENTS.md).
@@ -282,8 +347,8 @@ export async function lockRequestState(
     .select({
       status: agentRequest.status,
       claimedByTokenId: agentRequest.claimedByTokenId,
-      claimTokenRevoked: sql<boolean>`exists (select 1 from ${personalAccessToken} where ${personalAccessToken.id} = ${agentRequest.claimedByTokenId} and ${personalAccessToken.revokedAt} is not null)`,
-      leaseRuns: sql<boolean>`coalesce(${agentRequest.claimedAt} > now() - make_interval(mins => ${CLAIM_LEASE_MINUTES}::int), false)`,
+      claimTokenRevoked: sql<boolean>`${claimTokenRevokedSql}`,
+      leaseRuns: sql<boolean>`${leaseRunsSql}`,
       answerSeen: sql<boolean>`${agentRequest.answerSeenAt} is not null`,
     })
     .from(agentRequest)

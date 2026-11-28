@@ -73,7 +73,7 @@ function pickOut(pick: AgentPick, unlocks?: ReadonlyMap<number, OutfitCount>) {
   };
 }
 
-function needOut(need: Need) {
+export function needOut(need: Pick<Need, 'id' | 'name' | 'budget' | 'note'>) {
   return {
     id: need.id,
     name: need.name,
