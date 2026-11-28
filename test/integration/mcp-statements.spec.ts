@@ -20,6 +20,7 @@ import {
 } from '../../src/web/inspiration/queries';
 import { createOptionGroup } from '../../src/web/wishlist/decisions';
 import { MCP_WRITES } from '../../src/web/api/operations';
+import { transitionRequest } from '../../src/web/requests/request-actions';
 import {
   FULL_SCOPE,
   type TokenScope,
@@ -94,6 +95,7 @@ describe('MCP statements per tool (#172)', () => {
     trip: 0,
     need: 0,
     look: 0,
+    claimable: 0,
   };
   let lookSets = 0;
   /** A closet garment with the wishlist item: a new set at every call. */
@@ -268,6 +270,36 @@ describe('MCP statements per tool (#172)', () => {
         .returning({ id: capsule.id }),
     );
     ids.danaCapsule = danas.id;
+    await seedRequests();
+  }
+
+  /**
+   * Theo's open requests (#1287): the list's subjects (a garment, a trip, a
+   * need), the one claim_agent_request claims, and a pool answered one per
+   * call (an answer repeated is refused: "Already answered").
+   */
+  const answerPool: number[] = [];
+  async function seedRequests() {
+    const asker = { userId: ids.theo, surface: 'page' } as const;
+    const ask = async (
+      subject: { kind: 'garment' | 'trip' | 'need'; id: number } | null,
+    ) =>
+      (
+        await transitionRequest({ db: t.db, logger: t.logger }, asker, {
+          kind: 'ask',
+          body: 'Statements request',
+          subject,
+          clientId: null,
+        })
+      ).id;
+    // Two garments: a per-row read would add a statement per request.
+    await ask({ kind: 'garment', id: ids.garment });
+    await ask({ kind: 'garment', id: ids.other });
+    await ask({ kind: 'garment', id: ids.copies });
+    await ask({ kind: 'trip', id: ids.trip });
+    await ask({ kind: 'need', id: ids.need });
+    ids.claimable = await ask(null);
+    for (let i = 0; i < 6; i += 1) answerPool.push(await ask(null));
   }
 
   const day = (offset: number) => addDays(today, offset);
@@ -306,6 +338,18 @@ describe('MCP statements per tool (#172)', () => {
   };
   const cases: [string, () => Record<string, unknown>, number][] = [
     ['get_today', () => ({}), 3], // 6: the weather twice, worn apart
+    // The requests in one statement, then the trips (list_trips') and the
+    // needs in parallel, and each garment subject's own read.
+    ['list_agent_requests', () => ({}), 5],
+    // begin, owner lock, the row locked and judged, the guarded update, commit
+    // (the token's read is one more).
+    ['claim_agent_request', () => ({ id: ids.claimable }), 6],
+    // A request answered anew each call.
+    [
+      'answer_agent_request',
+      () => ({ id: answerPool.shift()!, answer: 'Done' }),
+      6,
+    ],
     ['search_garments', () => ({ category: 'tops' }), 3],
     // get_wardrobe: the garments, then every garment's wears in one
     // grouped statement (`wearCountsByGarment`); a grantee's has the share read and no wears.

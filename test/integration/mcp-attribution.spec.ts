@@ -3,6 +3,7 @@ import { and, eq, isNotNull, or } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays } from '../../src/calendar-date';
 import {
+  agentRequest,
   garment,
   outfit,
   outfitCalendar,
@@ -103,6 +104,16 @@ describe('agent writes carry their token (#682)', () => {
           .select({ id: garment.addedByTokenId })
           .from(garment)
           .where(or(...ids.map((id) => eq(garment.id, id)))),
+      requestClaim: () =>
+        t.db
+          .select({ id: agentRequest.claimedByTokenId })
+          .from(agentRequest)
+          .where(or(...ids.map((id) => eq(agentRequest.id, id)))),
+      requestAnswer: () =>
+        t.db
+          .select({ id: agentRequest.answeredByTokenId })
+          .from(agentRequest)
+          .where(or(...ids.map((id) => eq(agentRequest.id, id)))),
     }[kind]();
     expect(rows).toHaveLength(ids.length);
     return rows.map((row) => row.id);
@@ -127,7 +138,29 @@ describe('agent writes carry their token (#682)', () => {
   };
 
   /** Each stamping tool's write, as the agent makes it; the rows it stamped. */
+  /** A request the owner asks, over the API as the phone does. */
+  const askAgent = async () => {
+    const res = await t.api(device, {
+      method: 'POST',
+      url: '/api/v1/agent-requests',
+      payload: { body: 'What goes with my navy blazer?' },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    return res.json<{ id: number }>().id;
+  };
+
   const STAMPING: Record<string, () => Promise<Written>> = {
+    async claim_agent_request() {
+      const id = await askAgent();
+      await tool(t, token, 'claim_agent_request', { id });
+      return { requestClaim: [id] };
+    },
+    async answer_agent_request() {
+      const id = await askAgent();
+      await tool(t, token, 'claim_agent_request', { id });
+      await tool(t, token, 'answer_agent_request', { id, answer: 'Done' });
+      return { requestAnswer: [id] };
+    },
     async create_outfit() {
       const made = await tool<{ id: number }>(t, token, 'create_outfit', {
         garmentIds: [g.top1, g.bottom1],
@@ -363,6 +396,8 @@ describe('agent writes carry their token (#682)', () => {
       t.db.$count(outfitCalendar, isNotNull(outfitCalendar.plannedByTokenId)),
       t.db.$count(tripOutfit, isNotNull(tripOutfit.plannedByTokenId)),
       t.db.$count(garment, isNotNull(garment.addedByTokenId)),
+      t.db.$count(agentRequest, isNotNull(agentRequest.claimedByTokenId)),
+      t.db.$count(agentRequest, isNotNull(agentRequest.answeredByTokenId)),
     ]);
     return counts.reduce((a, b) => a + b, 0);
   }

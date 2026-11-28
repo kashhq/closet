@@ -16,6 +16,7 @@ import { NotFound, type Resource } from '../refusals';
 import type { Actor } from '../sharing/access';
 import {
   type AgentRequestRow,
+  claimableRequests,
   insertRequest,
   lockRequestState,
   type NewRequest,
@@ -243,6 +244,20 @@ export async function requireRequest(
   const row = await requestOf(db, actor.userId, id);
   if (!row) throw requestNotFound(actor, id);
   return row;
+}
+
+/**
+ * The requests the actor's agent token may claim or already holds, oldest
+ * first (at most `limit`): list_agent_requests. Judged by the same lease
+ * rule as a claim, so what it lists is what a claim would take.
+ */
+export function listClaimableRequests(
+  { db }: Pick<ActionDeps<Queryable>, 'db'>,
+  actor: Actor,
+  tokenId: number,
+  limit: number,
+): Promise<AgentRequestRow[]> {
+  return claimableRequests(db, actor.userId, tokenId, limit);
 }
 
 /** A page of the actor's requests, newest first: `more` says there is a next. */

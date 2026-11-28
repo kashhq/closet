@@ -465,13 +465,24 @@ const AGENT_ROUND = {
     'the agent’s suggestion round: what the agent proposes carries its token, and the owner decides it in the inbox',
 } as const;
 
+const AGENT_REQUEST = {
+  agentOnly: "an agent's side; the owner's app never claims",
+} as const;
+
 /**
  * The rows a tool's write stamps with the calling token (#682,
  * src/web/write-origin.ts): `outfit` (outfit.proposed_by_token_id),
  * `calendarEntry` (outfit_calendar planned_by 'agent' + its token),
- * `tripOutfit`, `garment` (garment.suggested_by_token_id).
+ * `tripOutfit`, `garment` (garment.suggested_by_token_id), `requestClaim`
+ * and `requestAnswer` (agent_request.claimed_by_token_id, answered_by_token_id).
  */
-export type Stamped = 'outfit' | 'calendarEntry' | 'tripOutfit' | 'garment';
+export type Stamped =
+  | 'outfit'
+  | 'calendarEntry'
+  | 'tripOutfit'
+  | 'garment'
+  | 'requestClaim'
+  | 'requestAnswer';
 
 /**
  * What a writing tool leaves of the agent: the rows it stamps (each with a
@@ -539,4 +550,12 @@ export const MCP_WRITES: Readonly<Record<string, McpWrite>> = {
   suggest_garment: { ...AGENT_ROUND, attribution: AGENT },
   suggest_outfit: { ...AGENT_ROUND, attribution: AGENT },
   finish_round: { ...AGENT_ROUND, attribution: AGENT },
+  claim_agent_request: {
+    ...AGENT_REQUEST,
+    attribution: { stamps: ['requestClaim'] },
+  },
+  answer_agent_request: {
+    ...AGENT_REQUEST,
+    attribution: { stamps: ['requestAnswer'] },
+  },
 };
