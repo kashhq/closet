@@ -14,7 +14,7 @@ import {
 import {
   QUEUEABLE_ROUTES,
   queueableKindOf,
-  REQUEST_TARGET,
+  requestTarget,
   queuedTarget,
   replayVerdict,
 } from '../../src/offline-writes';
@@ -877,14 +877,19 @@ describe('queued writes', () => {
       }
 
       // "Ask your agent" (#1286): Today's and the garment's sheets queue,
-      // their region named by its kind alone (the outbox adds the client
-      // id it mints at the tap), the form's clientId empty in the markup.
-      for (const [url, label, subject] of [
-        ['/', 'Today', ''],
-        [`/wardrobe/${tee}`, 'Marked tee', `name="subjectId" value="${tee}"`],
+      // their region named by its subject (the outbox adds the client id
+      // it mints at the tap), the form's clientId empty in the markup.
+      for (const [url, label, subject, region] of [
+        ['/', 'Today', '', requestTarget(null)],
+        [
+          `/wardrobe/${tee}`,
+          'Marked tee',
+          `name="subjectId" value="${tee}"`,
+          requestTarget({ kind: 'garment', id: tee }),
+        ],
       ] as const) {
         const html = await page(url);
-        expect(regionTag(html, REQUEST_TARGET.key), url).toContain(
+        expect(regionTag(html, region.key), url).toContain(
           `data-outbox-path="/requests" data-outbox-label="${label}"`,
         );
         expect(html, url).toMatch(

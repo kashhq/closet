@@ -88,6 +88,7 @@ import {
   replayQueue,
   replayVerdict,
   requestRecordKey,
+  requestRegionKey,
   routesThroughOutbox,
   takesDay,
   takesInstant,
@@ -497,12 +498,13 @@ const intentOf = (record: OutboxRecord | undefined) =>
  * (regionEnd): Discard, and a session or account drop, leave a tombstone
  * (#1042), so a record gone means saved whichever tab reads first.
  */
-function renderRegions(account: string, records: OutboxRecord[]): void {
+function renderRegions(account: string, stored: OutboxRecord[]): void {
+  const records = stored.map(asShown);
   const waiting = new Map(
     records.filter(isPending).map((record) => [record.key, record]),
   );
   for (const region of document.querySelectorAll<HTMLElement>(REGION)) {
-    const key = regionKey(region);
+    const key = shownKey(region);
     if (key === undefined) continue;
     const record = waiting.get(key);
     if (record) {
@@ -515,6 +517,20 @@ function renderRegions(account: string, records: OutboxRecord[]): void {
     if (end !== 'pending') endIntent(region, end);
   }
 }
+
+/**
+ * A record as its region shows it: an ask under its sheet's key, since a
+ * page that never saw the tap (a reload, another cached copy) cannot know
+ * the client id that completes the record's (requestRegionKey).
+ */
+const asShown = (record: OutboxRecord): OutboxRecord =>
+  record.kind === 'request'
+    ? { ...record, key: requestRegionKey(record.key) }
+    : record;
+
+/** The key a region shows its records by (asShown): an ask's sheet's own. */
+const shownKey = (region: HTMLElement): string | undefined =>
+  kindOf(region) === 'request' ? region.dataset.outboxKey : regionKey(region);
 
 /**
  * The region shows the record's state: a checklist row its tick, a control
@@ -835,10 +851,9 @@ const askClientId = (region: HTMLElement): string | undefined =>
  * Every tap of an ask is a new request: a fresh client id before the tap is
  * decided, so the live post and a queued replay carry the same one (the
  * server stores it once, on `(owner_id, client_id)`), and a page restored
- * from history never sends an earlier ask's id again. A hidden input's
- * value is its default (its value mode), so the reset after queueing
- * (closeAsk) keeps it, and the region's "Waiting to sync" stays keyed to
- * the ask it queued.
+ * from history never sends an earlier ask's id again. The region's
+ * "Waiting to sync" never reads it (shownKey): any copy of the page shows
+ * every ask queued from its sheet.
  */
 function mintAsk(form: HTMLFormElement): void {
   const region = form.closest<HTMLElement>(REGION);
@@ -1434,7 +1449,9 @@ function wearDayOf(region: HTMLElement, timeZone: string): string {
 
 /**
  * A region's record key: its own, plus its judged day for a wear (one
- * record per garment and day, `wear:41:2026-11-12`; src/offline-writes.ts).
+ * record per garment and day, `wear:41:2026-11-12`; src/offline-writes.ts)
+ * or the minted client id for an ask (`request:trip:7:<uuid>`; undefined
+ * before the tap mints it, so only a tap's draft reads it: shownKey).
  * Undefined for a wear on a page without the household's time zone (no
  * `#app-status`): it keys no record, and queue refuses its tap.
  */
@@ -1443,7 +1460,7 @@ function regionKey(region: HTMLElement): string | undefined {
   const kind = kindOf(region);
   if (kind === 'request') {
     const clientId = askClientId(region);
-    return clientId ? requestRecordKey(clientId) : undefined;
+    return clientId ? requestRecordKey(key, clientId) : undefined;
   }
   if (kind !== 'wear') return key;
   const { timeZone } = appStatus();

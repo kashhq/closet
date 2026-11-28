@@ -365,6 +365,8 @@
       "answered": "Already answered",
       "withdrawn": "The owner withdrew this request",
       "notAnswered": "Not answered yet",
+      "bodyBlank": "The request is empty",
+      "bodyTooLong": "The request is longer than {max} characters",
       "answerBlank": "The answer is empty",
       "answerTooLong": "The answer is longer than {max} characters"
     },

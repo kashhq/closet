@@ -16,7 +16,7 @@ export const QUEUEABLE_ROUTES = {
   entry: '/calendar/:id/worn',
   packed: '/trips/:id/packed',
   item: '/trips/:id/items/packed',
-  // "Ask your agent" (#1286): a create, keyed by its client id (requestRecordKey).
+  // "Ask your agent" (#1286): a create, keyed by its region and client id (requestRecordKey).
   request: '/requests',
 } as const;
 
@@ -93,19 +93,32 @@ export function queuedTarget(
 }
 
 /**
- * A request's region (src/web/requests/ask-sheet.tsx) names only its kind:
- * every ask is its own record, keyed by the client id the outbox mints
- * into the sheet's form at the tap (requestRecordKey), so two asks never
- * collapse into one and a replay is idempotent on `(owner_id, client_id)`.
+ * An ask's region (src/web/requests/ask-sheet.tsx), by its subject:
+ * `request` on Today, `request:garment:41` on a garment's page. Every ask
+ * is its own record, the region's key completed with the client id the
+ * outbox mints into the sheet's form at the tap (requestRecordKey), so two
+ * asks never collapse into one and a replay is idempotent on
+ * `(owner_id, client_id)`; a page that never saw the tap (a reload, another
+ * cached copy) finds its pending asks by the region's part of their keys
+ * (requestRegionKey).
  */
-export const REQUEST_TARGET: QueuedTarget = {
-  key: 'request',
-  path: QUEUEABLE_ROUTES.request,
-};
+export function requestTarget(
+  subject: { kind: string; id: number } | null,
+): QueuedTarget {
+  return {
+    key: subject ? `request:${subject.kind}:${subject.id}` : 'request',
+    path: QUEUEABLE_ROUTES.request,
+  };
+}
 
-/** A request record's key: `request:<clientId>`, one per ask. */
-export function requestRecordKey(clientId: string): string {
-  return `${REQUEST_TARGET.key}:${clientId}`;
+/** A request record's key: its region's and the ask's client id, one per ask. */
+export function requestRecordKey(regionKey: string, clientId: string): string {
+  return `${regionKey}:${clientId}`;
+}
+
+/** The region a request record shows in: its key less the client id (a UUID has no colon). */
+export function requestRegionKey(recordKey: string): string {
+  return recordKey.slice(0, recordKey.lastIndexOf(':'));
 }
 
 const ROW_ID = '[1-9]\\d{0,9}';

@@ -3,7 +3,7 @@ import {
   type RequestSubject,
   type RequestSubjectKind,
 } from '../../wardrobe/agent-requests';
-import { REQUEST_TARGET } from '../../offline-writes';
+import { requestTarget } from '../../offline-writes';
 import { PostForm } from '../form';
 import { FormField } from '../form-field';
 import { t, type StringKey } from '../i18n';
@@ -19,10 +19,11 @@ import { REQUESTS_PATH } from './urls';
  * the hidden subject; a send lands on the request's page.
  *
  * Queued offline (the outbox's `request` kind, src/web/shell/outbox.md):
- * the region names only its kind, and the outbox mints the form's
- * `clientId` at every tap, which completes the record's key
- * (`request:<clientId>`) and makes the replay idempotent. Static markup
- * (no id, no day, no token state), so a stale-while-revalidate page that
+ * the region is named by its subject (`requestTarget`), and the outbox
+ * mints the form's `clientId` at every tap, which completes the record's
+ * key (`request:garment:41:<clientId>`) and makes the replay idempotent;
+ * any copy of the page finds its queued asks by the region's part. Static
+ * markup (no client id, no day, no token state), so a stale-while-revalidate page that
  * holds it (the Wishlist) stays byte for byte the same; whether an agent is
  * connected is said where the request lands and on Today, never here.
  */
@@ -52,7 +53,7 @@ export function AskAgent(props: {
   const fieldId = `${id}-body`;
   return (
     <div
-      {...outboxRegion(REQUEST_TARGET, props.label)}
+      {...outboxRegion(requestTarget(subject), props.label)}
       class={`flex flex-wrap items-center gap-2 ${props.class ?? ''}`}
       data-ask-agent={subject?.kind ?? 'today'}
     >

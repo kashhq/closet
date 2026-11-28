@@ -8,7 +8,7 @@ import { pageErrors } from './support/page-errors';
  * "Ask your agent" offline (#1286; docs/plans/2026-11-27-mcp-oauth.md
  * section 3.4), as the installed app on a phone: what only a real browser
  * shows is the outbox's half, the sheet's ask queued while the heartbeat
- * fails, its "Waiting to sync", and the replay on reconnect landing on
+ * fails, its "Waiting to sync" (a reload too), and the replay on reconnect landing on
  * Today. The routes, the replay's idempotence and the markup are
  * test/integration/queued-writes.spec.ts's and authorization-account.spec.ts's.
  */
@@ -41,15 +41,16 @@ test('an ask queued offline syncs on reconnect and shows on Today', async ({
   await expect(page.locator('#outbox-banner')).toContainText(
     '1 change waiting to sync',
   );
+  // A copy that never saw the tap (its form's client id is the markup's
+  // empty one) still finds the queued ask by its sheet.
+  await page.reload();
+  await expect(ask.getByText('Waiting to sync')).toBeVisible();
 
   await setWritesReachable(page, true);
   await expect(page.locator('#toast-host')).toContainText('1 change saved');
   await expect(ask.getByText('Waiting to sync')).toBeHidden();
-  // The page was tapped, so its newer copy is offered (freshness.js).
-  await page
-    .locator('#toast-host')
-    .getByRole('button', { name: 'Refresh' })
-    .click();
+  // Untouched since the reload, the page takes the server's newer copy
+  // itself (freshness.js), the card with it.
   const card = page.locator('[data-today-requests="1"]');
   await expect(card).toContainText('What should I wear to the dinner tonight?');
   await expect(card).toContainText('Waiting for your agent');

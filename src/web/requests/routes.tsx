@@ -1,7 +1,7 @@
 import type { FastifyPluginCallbackTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import {
-  REQUEST_BODY_MAX,
+  REQUEST_BODY_SENT_MAX,
   REQUEST_SUBJECT_KINDS,
 } from '../../wardrobe/agent-requests';
 import { selectScalars } from '../../db/select-scalars';
@@ -43,7 +43,7 @@ const AskBody = Type.Object(
   {
     body: Type.String({
       minLength: 1,
-      maxLength: REQUEST_BODY_MAX,
+      maxLength: REQUEST_BODY_SENT_MAX,
       pattern: '\\S',
     }),
     subjectKind: Type.Optional(literals(REQUEST_SUBJECT_KINDS)),
@@ -117,7 +117,7 @@ export const requestRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { body, subjectKind, subjectId, clientId } = request.body;
       const asked = await transitionRequest(deps, actorOf(request), {
         kind: 'ask',
-        body: body.trim(),
+        body,
         subject:
           subjectKind !== undefined && subjectId !== undefined
             ? { kind: subjectKind, id: subjectId }

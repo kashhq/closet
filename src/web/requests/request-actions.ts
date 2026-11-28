@@ -1,16 +1,18 @@
 import {
   REQUEST_ANSWER_MAX,
+  REQUEST_BODY_MAX,
   type RequestEvent,
   type RequestMove,
   type RequestRefusal,
   requestMove,
   type RequestStatus,
   type RequestSubject,
+  storedText,
 } from '../../wardrobe/agent-requests';
 import type { Queryable } from '../../db/client';
 import { ownerTransaction } from '../auth/queries';
 import { HttpError } from '../errors';
-import { t, type StringKey } from '../i18n';
+import { t, type StringKey, type Translated } from '../i18n';
 import { type ActionDeps, logOp } from '../op-log';
 import { NotFound, type Resource } from '../refusals';
 import type { Actor } from '../sharing/access';
@@ -103,7 +105,7 @@ async function askAgent(
   { body, subject, clientId }: Extract<RequestTransition, { kind: 'ask' }>,
 ): Promise<TransitionOutcome> {
   const asked = await insertRequest(db, actor.userId, {
-    body,
+    body: checkedText(body, BODY_RULE),
     subject,
     clientId,
   });
@@ -129,7 +131,9 @@ async function moveRequest(
 ): Promise<TransitionOutcome> {
   const { id } = transition;
   const answer =
-    transition.kind === 'answer' ? checkedAnswer(transition.answer) : undefined;
+    transition.kind === 'answer'
+      ? checkedText(transition.answer, ANSWER_RULE)
+      : undefined;
   const moved: RequestMove | 'missing' = await ownerTransaction(
     db,
     actor.userId,
@@ -213,22 +217,38 @@ function patchFor(
   }
 }
 
+/** A text's limit and its refusals' words (checkedText). */
+interface TextRule {
+  max: number;
+  blank: () => Translated;
+  tooLong: () => Translated;
+}
+
+const BODY_RULE: TextRule = {
+  max: REQUEST_BODY_MAX,
+  blank: () => t('refusal.agentRequest.bodyBlank'),
+  tooLong: () =>
+    t('refusal.agentRequest.bodyTooLong', { max: REQUEST_BODY_MAX }),
+};
+
+const ANSWER_RULE: TextRule = {
+  max: REQUEST_ANSWER_MAX,
+  blank: () => t('refusal.agentRequest.answerBlank'),
+  tooLong: () =>
+    t('refusal.agentRequest.answerTooLong', { max: REQUEST_ANSWER_MAX }),
+};
+
 /**
- * The answer as stored: trimmed, 1..REQUEST_ANSWER_MAX (agent_request_answer_check),
- * checked before the transaction so a bad one is a 400, never the constraint's 500.
+ * The body or answer as stored (storedText), 1..max code points, as
+ * agent_request_body_check and _answer_check count: the one check of
+ * either, on every surface, before the write, so a bad one is a 400, never
+ * the constraint's 500. The route schemas only bound what is sent.
  */
-function checkedAnswer(raw: string): string {
-  const answer = raw.trim();
-  if (answer.length === 0) {
-    throw new HttpError(400, t('refusal.agentRequest.answerBlank'));
-  }
-  if ([...answer].length > REQUEST_ANSWER_MAX) {
-    throw new HttpError(
-      400,
-      t('refusal.agentRequest.answerTooLong', { max: REQUEST_ANSWER_MAX }),
-    );
-  }
-  return answer;
+function checkedText(raw: string, rule: TextRule): string {
+  const text = storedText(raw);
+  if (text.length === 0) throw new HttpError(400, rule.blank());
+  if ([...text].length > rule.max) throw new HttpError(400, rule.tooLong());
+  return text;
 }
 
 function subjectLabel(subject: RequestSubject | null): string {

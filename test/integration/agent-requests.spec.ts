@@ -5,6 +5,7 @@ import { agentRequest } from '../../src/db/schema';
 import {
   CLAIM_LEASE_MINUTES,
   REQUEST_ANSWER_MAX,
+  REQUEST_BODY_MAX,
 } from '../../src/wardrobe/agent-requests';
 import { HttpError } from '../../src/web/errors';
 import {
@@ -306,6 +307,52 @@ describe('the asker', () => {
     });
     expect(deleted.statusCode, deleted.body).toBeLessThan(400);
     expect((await rowOf(id)).garmentId).toBe(garmentId);
+  });
+  it('Today says no agent is connected while an older request waits beyond the shown few', async () => {
+    const a = await asker('requests-beyond@example.com');
+    await asked(a, 'Still waiting');
+    const tokenId = await a.agent('Gone soon');
+    for (const body of ['One', 'Two', 'Three']) {
+      const id = await asked(a, body);
+      await transitionRequest(deps(), agentOf(a.id), {
+        kind: 'answer',
+        id,
+        tokenId,
+        answer: `Done: ${body}`,
+      });
+    }
+    await revokeToken(deps(), agentOf(a.id), 'mcp', tokenId);
+    const today = await t.inject({
+      method: 'GET',
+      url: '/',
+      headers: { cookie: a.cookie },
+    });
+    const card = /<section[^>]*data-today-requests="4"[\s\S]*?<\/section>/.exec(
+      unescapeHtml(today.body),
+    )![0];
+    expect(card).not.toContain('Still waiting');
+    expect(card).toContain('data-no-agent');
+  });
+
+  it('measures a multi-line ask as the sheet did: CRLF is one line break, at the limit accepted', async () => {
+    const a = await asker('requests-crlf@example.com');
+    // A form sends each line break as CRLF; the textarea's maxlength counted
+    // it as one, so 100 lines of 4 and one more character are the limit.
+    const lines = Array.from({ length: 100 }, () => 'abcd').join('\r\n');
+    const atLimit = `${lines}e`;
+    expect(atLimit.replaceAll('\r\n', '\n')).toHaveLength(REQUEST_BODY_MAX);
+    const send = (body: string) =>
+      t.inject({
+        method: 'POST',
+        url: '/requests',
+        payload: { body },
+        headers: { cookie: a.cookie },
+      });
+    const sent = await send(` ${atLimit}\r\n`);
+    expect(sent.statusCode, sent.body).toBe(303);
+    const id = Number(/^\/requests\/(\d+)$/.exec(sent.headers.location!)![1]);
+    expect((await rowOf(id))?.body).toBe(atLimit.replaceAll('\r\n', '\n'));
+    expect((await send(`${atLimit}f`)).statusCode).toBe(400);
   });
 });
 

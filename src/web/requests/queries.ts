@@ -428,10 +428,15 @@ export interface TodayRequest {
   answeredBy: AgentLabel | null;
 }
 
-/** Today's card: the newest few still to show, how many there are, and whether an agent is connected. */
+/**
+ * Today's card: the newest few still to show, how many there are, whether
+ * any of them (shown or not) waits for an agent, and whether one is connected.
+ */
 export interface TodayRequests {
   shown: TodayRequest[];
   count: number;
+  /** Any open or claimed request, beyond the shown few too: the no-agent line's. */
+  waiting: boolean;
   connected: boolean;
 }
 
@@ -444,8 +449,8 @@ const card = sql.identifier('card');
  * The asker's requests Today shows (open, claimed, answered but not seen
  * yet: a withdrawn or seen one leaves Today), newest first, as a scalar
  * subquery for Today's one statement (todayFor's `requests`), with the
- * count behind "N more" and whether any agent token is in force (the
- * no-agent line). Raw columns of the alias, so the token labels' own
+ * count behind "N more", whether any waits for an agent and whether any
+ * agent token is in force (the no-agent line's two). Raw columns of the alias, so the token labels' own
  * subqueries never read an outer `id`.
  */
 export function todayRequestsSql(ownerId: number): SQL<TodayRequests> {
@@ -468,6 +473,7 @@ export function todayRequestsSql(ownerId: number): SQL<TodayRequests> {
       ) as ${card}
     ), '[]'::json),
     'count', (select count(*)::int from ${agentRequest} as ${card} where ${showing}),
+    'waiting', exists (select from ${agentRequest} as ${card} where ${card}.owner_id = ${ownerId}::int and ${card}.status in ('open', 'claimed')),
     'connected', ${agentConnectedSql(ownerId)}
   )`;
 }

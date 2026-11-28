@@ -18,6 +18,9 @@ import {
   REPLAY_WINDOW_DAYS,
   reasonTextName,
   replayVerdict,
+  requestRecordKey,
+  requestRegionKey,
+  requestTarget,
   type ReplayDriver,
   type ReplayRecord,
   replayQueue,
@@ -192,6 +195,20 @@ describe('queuedTarget', () => {
     expect(showsQueuedWrite('/wardrobe/41/washed?ownerId=7', '/laundry')).toBe(
       true,
     );
+  });
+});
+
+describe('requestTarget', () => {
+  it('keys each ask by its sheet and client id, and finds the sheet from the key', () => {
+    const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+    for (const [subject, region] of [
+      [null, 'request'],
+      [{ kind: 'garment', id: 41 }, 'request:garment:41'],
+    ] as const) {
+      const target = requestTarget(subject);
+      expect(target).toEqual({ key: region, path: '/requests' });
+      expect(requestRegionKey(requestRecordKey(target.key, id))).toBe(region);
+    }
   });
 });
 

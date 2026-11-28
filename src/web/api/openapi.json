@@ -9075,9 +9075,9 @@
         "properties": {
           "body": {
             "minLength": 1,
-            "maxLength": 500,
+            "maxLength": 1000,
             "pattern": "\\S",
-            "description": "What you ask, in your words; stored trimmed",
+            "description": "What you ask, in your words, up to 500 characters; stored trimmed, its line breaks as LF",
             "type": "string"
           },
           "subject": {

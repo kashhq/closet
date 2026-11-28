@@ -13,9 +13,8 @@ import { REQUESTS_PATH, requestUrl } from './urls';
  * is how one starts.
  */
 export function TodayRequestsCard({ requests }: { requests: TodayRequests }) {
-  const { shown, count, connected } = requests;
+  const { shown, count, waiting, connected } = requests;
   if (shown.length === 0) return null;
-  const waiting = shown.some((request) => request.status !== 'answered');
   return (
     <Card
       as="section"
