@@ -44,6 +44,7 @@ import { configurePasswordHashing } from './web/auth/passwords';
 import type { HeicDecoderOptions } from './web/files/heic-decoder';
 import { createPhotos, type Photos, photosConfig } from './web/files/photos';
 import { t } from './web/i18n';
+import { normalizeUrlencodedBody } from './web/form-body';
 import { loggableUrl } from './web/loggable-url';
 import { markShareAware, refuseForeignOwner } from './web/sharing/share-aware';
 import { webPlugin } from './web/plugin';
@@ -550,6 +551,8 @@ export async function createApp(
   await app.register(compressPlugin);
   // Forms post urlencoded bodies; JSON is Fastify's own parser.
   await app.register(formbodyPlugin);
+  // CRLF to LF before any schema counts the text (form-body.ts).
+  app.addHook('preValidation', normalizeUrlencodedBody);
   // The parser's outer bounds per request (100 MiB a part); a photo past
   // the decoders' pixel or HEIC caps is refused before that (photos.ts).
   await app.register(multipartPlugin, {

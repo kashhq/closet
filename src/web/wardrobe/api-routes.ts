@@ -21,6 +21,7 @@ import {
   withoutNulls,
 } from '../api/resource';
 import type { Queryable } from '../../db/client';
+import { formFile, formFiles } from '../form-body';
 import { HttpError } from '../errors';
 import { t } from '../i18n';
 import { GarmentParams, RowId } from '../schemas';
@@ -687,7 +688,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         deps,
         actorOf(request),
         garmentAddress(request),
-        request.files({ limits: { files: 1 } }),
+        formFiles(request, { limits: { files: 1 } }),
       );
       return { cutoutStatus };
     },
@@ -740,7 +741,7 @@ export const wardrobeApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
         deps,
         actorOf(request),
         garmentAddress(request),
-        () => request.file(),
+        () => formFile(request),
       );
       return toGarmentPhoto(edited);
     },

@@ -4,6 +4,7 @@ import type { FastifyReply } from 'fastify';
 import { sessionUserId } from '../auth/require-session';
 import { todayIn } from '../../calendar-date';
 import { sendPrivatePhoto } from '../files/private-photo';
+import { formFiles } from '../form-body';
 import type { WebOptions } from '../plugin';
 import { RowId } from '../schemas';
 import { safeReturnTo } from '../security/return-to';
@@ -54,7 +55,7 @@ export const selfieRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
       const { day } = await attachSelfie(deps, actorOf(request), {
         entryId: request.params.id,
         // One file: the photo (a second is a 413).
-        parts: request.files({ limits: { files: 1 } }),
+        parts: formFiles(request, { limits: { files: 1 } }),
         today: todayIn(config.timeZone, new Date()),
       });
       return reply.redirect(
