@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { wardrobeShare } from '../../src/db/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { transitionRequest } from '../../src/web/requests/request-actions';
 import { createTrip } from '../../src/web/trips/queries';
@@ -172,5 +173,33 @@ describe('a read-only token', () => {
       expect(res.body).toContain(`Tool ${name} not found`);
     }
     expect((await list(agent)).find((r) => r.id === id)?.status).toBe('open');
+  });
+});
+
+describe('a request about a sharer’s garment', () => {
+  it('shows its summary to a token that may see the wardrobe, and none to an own-wardrobe-only token', async () => {
+    const email = 'requests-sharer@example.com';
+    const cookie = await t.register(email);
+    const sharer = await userIdOf(t, email);
+    const garmentId = await createGarment(t, { name: 'Sharer coat', cookie });
+    await t.db.insert(wardrobeShare).values({
+      grantorId: sharer,
+      granteeId: userId,
+      permission: 'VIEW',
+      acceptedAt: new Date(),
+      createdAt: new Date(),
+    });
+    const id = await ask({ kind: 'garment', id: garmentId }, 'The coat');
+    const minted = await mintToken(t, userId, 'Own only', 'mcp', {
+      readOnly: false,
+      ownWardrobeOnly: true,
+    });
+    if (!minted.created) throw new Error('no token');
+
+    expect((await list(agent)).find((r) => r.id === id)?.subject).toMatchObject(
+      { kind: 'garment', id: garmentId, name: 'Sharer coat' },
+    );
+    const ownOnly = (await list(minted.token)).find((r) => r.id === id);
+    expect(ownOnly).toMatchObject({ body: 'The coat', subject: null });
   });
 });

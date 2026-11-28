@@ -292,7 +292,10 @@ describe('MCP statements per tool (#172)', () => {
           clientId: null,
         })
       ).id;
+    // Two garments: a per-row read would add a statement per request.
     await ask({ kind: 'garment', id: ids.garment });
+    await ask({ kind: 'garment', id: ids.other });
+    await ask({ kind: 'garment', id: ids.copies });
     await ask({ kind: 'trip', id: ids.trip });
     await ask({ kind: 'need', id: ids.need });
     ids.claimable = await ask(null);

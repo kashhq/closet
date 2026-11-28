@@ -13,7 +13,8 @@ import {
   GarmentListItem,
   garmentListRecord,
 } from '../../wardrobe/garment-resource';
-import { findGarment } from '../../wardrobe/queries';
+import { garmentsByIds } from '../../wardrobe/queries';
+import { sharedWardrobesOf } from '../../sharing/access';
 import { actorOf, defineTool, type ToolContext } from '../tool';
 import { rowId } from './common';
 import { GARMENT_SUMMARY_FOR_MCP } from './garments';
@@ -30,21 +31,48 @@ import { TRIP_LIST_ITEM_FOR_MCP } from './trips';
 /** list_agent_requests' cap: the oldest twenty; the rest wait for the next call. */
 const LIST_LIMIT = 20;
 
-/** A garment subject as search_garments' hit; the request's own join proved the asker sees it, so it is read as a VIEW. */
-async function garmentSubject(ctx: ToolContext, row: AgentRequestRow) {
-  const garment = await findGarment(ctx.db, row.subject!.id, {
-    ownerId: row.subjectOwnerId!,
-    role: 'VIEW',
-  });
-  return (
-    garment &&
-    project(
-      garmentListRecord(garment, ctx.cutouts.enabled),
-      GarmentListItem,
-      GARMENT_SUMMARY_FOR_MCP,
-      {},
-    )
+/**
+ * The garment subjects as search_garments' hits, in one statement
+ * (garmentsByIds, whatever their owners) over those in a wardrobe this
+ * token may see: the caller's own, or one shared with them that its scope
+ * allows (sharedWardrobesOf: none for an own-wardrobe-only token, as
+ * wardrobeFor refuses it). A subject outside them has no entry, as an
+ * unseen one.
+ */
+async function garmentSubjects(
+  ctx: ToolContext,
+  rows: readonly AgentRequestRow[],
+): Promise<Map<number, object>> {
+  const garments = rows.filter((row) => row.subject?.kind === 'garment');
+  const foreign = garments.some((row) => row.subjectOwnerId !== ctx.userId);
+  const visible = new Set<number>([ctx.userId]);
+  if (foreign) {
+    for (const wardrobe of await sharedWardrobesOf(ctx.db, actorOf(ctx))) {
+      visible.add(wardrobe.grantorId);
+    }
+  }
+  const seen = garments.filter((row) => visible.has(row.subjectOwnerId!));
+  if (seen.length === 0) return new Map();
+  const found = await garmentsByIds(
+    ctx.db,
+    ctx.userId,
+    seen.map((row) => row.subject!.id),
   );
+  const subjects = new Map<number, object>();
+  for (const row of seen) {
+    const garment = found.find((candidate) => candidate.id === row.subject!.id);
+    if (!garment) continue;
+    subjects.set(
+      row.id,
+      project(
+        garmentListRecord(garment, ctx.cutouts.enabled),
+        GarmentListItem,
+        GARMENT_SUMMARY_FOR_MCP,
+        {},
+      ),
+    );
+  }
+  return subjects;
 }
 
 /**
@@ -61,20 +89,18 @@ async function subjectsForAgent(
   const idsOf = (kind: 'trip' | 'need') =>
     rows.flatMap((row) => (row.subject?.kind === kind ? [row.subject.id] : []));
   const needIds = idsOf('need');
-  const [trips, needs] = await Promise.all([
+  const [trips, needs, garments] = await Promise.all([
     idsOf('trip').length > 0 ? listTrips(ctx.db, ctx.userId, today) : [],
     needIds.length > 0 ? needsOf(ctx.db, ctx.userId, needIds) : [],
+    garmentSubjects(ctx, rows),
   ]);
-  const subjects = new Map<number, object>();
+  const subjects = new Map<number, object>(garments);
   for (const row of rows) {
     const { subject } = row;
     if (!subject) continue;
     switch (subject.kind) {
-      case 'garment': {
-        const garment = await garmentSubject(ctx, row);
-        if (garment) subjects.set(row.id, garment);
-        break;
-      }
+      case 'garment':
+        break; // read in one statement, above
       case 'trip': {
         const trip = trips.find((candidate) => candidate.id === subject.id);
         if (trip) {
