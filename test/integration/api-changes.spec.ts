@@ -1133,6 +1133,50 @@ describe("a grantee's feed", () => {
     ).not.toHaveProperty('revokedWardrobes');
   });
 
+  // #1310: the feed is a replica. A request about a shared garment keeps
+  // its stored reference when the share ends (no request revision moves);
+  // the wardrobe's end arrives as revokedWardrobes and the client drops the
+  // garment it resolved the reference against.
+  it('a request about a shared garment: the share ending revokes the wardrobe and leaves the request holding its reference', async () => {
+    const owner = await account('changes-req-owner@example.com');
+    const grantee = await account('changes-req-grantee@example.com');
+    const shared = await newGarment(owner.device, 'Shared coat');
+    await t.db.insert(wardrobeShare).values({
+      grantorId: owner.id,
+      granteeId: grantee.id,
+      permission: 'VIEW',
+      acceptedAt: new Date(),
+      createdAt: new Date(),
+    });
+    const asked = await api(grantee.device, 'POST', '/agent-requests', {
+      body: 'What goes with this?',
+      subject: { kind: 'garment', id: shared },
+    });
+    expect(asked.statusCode, asked.body).toBe(201);
+    const { id } = asked.json<{ id: number }>();
+    const first = await syncAll(grantee.device, { limit: 100 });
+    const subject = { subject: { kind: 'garment', id: shared } };
+    expect(dataOf(first.pages, 'agentRequest')).toMatchObject([subject]);
+
+    await t.db
+      .delete(wardrobeShare)
+      .where(
+        and(
+          eq(wardrobeShare.grantorId, owner.id),
+          eq(wardrobeShare.granteeId, grantee.id),
+        ),
+      );
+    const delta = await changes(grantee.device, { cursor: first.cursor });
+    expect(delta.revokedWardrobes).toEqual([owner.id]);
+    expect(delta.changes).toEqual([]);
+    // The request is unchanged and still holds its reference on a fresh
+    // sync; the API's resource, a fresh read, no longer shows the garment.
+    const fresh = await syncAll(grantee.device, { limit: 100 });
+    expect(dataOf(fresh.pages, 'agentRequest')).toMatchObject([subject]);
+    const read = await api(grantee.device, 'GET', `/agent-requests/${id}`);
+    expect(read.json()).not.toHaveProperty('subject');
+  });
+
   // #680: price and notes are `private`, a MANAGE share's and never a
   // VIEW one's. The grant is part of the cursor (`g`, #959), so a share
   // lowered to VIEW resends the wardrobe's garments, without them: a

@@ -230,6 +230,33 @@ describe('the asker', () => {
   });
 });
 
+describe('a replayed ask', () => {
+  it('answers the first request with where it is now, not open (#1311)', async () => {
+    const a = await asker('requests-replay@example.com');
+    const clientId = randomUUID();
+    const body = 'Which shoes?';
+    const first = await transitionRequest(deps(), agentOf(a.id), {
+      kind: 'ask',
+      body,
+      subject: null,
+      clientId,
+    });
+    expect(first).toEqual({ id: first.id, status: 'open', changed: true });
+    await transitionRequest(deps(), agentOf(a.id), {
+      kind: 'withdraw',
+      id: first.id,
+    });
+    expect(
+      await transitionRequest(deps(), agentOf(a.id), {
+        kind: 'ask',
+        body,
+        subject: null,
+        clientId,
+      }),
+    ).toEqual({ id: first.id, status: 'withdrawn', changed: false });
+  });
+});
+
 describe('the agent', () => {
   it('two claim at once: the first holds it, the second is refused', async () => {
     const a = await asker('requests-race@example.com');

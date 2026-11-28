@@ -118,7 +118,7 @@ async function askAgent(
     subject: subject?.kind ?? null,
     clientId: clientId ?? undefined,
   });
-  return { id: asked.id, status: 'open', changed: asked.created };
+  return { id: asked.id, status: asked.status, changed: asked.created };
 }
 
 async function moveRequest(

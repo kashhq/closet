@@ -44,7 +44,11 @@ export interface AgentRequestRow {
   createdAt: Date;
 }
 
-/** A request's subject as a check of what the asker sees now: the stored one only while it is. */
+/**
+ * A request's subject as the asker sees it now: the stored one only while
+ * it is seen. The API resource's (a fresh read, #1285); the feed sends the
+ * stored reference instead (agentRequestsByIds).
+ */
 const subjectSql = sql<RequestSubject | null>`case
   when ${garment.id} is not null then json_build_object('kind', 'garment', 'id', ${garment.id})
   when ${agentRequest.tripId} is not null then json_build_object('kind', 'trip', 'id', ${agentRequest.tripId})
@@ -69,8 +73,8 @@ const ROW = {
 
 /**
  * The asker's requests matching `where`, the garment subject joined only
- * while they still see it (garment_id is a soft reference: schema.ts).
- * Joined, so every column keeps its table (src/db/AGENTS.md).
+ * while they still see it. Joined, so every column keeps its table
+ * (src/db/AGENTS.md).
  */
 function readRequests(db: Queryable, ownerId: number, where: SQL | undefined) {
   return db
@@ -114,7 +118,13 @@ export function requestPage(
     .limit(page.limit + 1);
 }
 
-/** The changes feed's rows (src/web/sync/feed.ts): as stored, one statement for any owners. */
+/**
+ * The changes feed's rows (src/web/sync/feed.ts): as stored, one statement
+ * for any owners. The feed is a replica: the subject is the stored
+ * reference (garment_id included), never judged against the live share,
+ * which moves no request's revision; the client resolves it against the
+ * garments it holds and drops a wardrobe's on `revokedWardrobes`.
+ */
 export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
   return db
     .select({
@@ -175,7 +185,7 @@ const idOf = (subject: RequestSubject | null, kind: RequestSubject['kind']) =>
  * `find` must also run when the subject is no longer seen): one statement, the owner lock folded in,
  * inserting only while the asker sees the subject, and saying which. With
  * a client id (the outbox's replay, the API's retry) a request of that id
- * already stored is the answer, `created: false`, whatever this one says;
+ * already stored is the answer, `created: false` and its status now, whatever this one says;
  * the constraint arbitrates, never a read first. 'unseen': the subject is
  * not the asker's to name (or the account is gone). 'gone': the id of a
  * request deleted since (none today: only the account's cascade deletes,
@@ -185,7 +195,9 @@ export async function insertRequest(
   db: Queryable,
   ownerId: number,
   ask: NewRequest,
-): Promise<{ id: number; created: boolean } | 'unseen' | 'gone'> {
+): Promise<
+  { id: number; status: RequestStatus; created: boolean } | 'unseen' | 'gone'
+> {
   let written: { seen: boolean; id: number | null };
   try {
     const { rows } = await db.execute<{ seen: boolean; id: number | null }>(
@@ -211,12 +223,14 @@ export async function insertRequest(
     if (isDeletedClientId(error)) return 'gone';
     throw error;
   }
-  if (written.id !== null) return { id: written.id, created: true };
+  if (written.id !== null) {
+    return { id: written.id, status: 'open', created: true };
+  }
   // A replay finds its first request even once the subject is unseen: the
   // id names the ask, not what it is about.
   if (ask.clientId !== null) {
     const [first] = await db
-      .select({ id: agentRequest.id })
+      .select({ id: agentRequest.id, status: agentRequest.status })
       .from(agentRequest)
       .where(
         and(
@@ -224,7 +238,7 @@ export async function insertRequest(
           eq(agentRequest.clientId, ask.clientId),
         ),
       );
-    if (first) return { id: first.id, created: false };
+    if (first) return { ...first, created: false };
   }
   // Seen, yet nothing inserted and nothing found: the conflicting row went.
   return written.seen ? 'gone' : 'unseen';
