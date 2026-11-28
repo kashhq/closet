@@ -27,7 +27,7 @@
  * - claim or answer of a claim another token holds while its lease runs
  *   (`held` for a claim, `taken` for an answer: the answering agent lost
  *   it, or never had it).
- * - anything but withdraw after an answer (`answered`), and anything but
+ * - anything but seen after an answer (`answered`), and anything but
  *   withdraw after a withdrawal (`withdrawn`); seen before an answer
  *   (`not-answered`).
  */
