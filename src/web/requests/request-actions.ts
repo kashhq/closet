@@ -1,4 +1,5 @@
 import {
+  REQUEST_ANSWER_MAX,
   type RequestEvent,
   type RequestMove,
   type RequestRefusal,
@@ -126,6 +127,8 @@ async function moveRequest(
   transition: Move,
 ): Promise<TransitionOutcome> {
   const { id } = transition;
+  const answer =
+    transition.kind === 'answer' ? checkedAnswer(transition.answer) : undefined;
   const moved: RequestMove | 'missing' = await ownerTransaction(
     db,
     actor.userId,
@@ -135,7 +138,13 @@ async function moveRequest(
       if (!state) return 'missing';
       const move = requestMove(state, eventOf(transition));
       if (move.kind === 'move') {
-        await writeMove(tx, actor.userId, id, move, patchFor(transition, move));
+        await writeMove(
+          tx,
+          actor.userId,
+          id,
+          move,
+          patchFor(transition, move, answer),
+        );
       }
       return move;
     },
@@ -184,6 +193,7 @@ function eventOf(transition: Move): RequestEvent {
 function patchFor(
   transition: Move,
   move: Extract<RequestMove, { kind: 'move' }>,
+  answer: string | undefined,
 ): RequestPatch {
   switch (transition.kind) {
     case 'claim':
@@ -192,7 +202,7 @@ function patchFor(
       return {
         kind: 'answer',
         tokenId: transition.tokenId,
-        answer: transition.answer,
+        answer: answer ?? '',
         stampsClaim: move.claim !== 'keep',
       };
     case 'withdraw':
@@ -200,6 +210,24 @@ function patchFor(
     case 'seen':
       return { kind: 'seen' };
   }
+}
+
+/**
+ * The answer as stored: trimmed, 1..REQUEST_ANSWER_MAX (agent_request_answer_check),
+ * checked before the transaction so a bad one is a 400, never the constraint's 500.
+ */
+function checkedAnswer(raw: string): string {
+  const answer = raw.trim();
+  if (answer.length === 0) {
+    throw new HttpError(400, t('refusal.agentRequest.answerBlank'));
+  }
+  if ([...answer].length > REQUEST_ANSWER_MAX) {
+    throw new HttpError(
+      400,
+      t('refusal.agentRequest.answerTooLong', { max: REQUEST_ANSWER_MAX }),
+    );
+  }
+  return answer;
 }
 
 function subjectLabel(subject: RequestSubject | null): string {

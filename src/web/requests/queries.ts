@@ -2,7 +2,13 @@ import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
 import type { Queryable } from '../../db/client';
 import { isDeletedClientId } from '../../db/errors';
 import { OWNER_LOCKED, ownerLockSql } from '../../db/owner-lock';
-import { agentRequest, garment, optionGroup, trip } from '../../db/schema';
+import {
+  agentRequest,
+  garment,
+  optionGroup,
+  personalAccessToken,
+  trip,
+} from '../../db/schema';
 import {
   CLAIM_LEASE_MINUTES,
   type RequestState,
@@ -239,6 +245,7 @@ export async function lockRequestState(
     .select({
       status: agentRequest.status,
       claimedByTokenId: agentRequest.claimedByTokenId,
+      claimTokenRevoked: sql<boolean>`exists (select 1 from ${personalAccessToken} where ${personalAccessToken.id} = ${agentRequest.claimedByTokenId} and ${personalAccessToken.revokedAt} is not null)`,
       leaseRuns: sql<boolean>`coalesce(${agentRequest.claimedAt} > now() - make_interval(mins => ${CLAIM_LEASE_MINUTES}::int), false)`,
       answerSeen: sql<boolean>`${agentRequest.answerSeenAt} is not null`,
     })

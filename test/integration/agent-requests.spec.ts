@@ -2,12 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { agentRequest } from '../../src/db/schema';
-import { CLAIM_LEASE_MINUTES } from '../../src/wardrobe/agent-requests';
+import {
+  CLAIM_LEASE_MINUTES,
+  REQUEST_ANSWER_MAX,
+} from '../../src/wardrobe/agent-requests';
 import { HttpError } from '../../src/web/errors';
 import {
   type RequestTransition,
   transitionRequest,
 } from '../../src/web/requests/request-actions';
+import { revokeToken } from '../../src/web/auth/personal-tokens';
 import { createInvite } from '../../src/web/sharing/queries';
 import type { Actor } from '../../src/web/sharing/access';
 import { deviceToken, expectProblem } from './api';
@@ -266,6 +270,44 @@ describe('the agent', () => {
         tokenId: laptop,
       }),
     ).resolves.toEqual({ id, status: 'claimed', changed: true });
+  });
+
+  it('a revoked token frees its claim at once: another agent claims it', async () => {
+    const a = await asker('requests-revoked@example.com');
+    const id = await asked(a, 'Pack me for Porto');
+    const [laptop, phone] = [await a.agent('Laptop'), await a.agent('Phone')];
+    const claim = (tokenId: number) =>
+      transitionRequest(deps(), agentOf(a.id), { kind: 'claim', id, tokenId });
+    await claim(laptop);
+    expect(await revokeToken(deps(), agentOf(a.id), 'mcp', laptop)).toBe(true);
+    await expect(claim(phone)).resolves.toEqual({
+      id,
+      status: 'claimed',
+      changed: true,
+    });
+    expect((await rowOf(id))?.claimedByTokenId).toBe(phone);
+  });
+
+  it('a blank or over-long answer is a 400, never the constraint’s 500', async () => {
+    const a = await asker('requests-answer@example.com');
+    const id = await asked(a, 'What should I wear?');
+    const tokenId = await a.agent('Laptop');
+    const answer = (text: string) =>
+      refusalOf(a.id, { kind: 'answer', id, tokenId, answer: text });
+    expect(await answer('  \n ')).toMatchObject({ status: 400 });
+    expect(await answer('x'.repeat(REQUEST_ANSWER_MAX + 1))).toMatchObject({
+      status: 400,
+    });
+    expect((await rowOf(id))?.status).toBe('open');
+    await expect(
+      transitionRequest(deps(), agentOf(a.id), {
+        kind: 'answer',
+        id,
+        tokenId,
+        answer: `  ${'x'.repeat(REQUEST_ANSWER_MAX)}  `,
+      }),
+    ).resolves.toMatchObject({ status: 'answered' });
+    expect((await rowOf(id))?.answer).toBe('x'.repeat(REQUEST_ANSWER_MAX));
   });
 
   it('an expired lease is taken over; the first agent’s answer is refused, the new one’s is the asker’s to see once', async () => {

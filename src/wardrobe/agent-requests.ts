@@ -15,7 +15,7 @@
  *   seen      the asker ("Got it")        answered, not seen yet             answered
  *
  * - A claim is **free** when its lease (CLAIM_LEASE_MINUTES) has run out or
- *   its token is gone: it reads as open to the next agent, so no timer
+ *   its token is gone (deleted or revoked): it reads as open to the next agent, so no timer
  *   ends a lease. Taking it over stamps the new token.
  * - claim by the token holding it renews the lease (idempotent for the
  *   agent; the lease clock restarts).
@@ -68,6 +68,8 @@ export type RequestEvent =
 export interface RequestState {
   status: RequestStatus;
   claimedByTokenId: number | null;
+  /** The claiming token was revoked (its row stays), which frees its claim like an expired lease. */
+  claimTokenRevoked: boolean;
   /** The claim's lease still runs (claimed_at + the lease is after now). */
   leaseRuns: boolean;
   answerSeen: boolean;
@@ -100,7 +102,11 @@ function claimOf(
   tokenId: number,
 ): 'mine' | 'free' | 'held' {
   if (state.claimedByTokenId === tokenId) return 'mine';
-  return state.claimedByTokenId === null || !state.leaseRuns ? 'free' : 'held';
+  return state.claimedByTokenId === null ||
+    state.claimTokenRevoked ||
+    !state.leaseRuns
+    ? 'free'
+    : 'held';
 }
 
 const refused = (reason: RequestRefusal): RequestMove => ({

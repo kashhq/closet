@@ -11,10 +11,16 @@ const OTHER = 8;
 
 const state = (
   status: RequestStatus,
-  claim: { by?: number | null; runs?: boolean; seen?: boolean } = {},
+  claim: {
+    by?: number | null;
+    runs?: boolean;
+    revoked?: boolean;
+    seen?: boolean;
+  } = {},
 ): RequestState => ({
   status,
   claimedByTokenId: claim.by ?? null,
+  claimTokenRevoked: claim.revoked ?? false,
   leaseRuns: claim.runs ?? false,
   answerSeen: claim.seen ?? false,
 });
@@ -58,6 +64,12 @@ describe('requestMove', () => {
     [
       'claim one whose token is gone',
       state('claimed', { by: null, runs: true }),
+      claim,
+      move('claimed', 'claimed', 'takeover'),
+    ],
+    [
+      'claim a live claim whose token was revoked',
+      state('claimed', { by: OTHER, runs: true, revoked: true }),
       claim,
       move('claimed', 'claimed', 'takeover'),
     ],

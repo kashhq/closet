@@ -363,7 +363,9 @@
       "taken": "Another agent took this request",
       "answered": "Already answered",
       "withdrawn": "The owner withdrew this request",
-      "notAnswered": "Not answered yet"
+      "notAnswered": "Not answered yet",
+      "answerBlank": "The answer is empty",
+      "answerTooLong": "The answer is longer than {max} characters"
     },
     "replay": {
       "tooOld": "Too long ago to save: add it from the calendar",
