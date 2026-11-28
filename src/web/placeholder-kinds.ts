@@ -272,6 +272,7 @@ export const PLACEHOLDER_KINDS = {
   'today.push.EVENING_PLANNED': { outfits: 'data' },
   'requests.ASKED': { day: 'copy' },
   'requests.MORE': { count: 'data' },
+  'requests.push.TITLE': { agent: 'data' },
   'selfie.ALT': { day: 'copy' },
   'selfie.VIEW': { day: 'copy' },
   'selfie.WORN_HEADING': { count: 'data' },

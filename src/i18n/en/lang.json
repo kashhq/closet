@@ -1514,6 +1514,10 @@
     "ONE_TITLE": "Your request",
     "TODAY_TITLE": "Asked of your agent",
     "SHORT": "Requests",
+    "push": {
+      "TITLE": "{agent} answered your request",
+      "TITLE_UNNAMED": "Your agent answered your request"
+    },
     "EMPTY": "Nothing asked yet. Ask your agent from Today, a garment, a trip or a need.",
     "MORE": "{count} more",
     "OLDER": "Older requests",
