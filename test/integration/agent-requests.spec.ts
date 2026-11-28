@@ -362,8 +362,11 @@ describe('the asker', () => {
       t.inject({
         method: 'POST',
         url: '/requests',
-        payload: { body },
-        headers: { cookie: a.cookie },
+        payload: new URLSearchParams({ body }).toString(),
+        headers: {
+          cookie: a.cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
       });
     const sent = await send(` ${atLimit}\r\n`);
     expect(sent.statusCode, sent.body).toBe(303);

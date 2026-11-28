@@ -51,6 +51,10 @@ Every `PostForm` submits once (`data-submit-once`, `public/js/submit-once.js`, l
 
 A post form's field (its label, the control, the messages a refused post re-renders under it) is `FormField` with the control's attributes from `inputAttributes` (`src/web/form-field.tsx`): while it has messages the control is red, `aria-invalid` and `aria-describedby` its messages, which are announced (`role="alert"`). The garment form's colour dropdown, a group no `<label for>` names, gets `FieldMessages` alone: announced, not tied to a control. Eight hand-written copies had drifted (2026-10-17): the capsule and trip forms never announced theirs, and the garment form, repair log, "Bought it" and fabric weight were red without `aria-invalid`. guards.conf `@field-invalid` fails `input-error` or `aria-invalid` spelled anywhere else in `src/` outside specs (it cannot see a hand-made `aria-describedby` or alert, which other widgets use too); the account forms (`src/web/auth/form.tsx`) are excepted, since their inline check refills message slots out of band.
 
+### Line breaks (#1318)
+
+A browser posts a textarea's line breaks as CRLF but its `maxlength` counts one character. `src/web/form-body.ts` turns CRLF into LF in every urlencoded body (a root preValidation hook) and every multipart text field (`formParts`, never `request.parts`) before validation, so a schema's `maxLength` is the textarea's and no feature normalizes line breaks itself. JSON bodies (`/api/v1`, `/mcp`) are left as sent.
+
 ### Checklists
 
 A list of checkboxes posts only what is checked, so every checklist (the capsule picker, the garment page's capsule toggles, the packing list, the extras) also posts `shown`, each id it listed, and only shown-and-unchecked leaves. `src/web/checklist.tsx` owns the protocol: `checklistBody(field, maxItems)` (each list keeps its posted field name and cap), `unchecked` and the `ShownId` hidden input. guards.conf `@checklist-shown` holds `name="shown"` to it. Before 2026-10-17 trips imported `unchecked` from capsules' validation and each list hand-wrote its schema.

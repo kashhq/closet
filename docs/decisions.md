@@ -1876,6 +1876,12 @@ Why: a form sends each textarea line break as CRLF while its `maxlength` counts 
 Decision: `storedText` (src/wardrobe/agent-requests.ts) normalizes CRLF to LF and trims; `checkedText` in `transitionRequest` is the one length check of the body and the answer, on every surface. The route schemas bound only what is sent (`REQUEST_BODY_SENT_MAX`, twice the limit).
 Consequence: any other textarea with a `maxlength` and a server-side length bound has the same trap: measure after normalizing, in the domain writer.
 
+## 2026-11-28 — A form's CRLF is LF before any schema counts it (#1318)
+
+Why: a browser posts each textarea line break as CRLF while `maxlength` counts one character, so every route schema's `maxLength` refused a multi-line note at its limit (#1317 found it for requests; care notes and style notes had it too).
+Decision: one place normalizes: a root preValidation hook for urlencoded bodies and `formParts` (src/web/form-body.ts) for multipart text fields (files untouched). JSON bodies (/api/v1, /mcp) are excluded: a native client sends the text it means, and its length is what the schema counts. `storedText` is a trim.
+Consequence: a feature never normalizes line breaks itself. A multipart reader uses `formParts`, never `request.parts`.
+
 ## 2026-11-28 — OAuth discovery ships switched off by MCP_PUBLIC_URL (#1289)
 
 Why: the plan's discovery (A1) lands before the consent page (#1290) and the token endpoint (#1291), yet its Authorization Server Metadata must name both.
