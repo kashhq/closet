@@ -3,7 +3,6 @@ import {
   REQUEST_BODY_MAX,
   REQUEST_STATUSES,
   REQUEST_SUBJECT_KINDS,
-  type RequestSubject,
 } from '../../wardrobe/agent-requests';
 import { asResource, ListOf, literals } from '../api/resource';
 import { RowId } from '../schemas';
@@ -147,9 +146,8 @@ export const AgentRequestOutcome = Type.Object(
 );
 
 /**
- * The changes feed's request (#196b): as stored, its subject the one it
- * was asked about (the feed's garments say whether it is still there and
- * seen) and no agent names (a token's rename moves no request's revision:
+ * The changes feed's request (#196b): its subject judged like the API's
+ * (absent once the asker no longer sees it, #1310) and no agent names (a token's rename moves no request's revision:
  * the client asks GET /agent-requests/{id} for them).
  */
 export const SyncedAgentRequest = Type.Object(
@@ -171,15 +169,6 @@ export const SyncedAgentRequest = Type.Object(
   },
 );
 
-function storedSubject(row: SyncedAgentRequestRow): RequestSubject | null {
-  if (row.garmentId !== null) return { kind: 'garment', id: row.garmentId };
-  if (row.tripId !== null) return { kind: 'trip', id: row.tripId };
-  if (row.optionGroupId !== null) {
-    return { kind: 'need', id: row.optionGroupId };
-  }
-  return null;
-}
-
 export function toSyncedAgentRequest(
   row: SyncedAgentRequestRow,
 ): Static<typeof SyncedAgentRequest> {
@@ -187,7 +176,7 @@ export function toSyncedAgentRequest(
     id: row.id,
     body: row.body,
     status: row.status,
-    subject: storedSubject(row),
+    subject: row.subject,
     claimedAt: iso(row.claimedAt),
     answer: row.answer,
     answeredAt: iso(row.answeredAt),

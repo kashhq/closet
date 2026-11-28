@@ -148,7 +148,7 @@ export function sharePermissionSql(
  */
 export function managesWardrobeSql(
   ownerId: AnyPgColumn,
-  viewerId: number,
+  viewerId: number | AnyPgColumn,
 ): SQL<boolean> {
   return sql<boolean>`(${ownerId} = ${viewerId} or exists (
     select from ${wardrobeShare}
@@ -165,7 +165,7 @@ export function managesWardrobeSql(
  */
 export function viewsWardrobeSql(
   ownerId: AnyPgColumn,
-  viewerId: number,
+  viewerId: number | AnyPgColumn,
 ): SQL<boolean> {
   return sql<boolean>`(${ownerId} = ${viewerId} or exists (
     select from ${wardrobeShare} where ${acceptedShare(ownerId, viewerId)}

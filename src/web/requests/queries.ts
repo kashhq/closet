@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Queryable } from '../../db/client';
 import { isDeletedClientId } from '../../db/errors';
 import { OWNER_LOCKED, ownerLockSql } from '../../db/owner-lock';
@@ -44,7 +45,12 @@ export interface AgentRequestRow {
   createdAt: Date;
 }
 
-/** A request's subject as a check of what the asker sees now: the stored one only while it is. */
+/**
+ * A request's subject as the asker sees it now: the stored one only while
+ * it is seen. The one definition of that, for the API's reads and the
+ * changes feed alike (#1310): the garment is the joined `seenGarment`,
+ * never the stored garment_id, which stays after a share ends.
+ */
 const subjectSql = sql<RequestSubject | null>`case
   when ${garment.id} is not null then json_build_object('kind', 'garment', 'id', ${garment.id})
   when ${agentRequest.tripId} is not null then json_build_object('kind', 'trip', 'id', ${agentRequest.tripId})
@@ -68,21 +74,23 @@ const ROW = {
 };
 
 /**
+ * The join condition that keeps a request's garment only while its asker
+ * (`viewerId`: an id, or the request's own owner column) still sees it
+ * (garment_id is a soft reference: schema.ts).
+ */
+const seenGarment = (viewerId: number | AnyPgColumn) =>
+  sql`${garment.id} = ${agentRequest.garmentId} and ${viewsWardrobeSql(garment.ownerId, viewerId)}`;
+
+/**
  * The asker's requests matching `where`, the garment subject joined only
- * while they still see it (garment_id is a soft reference: schema.ts).
- * Joined, so every column keeps its table (src/db/AGENTS.md).
+ * while they still see it. Joined, so every column keeps its table
+ * (src/db/AGENTS.md).
  */
 function readRequests(db: Queryable, ownerId: number, where: SQL | undefined) {
   return db
     .select(ROW)
     .from(agentRequest)
-    .leftJoin(
-      garment,
-      and(
-        eq(garment.id, agentRequest.garmentId),
-        viewsWardrobeSql(garment.ownerId, ownerId),
-      ),
-    )
+    .leftJoin(garment, seenGarment(ownerId))
     .where(and(eq(agentRequest.ownerId, ownerId), where));
 }
 
@@ -114,16 +122,17 @@ export function requestPage(
     .limit(page.limit + 1);
 }
 
-/** The changes feed's rows (src/web/sync/feed.ts): as stored, one statement for any owners. */
+/**
+ * The changes feed's rows (src/web/sync/feed.ts): one statement for any
+ * owners, each request's subject judged for its own asker like the API's.
+ */
 export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
   return db
     .select({
       id: agentRequest.id,
       body: agentRequest.body,
       status: agentRequest.status,
-      garmentId: agentRequest.garmentId,
-      tripId: agentRequest.tripId,
-      optionGroupId: agentRequest.optionGroupId,
+      subject: subjectSql,
       claimedAt: agentRequest.claimedAt,
       answer: agentRequest.answer,
       answeredAt: agentRequest.answeredAt,
@@ -132,6 +141,7 @@ export function agentRequestsByIds(db: Queryable, ids: readonly number[]) {
       createdAt: agentRequest.createdAt,
     })
     .from(agentRequest)
+    .leftJoin(garment, seenGarment(agentRequest.ownerId))
     .where(inArray(agentRequest.id, [...ids]));
 }
 export type SyncedAgentRequestRow = Awaited<
@@ -175,7 +185,7 @@ const idOf = (subject: RequestSubject | null, kind: RequestSubject['kind']) =>
  * `find` must also run when the subject is no longer seen): one statement, the owner lock folded in,
  * inserting only while the asker sees the subject, and saying which. With
  * a client id (the outbox's replay, the API's retry) a request of that id
- * already stored is the answer, `created: false`, whatever this one says;
+ * already stored is the answer, `created: false` and its status now, whatever this one says;
  * the constraint arbitrates, never a read first. 'unseen': the subject is
  * not the asker's to name (or the account is gone). 'gone': the id of a
  * request deleted since (none today: only the account's cascade deletes,
@@ -185,7 +195,9 @@ export async function insertRequest(
   db: Queryable,
   ownerId: number,
   ask: NewRequest,
-): Promise<{ id: number; created: boolean } | 'unseen' | 'gone'> {
+): Promise<
+  { id: number; status: RequestStatus; created: boolean } | 'unseen' | 'gone'
+> {
   let written: { seen: boolean; id: number | null };
   try {
     const { rows } = await db.execute<{ seen: boolean; id: number | null }>(
@@ -211,12 +223,14 @@ export async function insertRequest(
     if (isDeletedClientId(error)) return 'gone';
     throw error;
   }
-  if (written.id !== null) return { id: written.id, created: true };
+  if (written.id !== null) {
+    return { id: written.id, status: 'open', created: true };
+  }
   // A replay finds its first request even once the subject is unseen: the
   // id names the ask, not what it is about.
   if (ask.clientId !== null) {
     const [first] = await db
-      .select({ id: agentRequest.id })
+      .select({ id: agentRequest.id, status: agentRequest.status })
       .from(agentRequest)
       .where(
         and(
@@ -224,7 +238,7 @@ export async function insertRequest(
           eq(agentRequest.clientId, ask.clientId),
         ),
       );
-    if (first) return { id: first.id, created: false };
+    if (first) return { ...first, created: false };
   }
   // Seen, yet nothing inserted and nothing found: the conflicting row went.
   return written.seen ? 'gone' : 'unseen';
