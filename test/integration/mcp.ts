@@ -70,7 +70,7 @@ export async function mintToken(
       kind,
       name,
       scope,
-      verifiedPassword: account.password,
+      verified: { password: account.password },
     },
   );
 }

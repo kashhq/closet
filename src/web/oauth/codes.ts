@@ -6,7 +6,11 @@ import {
   personalAccessToken,
   user,
 } from '../../db/schema';
-import { hashToken, MAX_ACTIVE_TOKENS } from '../auth/personal-tokens';
+import {
+  agentTokenNotIdleSql,
+  hashToken,
+  MAX_ACTIVE_TOKENS,
+} from '../auth/personal-tokens';
 import type { TokenScope } from '../auth/personal-tokens';
 import { passwordFingerprintSql } from '../auth/tokens';
 import { type ActionDeps, logOp } from '../op-log';
@@ -18,7 +22,7 @@ import type { ConsentRequest } from './authorize-request';
  * `closet_code_` + 32 random bytes, so scrubSecrets' `closet_` shape
  * already filters it from any text. Stored only as its hash.
  */
-const CODE_PREFIX = `${TOKEN_PREFIX}code_`;
+export const CODE_PREFIX = `${TOKEN_PREFIX}code_`;
 /** RFC 6749 4.1.2 recommends at most ten minutes; the exchange is at once. */
 export const CODE_LIFETIME_SECONDS = 2 * 60;
 
@@ -43,7 +47,8 @@ export type ConsentResult =
  * and its fingerprint is stamped on the row, so one committed after is
  * caught at the exchange, #1291) and Agent Access not full, counting the
  * user's live agent tokens but their grant from this same client, which
- * the exchange's mint replaces. Unlocked: the mint rechecks both under the
+ * the exchange's mint replaces, and any grant idle past its days
+ * (agentTokenNotIdleSql, on the app's clock that stamps them). Unlocked: the mint rechecks both under the
  * user's lock (createToken), so this only spares a code that cannot mint.
  */
 export async function grantConsent(
@@ -62,10 +67,12 @@ export async function grantConsent(
       select ${user.id} as id,
         ${user.password} = ${consent.verifiedPassword} as unchanged,
         ${passwordFingerprintSql} as fingerprint,
-        (select count(*)::int from ${personalAccessToken} p
-          where p.user_id = ${user.id} and p.kind = 'mcp'
-            and p.revoked_at is null
-            and p.oauth_client_id is distinct from ${request.clientId}) as active
+        (select count(*)::int from ${personalAccessToken}
+          where ${personalAccessToken.userId} = ${user.id}
+            and ${personalAccessToken.kind} = 'mcp'
+            and ${personalAccessToken.revokedAt} is null
+            and ${personalAccessToken.oauthClientId} is distinct from ${request.clientId}
+            and ${agentTokenNotIdleSql(new Date())}) as active
       from ${user} where ${user.id} = ${actor.userId}
     ), code as (
       insert into ${oauthAuthorizationCode} (code_hash, user_id, client_id,

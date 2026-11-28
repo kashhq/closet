@@ -51,7 +51,8 @@ export type JobName =
   | 'agent_rounds'
   | 'sync_prune'
   | 'weather_prune'
-  | 'oauth_code_prune';
+  | 'oauth_code_prune'
+  | 'oauth_refresh_prune';
 
 /**
  * A job's ending, closed. `success` and `failure` are the homelab contract

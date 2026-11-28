@@ -12,7 +12,7 @@ import type { Logger } from '../../logger';
  * unless its route opts in with `config: { rateLimit: SIGN_IN_LIMIT }` (or
  * ACCOUNT_LIMIT, LINK_IMPORT_LIMIT, WEATHER_SEARCH_LIMIT, WEATHER_LOCATION_LIMIT,
  * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT, OAUTH_DISCOVERY_LIMIT, OAUTH_AUTHORIZE_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
- * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, API_LIMIT, API_PHOTO_LIMIT, PHOTO_UPLOAD_LIMIT and PUSH_TEST_LIMIT through one
+ * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, OAUTH_TOKEN_LIMIT, API_LIMIT, API_PHOTO_LIMIT, PHOTO_UPLOAD_LIMIT and PUSH_TEST_LIMIT through one
  * createRateLimit checker each). Every limited route counts on its own. Counters live in
  * process memory, which is right for the single container this runs as.
  *
@@ -357,6 +357,21 @@ export const OAUTH_AUTHORIZE_LIMIT = {
   max: 10,
   timeWindow: MINUTE_MS,
   keyGenerator: (request: FastifyRequest) => request.ip,
+};
+
+/**
+ * `POST /oauth/token`'s refusals (src/web/oauth/token-routes.ts, #1291),
+ * per client address, counted only once a request is refused, as
+ * BEARER_REFUSAL_LIMIT is: a healthy client's hourly refresh never counts,
+ * so a vendor's shared egress addresses keep working. Its own checker:
+ * the token endpoint's callers are agent vendors, not the bearer
+ * surfaces'. Past it, a refusal that names no grant is a 429; a known
+ * grant's refusal stays `invalid_grant`, so its client learns to reconnect.
+ */
+export const OAUTH_TOKEN_LIMIT = {
+  max: 30,
+  timeWindow: MINUTE_MS,
+  keyGenerator: (request: FastifyRequest) => `oauth refused ${request.ip}`,
 };
 
 /**

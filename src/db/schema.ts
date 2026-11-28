@@ -386,18 +386,62 @@ export const personalAccessToken = pgTable(
     // consent's cap check leaves out the user's grant from the same client,
     // which its mint replaces (#1290, #1291).
     oauthClientId: text('oauth_client_id'),
+    // An OAuth grant's (#1291): when its current access token (token_hash)
+    // stops opening /mcp, on the app's clock (authenticateToken), and its
+    // live refresh token's hash, replaced on each rotation (the one it
+    // retires goes to oauth_retired_refresh_token), kept once revoked so a
+    // refused refresh says so. Null for every other token.
+    accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }),
+    refreshTokenHash: varchar('refresh_token_hash', { length: 64 }),
   },
   (table) => [
     unique('personal_access_token_token_hash_unique').on(table.tokenHash),
+    unique('personal_access_token_refresh_token_hash_unique').on(
+      table.refreshTokenHash,
+    ),
     index('personal_access_token_user_id_index').on(table.userId),
     check(
       'personal_access_token_kind_check',
       sql`${table.kind} in (${sqlList(TOKEN_KINDS)})`,
     ),
+    // An OAuth grant has all three and is an agent token; any other row none.
+    check(
+      'personal_access_token_oauth_check',
+      sql`(${table.oauthClientId} is null and ${table.refreshTokenHash} is null and ${table.accessExpiresAt} is null) or (${table.kind} = 'mcp' and ${table.oauthClientId} is not null and ${table.refreshTokenHash} is not null and ${table.accessExpiresAt} is not null)`,
+    ),
     foreignKey({
       name: 'personal_access_token_user_id_foreign',
       columns: [table.userId],
       foreignColumns: [user.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
+  ],
+);
+
+// Every refresh token an OAuth grant has retired (#1291, #1295;
+// src/web/oauth/AGENTS.md): a rotation inserts the one it replaced in its own
+// statement, so presenting any earlier generation, not only the last, is
+// reuse and revokes the grant (refreshGrant, src/web/oauth/grants.ts).
+// `retired_at` is the app's clock. Deleted with its grant's row; nightly, the
+// rows of a revoked grant go (src/maintenance/oauth-code-prune.ts). Not synced.
+export const oauthRetiredRefreshToken = pgTable(
+  'oauth_retired_refresh_token',
+  {
+    id: serial('id').primaryKey(),
+    refreshTokenHash: varchar('refresh_token_hash', { length: 64 }).notNull(),
+    tokenId: integer('token_id').notNull(),
+    retiredAt: timestamp('retired_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique('oauth_retired_refresh_token_refresh_token_hash_unique').on(
+      table.refreshTokenHash,
+    ),
+    index('oauth_retired_refresh_token_token_id_index').on(table.tokenId),
+    foreignKey({
+      name: 'oauth_retired_refresh_token_token_id_foreign',
+      columns: [table.tokenId],
+      foreignColumns: [personalAccessToken.id],
     })
       .onUpdate('cascade')
       .onDelete('cascade'),

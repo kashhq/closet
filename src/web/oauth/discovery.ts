@@ -93,9 +93,22 @@ export function authorizationServerMetadata(discovery: OAuthDiscovery) {
  * /mcp's 401 challenge. With OAuth on it names the Protected Resource
  * Metadata and the scopes to ask for (RFC 9728 section 5.1, MCP's
  * discovery): a client that sent no token learns where to get one. A
- * hosted client reads it only on a 401, never a 200.
+ * hosted client reads it only on a 401, never a 200. `invalidToken`: a
+ * token was presented and refused (expired, revoked, replaced, unknown),
+ * RFC 6750 3.1's `error="invalid_token"`, which tells an OAuth client to
+ * refresh; a request with no token gets no error code.
  */
-export function mcpChallenge(discovery: OAuthDiscovery | undefined): string {
-  if (discovery === undefined) return BEARER_CHALLENGE;
-  return `${BEARER_CHALLENGE}, resource_metadata="${discovery.resourceMetadataUrl}", scope="${OAUTH_SCOPES.join(' ')}"`;
+export function mcpChallenge(
+  discovery: OAuthDiscovery | undefined,
+  { invalidToken = false }: { invalidToken?: boolean } = {},
+): string {
+  const parts = [BEARER_CHALLENGE];
+  if (invalidToken) parts.push('error="invalid_token"');
+  if (discovery !== undefined) {
+    parts.push(
+      `resource_metadata="${discovery.resourceMetadataUrl}"`,
+      `scope="${OAUTH_SCOPES.join(' ')}"`,
+    );
+  }
+  return parts.join(', ');
 }

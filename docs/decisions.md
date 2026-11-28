@@ -1893,3 +1893,16 @@ Consequence: setting `MCP_PUBLIC_URL` before #1291 points clients at endpoints t
 Why: a Client ID Metadata Document is self-asserted, so its `redirect_uris` are whatever its author wants (`evil.example`); a GET error that 303'd there after the URI "matched" would bounce a tailnet user off Closet's origin with no consent shown.
 Decision: only the POST's outcome redirects (a code, or `access_denied`); a GET refusal after proof is a 400 page with a "Return to <host>" link the user taps (`ConsentErrorPage`), and before proof a 400 page with no link. Every answer is `no-store`; the POST reads no session (`config.sessionless`). A grant's client is `personal_access_token.oauth_client_id` (0076), read now by the cap check, written by #1291's mint.
 Consequence: no `/oauth/authorize` path calls `reply.redirect` but the POST's two outcomes; #1291's token endpoint answers JSON, never a redirect.
+
+## 2026-11-28 — OAuth refresh: a family table, no grace period, one-attempt codes (#1291)
+
+Why: the design kept one `previous_refresh_token_hash`, so presenting generation N-2 read as unknown and the grant survived (#1295); and two refreshes racing on one token cannot be told from a thief replaying a stolen one.
+Decision: `oauth_retired_refresh_token` holds every refresh token a grant retired, written in the rotation's own statement; any of them presented revokes the whole grant, two racing refreshes included (owner-approved on #1336). A code is one attempt: its claim commits whatever refuses after (verifier, client, redirect, resource, password changed, Agent Access full), and a used code presented again revokes the grant it minted.
+Accepted risk: RFC 6749 4.1.2's replay revocation lets whoever holds a leaked code end the grant (a denial of service, never access); the code lives 2 minutes and travels only to the proven redirect. Likewise a client that loses a rotation's answer reconnects.
+Consequence: a grant's audience is its kind (`mcp`), so a second resource needs an audience column checked at exchange, refresh and authenticateToken. `expired` never spends `BEARER_REFUSAL_LIMIT`. The family prune drops only revoked grants' rows.
+
+## 2026-11-28 — The OAuth code exchange locks the account before the code (#1291)
+
+Why: the exchange claimed the code row, then mintToken locked the user row; deleting the account locks the user row, then its cascade takes the codes. Racing, the two deadlocked (40P01, one side a 500).
+Decision: `exchangeCode` locks the code's account FOR UPDATE in a statement of its own (`lockCodeAccount`), then claims the code; the claim still commits whatever refuses after. An expired access token at /mcp stays uncharged but is logged once per address per BEARER_REFUSAL_LIMIT window (`RefusalSummaries.logsOwnLine`); an OAuth grant idle past OAUTH_IDLE_DAYS no longer counts against MAX_ACTIVE_TOKENS nor as a connected agent ("Ask your agent"), and Agent Access lists it as expired.
+Consequence: a new writer of `oauth_authorization_code` takes the user row first; the interleaved spec in `oauth-token.spec.ts` (deletion queued before the exchange) deadlocks on the old order.

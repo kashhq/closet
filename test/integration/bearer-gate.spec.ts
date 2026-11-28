@@ -107,9 +107,14 @@ describe('the bearer gate', () => {
       .map((record) => record.msg);
   };
 
-  const expectMcp401 = (res: LightMyRequestResponse) => {
+  /** `presented`: a token was sent and refused, RFC 6750's invalid_token. */
+  const expectMcp401 = (res: LightMyRequestResponse, presented = false) => {
     expect(res.statusCode).toBe(401);
-    expect(res.headers['www-authenticate']).toBe('Bearer realm="closet"');
+    expect(res.headers['www-authenticate']).toBe(
+      presented
+        ? 'Bearer realm="closet", error="invalid_token"'
+        : 'Bearer realm="closet"',
+    );
     expect(res.json()).toEqual({
       statusCode: 401,
       message: 'Unauthorized',
@@ -132,7 +137,7 @@ describe('the bearer gate', () => {
         payload: '{"jsonrpc": "2.0", "method": ',
       });
     expectMcp401(await malformed());
-    expectMcp401(await malformed(`Bearer ${UNKNOWN}`));
+    expectMcp401(await malformed(`Bearer ${UNKNOWN}`), true);
     // The same body with a token that opens reaches the parser.
     expect((await malformed(`Bearer ${agent}`)).statusCode).toBe(400);
   });
@@ -169,7 +174,7 @@ describe('the bearer gate', () => {
     expect((await me(client, device)).statusCode).toBe(200);
 
     // A device token on /mcp and an agent token on /api: the wrong kind.
-    expectMcp401(await mcp(client, device));
+    expectMcp401(await mcp(client, device), true);
     expectProblem(await me(client, agent), 401, 'unauthorized');
 
     // A device that signed out (its token revoked) learns to sign in again.
@@ -197,7 +202,7 @@ describe('the bearer gate', () => {
     const minted = await mintToken(t, t.owner.id, 'Phone', 'device');
     if (!minted.created) throw new Error('no device token');
     for (let n = 0; n < BEARER_REFUSAL_LIMIT.max; n += 1) {
-      expectMcp401(await mcp(client, minted.token));
+      expectMcp401(await mcp(client, minted.token), true);
     }
     expect((await mcp(client)).statusCode).toBe(429);
   });
@@ -210,7 +215,7 @@ describe('the bearer gate', () => {
     const lines = () => warnsFrom(client);
     t.logs.clear();
     for (let n = 0; n < 50; n += 1) {
-      expectMcp401(await mcp(client, minted.token));
+      expectMcp401(await mcp(client, minted.token), true);
     }
     // The budget's lines, each its own; the rest are counted, not written.
     expect(lines()).toHaveLength(BEARER_REFUSAL_LIMIT.max);
@@ -219,7 +224,7 @@ describe('the bearer gate', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(Date.now() + 2 * BEARER_REFUSAL_LIMIT.timeWindow);
-      expectMcp401(await mcp(client, minted.token));
+      expectMcp401(await mcp(client, minted.token), true);
     } finally {
       vi.useRealTimers();
     }
@@ -227,7 +232,7 @@ describe('the bearer gate', () => {
     expect(
       lines().filter((line) => line.includes('further credential')),
     ).toEqual([
-      `${over} further credential refusals from ${address} past its budget, not logged one by one (wrong kind of token (wants mcp) x${over})`,
+      `${over} further credential refusals from ${address} not logged one by one (wrong kind of token (wants mcp) x${over})`,
     ]);
     // The summary, and the new window's first refusal as a line of its own.
     expect(lines()).toHaveLength(BEARER_REFUSAL_LIMIT.max + 2);

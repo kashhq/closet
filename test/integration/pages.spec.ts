@@ -186,6 +186,23 @@ describe('pages', () => {
     });
   });
 
+  it('POST /oauth/token is the same JSON 404 with OAuth off, and stores nothing (#1291)', async () => {
+    const res = await t.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      anonymous: true,
+      sameOrigin: false,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'grant_type=refresh_token&refresh_token=closet_rt_x&client_id=x',
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.json()).toEqual({
+      error: 'not_found',
+      error_description: 'Not Found',
+    });
+  });
+
   it('an unknown garment renders the error page', async () => {
     const res = await t.inject({ method: 'GET', url: '/wardrobe/999999' });
     expect(res.statusCode).toBe(404);

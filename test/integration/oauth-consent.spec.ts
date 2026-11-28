@@ -569,12 +569,17 @@ describe('OAuth consent', () => {
 
     it("leaves this client's own grant out of the count, then refuses at the cap", async () => {
       // 19 others and this client's earlier grant: the mint replaces that one.
-      await fullApp.db
-        .insert(personalAccessToken)
-        .values([
-          ...tokenRows(19),
-          ...tokenRows(1, { oauthClientId: clientId }),
-        ]);
+      await fullApp.db.insert(personalAccessToken).values([
+        ...tokenRows(19),
+        // A whole grant: personal_access_token_oauth_check (#1291).
+        ...tokenRows(1, {
+          oauthClientId: clientId,
+          refreshTokenHash: createHash('sha256')
+            .update(`${Math.random()}`)
+            .digest('hex'),
+          accessExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        }),
+      ]);
       expect((await consentOn(fullApp)).statusCode).toBe(303);
 
       await fullApp.db.insert(personalAccessToken).values(tokenRows(1));

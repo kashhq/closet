@@ -9,7 +9,10 @@ import { scheduleMinutely } from './maintenance/minutely';
 import { scheduleNightly } from './maintenance/nightly';
 import { reconcileStorageWhole } from './maintenance/reconcile';
 import { type ScheduledJob, stopBeforeClose } from './maintenance/scheduled';
-import { pruneOAuthCodes } from './maintenance/oauth-code-prune';
+import {
+  pruneOAuthCodes,
+  pruneRetiredRefreshTokens,
+} from './maintenance/oauth-code-prune';
 import { pruneSyncTombstones } from './maintenance/sync-prune';
 import { pruneWeatherCaches } from './maintenance/weather-prune';
 import { addDays, todayIn } from './calendar-date';
@@ -134,6 +137,18 @@ export async function serve(
       timeZone: config.APP_TIMEZONE,
       run: metrics.timeJob('oauth_code_prune', () =>
         pruneOAuthCodes(oauthPrune),
+      ),
+      logger: oauthPrune.logger,
+    }),
+  );
+  // Revoked OAuth grants' retired refresh tokens (the same module).
+  jobs.push(
+    scheduleNightly({
+      name: 'OAuth refresh family prune',
+      hour: RECONCILE_HOUR,
+      timeZone: config.APP_TIMEZONE,
+      run: metrics.timeJob('oauth_refresh_prune', () =>
+        pruneRetiredRefreshTokens(oauthPrune),
       ),
       logger: oauthPrune.logger,
     }),

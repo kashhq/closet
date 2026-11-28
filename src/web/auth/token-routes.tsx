@@ -73,6 +73,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ctx={viewContext(reply)}
           tokens={await listTokens(db, sessionUserId(request), 'mcp')}
           timeZone={config.timeZone}
+          now={new Date()}
           notice={revokeNotice(request.query.revoked)}
         />,
       ),
@@ -108,6 +109,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
             ctx={viewContext(reply)}
             tokens={tokens ?? (await listTokens(db, userId, 'mcp'))}
             timeZone={config.timeZone}
+            now={new Date()}
             notice={notice}
             form={{ name: request.body.name, scope, passwordError }}
           />,
@@ -128,7 +130,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         kind: 'mcp',
         name,
         scope,
-        verifiedPassword: password,
+        verified: { password },
         address: request.ip,
       });
       if (!result.created) {
@@ -148,6 +150,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
           ctx={viewContext(reply)}
           tokens={result.tokens}
           timeZone={config.timeZone}
+          now={new Date()}
           created={{ name, token: result.token }}
         />,
       );

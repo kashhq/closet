@@ -540,6 +540,13 @@
       "when": 1795850491823,
       "tag": "0076_oauth-authorization-code",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1795853387247,
+      "tag": "0077_oauth-token",
+      "breakpoints": true
     }
   ]
 }
