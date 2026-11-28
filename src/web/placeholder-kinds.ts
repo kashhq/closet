@@ -56,6 +56,7 @@ export const PLACEHOLDER_KINDS = {
   'refusal.need.open': { id: 'data' },
   'refusal.need.setAside': { id: 'data', reason: 'data' },
   'refusal.need.full': { max: 'data' },
+  'refusal.agentRequest.answerTooLong': { max: 'data' },
   'refusal.need.productSetAside': { id: 'data', reason: 'data' },
   'refusal.need.productSuggested': { id: 'data' },
   'refusal.form.reminderTime': { kind: 'data' },
