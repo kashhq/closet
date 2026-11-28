@@ -1857,3 +1857,9 @@ Consequence: the gate forwards four more exact routes. Nothing an agent calls ne
 **Decision:** `POST /push/reminders` accepts both names (`RemindersBody`, `src/web/push/routes.tsx`); the new one wins. Spec: `push-reminders.spec.ts`.
 **Consequence:** delete `museRoundsOn` once no cached or open page can predate the rename (a few weeks after 2026-11-27, once the installed PWAs have refetched).
 Superseded 2026-11-27: the owner dropped the alias; no clients exist.
+
+## 2026-11-27 — agent_request's garment is a soft reference; its moves read, judge, then write (#1285)
+
+Why: the plan's `garment_id` FK `ON DELETE SET NULL` breaks a shared subject: a grantor deleting their garment would set null on the grantee's synced `agent_request` row without the grantee's owner lock, which the sync triggers refuse, so the grantor's delete would fail.
+Decision: `garment_id` has no foreign key (like `garment.suggested_by_token_id`), and every read joins the garment only while the asker still sees it. Trip and need stay FKs (always the asker's own). Each move is one `ownerTransaction`: the row `FOR UPDATE`, the pure `requestMove` (src/wardrobe/agent-requests.ts), then one UPDATE guarded by the judged status, so refusals name their reason exactly. withdraw and seen twice are `changed: false`, not errors.
+Consequence: a key from any synced row into another account's rows must be soft (src/db/AGENTS.md). `PAGE_WRITES`/`MCP_WRITES` lines land with #1286/#1287: the parity spec refuses a line whose route or tool does not exist yet.

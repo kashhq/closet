@@ -82,6 +82,7 @@
   "CAPSULE_DELETED": "This capsule was removed since, so it was not saved again.",
   "TRIP_DELETED": "This trip was removed since, so it was not saved again.",
   "GARMENT_DELETED": "This garment was removed since, so it was not saved again.",
+  "REQUEST_DELETED": "This request was removed since, so it was not asked again.",
   "REQUEST_ID": "Request ID",
   "RETURN_TO_HOME": "Return to home",
   "COPY_TEXT": "Copy text",
@@ -330,6 +331,7 @@
     },
     "notFound": {
       "account": "Account not found",
+      "agentRequest": "Request not found",
       "avoidedPair": "No such pair",
       "brand": "Brand not found",
       "calendarEntry": "Calendar entry not found",
@@ -355,6 +357,15 @@
     "status": {
       "archive": "Only a garment in the closet can be archived",
       "restore": "Only an archived garment can be restored"
+    },
+    "agentRequest": {
+      "held": "Another agent is working on this request",
+      "taken": "Another agent took this request",
+      "answered": "Already answered",
+      "withdrawn": "The owner withdrew this request",
+      "notAnswered": "Not answered yet",
+      "answerBlank": "The answer is empty",
+      "answerTooLong": "The answer is longer than {max} characters"
     },
     "replay": {
       "tooOld": "Too long ago to save: add it from the calendar",

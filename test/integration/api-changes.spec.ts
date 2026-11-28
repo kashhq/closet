@@ -687,6 +687,39 @@ describe("the owner's own resources (#196b-2)", () => {
     expect(deletionKeys(delta.pages)).toEqual([`brandSize:${brandId}`]);
   });
 
+  it('a request to the agent (#681 B1): its ask and its withdrawal are each the delta, as stored', async () => {
+    const a = await account('changes-requests@example.com');
+    const asked = await api(a.other, 'POST', '/agent-requests', {
+      body: 'What goes with my navy coat?',
+    });
+    expect(asked.statusCode, asked.body).toBe(201);
+    const { id } = asked.json<{ id: number }>();
+    const first = await syncAll(a.device, { limit: 100 });
+    expect(changeKeys(first.pages).sort()).toEqual(
+      [`agentRequest:${id}`, templateOf(a.id)].sort(),
+    );
+    expect(dataOf(first.pages, 'agentRequest')).toEqual([
+      {
+        id,
+        body: 'What goes with my navy coat?',
+        status: 'open',
+        createdAt: expect.any(String),
+      },
+    ]);
+    const withdrawn = await api(
+      a.other,
+      'POST',
+      `/agent-requests/${id}/withdraw`,
+    );
+    expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+    const delta = await syncAll(a.device, { cursor: first.cursor, limit: 100 });
+    expect(changeKeys(delta.pages)).toEqual([`agentRequest:${id}`]);
+    expect(dataOf(delta.pages, 'agentRequest')[0]).toMatchObject({
+      status: 'withdrawn',
+      withdrawnAt: expect.any(String),
+    });
+  });
+
   it('the week template and outfit rules (#716): a write on one device is the other device’s delta, the rules in the profile', async () => {
     const a = await account('changes-week@example.com');
     const emptyWeek = {

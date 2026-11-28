@@ -157,6 +157,22 @@ export function managesWardrobeSql(
 }
 
 /**
+ * Whether `viewerId` may see the wardrobe of `ownerId` (a row's owner
+ * column), as the resolver's `view` answers a session or device token: their
+ * own, or any accepted share. For a reference into a wardrobe that is
+ * checked inside another statement (an agent request's garment,
+ * src/web/requests/queries.ts), where no resolver runs.
+ */
+export function viewsWardrobeSql(
+  ownerId: AnyPgColumn,
+  viewerId: number,
+): SQL<boolean> {
+  return sql<boolean>`(${ownerId} = ${viewerId} or exists (
+    select from ${wardrobeShare} where ${acceptedShare(ownerId, viewerId)}
+  ))`;
+}
+
+/**
  * Keeps what the session statement (or an API request's token read) read,
  * for this request alone: the resolver stores it only for a cookie that
  * opened a session, the API's token hook only for a token it accepted, and

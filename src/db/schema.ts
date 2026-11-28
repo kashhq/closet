@@ -64,6 +64,12 @@ import {
   type OrderEmailStatus,
   type OrderItemState,
 } from '../wardrobe/order-items';
+import {
+  REQUEST_ANSWER_MAX,
+  REQUEST_BODY_MAX,
+  REQUEST_STATUSES,
+  type RequestStatus,
+} from '../wardrobe/agent-requests';
 import { LOOK_REACTIONS, type LookReaction } from '../wardrobe/look-reaction';
 import { GARMENT_STATUSES, type GarmentStatus } from '../wardrobe/status';
 import {
@@ -2385,6 +2391,126 @@ export const tripGarmentPacked = pgTable(
     })
       .onUpdate('cascade')
       .onDelete('cascade'),
+  ],
+);
+
+// "Ask your agent" (#681 B1; docs/plans/2026-11-27-mcp-oauth.md section 3.1):
+// what a household member asks their agent, answered by any of their own
+// agent tokens over MCP. A synced root owned by the asker; its moves are
+// src/wardrobe/agent-requests.ts' machine, written only by transitionRequest
+// (src/web/requests/request-actions.ts) under the asker's owner lock. At
+// most one subject. The trip and the need are the asker's own (cascade set
+// null with them). `garment_id` is a soft reference, no foreign key
+// (decisions 2026-11-27, agent_request's garment): the garment may be in a
+// wardrobe shared with the asker, and its owner's delete would then write
+// the asker's synced row without the asker's lock (the sync triggers refuse
+// it); every read checks the garment is still there and still seen.
+export const agentRequest = pgTable(
+  'agent_request',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: integer('owner_id').notNull(),
+    body: text('body').notNull(),
+    garmentId: integer('garment_id'),
+    tripId: integer('trip_id'),
+    optionGroupId: integer('option_group_id'),
+    status: text('status').$type<RequestStatus>().default('open').notNull(),
+    // The lease's holder and clock (CLAIM_LEASE_MINUTES): a claim free once
+    // its lease ran out or its token is gone.
+    claimedByTokenId: integer('claimed_by_token_id'),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    answer: text('answer'),
+    answeredByTokenId: integer('answered_by_token_id'),
+    answeredAt: timestamp('answered_at', { withTimezone: true }),
+    answerSeenAt: timestamp('answer_seen_at', { withTimezone: true }),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revision: syncRevision(),
+    updatedAt: syncUpdatedAt(),
+    clientId: clientId(),
+  },
+  (table) => [
+    // The asker's requests by status, oldest first (the agent's list,
+    // Today's cards), and the owner_id foreign key's index.
+    index('agent_request_owner_id_status_created_at_index').on(
+      table.ownerId,
+      table.status,
+      table.createdAt,
+    ),
+    // The sync feed's keyset (#196b), by owner and revision.
+    index('agent_request_owner_id_revision_index').on(
+      table.ownerId,
+      table.revision,
+    ),
+    unique('agent_request_owner_id_client_id_unique').on(
+      table.ownerId,
+      table.clientId,
+    ),
+    foreignKey({
+      name: 'agent_request_owner_id_foreign',
+      columns: [table.ownerId],
+      foreignColumns: [user.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
+    index('agent_request_garment_id_index').on(table.garmentId),
+    index('agent_request_trip_id_index').on(table.tripId),
+    foreignKey({
+      name: 'agent_request_trip_id_foreign',
+      columns: [table.tripId],
+      foreignColumns: [trip.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+    index('agent_request_option_group_id_index').on(table.optionGroupId),
+    foreignKey({
+      name: 'agent_request_option_group_id_foreign',
+      columns: [table.optionGroupId],
+      foreignColumns: [optionGroup.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+    index('agent_request_claimed_by_token_id_index').on(table.claimedByTokenId),
+    foreignKey({
+      name: 'agent_request_claimed_by_token_id_foreign',
+      columns: [table.claimedByTokenId],
+      foreignColumns: [personalAccessToken.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+    index('agent_request_answered_by_token_id_index').on(
+      table.answeredByTokenId,
+    ),
+    foreignKey({
+      name: 'agent_request_answered_by_token_id_foreign',
+      columns: [table.answeredByTokenId],
+      foreignColumns: [personalAccessToken.id],
+    })
+      .onUpdate('cascade')
+      .onDelete('set null'),
+    check(
+      'agent_request_status_check',
+      sql`${table.status} in (${sqlList(REQUEST_STATUSES)})`,
+    ),
+    check(
+      'agent_request_body_check',
+      sql`length(trim(${table.body})) > 0 and char_length(${table.body}) <= ${sql.raw(String(REQUEST_BODY_MAX))}`,
+    ),
+    check(
+      'agent_request_answer_check',
+      sql`${table.answer} is null or (length(trim(${table.answer})) > 0 and char_length(${table.answer}) <= ${sql.raw(String(REQUEST_ANSWER_MAX))})`,
+    ),
+    check(
+      'agent_request_one_subject_check',
+      sql`num_nonnulls(${table.garmentId}, ${table.tripId}, ${table.optionGroupId}) <= 1`,
+    ),
+    // Each state carries its stamps: what the machine wrote to get there.
+    check(
+      'agent_request_state_check',
+      sql`(${table.status} <> 'claimed' or ${table.claimedAt} is not null) and (${table.status} <> 'answered' or (${table.answer} is not null and ${table.answeredAt} is not null)) and (${table.status} <> 'withdrawn' or ${table.withdrawnAt} is not null) and (${table.answerSeenAt} is null or ${table.status} = 'answered')`,
+    ),
   ],
 );
 

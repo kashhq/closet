@@ -23,6 +23,7 @@ import {
   enforceLimit,
   type WeatherLimits,
 } from '../security/rate-limit';
+import { requestApiRoutes } from '../requests/api-routes';
 import { sizesApiRoutes } from '../sizes/api-routes';
 import { API_PREFIX } from '../surface';
 import { todayApiRoutes } from '../today/api-routes';
@@ -160,6 +161,7 @@ const apiPlugin: FastifyPluginAsyncTypebox<ApiOptions> = async (
   await app.register(sizesApiRoutes, options);
   await app.register(styleApiRoutes, options);
   await app.register(sharingApiRoutes, options);
+  await app.register(requestApiRoutes, options);
   await app.register(syncApiRoutes, options);
   // Only with WEATHER_ENABLED, as /weather/* (webPlugin).
   const { weather } = options;

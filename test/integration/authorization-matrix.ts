@@ -20,6 +20,7 @@ import {
   weekPlan,
 } from '../../src/db/schema';
 import type { SuggestionDecision } from '../../src/wardrobe/suggestions';
+import { transitionRequest } from '../../src/web/requests/request-actions';
 import { setGarmentStatus } from '../../src/web/wardrobe/status';
 import { decide, markSuggestion } from '../../src/web/wishlist/decisions';
 import { addOutfitRule, saveStyleProfile } from '../../src/web/style/queries';
@@ -219,6 +220,9 @@ export interface Fixture {
   orderItemName: string;
   /** A batch of the weekly auto-plan of the owner's, all its entries gone. */
   weekPlanId: number;
+  /** An open "Ask your agent" request of the owner's (#681 B1), and what it asks. */
+  agentRequestId: number;
+  agentRequestBody: string;
   /** An open invite link to the owner's wardrobe, not yet accepted, and its token (a bearer secret). */
   inviteShareId: number;
   inviteToken: string;
@@ -376,6 +380,8 @@ const TABLES = [
   'inspiration_piece',
   // An Ideas card's "Clashes" (#193c's matrix case).
   'generator_avoid',
+  // "Ask your agent" (#681 B1).
+  'agent_request',
 ];
 
 /** The page, or the route's /api/v1 twin (Route.api) with a device token. */
@@ -872,6 +878,17 @@ export function describeMatrix(
           .values({ ownerId: t.owner.id })
           .returning({ id: weekPlan.id }),
       );
+      const agentRequestBody = `Ask ${tag}`;
+      const { id: agentRequestId } = await transitionRequest(
+        { db: t.db, logger: t.logger },
+        { userId: t.owner.id, surface: 'page' },
+        {
+          kind: 'ask',
+          body: agentRequestBody,
+          subject: null,
+          clientId: null,
+        },
+      );
       const inviteToken = await createInviteLink('VIEW');
       const garmentShare = await setPublicShare(
         t.db,
@@ -929,6 +946,8 @@ export function describeMatrix(
         orderItemId,
         orderItemName,
         weekPlanId,
+        agentRequestId,
+        agentRequestBody,
         inviteShareId,
         inviteToken,
         photo,

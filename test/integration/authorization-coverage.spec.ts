@@ -64,6 +64,16 @@ const EXEMPT: Record<RouteKey, string> = {
     '"Goes with my closet" (#194b) has no page route of its own (the wishlist item\'s page draws it for the owner alone, so no page case answers what the API\'s does): covered by authorization-wardrobe.spec.ts "GET /api/v1/garments/:id/goes-with is the owner\'s alone"',
   'DELETE /api/v1/garments/:id/wears/:day':
     'the undo of PUT …/wears/:day (#193a), whose matrix case needs a wear to undo, which the shared fixture must not have (insights lists its garment unworn); covered by authorization-wardrobe.spec.ts "DELETE /api/v1/garments/:id/wears/:day refuses as its PUT does"',
+  // "Ask your agent" (#681 B1) has no page route until #1286, whose matrix
+  // rows replay on these as their twins and take them off this list.
+  'POST /api/v1/agent-requests':
+    'the ask\'s body names a subject\'s id, judged inside its insert (a garment the asker sees, their own trip or need): covered by agent-requests.spec.ts "names a subject it sees (a shared garment), never one it does not; a replayed client id answers the first"',
+  'GET /api/v1/agent-requests/:id':
+    'an API route with no page twin yet (#1286): covered by authorization-account.spec.ts "/api/v1/agent-requests/:id is the asker’s alone"',
+  'POST /api/v1/agent-requests/:id/withdraw':
+    'an API route with no page twin yet (#1286): covered by authorization-account.spec.ts "/api/v1/agent-requests/:id is the asker’s alone"',
+  'POST /api/v1/agent-requests/:id/seen':
+    'an API route with no page twin yet (#1286): covered by authorization-account.spec.ts "/api/v1/agent-requests/:id is the asker’s alone"',
   'PUT /api/v1/looks/:id/pieces':
     "MCP's set_inspiration_pieces as a route (#193d): no page route sets a look's whole list (the page adds, saves and removes one piece at a time, whose twins the matrix replays); covered by api-inspiration.spec.ts \"sets the whole list as MCP does; another's look is a 404\"",
   'DELETE /api/v1/garments/:id/clashes/:otherId':
