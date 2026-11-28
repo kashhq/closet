@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { formParts } from '../form-body';
 import { HttpError } from '../errors';
 import { LINK_INPUT_MAX } from '../wardrobe/link-import/link-text';
 import {
@@ -63,7 +64,7 @@ async function readShare(
   request: FastifyRequest,
 ): Promise<{ fields: Map<string, string>; photo: boolean }> {
   const fields = new Map<string, string>();
-  const parts = request.parts({
+  const parts = formParts(request, {
     limits: {
       fields: SHARED_TEXT_FIELDS.length,
       fieldSize: LINK_INPUT_MAX,

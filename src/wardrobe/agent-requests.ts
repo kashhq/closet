@@ -49,20 +49,19 @@ export const REQUEST_BODY_MAX = 500;
 export const REQUEST_ANSWER_MAX = 1000;
 
 /**
- * The most an ask's body may be as sent, before storedText: a form sends
- * every line break as CRLF, which the sheet's `maxlength` counted as one,
- * so a text at REQUEST_BODY_MAX may arrive up to twice as long. The route
- * schemas' bound; the limit itself is the domain's check of the stored text.
+ * The most an ask's body may be as sent, before storedText trims it: room for
+ * the padding a trim removes. The route schemas' bound; the limit itself is
+ * the domain's check of the stored text.
  */
 export const REQUEST_BODY_SENT_MAX = 2 * REQUEST_BODY_MAX;
 
 /**
- * A request's text as stored and measured: line breaks as LF, trimmed. A
- * form's CRLF (HTML's submission rule) would otherwise count twice against
- * the limit the textarea's `maxlength` counted once.
+ * A request's text as stored and measured: trimmed. A form's CRLF is already
+ * LF here (src/web/form-body.ts), so the length is what the textarea's
+ * `maxlength` counted.
  */
 export function storedText(raw: string): string {
-  return raw.replace(/\r\n?/g, '\n').trim();
+  return raw.trim();
 }
 
 /** What a request may be about: one of these, or nothing (Today's sheet). */
