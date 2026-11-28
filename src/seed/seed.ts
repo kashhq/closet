@@ -1015,7 +1015,7 @@ async function seedOne(
         scope: FULL_SCOPE,
         // The seed checked no password: the hash it just read stands in, so
         // the mint still refuses if the password moved since.
-        verifiedPassword: account!.password,
+        verified: { password: account!.password },
       },
     );
     output.write(

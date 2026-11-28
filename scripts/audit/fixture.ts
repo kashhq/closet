@@ -556,7 +556,7 @@ export async function createFixture(options: {
         name,
         // The audit calls every tool, writes included.
         scope: build.tokens.FULL_SCOPE,
-        verifiedPassword: row.password,
+        verified: { password: row.password },
       },
     );
   };

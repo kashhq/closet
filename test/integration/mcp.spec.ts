@@ -160,28 +160,35 @@ describe('the MCP endpoint', () => {
   });
 
   describe('authentication', () => {
-    const refusals: [string, () => Record<string, string>][] = [
-      ['no Authorization header', () => ({})],
-      ['a malformed header', () => ({ authorization: `Token ${token}` })],
+    const BARE = 'Bearer realm="closet"';
+    // RFC 6750 3.1: a token sent and refused says so; none sent, no error.
+    const INVALID = `${BARE}, error="invalid_token"`;
+    const refusals: [string, () => Record<string, string>, string][] = [
+      ['no Authorization header', () => ({}), BARE],
+      ['a malformed header', () => ({ authorization: `Token ${token}` }), BARE],
       [
         'an unknown token',
         () => ({
           authorization: `Bearer closet_${'A'.repeat(43)}`,
         }),
+        INVALID,
       ],
-      ['a session cookie instead', () => ({ cookie: t.owner.cookie })],
+      ['a session cookie instead', () => ({ cookie: t.owner.cookie }), BARE],
     ];
 
-    it.each(refusals)('refuses %s with a bare 401', async (_name, headers) => {
-      const res = await mcpRequest(t, undefined, 'tools/list', {}, headers());
-      expect(res.statusCode).toBe(401);
-      expect(res.headers['www-authenticate']).toBe('Bearer realm="closet"');
-      expect(res.json()).toEqual({
-        statusCode: 401,
-        message: 'Unauthorized',
-        request_id: res.headers['x-request-id'],
-      });
-    });
+    it.each(refusals)(
+      'refuses %s with a bare 401',
+      async (_name, headers, challenge) => {
+        const res = await mcpRequest(t, undefined, 'tools/list', {}, headers());
+        expect(res.statusCode).toBe(401);
+        expect(res.headers['www-authenticate']).toBe(challenge);
+        expect(res.json()).toEqual({
+          statusCode: 401,
+          message: 'Unauthorized',
+          request_id: res.headers['x-request-id'],
+        });
+      },
+    );
 
     it('refuses a revoked token the same way, and says nothing more', async () => {
       const doomed = await createAccessToken(t, { name: 'Doomed' });
@@ -212,7 +219,9 @@ describe('the MCP endpoint', () => {
       t.logs.clear();
       const res = await mcpRequest(t, device.token, 'tools/list');
       expect(res.statusCode).toBe(401);
-      expect(res.headers['www-authenticate']).toBe('Bearer realm="closet"');
+      expect(res.headers['www-authenticate']).toBe(
+        'Bearer realm="closet", error="invalid_token"',
+      );
       expect(res.json()).toEqual({
         statusCode: 401,
         message: 'Unauthorized',

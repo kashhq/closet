@@ -128,7 +128,7 @@ export const tokenRoutes: FastifyPluginCallbackTypebox<WebOptions> = (
         kind: 'mcp',
         name,
         scope,
-        verifiedPassword: password,
+        verified: { password },
         address: request.ip,
       });
       if (!result.created) {

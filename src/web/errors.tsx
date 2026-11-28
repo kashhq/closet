@@ -436,6 +436,20 @@ export function sendProblem(
 }
 
 /**
+ * The RFC 6749 section 5.2 word for an answer the root handler gives on
+ * the `oauth` surface: a request it refused before any route judged it (a
+ * schema's, a body past its limit, a wrong content type: `validation`) is
+ * `invalid_request`, a crash `server_error`; the rest keep their code (the
+ * documents' `not_found`, a budget's `rate_limited`). The token endpoint's
+ * own refusals name their word themselves (src/web/oauth/token-routes.ts).
+ */
+function oauthErrorOf(code: ErrorCode): string {
+  if (code === 'validation') return 'invalid_request';
+  if (code === 'internal') return 'server_error';
+  return code;
+}
+
+/**
  * The `oauth` surface's error body (src/web/surface.ts): RFC 6749 section
  * 5.2's shape, `{ error, error_description }`, as every OAuth client reads
  * a refusal. Used by the error handler and the same-origin hook; Retry-After
@@ -594,7 +608,7 @@ export function createErrorHandler(
     // OAuth's documents and endpoints answer as OAuth clients read errors;
     // a 5xx says nothing of what failed.
     if (surface === 'oauth') {
-      return sendOAuthError(reply, status, answer.code, message);
+      return sendOAuthError(reply, status, oauthErrorOf(answer.code), message);
     }
     // Decided by the request's htmx headers: a cache keeps the two apart.
     reply.header('Vary', FRAGMENT_VARY);

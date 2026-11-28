@@ -69,4 +69,13 @@ describe('mcpChallenge', () => {
       'Bearer realm="closet", resource_metadata="https://closet-mcp.example.com/.well-known/oauth-protected-resource/mcp", scope="closet:read closet:write"',
     );
   });
+
+  it('says invalid_token before the pointer for a refused token', () => {
+    expect(mcpChallenge(undefined, { invalidToken: true })).toBe(
+      'Bearer realm="closet", error="invalid_token"',
+    );
+    expect(mcpChallenge(on, { invalidToken: true })).toBe(
+      'Bearer realm="closet", error="invalid_token", resource_metadata="https://closet-mcp.example.com/.well-known/oauth-protected-resource/mcp", scope="closet:read closet:write"',
+    );
+  });
 });

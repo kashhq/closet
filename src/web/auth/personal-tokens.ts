@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, type SQL, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { TOKEN_PREFIX, type TokenKind } from '../../credential-names';
 import type { Db, Queryable } from '../../db/client';
@@ -15,6 +15,7 @@ import {
   sharePermissionSql,
 } from '../sharing/access';
 import type { SessionUser } from './session';
+import { passwordFingerprintSql } from './tokens';
 
 /**
  * Personal access tokens (#33): the bearer credentials, of two kinds (#189):
@@ -40,29 +41,62 @@ const DISPLAY_LENGTH = TOKEN_PREFIX.length + 4;
 const LAST_USED_RESOLUTION_MS = 60_000;
 /**
  * A device token unused this long is refused as revoked (#705): a sold
- * phone or a copied backup stops working by itself. Measured from
+ * phone or a copied backup stops working by itself. So is an OAuth grant
+ * (OAUTH_IDLE_DAYS, owner 2026-11-27, #1291): it was minted for a hosted
+ * service from a sheet, and reconnecting takes half a minute. Measured from
  * last_used_at, or created_at for one never used; LAST_USED_RESOLUTION_MS
- * is far below it, so a device in use never looks idle. Agent tokens have
- * no idle expiry: an agent can run monthly, and each is minted behind the
- * password with its own scope and listed on Agent Access.
+ * is far below it, so a token in use never looks idle. Static agent tokens
+ * have no idle expiry: an agent can run monthly, and each is minted behind
+ * the password with its own scope and listed on Agent Access.
  */
 export const DEVICE_IDLE_DAYS = 90;
-const DEVICE_IDLE_MS = DEVICE_IDLE_DAYS * 24 * 60 * 60 * 1000;
+export const OAUTH_IDLE_DAYS = 90;
+
+/** Whether a token idles out at all: a device's, or an OAuth grant. */
+function idles(token: {
+  kind: TokenKind;
+  oauthClientId: string | null;
+}): boolean {
+  return token.kind === 'device' || token.oauthClientId !== null;
+}
 
 /**
- * Whether a token has gone unused past its idle expiry at `now`: only a
- * device token has one. authenticateToken refuses it; Profile › Devices
+ * The idle test's one cutoff: a token whose last use (or creation) is at or
+ * before it is idle at `now`. Both readers judge by it, on the app's clock
+ * that stamps the columns: idleExpired on a row already read, and an OAuth
+ * refresh's rotation in its own WHERE (notIdleSql).
+ */
+function idleCutoff(token: { kind: TokenKind }, now: Date): Date {
+  const days = token.kind === 'device' ? DEVICE_IDLE_DAYS : OAUTH_IDLE_DAYS;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Whether a token has gone unused past its idle expiry at `now`: a device
+ * token or an OAuth grant. authenticateToken refuses it; Profile › Devices
  * says it is signed out.
  */
 export function idleExpired(
-  token: { kind: TokenKind; createdAt: Date; lastUsedAt: Date | null },
+  token: {
+    kind: TokenKind;
+    oauthClientId: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  },
   now: Date,
 ): boolean {
   return (
-    token.kind === 'device' &&
-    now.getTime() - (token.lastUsedAt ?? token.createdAt).getTime() >=
-      DEVICE_IDLE_MS
+    idles(token) &&
+    (token.lastUsedAt ?? token.createdAt) <= idleCutoff(token, now)
   );
+}
+
+/**
+ * idleExpired's negation for an OAuth grant's row as SQL, so the refresh's
+ * rotation judges idleness in its one statement (src/web/oauth/grants.ts).
+ */
+export function oauthGrantNotIdleSql(now: Date): SQL<boolean> {
+  return sql<boolean>`coalesce(${personalAccessToken.lastUsedAt}, ${personalAccessToken.createdAt}) > ${idleCutoff({ kind: 'mcp' }, now)}`;
 }
 export const TOKEN_NAME_MAX = 100;
 /**
@@ -104,6 +138,8 @@ export interface TokenListing {
   /** Agent Access shows it on each token. */
   readOnly: boolean;
   ownWardrobeOnly: boolean;
+  /** An OAuth grant's client (its metadata document's URL); else null. */
+  oauthClientId: string | null;
 }
 
 const listingColumns = {
@@ -115,6 +151,7 @@ const listingColumns = {
   lastUsedAt: personalAccessToken.lastUsedAt,
   readOnly: personalAccessToken.readOnly,
   ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
+  oauthClientId: personalAccessToken.oauthClientId,
 };
 
 const inForce = (userId: number) =>
@@ -202,11 +239,15 @@ export interface NewToken {
   /** Agent Access's choice; a device sign-in's is FULL_SCOPE. */
   scope: TokenScope;
   /**
-   * The full password hash the caller verified the user's password against,
-   * from the row read that did it (sessionAccount on a page). Rechecked under
-   * the lock: a password changed after the check refuses the mint.
+   * What the caller verified the user's password against, rechecked under
+   * the lock: a password changed after the check refuses the mint. The full
+   * hash, from the row read that did it (sessionAccount on a page), or an
+   * OAuth code's fingerprint stamp (`right(password, 8)`, read in the
+   * statement that checked the password at consent, #1291).
    */
-  verifiedPassword: string;
+  verified: { password: string } | { passwordFingerprint: string };
+  /** An OAuth grant's (the token exchange's, src/web/oauth/grants.ts). */
+  oauth?: OAuthMint;
   /**
    * The address the mint came from (`request.ip`, which TRUSTED_PROXIES
    * governs), the audit trail of a credential issued over the network; left
@@ -214,6 +255,32 @@ export interface NewToken {
    */
   address?: string;
 }
+
+/**
+ * What an OAuth grant's row carries beside an agent token's (#1291). Its
+ * mint replaces the user's grant from the same client: the cap is counted
+ * without it, and only once the cap allows the mint is it revoked, so a
+ * refused mint leaves it standing.
+ */
+export interface OAuthMint {
+  clientId: string;
+  refreshTokenHash: string;
+  accessExpiresAt: Date;
+}
+
+/** A mint inside the caller's transaction: mintToken's answer. */
+export type MintResult =
+  | {
+      created: true;
+      id: number;
+      token: string;
+      tokens: TokenListing[];
+      evictedId?: number;
+      /** An OAuth mint's: the same client's grants it revoked. */
+      replacedIds: number[];
+    }
+  | { created: false; reason: 'too-many'; tokens: TokenListing[] }
+  | { created: false; reason: 'password-changed' };
 
 /**
  * Makes a token. The user's row is locked first, with its password read in
@@ -238,68 +305,103 @@ export interface NewToken {
 export async function createToken(
   { db, logger }: ActionDeps,
   actor: Actor,
-  { kind, name, scope, verifiedPassword, address }: NewToken,
+  newToken: NewToken,
 ): Promise<CreateTokenResult> {
-  const { userId } = actor;
-  const result = await db.transaction(
-    async (tx): Promise<CreateTokenResult> => {
-      const [account] = await tx
-        .select({ password: user.password })
-        .from(user)
-        .where(eq(user.id, userId))
-        .for('update');
-      if (account?.password !== verifiedPassword) {
-        return { created: false, reason: 'password-changed' };
-      }
-      let tokens = await listTokens(tx, userId, kind);
-      let evictedId: number | undefined;
-      if (tokens.length >= MAX_ACTIVE_TOKENS) {
-        if (kind === 'mcp') {
-          return { created: false, reason: 'too-many', tokens };
-        }
-        evictedId = leastRecentlyUsed(tokens).id;
-        await tx
-          .update(personalAccessToken)
-          .set({ revokedAt: new Date() })
-          .where(eq(personalAccessToken.id, evictedId));
-        tokens = tokens.filter((token) => token.id !== evictedId);
-      }
-      const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-      const [row] = await tx
-        .insert(personalAccessToken)
-        .values({
-          userId,
-          kind,
-          name,
-          tokenHash: hashToken(token),
-          tokenPrefix: token.slice(0, DISPLAY_LENGTH),
-          // The app's clock, not the column's default: idleExpired judges it
-          // against the app's `now`, beside last_used_at, which it stamps.
-          createdAt: new Date(),
-          ...scope,
-        })
-        .returning(listingColumns);
-      return {
-        created: true,
-        id: row.id,
-        token,
-        tokens: [row, ...tokens],
-        evictedId,
-      };
-    },
-  );
+  const minted = await db.transaction((tx) => mintToken(tx, actor, newToken));
+  if (!minted.created) return minted;
+  const { id, token, tokens, evictedId } = minted;
   // After the commit: a rollback must leave no line for a token never minted.
-  if (result.created) {
-    logOp(logger, actor, 'token.created', {
-      tokenId: result.id,
-      kind,
-      readOnly: scope.readOnly,
-      ownWardrobeOnly: scope.ownWardrobeOnly,
-      evictedId: result.evictedId,
-      address,
-    });
+  logOp(logger, actor, 'token.created', {
+    tokenId: id,
+    kind: newToken.kind,
+    readOnly: newToken.scope.readOnly,
+    ownWardrobeOnly: newToken.scope.ownWardrobeOnly,
+    evictedId,
+    address: newToken.address,
+  });
+  return { created: true, id, token, tokens, evictedId };
+}
+
+/**
+ * createToken's work inside the caller's transaction `tx`, logging nothing:
+ * the OAuth exchange mints in the transaction that claimed its code
+ * (src/web/oauth/grants.ts) and logs after its own commit. A refusal
+ * writes nothing, so the caller's own writes still commit.
+ */
+export async function mintToken(
+  tx: Queryable,
+  { userId }: Actor,
+  { kind, name, scope, verified, oauth }: NewToken,
+): Promise<MintResult> {
+  const [account] = await tx
+    .select({
+      password: user.password,
+      fingerprint: passwordFingerprintSql,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .for('update');
+  const unchanged =
+    account !== undefined &&
+    ('password' in verified
+      ? account.password === verified.password
+      : account.fingerprint === verified.passwordFingerprint);
+  if (!unchanged) return { created: false, reason: 'password-changed' };
+  let tokens = await listTokens(tx, userId, kind);
+  // A reconnect replaces its own grant: it never counts against the cap.
+  const replaced = oauth
+    ? tokens.filter((token) => token.oauthClientId === oauth.clientId)
+    : [];
+  const counted = tokens.length - replaced.length;
+  let evictedId: number | undefined;
+  if (counted >= MAX_ACTIVE_TOKENS) {
+    if (kind === 'mcp') {
+      return { created: false, reason: 'too-many', tokens };
+    }
+    evictedId = leastRecentlyUsed(tokens).id;
+    await tx
+      .update(personalAccessToken)
+      .set({ revokedAt: new Date() })
+      .where(eq(personalAccessToken.id, evictedId));
+    tokens = tokens.filter((token) => token.id !== evictedId);
   }
-  return result;
+  // Only past the cap check: a refused reconnect keeps the grant it has.
+  const replacedIds = replaced.map((token) => token.id);
+  if (replacedIds.length > 0) {
+    await tx
+      .update(personalAccessToken)
+      .set({ revokedAt: new Date() })
+      .where(inArray(personalAccessToken.id, replacedIds));
+    tokens = tokens.filter((token) => !replacedIds.includes(token.id));
+  }
+  const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
+  const [row] = await tx
+    .insert(personalAccessToken)
+    .values({
+      userId,
+      kind,
+      name,
+      tokenHash: hashToken(token),
+      tokenPrefix: token.slice(0, DISPLAY_LENGTH),
+      // The app's clock, not the column's default: idleExpired judges it
+      // against the app's `now`, beside last_used_at, which it stamps.
+      createdAt: new Date(),
+      ...scope,
+      ...(oauth && {
+        oauthClientId: oauth.clientId,
+        refreshTokenHash: oauth.refreshTokenHash,
+        accessExpiresAt: oauth.accessExpiresAt,
+      }),
+    })
+    .returning(listingColumns);
+  return {
+    created: true,
+    id: row.id,
+    token,
+    tokens: [row, ...tokens],
+    evictedId,
+    replacedIds,
+  };
 }
 
 /**
@@ -399,15 +501,16 @@ export interface TokenAuth {
 }
 
 /**
- * Why a presented token opens nothing. `revoked` and `wrong kind` match a
- * real row (a device signed out or idle past DEVICE_IDLE_DAYS, an agent
- * token on /api): the bearer gate
- * always answers those with the 401 that says sign in again, never its 429
+ * Why a presented token opens nothing. `revoked`, `expired` and `wrong
+ * kind` match a real row (a device signed out or idle past
+ * DEVICE_IDLE_DAYS, an OAuth grant revoked or idle, an OAuth access token
+ * past its hour, an agent token on /api): the bearer gate always answers
+ * those with the 401 that says sign in again or refresh, never its 429
  * (src/web/auth/bearer-gate.ts). `unknown` is everything else, a deleted
- * user's token included.
+ * user's token and an OAuth access token a refresh replaced included.
  */
 export interface TokenRefusal {
-  refused: 'unknown' | 'revoked' | 'wrong kind';
+  refused: 'unknown' | 'revoked' | 'expired' | 'wrong kind';
 }
 
 /**
@@ -415,9 +518,10 @@ export interface TokenRefusal {
  * (the caller answers each with the same 401, and a refused token's use is
  * never recorded). One indexed read, by the hash alone, so a revoked or
  * other-kind row is told from an unknown one; a second statement records
- * the use when the last one is a minute old. A device token idle past
- * DEVICE_IDLE_DAYS (idleExpired) is refused as revoked, judged on the
- * same row, so expiry costs no statement. `shareOf` (shareToReadAhead)
+ * the use when the last one is a minute old. A device token or OAuth grant
+ * idle past its days (idleExpired) is refused as revoked, and an OAuth
+ * access token past its hour as expired, judged on the same row, so
+ * neither costs a statement. `shareOf` (shareToReadAhead)
  * reads the token user's share of that wardrobe in the same read, as the
  * session statement does (#170): `share` then answers it, unless the
  * wardrobe is the user's own.
@@ -437,6 +541,8 @@ export async function authenticateToken(
       revokedAt: personalAccessToken.revokedAt,
       createdAt: personalAccessToken.createdAt,
       lastUsedAt: personalAccessToken.lastUsedAt,
+      oauthClientId: personalAccessToken.oauthClientId,
+      accessExpiresAt: personalAccessToken.accessExpiresAt,
       readOnly: personalAccessToken.readOnly,
       ownWardrobeOnly: personalAccessToken.ownWardrobeOnly,
       userId: user.id,
@@ -468,8 +574,10 @@ export async function authenticateToken(
 
 /**
  * Why a token's row opens nothing for `kind`, if it does not. An idle
- * device token is a revoked one to its caller (and so to the bearer gate's
- * 401-never-429 rule): it learns to sign in again.
+ * device token or OAuth grant is a revoked one to its caller (and so to the
+ * bearer gate's 401-never-429 rule): it learns to sign in again. An OAuth
+ * access token past `access_expires_at` (the app's clock, which stamped it)
+ * is `expired`: the client refreshes.
  */
 function refusalOf(
   row: {
@@ -477,6 +585,8 @@ function refusalOf(
     revokedAt: Date | null;
     createdAt: Date;
     lastUsedAt: Date | null;
+    oauthClientId: string | null;
+    accessExpiresAt: Date | null;
   },
   kind: TokenKind,
   now: Date,
@@ -485,6 +595,9 @@ function refusalOf(
     return { refused: 'revoked' };
   }
   if (row.kind !== kind) return { refused: 'wrong kind' };
+  if (row.accessExpiresAt !== null && row.accessExpiresAt <= now) {
+    return { refused: 'expired' };
+  }
   return undefined;
 }
 

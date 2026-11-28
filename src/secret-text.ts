@@ -14,6 +14,9 @@ const SECRET_PATTERNS: [RegExp, string][] = [
     new RegExp(`\\b${SESSION_COOKIE}=[^;\\s"']*`, 'g'),
     `${SESSION_COOKIE}=${FILTERED}`,
   ],
+  // Every credential closet mints starts `closet_`: an agent or device token, and OAuth's
+  // refresh token (`closet_rt_`) and code (`closet_code_`, #1291); `_` is a word character, so
+  // one shape takes all of them (secret-text.spec.ts holds each).
   [new RegExp(`\\b${TOKEN_PREFIX}[\\w-]+`, 'g'), `${TOKEN_PREFIX}${FILTERED}`],
   [/\bBearer\s+[^\s"']+/gi, `Bearer ${FILTERED}`],
   // Fastmail API tokens (the order mail's, #25): `fmu1-` and hex groups.

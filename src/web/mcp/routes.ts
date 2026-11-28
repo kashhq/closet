@@ -89,8 +89,12 @@ export const mcpRoutes: FastifyPluginCallback<
   } = options;
   const tools = mcpTools({ weather: weather !== undefined });
   const linkImportLimit = app.createRateLimit(MCP_LINK_IMPORT_LIMIT);
-  // With OAuth on, a refusal names its metadata (src/web/oauth/discovery.ts).
-  const challenge = mcpChallenge(config.oauth);
+  // With OAuth on, a refusal names its metadata, and a refused token says
+  // invalid_token (src/web/oauth/discovery.ts).
+  const challenges = {
+    missing: mcpChallenge(config.oauth),
+    refused: mcpChallenge(config.oauth, { invalidToken: true }),
+  };
 
   const route = {
     config: { surface: 'mcp', secretPath: true },
@@ -104,7 +108,11 @@ export const mcpRoutes: FastifyPluginCallback<
       refusalLimit: bearerRefusalLimit,
       refusalSummaries,
       // quiet: the gate logs its refusals itself (bearer-gate.ts).
-      refusal: () => new HttpError(401, undefined, { quiet: true, challenge }),
+      refusal: (presented) =>
+        new HttpError(401, undefined, {
+          quiet: true,
+          challenge: presented ? challenges.refused : challenges.missing,
+        }),
     }),
   } as const;
 

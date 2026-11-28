@@ -18,7 +18,7 @@ import type { ConsentRequest } from './authorize-request';
  * `closet_code_` + 32 random bytes, so scrubSecrets' `closet_` shape
  * already filters it from any text. Stored only as its hash.
  */
-const CODE_PREFIX = `${TOKEN_PREFIX}code_`;
+export const CODE_PREFIX = `${TOKEN_PREFIX}code_`;
 /** RFC 6749 4.1.2 recommends at most ten minutes; the exchange is at once. */
 export const CODE_LIFETIME_SECONDS = 2 * 60;
 

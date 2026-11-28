@@ -1951,6 +1951,12 @@
     "INVALID": "This request could not be read. Start again from the app.",
     "ERROR_TITLE": "Could not connect",
     "REFUSED": "The app’s request could not be accepted ({error}).",
-    "RETURN_TO": "Return to {host}"
+    "RETURN_TO": "Return to {host}",
+    "TOKEN_INVALID_REQUEST": "The token request is malformed: send each parameter once, form-encoded.",
+    "TOKEN_CLIENT_AUTHENTICATION": "Closet's clients are public: send client_id alone, with no client authentication.",
+    "TOKEN_UNSUPPORTED_GRANT": "Only authorization_code and refresh_token grants are supported.",
+    "TOKEN_INVALID_TARGET": "The resource is not this server's MCP endpoint.",
+    "TOKEN_INVALID_GRANT": "The grant is invalid, expired or revoked: connect again.",
+    "TOKEN_FULL": "Agent Access is full: revoke a connection in Closet, then connect again."
   }
 }

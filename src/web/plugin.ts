@@ -16,6 +16,7 @@ import type { ConsentTokens } from './oauth/consent-token';
 import { oauthConsentRoutes } from './oauth/consent-routes';
 import type { OAuthDiscovery } from './oauth/discovery';
 import { oauthRoutes } from './oauth/routes';
+import { oauthTokenRoutes } from './oauth/token-routes';
 import {
   BEARER_REFUSAL_LIMIT,
   createWeatherLimits,
@@ -296,6 +297,9 @@ export const webPlugin: FastifyPluginAsync<WebOptions> = async (
   // them, each authenticates its own kind of token.
   await app.register(mcpRoutes, shared);
   await app.register(oauthRoutes, options);
+  // The token endpoint (#1291): its refusals fold into the bearer
+  // surfaces' summaries past its own OAUTH_TOKEN_LIMIT.
+  await app.register(oauthTokenRoutes, shared);
   // The consent page (#1290): a page, on SITE_URL, counting its POST on
   // the sign-in's shared budgets.
   await app.register(oauthConsentRoutes, shared);

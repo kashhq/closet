@@ -35,12 +35,14 @@ export interface BearerRefusalLimit {
  * `closet_` value one indexed read (authenticateToken), plus the last-use
  * write once a minute.
  *
- * Every refusal is charged to the address's BEARER_REFUSAL_LIMIT, and only
- * a refusal: a token that opens is never counted there, so a household
- * behind one address keeps working while a stranger probes. Past the
- * budget, a missing, malformed or unknown credential is the 429; a revoked
- * or other-kind token stays `refusal()` (a signed-out device must still
- * learn to sign in again). Logs the reason and the client address, never
+ * Every refusal is charged to the address's BEARER_REFUSAL_LIMIT but an
+ * expired OAuth access token, and only a refusal: a token that opens is
+ * never counted there, so a household behind one address keeps working
+ * while a stranger probes. An expired token is a healthy client's hourly
+ * refresh cue, from a vendor's shared egress addresses, so it never spends
+ * the budget (#1291). Past the budget, a missing, malformed or unknown
+ * credential is the 429; a revoked, expired or other-kind token stays
+ * `refusal()` (a signed-out device must still learn to sign in again). Logs the reason and the client address, never
  * the token: a refusal within the budget is a line of its own, those past
  * it are counted into one summary line per address per window
  * (RefusalSummaries), so a flood is not a log flood (#940).
@@ -62,11 +64,43 @@ export function createBearerGate({
   kind: TokenKind;
   refusalLimit: RateLimitChecker;
   refusalSummaries: RefusalSummaries;
-  /** The surface's 401; the root error handler adds WWW-Authenticate. */
-  refusal: () => HttpError;
+  /**
+   * The surface's 401; the root error handler adds WWW-Authenticate.
+   * `presented`: a token was sent and refused (RFC 6750 3.1's
+   * `invalid_token`), not missing or unreadable.
+   */
+  refusal: (presented: boolean) => HttpError;
   /** /api: a grantee's `?ownerId=` share rides in the token's read (#170). */
   readsShare?: boolean;
 }) {
+  /** Throws the refusal's answer, charged and logged as the rule above says. */
+  async function refuse(
+    request: FastifyRequest,
+    refused: Refused,
+    tokenRefused: boolean,
+  ): Promise<never> {
+    const reason = refusalReason(refused, kind);
+    const line = `${label} ${request.method} ${loggableUrl(request)} refused: ${reason} from ${request.ip}`;
+    if (refused === 'expired') {
+      logger.info(line);
+      throw refusal(tokenRefused);
+    }
+    refusalSummaries.flushEnded();
+    const exceeded = await countAgainst(refusalLimit, request);
+    if (!exceeded) {
+      logger.warn(line);
+      throw refusal(tokenRefused);
+    }
+    const known = refused === 'revoked' || refused === 'wrong kind';
+    refusalSummaries.suppress(
+      request.ip,
+      known ? reason : `${reason}, 429`,
+      exceeded.ttlMs,
+    );
+    if (!known) throw tooManyAttempts(exceeded.ttlInSeconds, { quiet: true });
+    throw refusal(tokenRefused);
+  }
+
   return async function requireBearer(request: FastifyRequest): Promise<void> {
     if (request.routeOptions.config.public === true) return;
     const presented = presentedBearer(request);
@@ -77,26 +111,8 @@ export function createBearerGate({
           })
         : presented;
     if ('refused' in result) {
-      refusalSummaries.flushEnded();
-      const exceeded = await countAgainst(refusalLimit, request);
-      const known =
-        result.refused === 'revoked' || result.refused === 'wrong kind';
-      const reason = refusalReason(result.refused, kind);
-      if (exceeded) {
-        refusalSummaries.suppress(
-          request.ip,
-          known ? reason : `${reason}, 429`,
-          exceeded.ttlMs,
-        );
-        if (!known) {
-          throw tooManyAttempts(exceeded.ttlInSeconds, { quiet: true });
-        }
-        throw refusal();
-      }
-      logger.warn(
-        `${label} ${request.method} ${loggableUrl(request)} refused: ${reason} from ${request.ip}`,
-      );
-      throw refusal();
+      await refuse(request, result.refused, 'token' in presented);
+      return;
     }
     const { share, ...accessToken } = result;
     request.accessToken = accessToken;
@@ -115,6 +131,8 @@ function refusalReason(refused: Refused, kind: TokenKind): string {
       return 'unknown token';
     case 'revoked':
       return 'revoked token';
+    case 'expired':
+      return 'expired token';
     case 'wrong kind':
       return `wrong kind of token (wants ${kind})`;
     default:

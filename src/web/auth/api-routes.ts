@@ -119,7 +119,7 @@ export const authApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
           kind: 'device',
           name: deviceName.trim(),
           scope: FULL_SCOPE,
-          verifiedPassword: account.password,
+          verified: { password: account.password },
           address: request.ip,
         },
       );
