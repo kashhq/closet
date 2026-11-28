@@ -18,7 +18,7 @@ import { agentOutfit } from './references';
 import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
 
 /**
- * The agent's outfits (#335, docs/plans/2026-10-05-agent-suggestions.md section
+ * The agent's outfits (#335, docs/plans/2026-10-05-muse-suggestions.md section
  * 4 B): ordinary outfits the owner's agent proposed (outfit.proposed_at),
  * with its note and the owner's reaction (src/wardrobe/look-reaction.ts,
  * reused from plan looks: proposed, loved, revise, declined). Which list an

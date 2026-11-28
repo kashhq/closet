@@ -1,5 +1,7 @@
 # Muse in closet: suggestions as garments
 
+> The agent was called Muse when this plan was written; it is renamed (#1281, #1282). The old name stays below as history.
+
 > **Status: draft for the owner's review (2026-10-05).** Nothing here is built.
 > Comment on the pull request, line by line. This document replaces the plans feature's
 > UI (`docs/plans-*.md`, `src/web/plans/`). Once approved it is the reference for the epic

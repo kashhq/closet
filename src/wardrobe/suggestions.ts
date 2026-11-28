@@ -2,7 +2,7 @@ import { toCents } from './money';
 
 /**
  * A suggestion and its option group (the agent phase 1, #333; the design is
- * docs/plans/2026-10-05-agent-suggestions.md, section 3). A suggestion is a
+ * docs/plans/2026-10-05-muse-suggestions.md, section 3). A suggestion is a
  * wishlist garment with provenance (garment.suggested_at and the columns
  * beside it); an option group is one need holding its sibling suggestions
  * (option_group). Deciding between them is feedback to the agent, so
