@@ -7,7 +7,7 @@ import {
   user,
 } from '../../db/schema';
 import {
-  countsTowardAgentCapSql,
+  agentTokenNotIdleSql,
   hashToken,
   MAX_ACTIVE_TOKENS,
 } from '../auth/personal-tokens';
@@ -48,7 +48,7 @@ export type ConsentResult =
  * caught at the exchange, #1291) and Agent Access not full, counting the
  * user's live agent tokens but their grant from this same client, which
  * the exchange's mint replaces, and any grant idle past its days
- * (countsTowardAgentCapSql, on the app's clock that stamps them). Unlocked: the mint rechecks both under the
+ * (agentTokenNotIdleSql, on the app's clock that stamps them). Unlocked: the mint rechecks both under the
  * user's lock (createToken), so this only spares a code that cannot mint.
  */
 export async function grantConsent(
@@ -72,7 +72,7 @@ export async function grantConsent(
             and ${personalAccessToken.kind} = 'mcp'
             and ${personalAccessToken.revokedAt} is null
             and ${personalAccessToken.oauthClientId} is distinct from ${request.clientId}
-            and ${countsTowardAgentCapSql(new Date())}) as active
+            and ${agentTokenNotIdleSql(new Date())}) as active
       from ${user} where ${user.id} = ${actor.userId}
     ), code as (
       insert into ${oauthAuthorizationCode} (code_hash, user_id, client_id,

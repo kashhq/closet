@@ -100,12 +100,13 @@ export function oauthGrantNotIdleSql(now: Date): SQL<boolean> {
 }
 
 /**
- * Whether an agent token counts against MAX_ACTIVE_TOKENS at `now`, as SQL:
- * an OAuth grant idle past its days does not, since it opens nothing and
- * must not block a new connection. mintToken counts by idleExpired on the
- * rows it read; the consent's count (grantConsent) by this.
+ * Whether an agent token is not idle at `now`, as SQL: a static one never
+ * idles, an OAuth grant idle past its days opens nothing. Such a grant
+ * neither counts against MAX_ACTIVE_TOKENS (the consent's count,
+ * grantConsent; mintToken counts by idleExpired on the rows it read) nor
+ * makes an agent connected (agentConnectedSql).
  */
-export function countsTowardAgentCapSql(now: Date): SQL<boolean> {
+export function agentTokenNotIdleSql(now: Date): SQL<boolean> {
   return sql<boolean>`(${personalAccessToken.oauthClientId} is null or ${oauthGrantNotIdleSql(now)})`;
 }
 export const TOKEN_NAME_MAX = 100;
@@ -171,14 +172,19 @@ const inForce = (userId: number) =>
   );
 
 /**
- * Whether the user has an agent token in force, as a scalar for the
- * reader's own statement: "Ask your agent" says when none is (#1286), so a
- * request is known to wait until one connects.
+ * Whether the user has an agent token in force and not idle (an OAuth grant
+ * idle past its days opens nothing), as a scalar for the reader's own
+ * statement: "Ask your agent" says when none is (#1286), so a request is
+ * known to wait until one connects.
  */
-export function agentConnectedSql(userId: number): SQL<boolean> {
+export function agentConnectedSql(
+  userId: number,
+  now = new Date(),
+): SQL<boolean> {
   return sql<boolean>`exists (select from ${personalAccessToken} where ${and(
     inForce(userId),
     eq(personalAccessToken.kind, 'mcp'),
+    agentTokenNotIdleSql(now),
   )})`;
 }
 
@@ -362,7 +368,7 @@ export async function mintToken(
   const replaced = oauth
     ? tokens.filter((token) => token.oauthClientId === oauth.clientId)
     : [];
-  // Nor does an OAuth grant idle past its days (countsTowardAgentCapSql, the
+  // Nor does an OAuth grant idle past its days (agentTokenNotIdleSql, the
   // consent's count): it opens nothing, so it must not block a new
   // connection. Devices idle too, but at their cap the least recently used
   // is evicted, so an idle one goes first anyway.

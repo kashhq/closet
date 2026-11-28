@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { agentRequest } from '../../src/db/schema';
+import { agentRequest, personalAccessToken } from '../../src/db/schema';
 import {
   CLAIM_LEASE_MINUTES,
   REQUEST_ANSWER_MAX,
@@ -12,7 +12,11 @@ import {
   type RequestTransition,
   transitionRequest,
 } from '../../src/web/requests/request-actions';
-import { revokeToken } from '../../src/web/auth/personal-tokens';
+import {
+  hashToken,
+  OAUTH_IDLE_DAYS,
+  revokeToken,
+} from '../../src/web/auth/personal-tokens';
 import { createInvite } from '../../src/web/sharing/queries';
 import type { Actor } from '../../src/web/sharing/access';
 import { deviceToken, expectProblem } from './api';
@@ -36,6 +40,7 @@ import { mintToken } from './mcp';
  */
 
 let t: TestApp;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 beforeAll(async () => {
   t = await createTestApp();
@@ -349,6 +354,42 @@ describe('the asker', () => {
     )![0];
     expect(card).not.toContain('Still waiting');
     expect(card).toContain('data-no-agent');
+  });
+
+  it('Today says no agent is connected when its only agent token is an OAuth grant idle past its days', async () => {
+    const a = await asker('requests-idle-grant@example.com');
+    await asked(a, 'Anyone there?');
+    const [grant] = await t.db
+      .insert(personalAccessToken)
+      .values({
+        userId: a.id,
+        kind: 'mcp',
+        name: 'Claude',
+        tokenHash: hashToken(randomUUID()),
+        tokenPrefix: 'closet_Idle',
+        oauthClientId: 'https://claude.ai/oauth/client.json',
+        refreshTokenHash: hashToken(randomUUID()),
+        accessExpiresAt: new Date(),
+        lastUsedAt: new Date(Date.now() - (OAUTH_IDLE_DAYS + 1) * DAY_MS),
+      })
+      .returning({ id: personalAccessToken.id });
+    const card = async () => {
+      const today = await t.inject({
+        method: 'GET',
+        url: '/',
+        headers: { cookie: a.cookie },
+      });
+      return /<section[^>]*data-today-requests="1"[\s\S]*?<\/section>/.exec(
+        unescapeHtml(today.body),
+      )![0];
+    };
+    expect(await card()).toContain('data-no-agent');
+    // Control: the same grant used a day ago is a connected agent.
+    await t.db
+      .update(personalAccessToken)
+      .set({ lastUsedAt: new Date(Date.now() - DAY_MS) })
+      .where(eq(personalAccessToken.id, grant.id));
+    expect(await card()).not.toContain('data-no-agent');
   });
 
   it('measures a multi-line ask as the sheet did: CRLF is one line break, at the limit accepted', async () => {
