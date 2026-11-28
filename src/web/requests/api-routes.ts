@@ -97,7 +97,7 @@ export const requestApiRoutes: FastifyPluginCallbackTypebox<ApiOptions> = (
       const { body, subject, clientId } = request.body;
       const asked = await transitionRequest({ db, logger }, actorOf(request), {
         kind: 'ask',
-        body: body.trim(),
+        body,
         subject: subject ?? null,
         clientId: clientId ?? null,
       });

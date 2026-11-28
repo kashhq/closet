@@ -43,10 +43,27 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 /** How long a claim holds a request for its agent before another may take it over. */
 export const CLAIM_LEASE_MINUTES = 30;
 
-/** What the asker writes, trimmed (agent_request_body_check). */
+/** What the asker writes, as stored (storedText; agent_request_body_check). */
 export const REQUEST_BODY_MAX = 500;
-/** The agent's reply, trimmed (agent_request_answer_check). */
+/** The agent's reply, as stored (storedText; agent_request_answer_check). */
 export const REQUEST_ANSWER_MAX = 1000;
+
+/**
+ * The most an ask's body may be as sent, before storedText: a form sends
+ * every line break as CRLF, which the sheet's `maxlength` counted as one,
+ * so a text at REQUEST_BODY_MAX may arrive up to twice as long. The route
+ * schemas' bound; the limit itself is the domain's check of the stored text.
+ */
+export const REQUEST_BODY_SENT_MAX = 2 * REQUEST_BODY_MAX;
+
+/**
+ * A request's text as stored and measured: line breaks as LF, trimmed. A
+ * form's CRLF (HTML's submission rule) would otherwise count twice against
+ * the limit the textarea's `maxlength` counted once.
+ */
+export function storedText(raw: string): string {
+  return raw.replace(/\r\n?/g, '\n').trim();
+}
 
 /** What a request may be about: one of these, or nothing (Today's sheet). */
 export const REQUEST_SUBJECT_KINDS = ['garment', 'trip', 'need'] as const;

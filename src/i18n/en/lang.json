@@ -199,7 +199,8 @@
       "WEAR": "Wore today",
       "WASH": "Washed",
       "ENTRY": "Worn",
-      "PACKED": "Packed"
+      "PACKED": "Packed",
+      "REQUEST": "Ask your agent"
     },
     "reason": {
       "GONE": "it was deleted",
@@ -364,6 +365,8 @@
       "answered": "Already answered",
       "withdrawn": "The owner withdrew this request",
       "notAnswered": "Not answered yet",
+      "bodyBlank": "The request is empty",
+      "bodyTooLong": "The request is longer than {max} characters",
       "answerBlank": "The answer is empty",
       "answerTooLong": "The answer is longer than {max} characters"
     },
@@ -1496,6 +1499,37 @@
       "accessory": "Accessory",
       "bag": "Bag",
       "none": "Other"
+    }
+  },
+  "requests": {
+    "ASK": "Ask your agent",
+    "SEND": "Ask",
+    "BODY_LABEL": "What should your agent do?",
+    "PLACEHOLDER_TODAY": "What should I wear to the dinner tonight?",
+    "PLACEHOLDER_GARMENT": "What goes with this?",
+    "PLACEHOLDER_TRIP": "Pack me for this",
+    "PLACEHOLDER_NEED": "Find me three cheaper options",
+    "SHEET_HINT": "Your agent answers the next time it connects. Offline, it is sent once you are back online.",
+    "TITLE": "Requests to your agent",
+    "ONE_TITLE": "Your request",
+    "TODAY_TITLE": "Asked of your agent",
+    "SHORT": "Requests",
+    "EMPTY": "Nothing asked yet. Ask your agent from Today, a garment, a trip or a need.",
+    "MORE": "{count} more",
+    "OLDER": "Older requests",
+    "ASKED": "Asked {day}",
+    "ABOUT": "About:",
+    "NO_AGENT": "No agent is connected yet. It will wait until one connects.",
+    "CONNECT_AGENT": "Connect an agent",
+    "GOT_IT": "Got it",
+    "WITHDRAW": "Withdraw",
+    "WITHDRAW_CONFIRM": "Withdraw this request? Your agent will not answer it.",
+    "status": {
+      "OPEN": "Waiting for your agent",
+      "CLAIMED": "is on it",
+      "CLAIMED_UNNAMED": "Your agent is on it",
+      "ANSWERED": "Answered",
+      "WITHDRAWN": "Withdrawn"
     }
   },
   "today": {

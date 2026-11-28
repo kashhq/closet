@@ -14,6 +14,7 @@ import { imageUrl } from '../files/image-url';
 import { t } from '../i18n';
 import { OUTFIT_ROW_GRID } from '../layout/columns';
 import { DayHeading } from '../layout/day-heading';
+import { AskAgent } from '../requests/ask-sheet';
 import { PageShell } from '../layout/page-shell';
 import { HangerIcon, SavedToast, StripFlags } from '../layout/parts';
 import {
@@ -156,6 +157,7 @@ export function TripPage(props: { ctx: ViewContext; model: TripPageModel }) {
           <p class="text-sm text-muted">{trip.destination}</p>
         )}
       </div>
+      <AskAgent subject={{ kind: 'trip', id: trip.id }} label={trip.name} />
       <p
         data-offline-note=""
         class="alert alert-warning alert-soft py-2 text-sm"

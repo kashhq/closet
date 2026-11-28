@@ -223,6 +223,8 @@ export interface Fixture {
   /** An open "Ask your agent" request of the owner's (#681 B1), and what it asks. */
   agentRequestId: number;
   agentRequestBody: string;
+  /** One of the owner's requests answered by their agent, not seen yet (Got it, #1286). */
+  answeredRequestId: number;
   /** An open invite link to the owner's wardrobe, not yet accepted, and its token (a bearer secret). */
   inviteShareId: number;
   inviteToken: string;
@@ -607,6 +609,22 @@ export function describeMatrix(
       };
     };
 
+    /**
+     * The agent token that answers each fixture's request (Got it needs an
+     * answer): minted once, since the owner may hold MAX_ACTIVE_TOKENS. A
+     * case that revokes it changes nothing here: an open request is
+     * answered by any token of the asker's.
+     */
+    let answeringTokenId: number | undefined;
+    const answeringToken = async (): Promise<number> => {
+      if (answeringTokenId === undefined) {
+        const token = await mintToken(t, t.owner.id, 'Matrix answering agent');
+        if (!token.created) throw new Error('No answering token');
+        answeringTokenId = token.id;
+      }
+      return answeringTokenId;
+    };
+
     const createFixture = async (): Promise<Fixture> => {
       const cookie = actors.owner.cookie!;
       const tag = randomUUID().slice(0, 8);
@@ -889,6 +907,28 @@ export function describeMatrix(
           clientId: null,
         },
       );
+      const requests = { db: t.db, logger: t.logger };
+      const asker = { userId: t.owner.id, surface: 'page' } as const;
+      const { id: answeredRequestId } = await transitionRequest(
+        requests,
+        asker,
+        {
+          kind: 'ask',
+          body: `Answered ${tag}`,
+          subject: null,
+          clientId: null,
+        },
+      );
+      await transitionRequest(
+        requests,
+        { userId: t.owner.id, surface: 'mcp' },
+        {
+          kind: 'answer',
+          id: answeredRequestId,
+          tokenId: await answeringToken(),
+          answer: `Answer ${tag}`,
+        },
+      );
       const inviteToken = await createInviteLink('VIEW');
       const garmentShare = await setPublicShare(
         t.db,
@@ -948,6 +988,7 @@ export function describeMatrix(
         weekPlanId,
         agentRequestId,
         agentRequestBody,
+        answeredRequestId,
         inviteShareId,
         inviteToken,
         photo,

@@ -1,6 +1,7 @@
 import { type Static, Type } from '@sinclair/typebox';
 import {
   REQUEST_BODY_MAX,
+  REQUEST_BODY_SENT_MAX,
   REQUEST_STATUSES,
   REQUEST_SUBJECT_KINDS,
   type RequestSubject,
@@ -104,9 +105,9 @@ export const NewAgentRequest = Type.Object(
   {
     body: Type.String({
       minLength: 1,
-      maxLength: REQUEST_BODY_MAX,
+      maxLength: REQUEST_BODY_SENT_MAX,
       pattern: '\\S',
-      description: 'What you ask, in your words; stored trimmed',
+      description: `What you ask, in your words, up to ${REQUEST_BODY_MAX} characters; stored trimmed, its line breaks as LF`,
     }),
     subject: Type.Optional(
       Type.Object(

@@ -30,6 +30,7 @@ import {
 import { somethingWornSql } from './queries';
 import { type NeedsToDecide, needsToDecideSql } from '../wishlist/inbox';
 import { type AgentRound, agentRoundSql } from '../wishlist/rounds';
+import { type TodayRequests, todayRequestsSql } from '../requests/queries';
 
 /**
  * Today (#15; plan section 9): the household's day for one person, as a
@@ -54,7 +55,8 @@ import { type AgentRound, agentRoundSql } from '../wishlist/rounds';
  * shows, as one card: the round's while it waits, else the needs'. So is
  * the first-run gate (`firstRun`, #666): until the closet can be dressed
  * as an outfit the page leads with adding garments and offers no plan,
- * and no ideas are drawn (none could be).
+ * and no ideas are drawn (none could be). So are the requests to the agent
+ * still to show (`requests`, #1286: open, claimed, answered not seen).
  */
 
 /** Ideas a suggestions row shows at once. */
@@ -104,6 +106,8 @@ export interface TodayModel {
   needs?: NeedsToDecide | null;
   /** The agent's latest round while any of it waits (agentRoundSql); null otherwise; read with `needs`. */
   round?: AgentRound | null;
+  /** "Ask your agent"'s card (todayRequestsSql, #1286); read only when asked (`requests`). */
+  requests?: TodayRequests;
   /** The first-run path's stage; null once the closet can be dressed; read only when asked (`firstRun`). */
   firstRun?: FirstRun | null;
   /** The trips today is a day of (#684): the page says "Away". */
@@ -122,6 +126,8 @@ export interface TodayOptions {
   needs?: boolean;
   /** Also read the first-run gate over the closet's kinds (the page). */
   firstRun?: boolean;
+  /** Also read the requests to the agent Today's card shows (the page). */
+  requests?: boolean;
 }
 
 export interface TodayDeps {
@@ -133,29 +139,43 @@ export interface TodayDeps {
 /**
  * The day's entries, the person's settings with their forecast row, and
  * (when asked) whether anything was worn, the agent's needs waiting on a
- * choice and the closet's kinds (the first-run gate, #666), in one
+ * choice, the closet's kinds (the first-run gate, #666) and the requests
+ * to the agent (#1286), in one
  * statement (#172; the
  * entries and the weather were two, in parallel), so the ideas start with
  * the weather in hand. Only a forecast that must be fetched reads again
  * (userWeatherFrom).
  */
+/** The reads only some callers ask for (TodayOptions): each left out of the statement unless asked. */
+function askedReads(
+  ownerId: number,
+  today: IsoDate,
+  { worn, needs, firstRun, requests }: TodayOptions,
+) {
+  return {
+    worn: worn ? somethingWornSql(ownerId, today) : undefined,
+    needs: needs ? needsToDecideSql(ownerId) : undefined,
+    round: needs ? agentRoundSql(ownerId) : undefined,
+    closet: firstRun ? closetKindsSql(ownerId) : undefined,
+    requests: requests ? todayRequestsSql(ownerId) : undefined,
+  };
+}
+
 async function readDay(
   deps: TodayDeps,
   ownerId: number,
   today: IsoDate,
   now: Date,
-  { ownWeather, worn, needs, firstRun }: TodayOptions,
+  options: TodayOptions,
 ) {
+  const { ownWeather } = options;
   const read = await selectScalars(deps.db, {
     entries: entriesSql(ownerId, today, today, { washOn: today }),
     weather:
       ownWeather || !deps.weather
         ? undefined
         : weatherWithForecastSql(ownerId, now, deps.weather.timeZone),
-    worn: worn ? somethingWornSql(ownerId, today) : undefined,
-    needs: needs ? needsToDecideSql(ownerId) : undefined,
-    round: needs ? agentRoundSql(ownerId) : undefined,
-    closet: firstRun ? closetKindsSql(ownerId) : undefined,
+    ...askedReads(ownerId, today, options),
     away: awayTripsSql(ownerId, today, today),
   });
   const weather =
@@ -166,15 +186,7 @@ async function readDay(
         readWeatherWithForecast(read.weather ?? null, now),
         now,
       )));
-  return {
-    entries: read.entries,
-    weather,
-    worn: read.worn,
-    needs: read.needs,
-    round: read.round,
-    closet: read.closet,
-    away: read.away,
-  };
+  return { ...read, weather };
 }
 
 export async function todayFor(
@@ -184,13 +196,8 @@ export async function todayFor(
   options: TodayOptions = {},
 ): Promise<TodayModel> {
   const today = todayIn(deps.timeZone, now);
-  const { entries, weather, worn, needs, round, closet, away } = await readDay(
-    deps,
-    ownerId,
-    today,
-    now,
-    options,
-  );
+  const { entries, weather, worn, needs, round, closet, requests, away } =
+    await readDay(deps, ownerId, today, now, options);
   const firstRun = closet && firstRunOf(closet);
   // Occasion order, the calendar's; a stable sort keeps the planned first.
   entries.sort((a, b) => compareOccasions(a.occasion, b.occasion));
@@ -223,6 +230,7 @@ export async function todayFor(
     needs,
     round,
     firstRun,
+    requests,
     away,
   };
 }

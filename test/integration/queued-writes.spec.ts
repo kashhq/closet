@@ -3,6 +3,7 @@ import type { RouteOptions } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays, instantAt, type IsoDate } from '../../src/calendar-date';
 import {
+  agentRequest,
   garment,
   garmentWear,
   outfitCalendar,
@@ -13,6 +14,7 @@ import {
 import {
   QUEUEABLE_ROUTES,
   queueableKindOf,
+  requestTarget,
   queuedTarget,
   replayVerdict,
 } from '../../src/offline-writes';
@@ -546,6 +548,69 @@ describe('queued writes', () => {
     expect(outcome(await replay(items, itemTick))).toEqual([204, 'unchanged']);
   });
 
+  // "Ask your agent" (#1286): the one queued create. Each ask is its own
+  // record (`request:<clientId>`), and its replay is idempotent on
+  // `(owner_id, client_id)`: the live post the network dropped and the
+  // outbox's replays after it store one request.
+  it('stores a request queued offline exactly once', async () => {
+    const clientId = '1a2b3c4d-0000-4000-8000-00000000a5c0';
+    const ask = {
+      body: '  What goes with the shirt?  ',
+      subjectKind: 'garment',
+      subjectId: String(shirt),
+      clientId,
+    };
+    const stored = () =>
+      t.db
+        .select({
+          body: agentRequest.body,
+          garmentId: agentRequest.garmentId,
+          status: agentRequest.status,
+        })
+        .from(agentRequest)
+        .where(eq(agentRequest.clientId, clientId));
+    expect(outcome(await replay('/requests', ask))).toEqual([204, 'changed']);
+    expect(outcome(await replay('/requests', ask))).toEqual([204, 'unchanged']);
+    // A live tap of the same ask (sent, then queued when no answer came).
+    const live = await post('/requests', ask);
+    expect(live.statusCode).toBe(303);
+    expect(await stored()).toEqual([
+      { body: 'What goes with the shirt?', garmentId: shirt, status: 'open' },
+    ]);
+    const [{ id }] = await t.db
+      .select({ id: agentRequest.id })
+      .from(agentRequest)
+      .where(eq(agentRequest.clientId, clientId));
+    expect(live.headers.location).toBe(`/requests/${id}`);
+    expect(t.logs.ops('agent.request.asked')).toEqual([
+      expect.objectContaining({ requestId: id, changed: true }),
+      expect.objectContaining({ requestId: id, changed: false }),
+      expect.objectContaining({ requestId: id, changed: false }),
+    ]);
+    // Another account's replay stores nothing; a subject not theirs is its 404.
+    expect(
+      outcome(
+        await replay('/requests', { ...ask, clientId: KEY }, t.owner.id + 1000),
+      ),
+    ).toEqual([409, 'account']);
+    expect(
+      (
+        await replay('/requests', {
+          ...ask,
+          subjectKind: 'trip',
+          subjectId: '999999',
+          clientId: KEY,
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(
+      await t.db
+        .select({ id: agentRequest.id })
+        .from(agentRequest)
+        .where(eq(agentRequest.clientId, KEY)),
+    ).toEqual([]);
+  });
+
   it('refuses another account’s replay, 409 account, nothing written', async () => {
     const entry = await newEntry(await newOutfit([jeans]), t.today());
     for (const [url, fields] of [
@@ -809,6 +874,31 @@ describe('queued writes', () => {
         expect(pill.alternate, url).toContain('✓ Worn');
         expect(pill.alternate, url).toContain('name="worn" value="0"');
         expectKeysMatchPaths(html);
+      }
+
+      // "Ask your agent" (#1286): Today's and the garment's sheets queue,
+      // their region named by its subject (the outbox adds the client id
+      // it mints at the tap), the form's clientId empty in the markup.
+      for (const [url, label, subject, region] of [
+        ['/', 'Today', '', requestTarget(null)],
+        [
+          `/wardrobe/${tee}`,
+          'Marked tee',
+          `name="subjectId" value="${tee}"`,
+          requestTarget({ kind: 'garment', id: tee }),
+        ],
+      ] as const) {
+        const html = await page(url);
+        expect(regionTag(html, region.key), url).toContain(
+          `data-outbox-path="/requests" data-outbox-label="${label}"`,
+        );
+        expect(html, url).toMatch(
+          /<form [^>]*action="\/requests"[^>]*data-offline-queue="request"[^>]*><input type="hidden" name="clientId" value=""\/>/,
+        );
+        expect(html, url).toContain(subject);
+        expect(html, url).not.toMatch(
+          /action="\/requests"[^>]*data-needs-network/,
+        );
       }
 
       // A trip: each packing tick and extra is its own record; "Wore it"

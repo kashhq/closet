@@ -14,6 +14,7 @@ import {
   sharingSummary,
 } from '../sharing/pages';
 import type { ShareView } from '../sharing/queries';
+import { REQUESTS_PATH } from '../requests/urls';
 import { SHARING_SECTION_ID } from '../sharing/urls';
 import { SIZES_SECTION_ID } from '../sizes/urls';
 import type { ViewContext } from '../view-context';
@@ -357,7 +358,16 @@ export function ProfilePage(props: ProfileProps) {
     <PageShell
       ctx={ctx}
       name="profile"
-      bar={{ title: t('PROFILE') }}
+      bar={{
+        title: t('PROFILE'),
+        // Not a setting (SETTINGS_ROWS): what the user asked their agent
+        // (#1286). In the bar, since a row would break the two screens.
+        actions: (
+          <a href={REQUESTS_PATH} class="btn btn-ghost btn-sm">
+            {t('requests.SHORT')}
+          </a>
+        ),
+      }}
       body={{ gap: 4 }}
     >
       <ProfileNotices {...props} />

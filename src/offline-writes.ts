@@ -16,6 +16,8 @@ export const QUEUEABLE_ROUTES = {
   entry: '/calendar/:id/worn',
   packed: '/trips/:id/packed',
   item: '/trips/:id/items/packed',
+  // "Ask your agent" (#1286): a create, keyed by its region and client id (requestRecordKey).
+  request: '/requests',
 } as const;
 
 export type QueueableKind = keyof typeof QUEUEABLE_ROUTES;
@@ -88,6 +90,35 @@ export function queuedTarget(
     key: [kind, id, ...(part === undefined ? [] : [part])].join(':'),
     path: ownerId === undefined ? path : `${path}?ownerId=${ownerId}`,
   };
+}
+
+/**
+ * An ask's region (src/web/requests/ask-sheet.tsx), by its subject:
+ * `request` on Today, `request:garment:41` on a garment's page. Every ask
+ * is its own record, the region's key completed with the client id the
+ * outbox mints into the sheet's form at the tap (requestRecordKey), so two
+ * asks never collapse into one and a replay is idempotent on
+ * `(owner_id, client_id)`; a page that never saw the tap (a reload, another
+ * cached copy) finds its pending asks by the region's part of their keys
+ * (requestRegionKey).
+ */
+export function requestTarget(
+  subject: { kind: string; id: number } | null,
+): QueuedTarget {
+  return {
+    key: subject ? `request:${subject.kind}:${subject.id}` : 'request',
+    path: QUEUEABLE_ROUTES.request,
+  };
+}
+
+/** A request record's key: its region's and the ask's client id, one per ask. */
+export function requestRecordKey(regionKey: string, clientId: string): string {
+  return `${regionKey}:${clientId}`;
+}
+
+/** The region a request record shows in: its key less the client id (a UUID has no colon). */
+export function requestRegionKey(recordKey: string): string {
+  return recordKey.slice(0, recordKey.lastIndexOf(':'));
 }
 
 const ROW_ID = '[1-9]\\d{0,9}';
@@ -428,11 +459,15 @@ export type OfflineNotice = 'none' | 'wears' | 'washes' | 'ticks' | 'changes';
  * several of them. The page's views map each to its string.
  */
 export function offlineNotice(kinds: readonly QueueableKind[]): OfflineNotice {
+  // An ask is the sheet's, which says offline what it does itself: a page's
+  // notice names what the page's own controls keep.
   const groups = new Set(
-    kinds.map((kind) => {
-      if (isChecklist(kind)) return 'ticks';
-      return kind === 'wash' ? 'washes' : 'wears';
-    }),
+    kinds
+      .filter((kind) => kind !== 'request')
+      .map((kind) => {
+        if (isChecklist(kind)) return 'ticks';
+        return kind === 'wash' ? 'washes' : 'wears';
+      }),
   );
   if (groups.size === 0) return 'none';
   if (groups.size > 1) return 'changes';
@@ -663,6 +698,9 @@ export function showsQueuedWrite(writePath: string, pagePath: string): boolean {
     case 'packed':
     case 'item':
       return pagePath === `/trips/${id}`;
+    case 'request':
+      // Today's card lists it; /requests reads fresh on every open.
+      return pagePath === '/';
     case undefined:
       return false;
   }

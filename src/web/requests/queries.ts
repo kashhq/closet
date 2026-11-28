@@ -25,6 +25,7 @@ import {
   type RequestStatus,
   type RequestSubject,
 } from '../../wardrobe/agent-requests';
+import { agentConnectedSql } from '../auth/personal-tokens';
 import { viewsWardrobeSql } from '../sharing/access';
 import { type AgentLabel, agentLabelSql, OWNER_READS } from '../write-origin';
 
@@ -43,6 +44,8 @@ export interface AgentRequestRow {
   status: RequestStatus;
   /** Null when it has none, or the asker no longer sees it (a share ended, the garment deleted). */
   subject: RequestSubject | null;
+  /** What the pages name and link the subject by, with `subject`; never in a resource. */
+  subjectView: SubjectView | null;
   /** The owner of a garment subject's wardrobe (the asker's, or a sharer's); null for any other. */
   subjectOwnerId: number | null;
   /** The token holding the claim, as its owner reads it; null once the token is gone. */
@@ -68,12 +71,32 @@ const subjectSql = sql<RequestSubject | null>`case
   when ${agentRequest.optionGroupId} is not null then json_build_object('kind', 'need', 'id', ${agentRequest.optionGroupId})
 end`;
 
-const ROW = {
+/**
+ * A seen subject as the requests pages link it (#1286): its name (a
+ * garment's may be null: the page words its category), and a garment's
+ * wardrobe, so a shared one links with `?ownerId=`.
+ */
+export interface SubjectView {
+  name: string | null;
+  category: string | null;
+  /** A shared garment's wardrobe; null for the asker's own and for a trip or need. */
+  ownerId: number | null;
+}
+
+/** `ownerId`: the asker, whose own garment links without `?ownerId=`. */
+const subjectViewSql = (ownerId: number) => sql<SubjectView | null>`case
+  when ${garment.id} is not null then json_build_object('name', ${garment.name}, 'category', ${garment.category}, 'ownerId', nullif(${garment.ownerId}, ${ownerId}::int))
+  when ${agentRequest.tripId} is not null then json_build_object('name', (select ${trip.name} from ${trip} where ${trip.id} = ${agentRequest.tripId}), 'category', null, 'ownerId', null)
+  when ${agentRequest.optionGroupId} is not null then json_build_object('name', (select ${optionGroup.name} from ${optionGroup} where ${optionGroup.id} = ${agentRequest.optionGroupId}), 'category', null, 'ownerId', null)
+end`;
+
+const rowOf = (ownerId: number) => ({
   id: agentRequest.id,
   clientId: agentRequest.clientId,
   body: agentRequest.body,
   status: agentRequest.status,
   subject: subjectSql,
+  subjectView: subjectViewSql(ownerId),
   subjectOwnerId: garment.ownerId,
   claimedBy: agentLabelSql(agentRequest.claimedByTokenId, OWNER_READS),
   claimedByTokenId: agentRequest.claimedByTokenId,
@@ -84,7 +107,7 @@ const ROW = {
   answerSeenAt: agentRequest.answerSeenAt,
   withdrawnAt: agentRequest.withdrawnAt,
   createdAt: agentRequest.createdAt,
-};
+});
 
 /**
  * The asker's requests matching `where`, the garment subject joined only
@@ -93,7 +116,7 @@ const ROW = {
  */
 function readRequests(db: Queryable, ownerId: number, where: SQL | undefined) {
   return db
-    .select(ROW)
+    .select(rowOf(ownerId))
     .from(agentRequest)
     .leftJoin(
       garment,
@@ -392,4 +415,65 @@ export async function writeMove(
       `agent_request ${id} left ${move.from} under its owner's lock: a writer without the lock`,
     );
   }
+}
+
+/** A request as Today's card shows it (#1286, plan section 3.6). */
+export interface TodayRequest {
+  id: number;
+  body: string;
+  status: RequestStatus;
+  /** The agent holding it, while claimed. */
+  claimedBy: AgentLabel | null;
+  answer: string | null;
+  answeredBy: AgentLabel | null;
+}
+
+/**
+ * Today's card: the newest few still to show, how many there are, whether
+ * any of them (shown or not) waits for an agent, and whether one is connected.
+ */
+export interface TodayRequests {
+  shown: TodayRequest[];
+  count: number;
+  /** Any open or claimed request, beyond the shown few too: the no-agent line's. */
+  waiting: boolean;
+  connected: boolean;
+}
+
+/** How many requests Today's card lists before "N more". */
+export const TODAY_REQUESTS = 3;
+
+const card = sql.identifier('card');
+
+/**
+ * The asker's requests Today shows (open, claimed, answered but not seen
+ * yet: a withdrawn or seen one leaves Today), newest first, as a scalar
+ * subquery for Today's one statement (todayFor's `requests`), with the
+ * count behind "N more", whether any waits for an agent and whether any
+ * agent token is in force (the no-agent line's two). Raw columns of the alias, so the token labels' own
+ * subqueries never read an outer `id`.
+ */
+export function todayRequestsSql(ownerId: number): SQL<TodayRequests> {
+  const showing = sql`${card}.owner_id = ${ownerId}::int and (${card}.status in ('open', 'claimed') or (${card}.status = 'answered' and ${card}.answer_seen_at is null))`;
+  return sql<TodayRequests>`json_build_object(
+    'shown', coalesce((
+      select json_agg(json_build_object(
+        'id', ${card}.id,
+        'body', ${card}.body,
+        'status', ${card}.status,
+        'claimedBy', case when ${card}.status = 'claimed' then ${agentLabelSql(sql`${card}.claimed_by_token_id`, OWNER_READS)} end,
+        'answer', ${card}.answer,
+        'answeredBy', ${agentLabelSql(sql`${card}.answered_by_token_id`, OWNER_READS)}
+      ) order by ${card}.id desc)
+      from (
+        select ${card}.id, ${card}.body, ${card}.status, ${card}.answer,
+          ${card}.claimed_by_token_id, ${card}.answered_by_token_id
+        from ${agentRequest} as ${card} where ${showing}
+        order by ${card}.id desc limit ${TODAY_REQUESTS}
+      ) as ${card}
+    ), '[]'::json),
+    'count', (select count(*)::int from ${agentRequest} as ${card} where ${showing}),
+    'waiting', exists (select from ${agentRequest} as ${card} where ${card}.owner_id = ${ownerId}::int and ${card}.status in ('open', 'claimed')),
+    'connected', ${agentConnectedSql(ownerId)}
+  )`;
 }

@@ -1,4 +1,5 @@
 import {
+  type Fixture,
   type Route,
   BOTH,
   garmentName,
@@ -10,7 +11,9 @@ import {
   styleNote,
 } from './authorization-matrix';
 
-// The authorization matrix (authorization-matrix.ts): the style profile, sizes, agent access and sharing.
+const agentRequestBody = (f: Fixture) => f.agentRequestBody;
+
+// The authorization matrix (authorization-matrix.ts): the style profile, sizes, agent access, sharing and the requests to the agent.
 export const ROUTES: Route[] = [
   {
     // The style profile (#34): everyone's own; the owner's notes never
@@ -501,6 +504,114 @@ export const ROUTES: Route[] = [
         method: 'PUT',
         url: `/api/v1/calendar-entries/${f.entryId}/worn${q}`,
         payload: { worn: true },
+      }),
+    },
+  },
+  // "Ask your agent" (#1286): a request is the asker's alone, so anyone
+  // else's id is the unknown id's 404 on the page and its API twin, a
+  // grantee of either permission included; no route reads `?ownerId=`. The
+  // ask names a subject the asker sees: a grantee may ask about the
+  // owner's shared garment (their own request), a stranger may not.
+  {
+    name: 'GET /requests/:id',
+    kind: 'read',
+    ok: 200,
+    secret: agentRequestBody,
+    shows: true,
+    vias: ['own'],
+    request: (f) => ({ method: 'GET', url: `/requests/${f.agentRequestId}` }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f) => ({
+        method: 'GET',
+        url: `/api/v1/agent-requests/${f.agentRequestId}`,
+      }),
+    },
+  },
+  {
+    name: 'POST /requests',
+    kind: 'write',
+    ok: 303,
+    secret: garmentName,
+    vias: ['own'],
+    request: (f) => ({
+      method: 'POST',
+      url: '/requests',
+      payload: {
+        body: 'What goes with this?',
+        subjectKind: 'garment',
+        subjectId: String(f.garmentId),
+      },
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'ok',
+      viewer: 'ok',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 201,
+      request: (f) => ({
+        method: 'POST',
+        url: '/api/v1/agent-requests',
+        payload: {
+          body: 'What goes with this?',
+          subject: { kind: 'garment', id: f.garmentId },
+        },
+      }),
+    },
+  },
+  {
+    name: 'POST /requests/:id/withdraw',
+    kind: 'write',
+    ok: 303,
+    secret: agentRequestBody,
+    vias: ['own'],
+    request: (f) => ({
+      method: 'POST',
+      url: `/requests/${f.agentRequestId}/withdraw`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f) => ({
+        method: 'POST',
+        url: `/api/v1/agent-requests/${f.agentRequestId}/withdraw`,
+      }),
+    },
+  },
+  {
+    name: 'POST /requests/:id/seen',
+    kind: 'write',
+    ok: 303,
+    secret: agentRequestBody,
+    vias: ['own'],
+    request: (f) => ({
+      method: 'POST',
+      url: `/requests/${f.answeredRequestId}/seen`,
+    }),
+    expect: {
+      owner: 'ok',
+      manager: 'notFound',
+      viewer: 'notFound',
+      stranger: 'notFound',
+    },
+    api: {
+      ok: 200,
+      request: (f) => ({
+        method: 'POST',
+        url: `/api/v1/agent-requests/${f.answeredRequestId}/seen`,
       }),
     },
   },

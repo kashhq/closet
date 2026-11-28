@@ -10,6 +10,7 @@ import {
 } from './support/e2e-session';
 import { householdToday } from './support/household-today';
 import { pageErrors } from './support/page-errors';
+import { setReachable, setWritesReachable } from './support/connectivity';
 import {
   cachePage,
   closeSwitchedContext,
@@ -73,22 +74,6 @@ function guardedControls(page: Page) {
   );
 }
 
-/**
- * Offline for writes too: every POST the page sends fails like the
- * heartbeat, so a queued write can only wait. Pages still load (GET), as a
- * cached copy would.
- */
-async function setWritesReachable(page: Page, reachable: boolean) {
-  if (reachable) {
-    await page.unroute('**/*');
-  } else {
-    await page.route('**/*', (route) =>
-      route.request().method() === 'POST' ? route.abort() : route.fallback(),
-    );
-  }
-  await setReachable(page, reachable);
-}
-
 /** The worker's copy of a page: when it was cached (0: none). */
 function cachedAtOf(page: Page, path: string): Promise<number> {
   return page.evaluate(
@@ -98,19 +83,6 @@ function cachedAtOf(page: Page, path: string): Promise<number> {
     },
     [path, CACHED_AT_HEADER],
   );
-}
-
-/** Fails the heartbeat (or lets it through) and tells the page to probe. */
-async function setReachable(page: Page, reachable: boolean) {
-  if (reachable) await page.unroute('**/health/live');
-  else await page.route('**/health/live', (route) => route.abort());
-  await page.evaluate(
-    (event) => window.dispatchEvent(new Event(event)),
-    reachable ? 'online' : 'offline',
-  );
-  await expect(page.locator('#connectivity-banner')).toBeVisible({
-    visible: !reachable,
-  });
 }
 
 // One scenario, in steps: the e2e tier holds ten (test/AGENTS.md), and a new
