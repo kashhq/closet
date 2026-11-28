@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { TOKEN_PREFIX } from '../../credential-names';
 import type { Queryable } from '../../db/client';
@@ -6,6 +6,7 @@ import {
   oauthAuthorizationCode,
   oauthRetiredRefreshToken,
   personalAccessToken,
+  user,
 } from '../../db/schema';
 import {
   hashToken,
@@ -133,24 +134,27 @@ type ClaimedCode = Pick<
 
 /**
  * `grant_type=authorization_code` (RFC 6749 4.1.3, RFC 7636 4.6). One
- * transaction, which commits on every path: the code is claimed first
- * (`used_at`, only while unused and unexpired), so **a code is one
- * attempt**: a wrong verifier, client, redirect or resource, a password
- * changed since consent, or Agent Access full each burn it, and a retry is
- * a replay. Then the checks against the claimed row, then the mint inside
- * the same transaction (mintToken: the user's lock, the fingerprint
+ * transaction, which commits on every path. The code's account is locked
+ * first (lockCodeAccount), then the code is claimed (`used_at`, only while
+ * unused and unexpired), so **a code is one attempt**: a wrong verifier,
+ * client, redirect or resource, a password changed since consent, or Agent
+ * Access full each burn it, and a retry is a replay. Then the checks
+ * against the claimed row, then the mint inside the same transaction
+ * (mintToken: the user's lock again, already held, the fingerprint
  * recheck, the cap without this client's grant, and only then that grant
  * revoked), and the code pointed at its grant (`token_id`).
  *
  * A code that claims nothing is judged in a statement of its own, after the
  * transaction, on a fresh snapshot: a used one is **replay** (RFC 6749
  * 4.1.2's SHOULD), whose grant is revoked. A concurrent second use waits on
- * the claim's row lock, finds the code used once the first commits, and so
+ * the account's lock, finds the code used once the first commits, and so
  * revokes what the first just minted. Accepted risk (decisions
  * 2026-11-28): a leaked code lets its holder end the grant, never use it.
  *
- * Lock order: the code row, then the user row; no writer takes them the
- * other way (a new password locks the user and never touches a code).
+ * Lock order: the user row, then the code row, as every writer of both
+ * takes them: deleting the account locks the user, then its cascade takes
+ * the codes (deleteUserAndFileRows), and a new password locks the user and
+ * never touches a code. Claiming first deadlocked against the delete.
  */
 export async function exchangeCode(
   { db, logger }: ActionDeps<Queryable>,
@@ -161,6 +165,8 @@ export async function exchangeCode(
   const codeHash = hashToken(exchange.code);
   const refreshToken = newToken(REFRESH_PREFIX);
   const outcome = await db.transaction(async (tx) => {
+    // No account: the code is unknown, or went with a deleted account.
+    if (!(await lockCodeAccount(tx, codeHash))) return undefined;
     const [code] = await tx
       .update(oauthAuthorizationCode)
       .set({ usedAt: sql`now()` })
@@ -232,6 +238,33 @@ export async function exchangeCode(
     });
   }
   return result;
+}
+
+/**
+ * Locks the account of the code hashed `codeHash`, FOR UPDATE as mintToken
+ * does, before the claim touches the code row (exchangeCode's lock order);
+ * false when no account is locked. A statement of its own, so the claim
+ * after it reads on a snapshot taken under the lock: an account deleted
+ * while this waited took its codes with it, and the claim finds none.
+ */
+async function lockCodeAccount(
+  tx: Queryable,
+  codeHash: string,
+): Promise<boolean> {
+  const locked = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(
+      inArray(
+        user.id,
+        tx
+          .select({ userId: oauthAuthorizationCode.userId })
+          .from(oauthAuthorizationCode)
+          .where(eq(oauthAuthorizationCode.codeHash, codeHash)),
+      ),
+    )
+    .for('update');
+  return locked.length > 0;
 }
 
 /** The claimed code's checks, each a burned code's refusal (RFC 6749 4.1.3). */

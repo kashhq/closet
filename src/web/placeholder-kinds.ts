@@ -78,6 +78,7 @@ export const PLACEHOLDER_KINDS = {
   'api.RECAP_YEAR': { year: 'data' },
   'agentAccess.CREATED_ON': { day: 'data' },
   'agentAccess.LAST_USED': { day: 'data' },
+  'agentAccess.IDLE_EXPIRED': { days: 'data' },
   'agentAccess.REVOKE_CONFIRM': { name: 'data' },
   'agentAccess.TOO_MANY': { max: 'data' },
   'agentAccess.SUMMARY': { count: 'data' },

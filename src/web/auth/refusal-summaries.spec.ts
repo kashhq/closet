@@ -26,7 +26,7 @@ describe('RefusalSummaries', () => {
     advance(60_000);
     summaries.flushEnded();
     expect(lines()).toEqual([
-      '3 further credential refusals from a past its budget, not logged one by one (revoked token x2, unknown token, 429 x1)',
+      '3 further credential refusals from a not logged one by one (revoked token x2, unknown token, 429 x1)',
     ]);
     summaries.flushEnded();
     expect(lines()).toHaveLength(1);
@@ -43,6 +43,23 @@ describe('RefusalSummaries', () => {
     expect(lines()).toHaveLength(2);
   });
 
+  it('gives an uncharged refusal one line per window, counting the rest into its summary', () => {
+    const { summaries, lines, advance } = setup();
+    expect(summaries.logsOwnLine('a', 'expired token', 60_000)).toBe(true);
+    for (let n = 0; n < 5; n += 1) {
+      expect(summaries.logsOwnLine('a', 'expired token', 60_000)).toBe(false);
+    }
+    // Another address has a window of its own.
+    expect(summaries.logsOwnLine('b', 'expired token', 60_000)).toBe(true);
+    advance(60_000);
+    summaries.flushEnded();
+    // Only `a` had more than its own line to tell.
+    expect(lines()).toEqual([
+      '5 further credential refusals from a not logged one by one (expired token x5)',
+    ]);
+    expect(summaries.logsOwnLine('a', 'expired token', 60_000)).toBe(true);
+  });
+
   it('holds a bounded number of addresses, summarising the oldest to make room', () => {
     const { summaries, lines } = setup();
     for (let n = 0; n < 1_000; n += 1) {
@@ -50,8 +67,6 @@ describe('RefusalSummaries', () => {
     }
     expect(lines()).toEqual([]);
     summaries.suppress('one-more', 'revoked token', 60_000);
-    expect(lines()).toEqual([
-      expect.stringContaining('from ip-0 past its budget'),
-    ]);
+    expect(lines()).toEqual([expect.stringContaining('from ip-0 not logged')]);
   });
 });

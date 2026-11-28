@@ -8,7 +8,9 @@ import { PostForm } from '../form';
 import { Field, ScopeToggle, UsernameTwin } from './form';
 import { AGENT_ACCESS_SECTION_ID } from './urls';
 import {
+  idleExpired,
   MAX_ACTIVE_TOKENS,
+  OAUTH_IDLE_DAYS,
   TOKEN_NAME_MAX,
   type TokenListing,
   type TokenScope,
@@ -35,6 +37,8 @@ export interface TokensPageProps {
   tokens: TokenListing[];
   /** APP_TIMEZONE: dates are the household's. */
   timeZone: string;
+  /** What an OAuth grant's idle expiry is judged against (idleExpired). */
+  now: Date;
   /** The token just created: its only showing. */
   created?: { name: string; token: string };
   notice?: TokenNotice;
@@ -109,6 +113,16 @@ function TokenAlert({ notice }: { notice: TokenNotice }) {
 export function TokensPage(props: TokensPageProps) {
   const { ctx, tokens, created, timeZone } = props;
   const day = (instant: Date) => todayIn(timeZone, instant);
+  // An OAuth grant idle past its days is refused everywhere and never
+  // counts against the cap (mintToken), but stays listed until revoked.
+  const tokenUse = (token: TokenListing) => {
+    if (idleExpired(token, props.now)) {
+      return t('agentAccess.IDLE_EXPIRED', { days: OAUTH_IDLE_DAYS });
+    }
+    return token.lastUsedAt
+      ? t('agentAccess.LAST_USED', { day: day(token.lastUsedAt) })
+      : t('agentAccess.NEVER_USED');
+  };
   return (
     <SettingsPage
       ctx={ctx}
@@ -196,11 +210,7 @@ export function TokensPage(props: TokensPageProps) {
                       day: day(token.createdAt),
                     })}
                     {' · '}
-                    {token.lastUsedAt
-                      ? t('agentAccess.LAST_USED', {
-                          day: day(token.lastUsedAt),
-                        })
-                      : t('agentAccess.NEVER_USED')}
+                    {tokenUse(token)}
                   </span>
                 </div>
                 <PostForm

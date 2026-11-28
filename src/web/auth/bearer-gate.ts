@@ -5,6 +5,7 @@ import type { Logger } from '../../logger';
 import type { HttpError } from '../errors';
 import { loggableUrl } from '../loggable-url';
 import {
+  BEARER_REFUSAL_LIMIT,
   countAgainst,
   type RateLimitChecker,
   tooManyAttempts,
@@ -42,10 +43,13 @@ export interface BearerRefusalLimit {
  * refresh cue, from a vendor's shared egress addresses, so it never spends
  * the budget (#1291). Past the budget, a missing, malformed or unknown
  * credential is the 429; a revoked, expired or other-kind token stays
- * `refusal()` (a signed-out device must still learn to sign in again). Logs the reason and the client address, never
- * the token: a refusal within the budget is a line of its own, those past
- * it are counted into one summary line per address per window
- * (RefusalSummaries), so a flood is not a log flood (#940).
+ * `refusal()` (a signed-out device must still learn to sign in again).
+ * Logs the reason and the client address, never the token: a refusal
+ * within the budget is a line of its own, those past it are counted into
+ * one summary line per address per window (RefusalSummaries), so a flood
+ * is not a log flood (#940). An expired token, never charged, is held to
+ * the same: its address's first in a BEARER_REFUSAL_LIMIT window is an
+ * info line, the rest are counted into that window's summary.
  */
 export function createBearerGate({
   db,
@@ -81,11 +85,14 @@ export function createBearerGate({
   ): Promise<never> {
     const reason = refusalReason(refused, kind);
     const line = `${label} ${request.method} ${loggableUrl(request)} refused: ${reason} from ${request.ip}`;
+    refusalSummaries.flushEnded();
     if (refused === 'expired') {
-      logger.info(line);
+      const window = BEARER_REFUSAL_LIMIT.timeWindow;
+      if (refusalSummaries.logsOwnLine(request.ip, reason, window)) {
+        logger.info(line);
+      }
       throw refusal(tokenRefused);
     }
-    refusalSummaries.flushEnded();
     const exceeded = await countAgainst(refusalLimit, request);
     if (!exceeded) {
       logger.warn(line);

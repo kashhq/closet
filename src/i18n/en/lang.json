@@ -490,6 +490,7 @@
     "CREATED_ON": "created {day}",
     "LAST_USED": "last used {day}",
     "NEVER_USED": "never used",
+    "IDLE_EXPIRED": "expired: unused for {days} days",
     "REVOKE": "Revoke",
     "REVOKE_CONFIRM": "Revoke {name}? Anything using it stops working at once.",
     "REVOKED": "Token revoked.",

@@ -232,7 +232,7 @@ describe('the bearer gate', () => {
     expect(
       lines().filter((line) => line.includes('further credential')),
     ).toEqual([
-      `${over} further credential refusals from ${address} past its budget, not logged one by one (wrong kind of token (wants mcp) x${over})`,
+      `${over} further credential refusals from ${address} not logged one by one (wrong kind of token (wants mcp) x${over})`,
     ]);
     // The summary, and the new window's first refusal as a line of its own.
     expect(lines()).toHaveLength(BEARER_REFUSAL_LIMIT.max + 2);

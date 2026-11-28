@@ -1,6 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   oauthAuthorizationCode,
   oauthRetiredRefreshToken,
@@ -28,7 +36,7 @@ import {
   uniqueClient,
   userIdOf,
 } from './harness';
-import { interleave } from './interleave';
+import { backendPid, interleave, waitForBlockedOn } from './interleave';
 import { mcpRequest } from './mcp';
 
 /**
@@ -322,7 +330,7 @@ describe('OAuth token endpoint', () => {
       );
     });
 
-    it('revokes what a concurrent first use minted (interleaved on the code row)', async () => {
+    it('revokes what a concurrent first use minted (interleaved on the account)', async () => {
       const code = await consent();
       const [first, second] = await interleave(
         t.db,
@@ -465,6 +473,32 @@ describe('OAuth token endpoint', () => {
       expectRefusal(await exchange(code), 'invalid_grant');
       expect((await grantOf(again.access_token)).revokedAt).toBeNull();
       issued(await refresh(again.refresh_token));
+    });
+    it('leaves a grant idle past its days out of the cap, and Agent Access says it expired', async () => {
+      const idle = await connect();
+      await t.db
+        .update(personalAccessToken)
+        .set({
+          lastUsedAt: new Date(Date.now() - (OAUTH_IDLE_DAYS + 1) * DAY_MS),
+        })
+        .where(eq(personalAccessToken.tokenHash, hashToken(idle.access_token)));
+      await staticTokens(MAX_ACTIVE_TOKENS - 1);
+      // Another client's consent replaces nothing: only the idle grant
+      // leaving the count makes room.
+      clientId = `${clientId}?second`;
+      const fresh = await connect();
+      expect(await opens(fresh.access_token)).toBe(200);
+      // Not revoked by the mint: listed, as expired, until revoked by hand.
+      expect((await grantOf(idle.access_token)).revokedAt).toBeNull();
+      const page = await t.inject({
+        method: 'GET',
+        url: '/auth/tokens',
+        headers: { cookie },
+      });
+      expect(page.statusCode).toBe(200);
+      expect(
+        page.body.split(`expired: unused for ${OAUTH_IDLE_DAYS} days`),
+      ).toHaveLength(2);
     });
   });
 
@@ -693,6 +727,44 @@ describe('OAuth token endpoint', () => {
       ).toBe(401);
     });
 
+    it('logs an address stuck on an expired token once per window, the rest as one summary (#940)', async () => {
+      const first = await connect();
+      await t.db
+        .update(personalAccessToken)
+        .set({ accessExpiresAt: new Date(Date.now() - 1000) })
+        .where(
+          eq(personalAccessToken.tokenHash, hashToken(first.access_token)),
+        );
+      const client = uniqueClient();
+      const address = client['x-forwarded-for'];
+      const expired = async () =>
+        expect(
+          (await mcpRequest(t, first.access_token, 'tools/list', {}, client))
+            .statusCode,
+        ).toBe(401);
+      const linesOf = () =>
+        t.logs.records
+          .map((record) => record.msg)
+          .filter((msg) => msg.split(' ').includes(address));
+      const own = `MCP POST /mcp refused: expired token from ${address}`;
+      for (let n = 0; n < 10; n += 1) await expired();
+      expect(linesOf()).toEqual([own]);
+
+      // The next window's first writes the last one's summary and its own line.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(Date.now() + 2 * BEARER_REFUSAL_LIMIT.timeWindow);
+        await expired();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(linesOf()).toEqual([
+        own,
+        `9 further credential refusals from ${address} not logged one by one (expired token x9)`,
+        own,
+      ]);
+    });
+
     it('never idles a static agent token out', async () => {
       const res = await t.inject({
         method: 'POST',
@@ -827,6 +899,46 @@ describe('OAuth token endpoint', () => {
         'invalid_grant',
       );
     });
+  });
+
+  it('locks the account before the code: an exchange racing its deletion never deadlocks (interleaved)', async () => {
+    const code = await consent();
+    let holder!: number;
+    let exchanging!: Promise<LightMyRequestResponse>;
+    // A third transaction holds the account, so the deletion queues on it
+    // first and the exchange behind: the deletion then takes the user row
+    // and cascades into the code, which an exchange that claimed the code
+    // before the account would hold (40P01, one side's 500).
+    const [, deleted] = await interleave(
+      t.db,
+      async (tx) => {
+        holder = await backendPid(tx);
+        await tx
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.id, userId))
+          .for('update');
+      },
+      () =>
+        t.inject({
+          method: 'POST',
+          url: '/auth/delete-account',
+          headers: { cookie },
+          payload: { email, password: TEST_PASSWORD },
+        }),
+      async () => {
+        exchanging = exchange(code);
+        await waitForBlockedOn(t.db, holder, 2);
+      },
+    );
+    expect(deleted.statusCode).toBeLessThan(400);
+    expectRefusal(await exchanging, 'invalid_grant');
+    expect(
+      await t.db
+        .select({ id: personalAccessToken.id })
+        .from(personalAccessToken)
+        .where(eq(personalAccessToken.userId, userId)),
+    ).toEqual([]);
   });
 
   it('deletes an account with a live grant, its family and an unused code, cascading every key', async () => {

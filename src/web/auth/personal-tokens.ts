@@ -98,6 +98,16 @@ export function idleExpired(
 export function oauthGrantNotIdleSql(now: Date): SQL<boolean> {
   return sql<boolean>`coalesce(${personalAccessToken.lastUsedAt}, ${personalAccessToken.createdAt}) > ${idleCutoff({ kind: 'mcp' }, now)}`;
 }
+
+/**
+ * Whether an agent token counts against MAX_ACTIVE_TOKENS at `now`, as SQL:
+ * an OAuth grant idle past its days does not, since it opens nothing and
+ * must not block a new connection. mintToken counts by idleExpired on the
+ * rows it read; the consent's count (grantConsent) by this.
+ */
+export function countsTowardAgentCapSql(now: Date): SQL<boolean> {
+  return sql<boolean>`(${personalAccessToken.oauthClientId} is null or ${oauthGrantNotIdleSql(now)})`;
+}
 export const TOKEN_NAME_MAX = 100;
 /**
  * A household's tokens are a handful; this bounds a runaway script. Counted
@@ -352,7 +362,16 @@ export async function mintToken(
   const replaced = oauth
     ? tokens.filter((token) => token.oauthClientId === oauth.clientId)
     : [];
-  const counted = tokens.length - replaced.length;
+  // Nor does an OAuth grant idle past its days (countsTowardAgentCapSql, the
+  // consent's count): it opens nothing, so it must not block a new
+  // connection. Devices idle too, but at their cap the least recently used
+  // is evicted, so an idle one goes first anyway.
+  const now = new Date();
+  const counted = tokens.filter(
+    (token) =>
+      !replaced.includes(token) &&
+      !(token.oauthClientId !== null && idleExpired(token, now)),
+  ).length;
   let evictedId: number | undefined;
   if (counted >= MAX_ACTIVE_TOKENS) {
     if (kind === 'mcp') {
@@ -361,7 +380,7 @@ export async function mintToken(
     evictedId = leastRecentlyUsed(tokens).id;
     await tx
       .update(personalAccessToken)
-      .set({ revokedAt: new Date() })
+      .set({ revokedAt: now })
       .where(eq(personalAccessToken.id, evictedId));
     tokens = tokens.filter((token) => token.id !== evictedId);
   }
@@ -370,7 +389,7 @@ export async function mintToken(
   if (replacedIds.length > 0) {
     await tx
       .update(personalAccessToken)
-      .set({ revokedAt: new Date() })
+      .set({ revokedAt: now })
       .where(inArray(personalAccessToken.id, replacedIds));
     tokens = tokens.filter((token) => !replacedIds.includes(token.id));
   }
@@ -385,7 +404,7 @@ export async function mintToken(
       tokenPrefix: token.slice(0, DISPLAY_LENGTH),
       // The app's clock, not the column's default: idleExpired judges it
       // against the app's `now`, beside last_used_at, which it stamps.
-      createdAt: new Date(),
+      createdAt: now,
       ...scope,
       ...(oauth && {
         oauthClientId: oauth.clientId,
