@@ -1513,7 +1513,7 @@
     "TITLE": "Requests to your agent",
     "ONE_TITLE": "Your request",
     "TODAY_TITLE": "Asked of your agent",
-    "PROFILE_SUMMARY": "What you asked, and its answers",
+    "SHORT": "Requests",
     "EMPTY": "Nothing asked yet. Ask your agent from Today, a garment, a trip or a need.",
     "MORE": "{count} more",
     "OLDER": "Older requests",

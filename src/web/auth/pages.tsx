@@ -14,6 +14,7 @@ import {
   sharingSummary,
 } from '../sharing/pages';
 import type { ShareView } from '../sharing/queries';
+import { REQUESTS_PATH } from '../requests/urls';
 import { SHARING_SECTION_ID } from '../sharing/urls';
 import { SIZES_SECTION_ID } from '../sizes/urls';
 import type { ViewContext } from '../view-context';
@@ -37,10 +38,6 @@ import {
 } from './form';
 import { SignOutForm } from './logout';
 import { type SettingsRowId, settingsRows } from './settings-rows';
-import { REQUESTS_PATH } from '../requests/urls';
-
-/** Profile's row to the requests to the agent (`/auth/profile#requests`). */
-const REQUESTS_ROW_ID = 'requests';
 import { RETURN_TO_PARAM } from './return-to';
 import {
   DEVICE_IDLE_DAYS,
@@ -361,7 +358,16 @@ export function ProfilePage(props: ProfileProps) {
     <PageShell
       ctx={ctx}
       name="profile"
-      bar={{ title: t('PROFILE') }}
+      bar={{
+        title: t('PROFILE'),
+        // Not a setting (SETTINGS_ROWS): what the user asked their agent
+        // (#1286). In the bar, since a row would break the two screens.
+        actions: (
+          <a href={REQUESTS_PATH} class="btn btn-ghost btn-sm">
+            {t('requests.SHORT')}
+          </a>
+        ),
+      }}
       body={{ gap: 4 }}
     >
       <ProfileNotices {...props} />
@@ -381,22 +387,6 @@ export function ProfilePage(props: ProfileProps) {
               summary={SETTING_SUMMARIES[row.id](props)}
             />
           ))}
-        </ul>
-      </Card>
-      {/* Not a setting (SETTINGS_ROWS): what the user asked their agent (#1286). */}
-      <Card
-        as="nav"
-        variant="content"
-        class="w-full"
-        aria-label={t('requests.TITLE')}
-      >
-        <ul class="card-body py-1 gap-0">
-          <SettingsRow
-            id={REQUESTS_ROW_ID}
-            href={REQUESTS_PATH}
-            label={t('requests.TITLE')}
-            summary={t('requests.PROFILE_SUMMARY')}
-          />
         </ul>
       </Card>
       <ExportSection />
