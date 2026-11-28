@@ -1887,3 +1887,9 @@ Consequence: a feature never normalizes line breaks itself. A multipart reader u
 Why: the plan's discovery (A1) lands before the consent page (#1290) and the token endpoint (#1291), yet its Authorization Server Metadata must name both.
 Decision: OAuth is on exactly when `MCP_PUBLIC_URL` is set; nothing sets it until homelab's #1293, after #1291. Off, every OAuth name is a JSON 404 on the `oauth` surface; `/.well-known/openid-configuration` is one always, so `assignSurface` admits that path beside `/.well-known/oauth-*` and `/oauth/token` (the plan named only those). The `/mcp` 401 adds `resource_metadata` and `scope` only when on; `error="invalid_token"` waits for #1291's expiry.
 Consequence: setting `MCP_PUBLIC_URL` before #1291 points clients at endpoints that 404 (`src/web/oauth/AGENTS.md`).
+
+## 2026-11-28 — The OAuth consent redirects only with its outcome (#1290)
+
+Why: a Client ID Metadata Document is self-asserted, so its `redirect_uris` are whatever its author wants (`evil.example`); a GET error that 303'd there after the URI "matched" would bounce a tailnet user off Closet's origin with no consent shown.
+Decision: only the POST's outcome redirects (a code, or `access_denied`); a GET refusal after proof is a 400 page with a "Return to <host>" link the user taps (`ConsentErrorPage`), and before proof a 400 page with no link. Every answer is `no-store`; the POST reads no session (`config.sessionless`). A grant's client is `personal_access_token.oauth_client_id` (0076), read now by the cap check, written by #1291's mint.
+Consequence: no `/oauth/authorize` path calls `reply.redirect` but the POST's two outcomes; #1291's token endpoint answers JSON, never a redirect.

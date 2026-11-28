@@ -11,7 +11,7 @@ import type { Logger } from '../../logger';
  * once at the root by createApp() with `global: false`: nothing is limited
  * unless its route opts in with `config: { rateLimit: SIGN_IN_LIMIT }` (or
  * ACCOUNT_LIMIT, LINK_IMPORT_LIMIT, WEATHER_SEARCH_LIMIT, WEATHER_LOCATION_LIMIT,
- * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT, OAUTH_DISCOVERY_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
+ * VITALS_LIMIT, CLIENT_ERROR_LIMIT, MCP_LIMIT, OAUTH_DISCOVERY_LIMIT, OAUTH_AUTHORIZE_LIMIT; HEALTH_LIMIT, SIGN_IN_LIMIT's
  * two sign-in doors, SIGN_IN_ACCOUNT_LIMIT, BEARER_REFUSAL_LIMIT, API_LIMIT, API_PHOTO_LIMIT, PHOTO_UPLOAD_LIMIT and PUSH_TEST_LIMIT through one
  * createRateLimit checker each). Every limited route counts on its own. Counters live in
  * process memory, which is right for the single container this runs as.
@@ -342,6 +342,19 @@ export const HEALTH_LIMIT = {
  */
 export const OAUTH_DISCOVERY_LIMIT = {
   max: 60,
+  timeWindow: MINUTE_MS,
+  keyGenerator: (request: FastifyRequest) => request.ip,
+};
+
+/**
+ * `GET /oauth/authorize` (src/web/oauth/consent-routes.tsx), per client
+ * address, counted before anything is read: each one fetches a client's
+ * metadata document from the internet (#1290). A person connects an agent
+ * a few times at most; 10 a minute only stops a loop making the server
+ * fetch for it. The consent's POST counts on the sign-in budgets.
+ */
+export const OAUTH_AUTHORIZE_LIMIT = {
+  max: 10,
   timeWindow: MINUTE_MS,
   keyGenerator: (request: FastifyRequest) => request.ip,
 };

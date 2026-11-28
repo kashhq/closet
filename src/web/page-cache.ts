@@ -72,6 +72,12 @@ export function endedSession(headers: { has(name: string): boolean }): boolean {
 /** The MCP endpoint's path (src/web/mcp): an API for programs, never a page. */
 export const MCP_PATH = '/mcp';
 
+/**
+ * OAuth's endpoints under one prefix (src/web/oauth): the consent page and
+ * the token endpoint. Never a page the worker keeps (#1290, plan 4.8).
+ */
+const OAUTH_PATH_PREFIX = '/oauth/';
+
 /** The wardrobe export's downloads (src/web/wardrobe/export-routes.ts, #200). */
 export function wardrobeExportPath(format: 'csv' | 'json'): string {
   return `/wardrobe/export.${format}`;
@@ -85,7 +91,11 @@ const EXPORT_PATHS: ReadonlySet<string> = new Set([
 /**
  * Requests no worker route matches, so the worker neither answers nor
  * caches them: the MCP endpoint, the JSON API (isApiPath, the rule
- * surfaceOf reads), and the wardrobe export.
+ * surfaceOf reads), OAuth's `/oauth/*`, and the wardrobe export. The OAuth
+ * consent opens in an agent app's browser sheet, and Android's Custom Tabs
+ * share Chrome's worker with the installed PWA: without this the worker
+ * could answer the sheet from the page cache or the offline page, and keep
+ * a page whose URL carries a code challenge and state.
  * Programs call MCP and the API, not the app (and they have no worker),
  * but a browser tab opened on either must reach the server as it is and
  * never land in the page cache. An
@@ -98,6 +108,7 @@ export function bypassesWorker(url: { pathname: string }): boolean {
     url.pathname === MCP_PATH ||
     url.pathname.startsWith(`${MCP_PATH}/`) ||
     isApiPath(url.pathname) ||
+    url.pathname.startsWith(OAUTH_PATH_PREFIX) ||
     EXPORT_PATHS.has(url.pathname)
   );
 }

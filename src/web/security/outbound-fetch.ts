@@ -24,7 +24,8 @@ import { isPublicAddress } from './public-address';
  * section 0), the weather's fixed API (#14, src/web/weather/open-meteo.ts,
  * which names its hosts in `FetchRequest.hosts`) and the order mail's JMAP
  * API (#25, src/web/wardrobe/order-mail/jmap.ts, the one caller that sends a
- * credential). The server sits on the
+ * credential), and an OAuth client's metadata document (#1290,
+ * src/web/oauth/client-metadata.ts, `untrustedJson`). The server sits on the
  * homelab LAN, so a URL is a way to make it connect to the NAS, pgvault or
  * the router (SSRF). Every fetch:
  *
@@ -55,7 +56,12 @@ import { isPublicAddress } from './public-address';
  *   follows no redirect, so the credential reaches those hosts and nothing
  *   else;
  * - logs one line naming the host(s) and the last hop's protocol, never the
- *   path or query (a product link can carry a tracking or session token).
+ *   path or query (a product link can carry a tracking or session token);
+ * - with `untrustedJson`, a JSON document from any public host that nobody
+ *   vouches for, it is stricter still: https only, no redirect followed
+ *   (never dialled), JSON only, UNTRUSTED_JSON_BYTES decoded and
+ *   UNTRUSTED_JSON_TIMEOUT_MS for the whole fetch, a generic User-Agent, and
+ *   no credential, body, host list or `mayFollow` beside it.
  *
  * Failures are `OutboundFetchError`s whose `reason` says which rule refused.
  * The per-user rate limit is the caller's (the route's), not this module's.
@@ -78,6 +84,13 @@ export const BYTE_LIMITS: Readonly<Record<ContentKind, number>> = {
 };
 const MAX_REDIRECTS = 3;
 const FETCH_TIMEOUT_MS = 10_000;
+/**
+ * `untrustedJson`'s caps (#1290): an OAuth client's metadata document is a
+ * name and a few redirect URIs, well under 1 KB (Claude's is about 400
+ * bytes), and is fetched while a person waits on the consent sheet.
+ */
+export const UNTRUSTED_JSON_BYTES = 8 * 1024;
+export const UNTRUSTED_JSON_TIMEOUT_MS = 5_000;
 const MAX_URL_LENGTH = 2048;
 
 // SVG is left out: it is a document, not a photo, and the photo pipeline
@@ -95,6 +108,9 @@ const ACCEPT_HEADERS: Readonly<Record<ContentKind, string>> = {
   json: 'application/json',
 };
 const USER_AGENT = 'Mozilla/5.0 (compatible; Closet/1.0; +link import)';
+// Names the software only: a client's document host learns nothing of the
+// household or the feature asking.
+const UNTRUSTED_JSON_USER_AGENT = 'Closet/1.0';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 /**
  * Statuses a shop's bot protection answers an automated fetch with
@@ -163,6 +179,14 @@ export interface FetchRequest {
    * passes its product-link rule; link import passes none.
    */
   mayFollow?: (url: URL) => boolean;
+  /**
+   * A JSON document at a URL a stranger named, from any public host (an
+   * OAuth client's metadata document, #1290): the stricter rules in the
+   * header above. `accept` must be `['json']` alone, and `hosts`,
+   * `authorization`, `json` and `mayFollow` absent (a programming error
+   * otherwise). Reviewed as an SSRF change: widen it only with a review.
+   */
+  untrustedJson?: true;
 }
 
 export interface FetchedResource {
@@ -219,6 +243,12 @@ export interface OutboundFetcherOptions {
    */
   tls?: TrustedCertificates;
   timeoutMs?: number;
+  /**
+   * `untrustedJson`'s whole-fetch bound; defaults to
+   * UNTRUSTED_JSON_TIMEOUT_MS. Specs only, so a timeout spec costs
+   * milliseconds rather than the production five seconds.
+   */
+  untrustedJsonTimeoutMs?: number;
 }
 
 /**
@@ -303,6 +333,7 @@ export function createOutboundFetcher(
     destinations = PUBLIC_DESTINATIONS,
     tls,
     timeoutMs = FETCH_TIMEOUT_MS,
+    untrustedJsonTimeoutMs = UNTRUSTED_JSON_TIMEOUT_MS,
   } = options;
 
   /** The URL's destination, checked, with the address to connect to. */
@@ -391,6 +422,13 @@ export function createOutboundFetcher(
       const location = answer.headers.location;
       if (REDIRECT_STATUSES.has(status) && location) {
         answer.destroy();
+        if (request.untrustedJson) {
+          throw new OutboundFetchError(
+            'redirect-not-followed',
+            `A redirect (${status}) an untrusted document never follows`,
+            status,
+          );
+        }
         if (carriesCredentialOrBody(request)) {
           throw new OutboundFetchError(
             'http-status',
@@ -432,12 +470,23 @@ export function createOutboundFetcher(
           'An outbound fetch with a credential or a body must name its hosts',
         );
       }
+      if (request.untrustedJson) refuseLooseUntrustedJson(request);
       const started = performance.now();
-      const timeout = AbortSignal.timeout(timeoutMs);
+      const timeout = AbortSignal.timeout(
+        request.untrustedJson
+          ? Math.min(timeoutMs, untrustedJsonTimeoutMs)
+          : timeoutMs,
+      );
       const trail: Trail = { hosts: [] };
       try {
         const url = parseUrl(rawUrl);
         trail.hosts.push(url.hostname);
+        if (request.untrustedJson && url.protocol !== 'https:') {
+          throw new OutboundFetchError(
+            'unsupported-scheme',
+            `An untrusted document is fetched over https only, not ${url.protocol}`,
+          );
+        }
         const fetched = await fetchFollowing(url, request, timeout, trail);
         logger.info(
           `Fetched ${fetched.kind} from ${trailText(trail)}: ${fetched.body.length} bytes${fetched.truncated ? ' (cut at the cap)' : ''} in ${elapsed(started)} ms`,
@@ -452,6 +501,27 @@ export function createOutboundFetcher(
       }
     },
   };
+}
+
+/**
+ * `untrustedJson` beside anything that would loosen it (another kind, a
+ * host list that changes the refusals, a credential, a body, a redirect
+ * rule) is a programming error, outside the refusals like the credential
+ * rule above.
+ */
+function refuseLooseUntrustedJson(request: FetchRequest): void {
+  const { accept, hosts, mayFollow } = request;
+  if (
+    accept.length !== 1 ||
+    accept[0] !== 'json' ||
+    hosts !== undefined ||
+    mayFollow !== undefined ||
+    carriesCredentialOrBody(request)
+  ) {
+    throw new Error(
+      "An untrusted JSON fetch accepts ['json'] alone, with no hosts, credential, body or mayFollow",
+    );
+  }
 }
 
 function carriesCredentialOrBody(request: FetchRequest): boolean {
@@ -588,11 +658,11 @@ function jsonBody({ json }: FetchRequest): string | undefined {
 
 /** Every request's headers but Host / `:authority`, lower case for h2. */
 function requestHeaders(
-  { accept, authorization }: FetchRequest,
+  { accept, authorization, untrustedJson }: FetchRequest,
   body: string | undefined,
 ): OutgoingHttpHeaders {
   return {
-    'user-agent': USER_AGENT,
+    'user-agent': untrustedJson ? UNTRUSTED_JSON_USER_AGENT : USER_AGENT,
     accept: accept.map((kind) => ACCEPT_HEADERS[kind]).join(','),
     'accept-encoding': 'gzip, deflate, br',
     'accept-language': 'en',
@@ -684,7 +754,7 @@ function wholeBody(
 
 async function readResponse(
   answer: Answer,
-  { accept, hosts }: FetchRequest,
+  { accept, hosts, untrustedJson }: FetchRequest,
   signal: AbortSignal,
 ): Promise<Omit<FetchedResource, 'url' | 'redirects'>> {
   try {
@@ -699,7 +769,7 @@ async function readResponse(
         `Unexpected content type ${mediaType || '(none)'}`,
       );
     }
-    const limit = BYTE_LIMITS[kind];
+    const limit = untrustedJson ? UNTRUSTED_JSON_BYTES : BYTE_LIMITS[kind];
     const cut = kind === 'html';
     // An early refusal only: the guard is the counted bytes, since a server
     // can declare less than it sends.

@@ -9,6 +9,7 @@ import { scheduleMinutely } from './maintenance/minutely';
 import { scheduleNightly } from './maintenance/nightly';
 import { reconcileStorageWhole } from './maintenance/reconcile';
 import { type ScheduledJob, stopBeforeClose } from './maintenance/scheduled';
+import { pruneOAuthCodes } from './maintenance/oauth-code-prune';
 import { pruneSyncTombstones } from './maintenance/sync-prune';
 import { pruneWeatherCaches } from './maintenance/weather-prune';
 import { addDays, todayIn } from './calendar-date';
@@ -121,6 +122,20 @@ export async function serve(
         pruneWeatherCaches(weatherPrune, new Date()),
       ),
       logger: weatherPrune.logger,
+    }),
+  );
+  // The OAuth consent's spent codes (src/maintenance/oauth-code-prune.ts):
+  // database only, so with OAuth on or off.
+  const oauthPrune = { db, logger: logger.child({ logger: 'OAuth' }) };
+  jobs.push(
+    scheduleNightly({
+      name: 'OAuth code prune',
+      hour: RECONCILE_HOUR,
+      timeZone: config.APP_TIMEZONE,
+      run: metrics.timeJob('oauth_code_prune', () =>
+        pruneOAuthCodes(oauthPrune),
+      ),
+      logger: oauthPrune.logger,
     }),
   );
   // One set of re-plan deps: the minutely run and the morning reminder's

@@ -106,3 +106,18 @@ export function signInGuards(
       enforceLimit(account, request, { logger, who: 'an account' }),
   };
 }
+
+/**
+ * signInGuards' two budgets in one call, for a door whose body says whether
+ * it checks a credential at all: the OAuth consent's Allow does, its Deny
+ * does not (src/web/oauth/consent-routes.tsx), so the address budget waits
+ * for the parsed body there too.
+ */
+export async function enforceSignInLimits(
+  { address, account }: SignInLimits['signInLimits'],
+  request: FastifyRequest,
+  logger: Logger,
+): Promise<void> {
+  await enforceLimit(address, request, { logger, who: request.ip });
+  await enforceLimit(account, request, { logger, who: 'an account' });
+}

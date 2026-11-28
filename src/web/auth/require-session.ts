@@ -22,6 +22,14 @@ declare module 'fastify' {
      * in the database.
      */
     checksPassword?: boolean;
+    /**
+     * A public page that never reads the session cookie, so it never sets
+     * one either (a revoked cookie arriving here is not cleared): the root
+     * preValidation hook gives it a signed-out context. Only the OAuth
+     * consent's POST (#1290), which signs nobody in and leaves nothing in
+     * the agent app's browser sheet. Needs `public`.
+     */
+    sessionless?: true;
   }
 }
 

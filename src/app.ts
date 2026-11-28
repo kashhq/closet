@@ -37,6 +37,7 @@ import {
 } from './web/auth/session';
 import { createRegistrationGate } from './web/auth/registration';
 import { createSessionTokens } from './web/auth/tokens';
+import { createConsentTokens } from './web/oauth/consent-token';
 import { createErrorHandler, DatabaseOutage, HttpError } from './web/errors';
 import { sharedValidators } from './web/schema-validators';
 import { configurePhotoUrls } from './web/files/image-url';
@@ -55,7 +56,7 @@ import {
   type OutboundStandIn,
 } from './web/security/outbound-fetch';
 import { createAllowedHostHook } from './web/security/allowed-host';
-import { contentSecurityPolicy } from './web/security/csp';
+import { contentSecurityPolicy, formTargetOf } from './web/security/csp';
 import { importMapScript } from './web/layout/import-map';
 import { registerRateLimit } from './web/security/rate-limit';
 import {
@@ -477,6 +478,10 @@ export async function createApp(
   // read there, and without a page context their errors answer as data.
   app.addHook('preValidation', async (request, reply) => {
     if (isStaticPath(request.url) || surfaceOf(request) !== 'page') return;
+    if (request.routeOptions.config.sessionless === true) {
+      reply.locals = buildViewContext(request, undefined);
+      return;
+    }
     try {
       request.auth = await resolveSession(request, reply);
     } catch (error) {
@@ -510,6 +515,14 @@ export async function createApp(
   const everyResponse = securityHeaders(importMap);
   app.addHook('onSend', (_request, reply, payload, done) => {
     reply.headers(everyResponse);
+    // The OAuth consent page's form may end at its client (csp.ts).
+    const formTarget = formTargetOf(reply);
+    if (formTarget !== undefined) {
+      reply.header(
+        'Content-Security-Policy',
+        contentSecurityPolicy(importMap, formTarget),
+      );
+    }
     done(null, payload);
   });
   // Clear-Site-Data on a redirect is repeated on the page it lands on, which
@@ -598,6 +611,10 @@ export async function createApp(
     logger: web,
     db,
     tokens,
+    consentTokens: createConsentTokens(
+      config.ACCESS_TOKEN_SECRET,
+      new URL(config.SITE_URL).origin,
+    ),
     registration: await createRegistrationGate({
       db,
       mode: config.REGISTRATION,

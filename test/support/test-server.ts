@@ -5,6 +5,7 @@ import type * as LoggerModule from '../../src/logger';
 import type * as ServerModule from '../../src/server';
 import { CUTOUT_STUB_ORIGIN, startCutoutStub } from './cutout-stub';
 import { startJmapStub } from './jmap-stub';
+import { startOAuthClientStub } from './oauth-client-stub';
 import { startWeatherStub } from './weather-stub';
 
 /**
@@ -16,7 +17,9 @@ import { startWeatherStub } from './weather-stub';
  * reaches it, unless a spec holds it pending (cutout-stub.ts). And the weather comes from
  * a stand-in for Open-Meteo (weather-stub.ts: the seed's simulated New York
  * weather), so no test run calls the real service and the screenshots'
- * weather is the same on every run of a date. Configuration is the
+ * weather is the same on every run of a date. With MCP_PUBLIC_URL set
+ * (playwright.config.ts sets it beside an https SITE_URL), the consent's
+ * client document comes from oauth-client-stub.ts. Configuration is the
  * environment's, as for main.ts.
  */
 
@@ -49,12 +52,16 @@ async function main(): Promise<void> {
   const jmap = config.ORDER_MAIL_JMAP_TOKEN
     ? await startJmapStub(config.ORDER_MAIL_JMAP_TOKEN)
     : undefined;
+  const oauthClient = config.MCP_PUBLIC_URL
+    ? await startOAuthClientStub()
+    : undefined;
   logger.info(
-    `Test server: background removal stubbed (at once; holds on ${CUTOUT_STUB_ORIGIN}), weather from ${weather.options.endpoints.forecast}${jmap ? `, order mail from ${jmap.options.sessionUrl}` : ''}`,
+    `Test server: background removal stubbed (at once; holds on ${CUTOUT_STUB_ORIGIN}), weather from ${weather.options.endpoints.forecast}${jmap ? `, order mail from ${jmap.options.sessionUrl}` : ''}${oauthClient ? ', an OAuth client document stubbed' : ''}`,
   );
   const { app } = await serve(config, logger, cutouts.runner, {
     weather: weather.options,
     orderMail: jmap?.options,
+    outboundFetch: oauthClient?.fetch,
   });
   // serve() closes the app on SIGTERM; the stubs' own servers would keep the
   // process alive after it (a caller waited forever, #112). Their HTTP
@@ -62,6 +69,7 @@ async function main(): Promise<void> {
   app.server.once('close', () => {
     void weather.close();
     void jmap?.close();
+    void oauthClient?.close();
     void cutouts.close();
   });
 }

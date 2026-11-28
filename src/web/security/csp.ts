@@ -1,3 +1,4 @@
+import type { FastifyReply } from 'fastify';
 import { createHash } from 'node:crypto';
 
 /**
@@ -25,8 +26,13 @@ import { createHash } from 'node:crypto';
  *  - No eval (htmx's `allowEval` is off; hx-on, js: values and trigger
  *    filters are unused).
  *  - base-uri, form-action and object-src do not fall back to default-src.
+ *  - form-action is 'self' alone, but on a response allowFormTarget widened
+ *    (below): `formTarget`, an origin, beside it.
  */
-export function contentSecurityPolicy(importMap: string): string {
+export function contentSecurityPolicy(
+  importMap: string,
+  formTarget?: string,
+): string {
   const hash = createHash('sha256').update(importMap).digest('base64');
   const directives = [
     "default-src 'self'",
@@ -38,8 +44,41 @@ export function contentSecurityPolicy(importMap: string): string {
     "worker-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    formTarget === undefined
+      ? "form-action 'self'"
+      : `form-action 'self' ${formTarget}`,
     "object-src 'none'",
   ];
   return `${directives.join('; ')};`;
+}
+
+const formTargets = new WeakMap<FastifyReply, string>();
+
+/**
+ * Lets this response's forms end at `target`'s origin as well as this
+ * site's: Chromium holds the redirects after a submission to form-action,
+ * so the OAuth consent's POST, whose 303 goes to the client's redirect URI,
+ * would be blocked by 'self' alone (#1290; plan 4.4). Only the consent page
+ * calls it, with the redirect URI it proved; createApp's onSend builds the
+ * header from it (formTargetOf), every other response keeps the one CSP.
+ * The origin comes from the URL parser alone, so no character of the URI a
+ * client wrote reaches the header but its scheme, host and port: an opaque
+ * origin (`null`) or anything else is refused.
+ */
+export function allowFormTarget(reply: FastifyReply, target: URL): void {
+  formTargets.set(reply, formTargetOrigin(target));
+}
+
+/** `target`'s origin as a CSP source, or a throw. Exported for its spec. */
+export function formTargetOrigin(target: URL): string {
+  const { origin } = target;
+  if (!/^https?:\/\/[a-z0-9.\-[\]:]+$/.test(origin)) {
+    throw new Error('A form target must have an http(s) origin');
+  }
+  return origin;
+}
+
+/** The origin allowFormTarget gave this response, if any. */
+export function formTargetOf(reply: FastifyReply): string | undefined {
+  return formTargets.get(reply);
 }

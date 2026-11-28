@@ -111,6 +111,11 @@ describe('migrations', () => {
         // lists a user's tokens (also the user_id foreign key's).
         'personal_access_token_token_hash_unique',
         'personal_access_token_user_id_index',
+        // The token exchange looks a code up by its hash (#1290); the
+        // user_id and token_id foreign keys' own.
+        'oauth_authorization_code_code_hash_unique',
+        'oauth_authorization_code_user_id_index',
+        'oauth_authorization_code_token_id_index',
         // Login and every email lookup compare lower(email).
         'user_lower_email_unique',
         // The week template (#16): a user's (also its user_id foreign
