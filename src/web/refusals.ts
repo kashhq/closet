@@ -81,8 +81,10 @@ export class Forbidden extends HttpError {
  * the sites that may throw it, each with its reason: the public image
  * server's name that is no stored photo, a private photo's name, a share id
  * with no photo and bytes missing from storage (src/web/files), and
- * /metrics asked through a proxy (src/web/metrics/routes.ts). Its body is
- * the bare `{ statusCode, message }` those public routes always answered.
+ * /metrics asked through a proxy (src/web/metrics/routes.ts), and an OAuth
+ * discovery name while OAuth is off (src/web/oauth/routes.ts). Its body is
+ * the bare `{ statusCode, message }` those public routes always answered,
+ * or on the `oauth` surface `{ error: "not_found", error_description }`.
  */
 export class NotServed extends HttpError {
   constructor(options: { logDetail?: string } = {}) {

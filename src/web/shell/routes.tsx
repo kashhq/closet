@@ -71,7 +71,8 @@ export const shellRoutes: FastifyPluginCallback<WebOptions> = (
   });
 
   // Browsers and tools probe /.well-known/ (Chrome DevTools, app links); an
-  // empty object keeps those probes out of the error log.
+  // empty object keeps those probes out of the error log. OAuth's names are
+  // exact routes that win over this one (src/web/oauth/routes.ts).
   app.get(
     '/.well-known/*',
     { config: { public: true } },

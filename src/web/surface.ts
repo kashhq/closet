@@ -6,16 +6,20 @@ import { isApiPath } from './api-path';
  * section 3), and so which credential counts and how errors answer:
  *  - `page`: the PWA's HTML, the session cookie, error pages;
  *  - `mcp`: /mcp, an `mcp` personal access token, never the cookie;
- *  - `api`: /api/v1, a `device` token, never the cookie, problem+json.
+ *  - `api`: /api/v1, a `device` token, never the cookie, problem+json;
+ *  - `oauth`: OAuth's discovery documents and token endpoint (#681,
+ *    src/web/oauth), called by an agent vendor's servers: never the
+ *    cookie, RFC 6749 JSON errors, no Origin needed but a foreign one 403.
  * Read through surfaceOf(); a route without one is a page.
  */
-export type Surface = 'page' | 'mcp' | 'api';
+export type Surface = 'page' | 'mcp' | 'api' | 'oauth';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
     /**
-     * Set only on /mcp's routes (`'mcp'`); `'api'` is stamped by
-     * assignSurface on every /api/v1 route and may be spelled nowhere else.
+     * Set only on /mcp's routes (`'mcp'`) and OAuth's (`'oauth'`, only on
+     * OAUTH_PATHS); `'api'` is stamped by assignSurface on every /api/v1
+     * route and may be spelled nowhere else.
      */
     surface?: Surface;
   }
@@ -42,6 +46,23 @@ export function surfaceOf(
   );
 }
 
+/**
+ * Where the `oauth` surface may be: RFC 8414 and RFC 9728's well-known
+ * names (`/.well-known/oauth-authorization-server`,
+ * `/.well-known/oauth-protected-resource` and its `/mcp`), the OpenID name
+ * a client tries beside them, and the token endpoint. Not
+ * `/oauth/authorize`: the consent page is a page, with its cookie rules.
+ */
+const OAUTH_WELL_KNOWN_PREFIX = '/.well-known/oauth-';
+const OAUTH_PATHS: ReadonlySet<string> = new Set([
+  '/.well-known/openid-configuration',
+  '/oauth/token',
+]);
+
+function onOAuthPath(url: string): boolean {
+  return url.startsWith(OAUTH_WELL_KNOWN_PREFIX) || OAUTH_PATHS.has(url);
+}
+
 function underApiPrefix(url: string): boolean {
   return url === API_PREFIX || url.startsWith(`${API_PREFIX}/`);
 }
@@ -52,6 +73,9 @@ function underApiPrefix(url: string): boolean {
  * surface, and no other route is. A route that says otherwise, or a path
  * under /api that is not /api/v1, stops the boot: the API's guarantees
  * (no cookie, no CSRF exemption for a cookie, problem+json) hang on it.
+ * So does `oauth` off its paths (onOAuthPath): the surface lets a POST
+ * with no Origin through, a CSRF exemption held to the routes OAuth's
+ * servers call.
  */
 export function assignSurface(route: RouteOptions): void {
   const declared = route.config?.surface;
@@ -72,6 +96,11 @@ export function assignSurface(route: RouteOptions): void {
   if (declared === 'api') {
     throw new Error(
       `${String(route.method)} ${route.url} says surface 'api' outside ${API_PREFIX}`,
+    );
+  }
+  if (declared === 'oauth' && !onOAuthPath(route.url)) {
+    throw new Error(
+      `${String(route.method)} ${route.url} says surface 'oauth' outside OAuth's well-known names and /oauth/token`,
     );
   }
 }

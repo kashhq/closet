@@ -1881,3 +1881,9 @@ Consequence: any other textarea with a `maxlength` and a server-side length boun
 Why: a browser posts each textarea line break as CRLF while `maxlength` counts one character, so every route schema's `maxLength` refused a multi-line note at its limit (#1317 found it for requests; care notes and style notes had it too).
 Decision: one place normalizes: a root preValidation hook for urlencoded bodies and `formParts` (src/web/form-body.ts) for multipart text fields (files untouched). JSON bodies (/api/v1, /mcp) are excluded: a native client sends the text it means, and its length is what the schema counts. `storedText` is a trim.
 Consequence: a feature never normalizes line breaks itself. A multipart reader uses `formParts`, never `request.parts`.
+
+## 2026-11-28 — OAuth discovery ships switched off by MCP_PUBLIC_URL (#1289)
+
+Why: the plan's discovery (A1) lands before the consent page (#1290) and the token endpoint (#1291), yet its Authorization Server Metadata must name both.
+Decision: OAuth is on exactly when `MCP_PUBLIC_URL` is set; nothing sets it until homelab's #1293, after #1291. Off, every OAuth name is a JSON 404 on the `oauth` surface; `/.well-known/openid-configuration` is one always, so `assignSurface` admits that path beside `/.well-known/oauth-*` and `/oauth/token` (the plan named only those). The `/mcp` 401 adds `resource_metadata` and `scope` only when on; `error="invalid_token"` waits for #1291's expiry.
+Consequence: setting `MCP_PUBLIC_URL` before #1291 points clients at endpoints that 404 (`src/web/oauth/AGENTS.md`).

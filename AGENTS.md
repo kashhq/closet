@@ -87,6 +87,7 @@ Each area's detail lives in an `AGENTS.md` beside its code, with `CLAUDE.md` a s
 | Agent requests | `src/web/requests/AGENTS.md` |
 | Web Push | `src/push/AGENTS.md` |
 | MCP server | `src/web/mcp/AGENTS.md` |
+| OAuth for /mcp | `src/web/oauth/AGENTS.md` |
 | Changes feed | `src/web/sync/AGENTS.md` |
 | JSON API | `src/web/api/AGENTS.md` |
 | Health | `src/web/health/AGENTS.md` |
@@ -103,7 +104,7 @@ Each area's detail lives in an `AGENTS.md` beside its code, with `CLAUDE.md` a s
 
 ### Routes
 
-In full, with every route's owner: `docs/architecture.md#routes` and `#request-flow`. `GET /` is Today. A route is public only with `config: { public: true }`; `/mcp` and `/api/v1` take a token, never the cookie (their `surface`, `src/web/surface.ts`); everything else needs a session and is the user's own. `/weather/*` exists only with `WEATHER_ENABLED`, `/push/*` only with `PWA_ENABLED`. Root hooks live in `app.ts` (same-origin at onRequest; `req.auth` and `ViewContext` at preValidation, skipped on static paths).
+In full, with every route's owner: `docs/architecture.md#routes` and `#request-flow`. `GET /` is Today. A route is public only with `config: { public: true }`; `/mcp` and `/api/v1` take a token, never the cookie (their `surface`, `src/web/surface.ts`), and OAuth's documents read neither (`oauth`, live only with `MCP_PUBLIC_URL`); everything else needs a session and is the user's own. `/weather/*` exists only with `WEATHER_ENABLED`, `/push/*` only with `PWA_ENABLED`. Root hooks live in `app.ts` (same-origin at onRequest; `req.auth` and `ViewContext` at preValidation, skipped on static paths).
 
 ### Web layer (adding a feature)
 

@@ -8,6 +8,7 @@ import type {
 import { type BearerRefusalLimit, createBearerGate } from '../auth/bearer-gate';
 import { HttpError } from '../errors';
 import { MAX_OPTIONS_PER_GROUP } from '../../wardrobe/suggestions';
+import { mcpChallenge } from '../oauth/discovery';
 import { MCP_PATH } from '../page-cache';
 import type { WebOptions } from '../plugin';
 import { MCP_LIMIT, MCP_LINK_IMPORT_LIMIT } from '../security/rate-limit';
@@ -64,7 +65,8 @@ const READ_ONLY_INSTRUCTIONS = [
  * /api shares (src/web/auth/bearer-gate.ts), before the body is read;
  * refusals count on BEARER_REFUSAL_LIMIT per address. Rate-limited per
  * token (MCP_LIMIT), one JSON-RPC message per request (a batch is
- * refused, so the limit counts tool calls). The path is logged
+ * refused, so the limit counts tool calls). A refusal's 401 points an
+ * OAuth client at the metadata when MCP_PUBLIC_URL is set. The path is logged
  * as the pattern (secretPath), so a client that puts a token in the query
  * string never writes it to a log.
  */
@@ -87,6 +89,8 @@ export const mcpRoutes: FastifyPluginCallback<
   } = options;
   const tools = mcpTools({ weather: weather !== undefined });
   const linkImportLimit = app.createRateLimit(MCP_LINK_IMPORT_LIMIT);
+  // With OAuth on, a refusal names its metadata (src/web/oauth/discovery.ts).
+  const challenge = mcpChallenge(config.oauth);
 
   const route = {
     config: { surface: 'mcp', secretPath: true },
@@ -100,7 +104,7 @@ export const mcpRoutes: FastifyPluginCallback<
       refusalLimit: bearerRefusalLimit,
       refusalSummaries,
       // quiet: the gate logs its refusals itself (bearer-gate.ts).
-      refusal: () => new HttpError(401, undefined, { quiet: true }),
+      refusal: () => new HttpError(401, undefined, { quiet: true, challenge }),
     }),
   } as const;
 

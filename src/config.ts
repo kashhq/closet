@@ -151,6 +151,12 @@ const ConfigSchema = Type.Object({
   // name. SITE_URL's host and loopback are always allowed; a request for any
   // other Host is a 421 (allowedHosts, src/web/security/allowed-host.ts).
   ALLOWED_HOSTS: Type.String({ default: '' }),
+  // OAuth for /mcp (#681, docs/plans/2026-11-27-mcp-oauth.md 4.1): the
+  // public URL agents are given, `https://<public MCP host>/mcp`, which is
+  // the OAuth resource and whose origin is the issuer. Unset, OAuth is off.
+  // Its host must be SITE_URL's or an ALLOWED_HOSTS entry, and SITE_URL
+  // https (checked below).
+  MCP_PUBLIC_URL: Type.Optional(NonEmpty()),
   // Full-size PNG under public/assets/ for Open Graph previews and the
   // share-link watermark. The manifest and apple-touch-icon use its
   // <stem>-192.png and <stem>-512.png siblings, which must exist beside it
@@ -484,6 +490,7 @@ function crossFieldProblems(config: Config): string[] {
     );
   }
   problems.push(...pwaProblems(config));
+  problems.push(...mcpPublicUrlProblems(config));
   problems.push(...orderMailProblems(config));
   return problems;
 }
@@ -504,15 +511,63 @@ function pwaProblems(config: Config): string[] {
     }
   }
   // The value stays out of the message (it can carry credentials in a URL).
-  if (
-    !URL.canParse(config.SITE_URL) ||
-    new URL(config.SITE_URL).protocol !== 'https:'
-  ) {
+  if (!isHttpsUrl(config.SITE_URL)) {
     problems.push(
       'SITE_URL: must be an https: URL when PWA_ENABLED is true (it is the Web Push VAPID subject)',
     );
   }
   return problems;
+}
+
+// The path the MCP endpoint is served at (MCP_PATH, src/web/page-cache.ts,
+// which this layer sits below): the resource must name that endpoint.
+const MCP_ENDPOINT_PATH = '/mcp';
+
+// OAuth's resource and issuer (src/web/oauth/discovery.ts). Every refusal
+// leaves the value out, as SITE_URL's does.
+function mcpPublicUrlProblems(config: Config): string[] {
+  if (config.MCP_PUBLIC_URL === undefined) return [];
+  if (!URL.canParse(config.MCP_PUBLIC_URL)) {
+    return ['MCP_PUBLIC_URL: must be an https: URL'];
+  }
+  const url = new URL(config.MCP_PUBLIC_URL);
+  const problems: string[] = [];
+  if (url.protocol !== 'https:') {
+    problems.push('MCP_PUBLIC_URL: must be an https: URL');
+  }
+  if (!namesOnlyTheEndpoint(url)) {
+    problems.push(
+      `MCP_PUBLIC_URL: must be the origin followed by ${MCP_ENDPOINT_PATH}, with no query, fragment or credentials`,
+    );
+  }
+  const host = urlHostKey(config.MCP_PUBLIC_URL);
+  if (host === undefined || !allowedHosts(config).includes(host)) {
+    problems.push(
+      "MCP_PUBLIC_URL: its host must be SITE_URL's or an ALLOWED_HOSTS entry",
+    );
+  }
+  // The authorization endpoint is on SITE_URL (the tailnet-only consent
+  // page), and every authorization server endpoint must be https.
+  if (!isHttpsUrl(config.SITE_URL)) {
+    problems.push(
+      'SITE_URL: must be an https: URL when MCP_PUBLIC_URL is set (the OAuth authorization endpoint is on it)',
+    );
+  }
+  return problems;
+}
+
+// The OAuth resource identifier carries no fragment (RFC 9728 section 1.2),
+// and a query or credentials would make it differ from the URL a person
+// enters; the path names the one endpoint OAuth guards.
+function namesOnlyTheEndpoint(url: URL): boolean {
+  return (
+    url.pathname === MCP_ENDPOINT_PATH &&
+    `${url.search}${url.hash}${url.username}${url.password}` === ''
+  );
+}
+
+function isHttpsUrl(value: string): boolean {
+  return URL.canParse(value) && new URL(value).protocol === 'https:';
 }
 
 // A CA outside `verify` would be silently unused; an unreadable one would

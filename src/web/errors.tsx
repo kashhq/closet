@@ -69,6 +69,11 @@ export class HttpError extends Error {
    * (a JSON body the form's rules refused, #192b); a page shows the message.
    */
   readonly validation?: readonly ValidationFailure[];
+  /**
+   * A bearer surface's 401 challenge in place of BEARER_CHALLENGE: /mcp's
+   * names its OAuth metadata when OAuth is on (src/web/oauth/discovery.ts).
+   */
+  readonly challenge?: string;
 
   constructor(
     readonly statusCode: number,
@@ -81,10 +86,12 @@ export class HttpError extends Error {
       retryAfterSeconds?: number;
       quiet?: true;
       validation?: readonly ValidationFailure[];
+      challenge?: string;
     } = {},
   ) {
     super(message);
     this.name = 'HttpError';
+    this.challenge = options.challenge;
     this.logDetail = options.logDetail;
     this.quiet = options.quiet;
     this.code = options.code ?? codeOfStatus(statusCode);
@@ -232,6 +239,8 @@ export interface ErrorAnswer {
   quiet?: true;
   /** A validation's failures, each where and what (Fastify's, or an HttpError's). */
   validation?: readonly ValidationFailure[];
+  /** HttpError.challenge: the 401's WWW-Authenticate on a bearer surface. */
+  challenge?: string;
   /** A crash, not a chosen answer: logged with its stack. */
   unexpected: boolean;
   /**
@@ -348,6 +357,7 @@ export function describeError(error: unknown): ErrorAnswer {
       retryAfterSeconds: chosen.retryAfterSeconds,
       quiet: chosen.quiet,
       validation: chosen.validation,
+      challenge: chosen.challenge,
       unexpected: false,
       ...(chosen instanceof DatabaseUnavailable && {
         databaseUnavailable: true,
@@ -401,6 +411,12 @@ function problemOf(
 }
 
 /**
+ * A bearer surface's 401 challenge (RFC 6750 section 3): sign in again, or
+ * a new agent token. An HttpError's `challenge` replaces it.
+ */
+export const BEARER_CHALLENGE = 'Bearer realm="closet"';
+
+/**
  * Answers `reply` with the problem; a rate limit or a busy wardrobe says
  * when to retry. A 401's WWW-Authenticate is the error handler's (its
  * bearer branch, for /mcp and /api alike), never set here.
@@ -417,6 +433,21 @@ export function sendProblem(
     .status(answer.status)
     .type(PROBLEM_CONTENT_TYPE)
     .send(problemOf(request, answer));
+}
+
+/**
+ * The `oauth` surface's error body (src/web/surface.ts): RFC 6749 section
+ * 5.2's shape, `{ error, error_description }`, as every OAuth client reads
+ * a refusal. Used by the error handler and the same-origin hook; Retry-After
+ * is the caller's, as for a problem.
+ */
+export function sendOAuthError(
+  reply: FastifyReply,
+  status: number,
+  error: string,
+  description: string,
+): FastifyReply {
+  return reply.status(status).send({ error, error_description: description });
 }
 
 /**
@@ -549,16 +580,21 @@ export function createErrorHandler(
       reply.header('Retry-After', String(Math.ceil(answer.retryAfterSeconds)));
     }
     const surface = surfaceOf(request);
-    // A bearer surface's 401 names the scheme to retry with (RFC 6750: sign
-    // in again, or a new agent token), the one place it is set: the bearer
-    // gate's refusals and the API sign-in's wrong password alike.
+    // A bearer surface's 401 names the scheme to retry with, the one place
+    // it is set: the bearer gate's refusals and the API sign-in's wrong
+    // password alike, /mcp's with its OAuth pointer when OAuth is on.
     if (status === 401 && surface !== 'page') {
-      reply.header('WWW-Authenticate', 'Bearer realm="closet"');
+      reply.header('WWW-Authenticate', answer.challenge ?? BEARER_CHALLENGE);
     }
     // The API answers problem+json whatever failed, an unmatched path
     // included (surfaceOf), and never has a page context.
     if (surface === 'api') {
       return sendProblem(request, reply, answer);
+    }
+    // OAuth's documents and endpoints answer as OAuth clients read errors;
+    // a 5xx says nothing of what failed.
+    if (surface === 'oauth') {
+      return sendOAuthError(reply, status, answer.code, message);
     }
     // Decided by the request's htmx headers: a cache keeps the two apart.
     reply.header('Vary', FRAGMENT_VARY);
